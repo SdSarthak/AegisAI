@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { aiSystemsApi, classificationApi } from '../services/api'
+import { useMutation } from '@tanstack/react-query'
+import { classificationApi } from '../services/api'
 import { AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react'
 
 interface ClassificationResult {
@@ -32,11 +32,6 @@ export default function Classification() {
     generates_synthetic_content: false,
     emotion_recognition: false,
     biometric_categorization: false,
-  })
-
-  const { data: systems = [] } = useQuery({
-    queryKey: ['ai-systems'],
-    queryFn: aiSystemsApi.list,
   })
 
   const classifyMutation = useMutation({
