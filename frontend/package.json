@@ -10,18 +10,19 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "react-router-dom": "^6.21.3",
+    "@hookform/resolvers": "^3.3.4",
     "@tanstack/react-query": "^5.17.19",
     "axios": "^1.6.7",
-    "zustand": "^4.5.0",
-    "react-hook-form": "^7.49.3",
-    "@hookform/resolvers": "^3.3.4",
-    "zod": "^3.22.4",
-    "lucide-react": "^0.314.0",
     "clsx": "^2.1.0",
-    "tailwind-merge": "^2.2.1"
+    "lucide-react": "^0.314.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.49.3",
+    "react-hot-toast": "^2.6.0",
+    "react-router-dom": "^6.21.3",
+    "tailwind-merge": "^2.2.1",
+    "zod": "^3.22.4",
+    "zustand": "^4.5.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.48",
