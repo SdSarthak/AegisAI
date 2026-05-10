@@ -13,24 +13,24 @@ interface NotificationPreview {
 const DUMMY_PREVIEWS: NotificationPreview[] = [
   {
     id: 1,
-    title: 'New threat detected',
-    message: 'A suspicious login attempt was blocked from IP 192.168.1.105 targeting your admin panel.',
+    title: 'High Risk Classification',
+    message: 'CV Screening AI has been classified as High Risk under the EU AI Act and requires immediate review.',
     is_read: false,
-    created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(), // 2 min ago
+    created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
   },
   {
     id: 2,
-    title: 'Scan complete',
-    message: 'Your scheduled vulnerability scan finished. 3 medium-severity issues were found.',
+    title: 'Document Generated',
+    message: 'Technical Documentation has been successfully generated for Medical Diagnosis AI.',
     is_read: false,
-    created_at: new Date(Date.now() - 17 * 60 * 1000).toISOString(), // 17 min ago
+    created_at: new Date(Date.now() - 17 * 60 * 1000).toISOString(),
   },
   {
     id: 3,
-    title: 'Policy updated',
-    message: 'Your firewall policy "Block outbound port 23" was successfully applied to all nodes.',
+    title: 'Reassessment Due Soon',
+    message: 'Reassessment is due in 7 days for Loan Approval System. Please review compliance status.',
     is_read: true,
-    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
   },
 ]
 
