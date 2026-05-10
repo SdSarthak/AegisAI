@@ -1,3 +1,20 @@
+## Maintaining Knowledge Base Quality
+
+### Low-quality chunk aggregation
+
+The API provides an administrative endpoint to surface RAG chunks that receive low user feedback (thumbs-down). Use this to decide which chunks to re-ingest, repair, or remove from the FAISS index.
+
+- GET `/api/v1/rag/low-quality-chunks?threshold=0.3`
+  - Protected: admin/system-owner only (users on the `scale` subscription tier).
+  - Returns a list of chunk identifiers (the `source` metadata saved during ingestion) that have a thumbs-down ratio greater than `threshold`.
+
+Workflow:
+
+1. Query the RAG endpoint as usual: `POST /api/v1/rag/query` — the server stores the returned `answer_id` and the list of contributing chunk sources.
+2. Have users submit feedback: `POST /api/v1/rag/feedback` with `{"answer_id": "...", "vote": "down"}`.
+3. Run the aggregation endpoint: `GET /api/v1/rag/low-quality-chunks` to get candidate chunks for re-ingestion.
+
+The endpoint returns objects with `chunk`, `thumbs_down`, `total` and `ratio` fields to help prioritize remediation.
 # RAG Intelligence Module
 
 The RAG (Retrieval-Augmented Generation) module lets you ask natural language questions about AI regulations and receive grounded answers with source citations — rather than relying on an LLM's potentially outdated or hallucinated knowledge.
