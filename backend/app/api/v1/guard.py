@@ -9,12 +9,23 @@ TODO for contributors (medium difficulty):
   - Add a GET /guard/stats endpoint returning block/allow/sanitize counts
 """
 
+from collections import defaultdict, deque
+from datetime import datetime, timedelta, timezone
+from threading import Lock
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from app.core.security import get_current_user
 from app.models.user import User
 
 router = APIRouter()
+
+
+_RATE_LIMIT_REQUESTS = 60
+_RATE_LIMIT_WINDOW_SECONDS = 60
+_scan_attempts_by_user: dict[int, deque[datetime]] = defaultdict(deque)
+_rate_limit_lock = Lock()
 
 
 class ScanRequest(BaseModel):
@@ -29,6 +40,24 @@ class ScanResponse(BaseModel):
     matched_patterns: list[str] = []
 
 
+def _check_rate_limit(user_id: int) -> tuple[bool, int]:
+    """Return whether the user is limited and the seconds to retry after."""
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(seconds=_RATE_LIMIT_WINDOW_SECONDS)
+
+    with _rate_limit_lock:
+        attempts = _scan_attempts_by_user[user_id]
+        while attempts and attempts[0] <= window_start:
+            attempts.popleft()
+
+        if len(attempts) >= _RATE_LIMIT_REQUESTS:
+            retry_after = max(1, int((_RATE_LIMIT_WINDOW_SECONDS - (now - attempts[0]).total_seconds()) + 0.999))
+            return True, retry_after
+
+        attempts.append(now)
+        return False, 0
+
+
 @router.post("/scan", response_model=ScanResponse)
 def scan_prompt(
     request: ScanRequest,
@@ -38,6 +67,16 @@ def scan_prompt(
     Scan a prompt for injection risks.
     Returns a decision: allow, sanitize, or block.
     """
+    limited, retry_after = _check_rate_limit(current_user.id)
+    if limited:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "detail": "Rate limit exceeded: 60 requests per minute per user. Please try again later.",
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
+
     try:
         from app.modules.guard.llm_guard import LLMGuard
         from app.modules.guard.sanitizer import SanitizationLevel
