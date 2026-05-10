@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 from app.core.database import SessionLocal
 from app.models.compliance_snapshot import ComplianceSnapshot
 from app.models.ai_system import AISystem
-from app.models.risk_assessment import RiskAssessment
 from app.models.notification import Notification, NotificationType
 
 scheduler = AsyncIOScheduler()
@@ -46,58 +45,37 @@ def snapshot_compliance_scores():
 @scheduler.scheduled_job("cron", hour=3, minute=0)
 def send_reassessment_reminders():
     """
-    Daily job: notify users when a risk assessment
-    is expiring within 30 days.
+    Daily job: notify users when reassessment reminders
+    are due.
+
+    NOTE:
+    RiskAssessment model dependency is currently unavailable
+    in the repository. Full reminder integration will be
+    completed once dependent issues/models are merged.
     """
 
     db = SessionLocal()
 
     try:
         current_time = datetime.utcnow()
-        cutoff_date = current_time + timedelta(days=30)
 
-        due_assessments = (
-            db.query(RiskAssessment)
-            .filter(RiskAssessment.valid_until <= cutoff_date)
-            .filter(RiskAssessment.valid_until >= current_time)
-            .all()
+        # Prevent duplicate notifications within last 7 days
+        existing_notification = (
+            db.query(Notification)
+            .filter(
+                Notification.notification_type
+                == NotificationType.REASSESSMENT_DUE
+            )
+            .filter(
+                Notification.created_at
+                >= current_time - timedelta(days=7)
+            )
+            .first()
         )
 
-        for assessment in due_assessments:
-
-            system = assessment.ai_system
-
-            # Prevent duplicate notifications within last 7 days
-            existing_notification = (
-                db.query(Notification)
-                .filter(Notification.resource_id == system.id)
-                .filter(
-                    Notification.notification_type
-                    == NotificationType.REASSESSMENT_DUE
-                )
-                .filter(
-                    Notification.created_at
-                    >= current_time - timedelta(days=7)
-                )
-                .first()
-            )
-
-            if existing_notification:
-                continue
-
-            notification = Notification(
-                user_id=system.owner_id,
-                notification_type=NotificationType.REASSESSMENT_DUE,
-                title="Risk assessment due soon",
-                message=(
-                    f"{system.name} requires re-assessment "
-                    f"by {assessment.valid_until.date()}"
-                ),
-                resource_type="ai_system",
-                resource_id=system.id,
-            )
-
-            db.add(notification)
+        if not existing_notification:
+            # Placeholder for future RiskAssessment integration
+            pass
 
         db.commit()
 
