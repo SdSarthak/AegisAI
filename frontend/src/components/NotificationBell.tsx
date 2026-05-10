@@ -1,84 +1,383 @@
-import { useState } from 'react'
-import { Bell } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { Bell, Clock, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-/**
- * NotificationBell — nav bar bell icon with unread count badge and dropdown.
- *
- * TODO (good first issue — static UI):
- *   - Implement the bell icon button with a red badge showing `unreadCount`.
- *   - On click, toggle a dropdown showing the last 5 notifications (use
- *     hardcoded dummy data for now).
- *   - Each row should show: title, short message snippet, timestamp.
- *   - Add a "View all" link pointing to "/notifications".
- *   - Acceptance criteria: clicking the bell opens/closes the dropdown.
- *
- * TODO (help wanted — API wiring):
- *   - Use useQuery to poll GET /api/v1/notifications?unread_only=true every
- *     60 seconds to keep the badge count fresh.
- *   - Clicking a notification row marks it as read via POST /notifications/read.
- *   - Acceptance criteria: unread badge count decrements when a notification
- *     is clicked.
- */
+/*──────────────────────────────────────────────────────────────────────────────
+  NotificationBell — bell icon with unread badge + dropdown panel.
+
+  STATUS:  Static UI only (Issue #113).
+  NEXT:    Wire to GET /api/v1/notifications via useQuery (help wanted).
+
+  KEY DECISIONS
+  ─────────────
+  1. We keep all notification data as a local constant (DUMMY_PREVIEWS) so the
+     component works with zero backend.  When the API is ready, swap for
+     useQuery and everything else stays the same.
+
+  2. Click‑outside detection uses a single useEffect with a ref on the wrapper
+     <div>.  This is the lightest pattern that avoids an extra library.
+
+  3. The dropdown fades + translates via Tailwind transition utilities.  We
+     render the panel at all times but toggle opacity/translate/pointer-events
+     so the exit animation plays (conditional rendering with {isOpen && ...}
+     would unmount instantly, losing the close animation).
+
+  4. The badge caps at "9+" to avoid layout jitter from wide numbers.
+──────────────────────────────────────────────────────────────────────────────*/
+
+// ── Types ────────────────────────────────────────────────────────────────────
 
 interface NotificationPreview {
   id: number
   title: string
   message: string
   is_read: boolean
-  created_at: string
+  created_at: string               // ISO‑8601 date string
+  type: 'alert' | 'update' | 'ai' | 'news'
 }
 
-// TODO (help wanted): replace with real API data via useQuery
-const DUMMY_PREVIEWS: NotificationPreview[] = []
+// ── Static dummy data ────────────────────────────────────────────────────────
+// Gives us 3 unread + 2 read → badge shows "3".
+
+const DUMMY_PREVIEWS: NotificationPreview[] = [
+  {
+    id: 1,
+    title: 'AI system classified',
+    message:
+      'CV Screening AI was classified as High Risk under the EU AI Act.',
+    is_read: false,
+    created_at: new Date(Date.now() - 25 * 60 * 1000).toISOString(),   // 25 min ago
+    type: 'alert',
+  },
+  {
+    id: 2,
+    title: 'Guard scan blocked',
+    message:
+      'Prompt injection attempt detected and blocked in ChatBot Alpha.',
+    is_read: false,
+    created_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString(),  // 2 h ago
+    type: 'ai',
+  },
+  {
+    id: 3,
+    title: 'Document generated',
+    message:
+      'Technical Documentation for CV Screening AI is ready to review.',
+    is_read: false,
+    created_at: new Date(Date.now() - 5 * 3600 * 1000).toISOString(),  // 5 h ago
+    type: 'update',
+  },
+  {
+    id: 4,
+    title: 'Compliance deadline approaching',
+    message:
+      'Your High‑Risk AI system filing is due within 14 days.',
+    is_read: true,
+    created_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString(), // 1 d ago
+    type: 'news',
+  },
+  {
+    id: 5,
+    title: 'New regulation update',
+    message:
+      'Article 6 amendment published — review changes for your systems.',
+    is_read: true,
+    created_at: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(), // 3 d ago
+    type: 'news',
+  },
+]
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Tiny relative‑time formatter.  Avoids pulling in a library like date‑fns
+ *  for a single use case. */
+function timeAgo(isoDate: string): string {
+  const seconds = Math.floor(
+    (Date.now() - new Date(isoDate).getTime()) / 1000,
+  )
+  if (seconds < 60) return 'just now'
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.floor(hours / 24)
+  return `${days}d ago`
+}
+
+/** Accent colour for the left stripe, keyed by notification type. */
+function typeColor(type: NotificationPreview['type']): string {
+  switch (type) {
+    case 'alert':  return 'bg-red-500'
+    case 'update': return 'bg-green-500'
+    case 'ai':     return 'bg-purple-500'
+    case 'news':   return 'bg-primary-500'
+  }
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
 
 export default function NotificationBell() {
+  /*
+   * isOpen — controls the dropdown visibility.
+   * We use a simple boolean toggle rather than a reducer because the state
+   * machine only has two states (open / closed).
+   */
   const [isOpen, setIsOpen] = useState(false)
 
-  // TODO (help wanted): derive from real query data
+  /*
+   * wrapperRef — a ref attached to the outermost <div>.  The click‑outside
+   * handler checks if the click target lives inside this element.  If it
+   * doesn't, we close the dropdown.
+   *
+   * WHY a ref?  Because we need a stable DOM reference that persists across
+   * renders. Using document.getElementById would be fragile and un‑React‑like.
+   */
+  const wrapperRef = useRef<HTMLDivElement>(null)
+
+  // Derived state — avoids redundant state for the badge count.
   const unreadCount = DUMMY_PREVIEWS.filter((n) => !n.is_read).length
 
+  /*
+   * ── Click‑outside effect ──────────────────────────────────────────────
+   *
+   * HOW IT WORKS:
+   *   1. We attach a `mousedown` listener to the whole document.
+   *   2. On every click, we check: "did the click land INSIDE wrapperRef?"
+   *   3. If not → close the dropdown.
+   *
+   * WHY mousedown instead of click?
+   *   `mousedown` fires before `click`, so the dropdown closes before any
+   *   other click handlers run.  This prevents race conditions where the
+   *   bell button's onClick would immediately re‑open the panel.
+   *
+   * CLEANUP:
+   *   The returned function removes the listener when the component unmounts
+   *   (or when `isOpen` changes) to avoid memory leaks.
+   */
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        wrapperRef.current &&
+        !wrapperRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false)
+      }
+    }
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+    }
+  }, [isOpen])
+
+  /*
+   * ── Escape‑key handler ────────────────────────────────────────────────
+   * Accessibility best practice: pressing Escape should close an overlay.
+   */
+  useEffect(() => {
+    function handleEscape(e: KeyboardEvent) {
+      if (e.key === 'Escape') setIsOpen(false)
+    }
+    if (isOpen) {
+      document.addEventListener('keydown', handleEscape)
+    }
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [isOpen])
+
+  // ── Render ──────────────────────────────────────────────────────────────
+
   return (
-    <div className="relative">
-      {/* Bell button */}
+    <div ref={wrapperRef} className="relative">
+      {/* ── Bell button ───────────────────────────────────────────────────
+       *
+       * Styling breakdown:
+       *   p-2          → 8 px padding all sides (touch‑friendly 40 × 40 target)
+       *   rounded-lg   → consistent with ThemeToggle and Layout icon buttons
+       *   text-gray-500 hover:text-gray-700 → muted → emphasis on hover
+       *   hover:bg-gray-100                 → subtle background lift
+       *   transition-colors                 → smooth colour shift (150 ms default)
+       *
+       * The aria‑label dynamically includes the unread count so screen
+       * readers announce "Notifications (3 unread)" instead of just "Notifications".
+       */}
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="relative p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+        className="relative p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+        aria-expanded={isOpen}
+        aria-haspopup="true"
       >
         <Bell className="w-5 h-5" />
-        {/* TODO (good first issue): show badge only when unreadCount > 0 */}
+
+        {/* ── Unread badge ──────────────────────────────────────────────
+         *
+         * Positioned absolutely in the top‑right corner of the button.
+         * We cap at "9+" to prevent the badge from growing wider than
+         * 16 px and causing layout jitter.
+         *
+         * The `animate-pulse` is a subtle Tailwind animation (opacity
+         * oscillation) that draws the eye without being obnoxious.
+         * We intentionally only apply it when the dropdown is CLOSED
+         * so it doesn't compete with the panel itself.
+         */}
         {unreadCount > 0 && (
-          <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+          <span
+            className={`absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full ring-2 ring-white ${
+              !isOpen ? 'animate-pulse' : ''
+            }`}
+          >
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
       </button>
 
-      {/* Dropdown */}
-      {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl border border-gray-200 shadow-lg z-50">
-          <div className="p-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900 text-sm">Notifications</h3>
+      {/* ── Dropdown panel ──────────────────────────────────────────────
+       *
+       * ANIMATION APPROACH:
+       * Instead of conditionally rendering ({isOpen && <div>…</div>}),
+       * we always render the panel and toggle Tailwind utility classes:
+       *
+       *   OPEN  → opacity-100  translate-y-0    pointer-events-auto
+       *   CLOSE → opacity-0    -translate-y-2   pointer-events-none
+       *
+       * Combined with `transition-all duration-200 ease-out`, this gives
+       * a smooth fade + slide on BOTH open and close.  Conditional
+       * rendering would unmount the element instantly on close, losing
+       * the exit animation entirely.
+       *
+       * pointer-events-none ensures the invisible panel doesn't block
+       * clicks on elements behind it when closed.
+       *
+       * Z‑INDEX:
+       * z-50 places the dropdown above the main content and sidebar.
+       * The Layout sidebar is fixed but has no explicit z‑index, and
+       * the header bar we're adding uses z-30, so z-50 is safe.
+       *
+       * POSITIONING:
+       * `right-0` aligns the dropdown's right edge with the bell button's
+       * right edge, which prevents overflow on smaller screens.  On very
+       * narrow viewports, the `sm:w-96` → `w-80` fallback keeps it from
+       * overflowing the viewport.
+       */}
+      <div
+        className={`absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl border border-gray-200 shadow-xl z-50 transition-all duration-200 ease-out origin-top-right ${
+          isOpen
+            ? 'opacity-100 translate-y-0 pointer-events-auto'
+            : 'opacity-0 -translate-y-2 pointer-events-none'
+        }`}
+        role="menu"
+        aria-label="Notifications panel"
+      >
+        {/* ── Header ─────────────────────────────────────────────────── */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-gray-900">
+              Notifications
+            </h3>
+            {unreadCount > 0 && (
+              <span className="inline-flex items-center justify-center px-2 py-0.5 text-[11px] font-medium text-primary-700 bg-primary-50 rounded-full">
+                {unreadCount} new
+              </span>
+            )}
           </div>
-
-          {/* TODO (good first issue): map over DUMMY_PREVIEWS (or real data) here */}
-          <div className="p-4 text-center text-sm text-gray-400">
-            No notifications yet
-          </div>
-
-          <div className="p-3 border-t border-gray-100">
-            <Link
-              to="/notifications"
-              className="block text-center text-sm text-primary-600 hover:text-primary-700"
-              onClick={() => setIsOpen(false)}
-            >
-              View all notifications
-            </Link>
-          </div>
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
+            aria-label="Close notifications"
+          >
+            <X className="w-4 h-4" />
+          </button>
         </div>
-      )}
+
+        {/* ── Notification list ───────────────────────────────────────
+         *
+         * max-h-80 + overflow-y-auto creates a scrollable region so the
+         * dropdown never grows taller than 320 px regardless of how many
+         * notifications exist.
+         *
+         * divide-y + divide-gray-50 adds ultra‑subtle 1 px lines between
+         * rows without needing explicit border classes on each item.
+         */}
+        <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
+          {DUMMY_PREVIEWS.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <Bell className="w-10 h-10 mx-auto mb-2 text-gray-200" />
+              <p className="text-sm text-gray-400">No notifications yet</p>
+            </div>
+          ) : (
+            DUMMY_PREVIEWS.map((notification) => (
+              /*
+               * Each row:
+               *   - Left colour stripe (3 px wide) indicates notification type.
+               *   - Unread rows get a faint primary-50 background tint.
+               *   - hover:bg-gray-50 provides feedback on all rows.
+               *   - The entire row is a <button> so it's keyboard‑focusable.
+               *
+               * FUTURE: onClick will call POST /notifications/read and
+               *         navigate to the relevant page.
+               */
+              <button
+                key={notification.id}
+                type="button"
+                className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 focus:outline-none focus:bg-gray-50 ${
+                  !notification.is_read ? 'bg-primary-50/40' : ''
+                }`}
+                role="menuitem"
+              >
+                {/* Type colour stripe */}
+                <div
+                  className={`w-1 self-stretch rounded-full flex-shrink-0 ${typeColor(
+                    notification.type,
+                  )}`}
+                />
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p
+                      className={`text-sm truncate ${
+                        !notification.is_read
+                          ? 'font-semibold text-gray-900'
+                          : 'font-medium text-gray-700'
+                      }`}
+                    >
+                      {notification.title}
+                    </p>
+                    {/* Unread dot */}
+                    {!notification.is_read && (
+                      <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0" />
+                    )}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
+                    {notification.message}
+                  </p>
+                  <p className="flex items-center gap-1 text-[11px] text-gray-400 mt-1">
+                    <Clock className="w-3 h-3" />
+                    {timeAgo(notification.created_at)}
+                  </p>
+                </div>
+              </button>
+            ))
+          )}
+        </div>
+
+        {/* ── Footer ─────────────────────────────────────────────────── */}
+        <div className="border-t border-gray-100">
+          <Link
+            to="/notifications"
+            onClick={() => setIsOpen(false)}
+            className="block px-4 py-3 text-center text-sm font-medium text-primary-600 hover:text-primary-700 hover:bg-gray-50 transition-colors rounded-b-xl"
+          >
+            View all notifications
+          </Link>
+        </div>
+      </div>
     </div>
   )
 }
