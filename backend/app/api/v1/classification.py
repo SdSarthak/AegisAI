@@ -1,14 +1,14 @@
-
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
-from app.core.scoring import compute_compliance_score
 
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.models.ai_system import AISystem, RiskLevel, ComplianceStatus
-from app.schemas.ai_system import RiskClassificationRequest, RiskClassificationResponse
+from app.models.ai_system import AISystem, RiskLevel
+from app.schemas.ai_system import (
+    RiskClassificationRequest,
+    RiskClassificationResponse,
+)
 
 router = APIRouter()
 
@@ -17,146 +17,204 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
     """
     Classify the risk level of an AI system based on EU AI Act criteria.
     """
+
     reasons = []
     requirements = []
     risk_level = RiskLevel.MINIMAL
     confidence = 0.9
-    
-    # Check for UNACCEPTABLE risk (Article 5 - Prohibited practices)
-    # Social scoring, real-time biometric identification in public spaces, etc.
-    # These are typically banned outright
-    
-    # Check for HIGH risk (Article 6 + Annex III)
+
+    # Check for HIGH risk systems
     high_risk_indicators = []
-    
-    # HR and recruitment AI (Annex III, point 4)
+
     if data.hr_recruitment_screening or data.hr_promotion_termination:
         high_risk_indicators.append("HR recruitment/management AI system")
-        reasons.append("AI systems used for recruitment, CV screening, or employment decisions are classified as HIGH risk under Annex III")
+
+        reasons.append(
+            "AI systems used for recruitment or employment "
+            "decisions are classified as HIGH risk under Annex III"
+        )
+
         requirements.extend([
-            "Implement risk management system (Article 9)",
-            "Ensure data governance and quality (Article 10)",
-            "Maintain technical documentation (Article 11)",
-            "Enable record-keeping/logging (Article 12)",
-            "Provide transparency to users (Article 13)",
-            "Enable human oversight (Article 14)",
-            "Ensure accuracy, robustness, cybersecurity (Article 15)"
+            "Implement risk management system",
+            "Ensure data governance and quality",
+            "Maintain technical documentation",
+            "Enable record-keeping/logging",
+            "Provide transparency to users",
+            "Enable human oversight",
+            "Ensure accuracy and robustness",
         ])
-    
-    # Credit and insurance (Annex III, point 5)
+
     if data.credit_worthiness or data.insurance_risk_assessment:
-        high_risk_indicators.append("Credit/insurance assessment AI")
-        reasons.append("AI for creditworthiness or insurance risk assessment is HIGH risk under Annex III")
-    
-    # Safety component
+        high_risk_indicators.append(
+            "Credit/insurance assessment AI"
+        )
+
+        reasons.append(
+            "AI for creditworthiness or insurance risk "
+            "assessment is HIGH risk under Annex III"
+        )
+
     if data.is_safety_component:
-        high_risk_indicators.append("Safety component of a product")
-        reasons.append("AI used as a safety component requires HIGH risk compliance")
-    
-    # Fundamental rights impact
+        high_risk_indicators.append(
+            "Safety component of a product"
+        )
+
+        reasons.append(
+            "AI used as a safety component requires "
+            "HIGH risk compliance"
+        )
+
     if data.affects_fundamental_rights:
-        high_risk_indicators.append("Affects fundamental rights")
-        reasons.append("System impacts fundamental rights (employment, education, essential services)")
-    
-    # Law enforcement, border control, justice
-    if data.law_enforcement or data.border_control or data.justice_system:
-        high_risk_indicators.append("Law enforcement/justice system use")
-        reasons.append("Use in law enforcement, border control, or justice is HIGH risk")
-    
-    # Determine if HIGH risk
+        high_risk_indicators.append(
+            "Affects fundamental rights"
+        )
+
+        reasons.append(
+            "System impacts fundamental rights"
+        )
+
+    if (
+        data.law_enforcement
+        or data.border_control
+        or data.justice_system
+    ):
+        high_risk_indicators.append(
+            "Law enforcement/justice system use"
+        )
+
+        reasons.append(
+            "Use in law enforcement or justice is HIGH risk"
+        )
+
+    # Determine risk level
     if high_risk_indicators:
         risk_level = RiskLevel.HIGH
-    
-    # Check for LIMITED risk (Article 52 - Transparency obligations)
-    elif data.interacts_with_humans or data.emotion_recognition or data.generates_synthetic_content:
+
+    elif (
+        data.interacts_with_humans
+        or data.emotion_recognition
+        or data.generates_synthetic_content
+    ):
         risk_level = RiskLevel.LIMITED
+
         if data.interacts_with_humans:
-            reasons.append("System interacts directly with humans (e.g., chatbot)")
-            requirements.append("Inform users they are interacting with AI (Article 52)")
+            reasons.append(
+                "System interacts directly with humans"
+            )
+
+            requirements.append(
+                "Inform users they are interacting with AI"
+            )
+
         if data.emotion_recognition:
-            reasons.append("System uses emotion recognition")
-            requirements.append("Inform subjects about emotion recognition system")
+            reasons.append(
+                "System uses emotion recognition"
+            )
+
+            requirements.append(
+                "Inform subjects about emotion recognition"
+            )
+
         if data.generates_synthetic_content:
-            reasons.append("System generates synthetic/manipulated content")
-            requirements.append("Label AI-generated content appropriately")
-    
-    # MINIMAL risk - no specific requirements
+            reasons.append(
+                "System generates synthetic content"
+            )
+
+            requirements.append(
+                "Label AI-generated content appropriately"
+            )
+
     else:
-        reasons.append("System does not fall into high-risk or limited-risk categories")
-        requirements.append("No mandatory requirements, but voluntary codes of conduct encouraged")
-    
-    # Generate next steps based on risk level
+        reasons.append(
+            "System does not fall into high-risk "
+            "or limited-risk categories"
+        )
+
+        requirements.append(
+            "Voluntary codes of conduct encouraged"
+        )
+
+    # Generate next steps
     next_steps = []
+
     if risk_level == RiskLevel.HIGH:
         next_steps = [
-            "Complete the full risk assessment questionnaire",
-            "Document your AI system's technical specifications",
-            "Implement a risk management system",
+            "Complete the risk assessment questionnaire",
+            "Document technical specifications",
+            "Implement risk management system",
             "Establish data governance procedures",
             "Set up human oversight mechanisms",
-            "Prepare conformity assessment documentation"
         ]
+
     elif risk_level == RiskLevel.LIMITED:
         next_steps = [
-            "Implement transparency notices for users",
-            "Document your disclosure mechanisms",
-            "Review interaction points with users"
+            "Implement transparency notices",
+            "Document disclosure mechanisms",
+            "Review user interaction points",
         ]
+
     else:
         next_steps = [
             "Consider voluntary compliance measures",
             "Monitor regulatory updates",
-            "Document your AI governance practices"
+            "Document governance practices",
         ]
-    
+
     return RiskClassificationResponse(
         risk_level=risk_level,
         confidence=confidence,
         reasons=reasons,
         requirements=requirements,
-        next_steps=next_steps
+        next_steps=next_steps,
     )
 
 
-@router.post("/classify", response_model=RiskClassificationResponse)
+@router.post(
+    "/classify",
+    response_model=RiskClassificationResponse,
+)
 def classify_ai_system(
     data: RiskClassificationRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Classify an AI system's risk level based on EU AI Act criteria.
-    This is a preliminary classification - full assessment requires more details.
+    Classify an AI system's risk level.
     """
+
     return classify_risk(data)
 
 
-@router.post("/classify/{system_id}", response_model=RiskClassificationResponse)
+@router.post(
+    "/classify/{system_id}",
+    response_model=RiskClassificationResponse,
+)
 def classify_and_save(
     system_id: int,
     data: RiskClassificationRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Classify an AI system and save the result to the database.
+    Classify an AI system and save the result.
     """
-    # Get the AI system
+
     system = db.query(AISystem).filter(
         AISystem.id == system_id,
-        AISystem.owner_id == current_user.id
+        AISystem.owner_id == current_user.id,
     ).first()
-    
+
     if not system:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="AI system not found"
+            detail="AI system not found",
         )
+
     # Perform classification
     result = classify_risk(data)
- 
+
     # TODO:
-    # AISystem scoring fields are pending integration.
-    # Compliance score logic prepared for future implementation.
+    # Compliance score rollup integration pending.
+    # RiskAssessment model dependency not yet available.
 
     db.commit()
     db.refresh(system)
