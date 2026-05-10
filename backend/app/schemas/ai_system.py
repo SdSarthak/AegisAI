@@ -97,3 +97,13 @@ class RiskAssessmentResponse(BaseModel):
 class BulkImportResponse(BaseModel):
     created: int
     errors: List[Dict[str, Any]]
+
+class AuditLogResponse(BaseModel):
+    id: int
+    changed_by_id: int
+    old_values: Dict[str, Any]
+    new_values: Dict[str, Any]
+    changed_at: datetime
+
+    class Config:
+        from_attributes = True

@@ -1,3 +1,6 @@
+import os
+from app.core.database import Base
+import app.models
 from app.core.database import Base
 from logging.config import fileConfig
 
@@ -27,7 +30,7 @@ target_metadata = Base.metadata
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
 
-
+config.set_main_option("sqlalchemy.url", os.environ["DATABASE_URL"])
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
