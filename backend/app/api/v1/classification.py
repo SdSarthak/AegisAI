@@ -13,25 +13,35 @@ from app.schemas.ai_system import (
 router = APIRouter()
 
 
-def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse:
+def classify_risk(
+    data: RiskClassificationRequest,
+) -> RiskClassificationResponse:
     """
-    Classify the risk level of an AI system based on EU AI Act criteria.
+    Classify the risk level of an AI system
+    based on EU AI Act criteria.
     """
 
     reasons = []
     requirements = []
+    next_steps = []
+
     risk_level = RiskLevel.MINIMAL
     confidence = 0.9
 
-    # Check for HIGH risk systems
     high_risk_indicators = []
 
-    if data.hr_recruitment_screening or data.hr_promotion_termination:
-        high_risk_indicators.append("HR recruitment/management AI system")
+    # HR and recruitment AI
+    if (
+        data.hr_recruitment_screening
+        or data.hr_promotion_termination
+    ):
+        high_risk_indicators.append(
+            "HR recruitment/management AI system"
+        )
 
         reasons.append(
-            "AI systems used for recruitment or employment "
-            "decisions are classified as HIGH risk under Annex III"
+            "AI systems used for recruitment or "
+            "employment decisions are HIGH risk."
         )
 
         requirements.extend([
@@ -44,35 +54,42 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
             "Ensure accuracy and robustness",
         ])
 
-    if data.credit_worthiness or data.insurance_risk_assessment:
+    # Credit and insurance AI
+    if (
+        data.credit_worthiness
+        or data.insurance_risk_assessment
+    ):
         high_risk_indicators.append(
             "Credit/insurance assessment AI"
         )
 
         reasons.append(
-            "AI for creditworthiness or insurance risk "
-            "assessment is HIGH risk under Annex III"
+            "AI for creditworthiness or insurance "
+            "assessment is HIGH risk."
         )
 
+    # Safety component AI
     if data.is_safety_component:
         high_risk_indicators.append(
             "Safety component of a product"
         )
 
         reasons.append(
-            "AI used as a safety component requires "
-            "HIGH risk compliance"
+            "AI used as a safety component "
+            "requires HIGH risk compliance."
         )
 
+    # Fundamental rights impact
     if data.affects_fundamental_rights:
         high_risk_indicators.append(
             "Affects fundamental rights"
         )
 
         reasons.append(
-            "System impacts fundamental rights"
+            "System impacts fundamental rights."
         )
 
+    # Law enforcement / justice
     if (
         data.law_enforcement
         or data.border_control
@@ -83,7 +100,8 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
         )
 
         reasons.append(
-            "Use in law enforcement or justice is HIGH risk"
+            "Use in law enforcement or justice "
+            "is HIGH risk."
         )
 
     # Determine risk level
@@ -99,50 +117,48 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
 
         if data.interacts_with_humans:
             reasons.append(
-                "System interacts directly with humans"
+                "System interacts directly with humans."
             )
 
             requirements.append(
-                "Inform users they are interacting with AI"
+                "Inform users they are interacting with AI."
             )
 
         if data.emotion_recognition:
             reasons.append(
-                "System uses emotion recognition"
+                "System uses emotion recognition."
             )
 
             requirements.append(
-                "Inform subjects about emotion recognition"
+                "Inform subjects about emotion recognition."
             )
 
         if data.generates_synthetic_content:
             reasons.append(
-                "System generates synthetic content"
+                "System generates synthetic content."
             )
 
             requirements.append(
-                "Label AI-generated content appropriately"
+                "Label AI-generated content appropriately."
             )
 
     else:
         reasons.append(
             "System does not fall into high-risk "
-            "or limited-risk categories"
+            "or limited-risk categories."
         )
 
         requirements.append(
-            "Voluntary codes of conduct encouraged"
+            "Voluntary codes of conduct encouraged."
         )
 
     # Generate next steps
-    next_steps = []
-
     if risk_level == RiskLevel.HIGH:
         next_steps = [
-            "Complete the risk assessment questionnaire",
+            "Complete risk assessment questionnaire",
             "Document technical specifications",
             "Implement risk management system",
-            "Establish data governance procedures",
+            "Establish governance procedures",
             "Set up human oversight mechanisms",
         ]
 
@@ -214,7 +230,8 @@ def classify_and_save(
 
     # TODO:
     # Compliance score rollup integration pending.
-    # RiskAssessment model dependency not yet available.
+    # RiskAssessment model dependency
+    # not yet available in repository.
 
     db.commit()
     db.refresh(system)
