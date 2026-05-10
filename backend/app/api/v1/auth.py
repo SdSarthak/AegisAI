@@ -12,7 +12,7 @@ from app.core.security import (
 )
 from app.core.config import settings
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, Token
+from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token
 
 router = APIRouter()
 
@@ -69,6 +69,24 @@ def login(
     )
     
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.patch("/me", response_model=UserResponse)
+def update_current_user(
+    user_update: UserUpdateSchema,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Update current user profile."""
+    if user_update.full_name is not None:
+        current_user.full_name = user_update.full_name
+    if user_update.company_name is not None:
+        current_user.company_name = user_update.company_name
+
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user
 
 
 @router.get("/me", response_model=UserResponse)
