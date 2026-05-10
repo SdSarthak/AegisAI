@@ -13,6 +13,7 @@ interface RagAnswer {
 
 export default function RagChat() {
   const [question, setQuestion] = useState('')
+  const [submittedQuestion, setSubmittedQuestion] = useState('')
   const [answer, setAnswer] = useState<RagAnswer | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -23,10 +24,13 @@ export default function RagChat() {
     const trimmedQuestion = question.trim()
     if (!trimmedQuestion) {
       setError('Please enter a question before asking.')
+      setSubmittedQuestion('')
       setAnswer(null)
       return
     }
 
+    setSubmittedQuestion(trimmedQuestion)
+    setQuestion('')
     setIsLoading(true)
     setError(null)
     setAnswer(null)
@@ -83,7 +87,7 @@ export default function RagChat() {
 
       <div className="flex-1 overflow-y-auto bg-gray-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
-          {!answer && !isLoading && !error && (
+          {!submittedQuestion && !answer && !isLoading && !error && (
             <div className="min-h-[320px] sm:min-h-[420px] flex flex-col items-center justify-center text-center">
               <div className="p-3 sm:p-4 bg-primary-50 rounded-2xl mb-5">
                 <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-primary-600" />
@@ -114,16 +118,18 @@ export default function RagChat() {
             </div>
           )}
 
-          {(answer || isLoading || error) && (
+          {(submittedQuestion || answer || isLoading || error) && (
             <div className="space-y-5 sm:space-y-6">
-              <div className="flex justify-end">
-                <div className="w-full sm:w-auto sm:max-w-2xl bg-primary-600 text-white rounded-2xl sm:rounded-br-md px-4 sm:px-5 py-3 sm:py-4 shadow-sm">
-                  <div className="flex items-start gap-3">
-                    <User className="w-5 h-5 mt-0.5 flex-shrink-0" />
-                    <p className="text-sm leading-6">{question}</p>
+              {submittedQuestion && (
+                <div className="flex justify-end">
+                  <div className="w-full sm:w-auto sm:max-w-2xl bg-primary-600 text-white rounded-2xl sm:rounded-br-md px-4 sm:px-5 py-3 sm:py-4 shadow-sm">
+                    <div className="flex items-start gap-3">
+                      <User className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                      <p className="text-sm leading-6">{submittedQuestion}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
 
               {isLoading && (
                 <div className="flex justify-start">
