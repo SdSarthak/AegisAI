@@ -47,8 +47,7 @@ jobs:
         env:
           AEGISAI_GUARD_URL: ${{ secrets.AEGISAI_GUARD_URL }}
           AEGISAI_API_TOKEN: ${{ secrets.AEGISAI_API_TOKEN }}
-
-       - name: Comment scan results on PR
+      - name: Comment scan results on PR
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
