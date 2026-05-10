@@ -29,18 +29,18 @@ class Notification(Base):
     __tablename__ = "notifications"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
-    notification_type = Column(String(100), nullable=False)  # NotificationType value
+    notification_type = Column(String(100), nullable=False, index=True)  # NotificationType value
     title = Column(String(255), nullable=False)
     message = Column(Text, nullable=False)
-    is_read = Column(Boolean, default=False)
+    is_read = Column(Boolean, default=False, index=True)
 
     # Optional link back to the relevant resource
     resource_type = Column(String(100), nullable=True)  # e.g. "ai_system", "document"
     resource_id = Column(Integer, nullable=True)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
     # Relationships
     user = relationship("User", back_populates="notifications")
