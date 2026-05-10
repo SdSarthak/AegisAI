@@ -9,6 +9,8 @@ Tests the GET /api/v1/documents/{id}/pdf endpoint to ensure:
 
 import pytest
 from sqlalchemy.orm import Session
+from io import BytesIO
+import pdfplumber
 
 from app.models.user import User
 from app.models.ai_system import AISystem, RiskLevel, ComplianceStatus
@@ -174,15 +176,20 @@ class TestPDFExportEndpoint:
         assert response.status_code in [401, 403]
 
     def test_pdf_export_includes_document_title(self, client, auth_headers, test_document):
-        """Test that PDF contains the document title (via text extraction check)."""
+        """Test that PDF contains the document title by extracting and verifying text."""
         response = client.get(
             f"/api/v1/documents/{test_document.id}/pdf",
             headers=auth_headers
         )
-        # PDF bytes should contain the title text (may be encoded)
         pdf_bytes = response.content
-        # Basic check: PDF should have significant content
-        assert len(pdf_bytes) > 2000, "PDF appears to be too small to contain full document"
+        
+        # Extract text from PDF and verify title is present
+        pdf_file = BytesIO(pdf_bytes)
+        with pdfplumber.open(pdf_file) as pdf:
+            # Extract text from first page
+            first_page_text = pdf.pages[0].extract_text()
+            # Verify document title is in the extracted text
+            assert test_document.title in first_page_text, f"Document title '{test_document.title}' not found in PDF"
 
     def test_pdf_export_has_filename(self, client, auth_headers, test_document):
         """Test that response includes filename in Content-Disposition header."""

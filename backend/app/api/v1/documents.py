@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
 from io import BytesIO
+import re
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -417,13 +418,10 @@ def export_document_pdf(
         elif line.startswith('- '):
             # Bullet point
             story.append(Paragraph('• ' + line.replace('- ', ''), body_style))
-        elif line.startswith('**') and line.endswith('**'):
-            # Bold text
-            bold_text = line.replace('**', '')
-            story.append(Paragraph(f"<b>{bold_text}</b>", body_style))
         else:
-            # Regular paragraph
-            story.append(Paragraph(line.strip(), body_style))
+            # Handle inline bold with regex
+            processed_line = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', line.strip())
+            story.append(Paragraph(processed_line, body_style))
     
     # Build PDF
     doc.build(story)
