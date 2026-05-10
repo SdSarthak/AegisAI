@@ -38,9 +38,9 @@ export default function RagChat() {
     try {
       // TODO: Replace this simulated response with the real RAG API call in the follow-up issue.
       // Suggested integration point:
-      // const { data } = await api.post('/rag/query', { question: trimmedQuestion })
+      // const { data } = await api.post('/api/v1/rag/query', { question: trimmedQuestion })
       // setAnswer({ answer: data.answer, sources: data.sources })
-      await new Promise((resolve) => setTimeout(resolve, 900))
+      await new Promise((resolve) => setTimeout(resolve, 900)) // TODO (#73): replace with actual POST /api/v1/rag/query call
 
       if (trimmedQuestion.toLowerCase().includes('error')) {
         throw new Error('Simulated RAG service failure. Try another question.')
@@ -242,10 +242,11 @@ export default function RagChat() {
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 mt-2">
             <p className="text-xs text-gray-500">
-              Try typing `error` to preview the error state.
+              Try typing `error` to preview the error state. 
+              {/* TODO: This statement is just for testing. Remove it after integration of API */}
             </p>
             <p className="text-xs text-gray-400">
-              Lorem ipsum dolor sit amet consectetur adipisicing elit.
+              Use this assistant to explore risk, documentation, and governance obligations.
             </p>
           </div>
         </form>
