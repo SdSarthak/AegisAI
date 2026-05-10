@@ -1,25 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Bell } from 'lucide-react'
 import { Link } from 'react-router-dom'
-
-/**
- * NotificationBell — nav bar bell icon with unread count badge and dropdown.
- *
- * TODO (good first issue — static UI):
- *   - Implement the bell icon button with a red badge showing `unreadCount`.
- *   - On click, toggle a dropdown showing the last 5 notifications (use
- *     hardcoded dummy data for now).
- *   - Each row should show: title, short message snippet, timestamp.
- *   - Add a "View all" link pointing to "/notifications".
- *   - Acceptance criteria: clicking the bell opens/closes the dropdown.
- *
- * TODO (help wanted — API wiring):
- *   - Use useQuery to poll GET /api/v1/notifications?unread_only=true every
- *     60 seconds to keep the badge count fresh.
- *   - Clicking a notification row marks it as read via POST /notifications/read.
- *   - Acceptance criteria: unread badge count decrements when a notification
- *     is clicked.
- */
 
 interface NotificationPreview {
   id: number
@@ -29,17 +10,60 @@ interface NotificationPreview {
   created_at: string
 }
 
-// TODO (help wanted): replace with real API data via useQuery
-const DUMMY_PREVIEWS: NotificationPreview[] = []
+const DUMMY_PREVIEWS: NotificationPreview[] = [
+  {
+    id: 1,
+    title: 'New threat detected',
+    message: 'A suspicious login attempt was blocked from IP 192.168.1.105 targeting your admin panel.',
+    is_read: false,
+    created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(), // 2 min ago
+  },
+  {
+    id: 2,
+    title: 'Scan complete',
+    message: 'Your scheduled vulnerability scan finished. 3 medium-severity issues were found.',
+    is_read: false,
+    created_at: new Date(Date.now() - 17 * 60 * 1000).toISOString(), // 17 min ago
+  },
+  {
+    id: 3,
+    title: 'Policy updated',
+    message: 'Your firewall policy "Block outbound port 23" was successfully applied to all nodes.',
+    is_read: true,
+    created_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+  },
+]
+
+function getRelativeTime(isoString: string): string {
+  const diff = Math.floor((Date.now() - new Date(isoString).getTime()) / 1000)
+  if (diff < 60) return `${diff}s ago`
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
+  return `${Math.floor(diff / 86400)}d ago`
+}
 
 export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
 
-  // TODO (help wanted): derive from real query data
   const unreadCount = DUMMY_PREVIEWS.filter((n) => !n.is_read).length
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    if (!isOpen) return
+
+    function handleMouseDown(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleMouseDown)
+    return () => document.removeEventListener('mousedown', handleMouseDown)
+  }, [isOpen])
+
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       {/* Bell button */}
       <button
         type="button"
@@ -48,7 +72,6 @@ export default function NotificationBell() {
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       >
         <Bell className="w-5 h-5" />
-        {/* TODO (good first issue): show badge only when unreadCount > 0 */}
         {unreadCount > 0 && (
           <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
             {unreadCount > 9 ? '9+' : unreadCount}
@@ -58,15 +81,42 @@ export default function NotificationBell() {
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl border border-gray-200 shadow-lg z-50">
+        <div className="absolute left-0 mt-2 w-72 bg-white rounded-xl border border-gray-200 shadow-lg z-50">
           <div className="p-4 border-b border-gray-100">
             <h3 className="font-semibold text-gray-900 text-sm">Notifications</h3>
           </div>
 
-          {/* TODO (good first issue): map over DUMMY_PREVIEWS (or real data) here */}
-          <div className="p-4 text-center text-sm text-gray-400">
-            No notifications yet
-          </div>
+          {DUMMY_PREVIEWS.length === 0 ? (
+            <div className="p-4 text-center text-sm text-gray-400">
+              No notifications yet
+            </div>
+          ) : (
+            <ul>
+              {DUMMY_PREVIEWS.map((n) => (
+                <li
+                  key={n.id}
+                  className={`px-4 py-3 border-b border-gray-50 last:border-b-0 hover:bg-gray-50 transition-colors ${
+                    !n.is_read ? 'bg-blue-50/40' : ''
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {!n.is_read && (
+                        <span className="mt-1 shrink-0 w-2 h-2 rounded-full bg-blue-500" />
+                      )}
+                      <p className="text-sm font-medium text-gray-900 truncate">{n.title}</p>
+                    </div>
+                    <span className="shrink-0 text-xs text-gray-400 whitespace-nowrap">
+                      {getRelativeTime(n.created_at)}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-gray-500 line-clamp-2 pl-3.5">
+                    {n.message}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
 
           <div className="p-3 border-t border-gray-100">
             <Link

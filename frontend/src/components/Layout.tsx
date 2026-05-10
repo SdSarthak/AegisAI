@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
+import NotificationBell from './NotificationBell'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -34,31 +35,39 @@ export default function Layout() {
           isCollapsed ? 'w-20' : 'w-64'
         }`}
       >
-        {/* Logo */}
+        {/* Logo + Bell + Collapse button */}
         <div className="flex items-center justify-between gap-2 px-4 py-4 border-b border-gray-200">
-          <div className="flex items-center gap-2">
-            <Shield className="w-8 h-8 text-primary-600" />
+          {/* Left: Shield icon + brand name */}
+          <div className="flex items-center gap-2 min-w-0">
+            <Shield className="w-8 h-8 text-primary-600 shrink-0" />
             <span
-              className={`text-lg font-semibold text-gray-900 ${
+              className={`text-lg font-semibold text-gray-900 truncate ${
                 isCollapsed ? 'sr-only' : ''
               }`}
             >
               AI Compliance
             </span>
           </div>
-          <button
-            type="button"
-            onClick={() => setIsCollapsed((prev) => !prev)}
-            className="p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100"
-            aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            {isCollapsed ? (
-              <ChevronRight className="w-5 h-5" />
-            ) : (
-              <ChevronLeft className="w-5 h-5" />
-            )}
-          </button>
+
+          {/* Right: Bell + Collapse toggle */}
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Hide bell when collapsed so the narrow sidebar stays clean */}
+            {!isCollapsed && <NotificationBell />}
+
+            <button
+              type="button"
+              onClick={() => setIsCollapsed((prev) => !prev)}
+              className="p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100"
+              aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              {isCollapsed ? (
+                <ChevronRight className="w-5 h-5" />
+              ) : (
+                <ChevronLeft className="w-5 h-5" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* Navigation */}
@@ -76,10 +85,8 @@ export default function Layout() {
                     : 'text-gray-600 hover:bg-gray-100'
                 } ${isCollapsed ? 'justify-center' : ''}`}
               >
-                <item.icon className="w-5 h-5" />
-                <span className={isCollapsed ? 'sr-only' : ''}>
-                  {item.name}
-                </span>
+                <item.icon className="w-5 h-5 shrink-0" />
+                <span className={isCollapsed ? 'sr-only' : ''}>{item.name}</span>
               </Link>
             )
           })}
@@ -92,17 +99,15 @@ export default function Layout() {
               isCollapsed ? 'justify-center' : 'justify-between'
             }`}
           >
-            <div className={isCollapsed ? 'sr-only' : 'truncate'}>
+            <div className={isCollapsed ? 'sr-only' : 'truncate mr-2'}>
               <p className="text-sm font-medium text-gray-900 truncate">
                 {displayName}
               </p>
-              <p className="text-xs text-gray-500 truncate">
-                {companyName}
-              </p>
+              <p className="text-xs text-gray-500 truncate">{companyName}</p>
             </div>
             <button
               onClick={logout}
-              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 shrink-0"
               aria-label="Log out"
               title="Log out"
             >
@@ -113,7 +118,11 @@ export default function Layout() {
       </div>
 
       {/* Main content */}
-      <div className={isCollapsed ? 'pl-20' : 'pl-64'}>
+      <div
+        className={`transition-[padding-left] duration-200 ${
+          isCollapsed ? 'pl-20' : 'pl-64'
+        }`}
+      >
         <main className="p-8">
           <Outlet />
         </main>
