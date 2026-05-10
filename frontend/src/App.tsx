@@ -6,6 +6,7 @@ import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import AISystems from './pages/AISystems'
 import Classification from './pages/Classification'
+import Onboarding from './pages/Onboarding'
 import Documents from './pages/Documents'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -18,6 +19,10 @@ function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
+
+      {/* Onboarding Route */}
+      <Route path="/onboarding" element={<Onboarding />} />
+
       <Route
         path="/"
         element={

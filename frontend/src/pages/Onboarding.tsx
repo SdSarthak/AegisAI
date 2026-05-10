@@ -50,6 +50,8 @@ export default function Onboarding() {
 
   const handleNext = () => {
     if (isLastStep) {
+      console.log('Onboarding completed')
+
       // TODO (help wanted): mark onboarding complete via API before navigating
       navigate('/')
     } else {
@@ -87,9 +89,12 @@ export default function Onboarding() {
               >
                 {idx + 1}
               </div>
+
               {idx < STEPS.length - 1 && (
                 <div
-                  className={`h-0.5 flex-1 ${idx < currentStep ? 'bg-primary-600' : 'bg-gray-200'}`}
+                  className={`h-0.5 flex-1 ${
+                    idx < currentStep ? 'bg-primary-600' : 'bg-gray-200'
+                  }`}
                 />
               )}
             </div>
@@ -100,16 +105,67 @@ export default function Onboarding() {
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <StepIcon className="w-6 h-6 text-primary-600" />
+
             <h2 className="text-lg font-semibold text-gray-900">
               {STEPS[currentStep].label}
             </h2>
           </div>
-          <p className="text-gray-600 text-sm">{STEPS[currentStep].description}</p>
 
-          {/* TODO (good first issue): add step-specific form fields here */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center text-sm text-gray-400">
-            Step {currentStep + 1} form fields — implement me
-          </div>
+          <p className="text-gray-600 text-sm">
+            {STEPS[currentStep].description}
+          </p>
+
+          {/* Step 1 */}
+          {currentStep === 0 && (
+            <div className="mt-6 space-y-4">
+              <input
+                type="text"
+                placeholder="AI System Name"
+                className="w-full rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+
+              <textarea
+                placeholder="Description"
+                rows={4}
+                className="w-full rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+
+              <input
+                type="text"
+                placeholder="Sector"
+                className="w-full rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+
+              <input
+                type="text"
+                placeholder="Use Case"
+                className="w-full rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+          )}
+
+          {/* Step 2 */}
+          {currentStep === 1 && (
+            <div className="mt-6 rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700">
+              Classification will run automatically based on the information
+              provided in the previous step.
+            </div>
+          )}
+
+          {/* Step 3 */}
+          {currentStep === 2 && (
+            <div className="mt-6 space-y-4">
+              <label className="block text-sm font-medium text-gray-700">
+                Select Document Type
+              </label>
+
+              <select className="w-full rounded-lg border border-gray-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+                <option>Compliance Report</option>
+                <option>Risk Assessment</option>
+                <option>Audit Checklist</option>
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Navigation */}
@@ -122,12 +178,14 @@ export default function Onboarding() {
           >
             Back
           </button>
+
           <button
             type="button"
             onClick={handleNext}
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
           >
             {isLastStep ? 'Finish' : 'Next'}
+
             {!isLastStep && <ChevronRight className="w-4 h-4" />}
           </button>
         </div>
