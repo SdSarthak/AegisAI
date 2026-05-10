@@ -43,12 +43,34 @@ jobs:
         run: pip install httpx
 
       - name: Scan prompt files
-        # TODO (high priority): replace this placeholder with a real scan script
-        run: |
-          echo "TODO: implement prompt scanning against AEGISAI_GUARD_URL"
-          echo "See the TODO comment at the top of this file for instructions."
-          # Placeholder — always passes until implemented
-          exit 0
+        run: python scripts/scan_prompts.py
         env:
           AEGISAI_GUARD_URL: ${{ secrets.AEGISAI_GUARD_URL }}
           AEGISAI_API_TOKEN: ${{ secrets.AEGISAI_API_TOKEN }}
+
+      - name: Comment scan results on PR
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -f guard-scan-report.json ]; then
+            COMMENT_BODY=$(python - <<'PY'
+import json
+
+with open('guard-scan-report.json', 'r', encoding='utf-8') as report_file:
+    report = json.load(report_file)
+
+blocked = report.get('blocked', [])
+if not blocked:
+    print('Guard scan failed, but no blocked prompt details were captured.')
+else:
+    lines = ['Guard Scan blocked the following prompt files:']
+    for item in blocked:
+        lines.append(f"- `{item['file']}`: {item['patterns']}")
+    print('\n'.join(lines))
+PY
+            )
+            gh pr comment ${{ github.event.pull_request.number }} --body "$COMMENT_BODY"
+          else
+            gh pr comment ${{ github.event.pull_request.number }} --body "Guard scan failed before a report could be written."
+          fi
