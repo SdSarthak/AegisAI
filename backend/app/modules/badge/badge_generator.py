@@ -36,17 +36,24 @@ def generate_badge_svg(
 ) -> str:
     """
     Generate an SVG compliance badge.
-
-    Args:
-        system_name: Name of the AI system.
-        risk_level: One of minimal / limited / high / unacceptable, or None.
-        compliance_status: One of the ComplianceStatus enum values.
-
-    Returns:
-        SVG string ready for serving with Content-Type: image/svg+xml.
-
-    TODO (good first issue): implement the body of this function.
-    Hint: build the SVG as an f-string using STATUS_COLORS and RISK_LABELS.
     """
-    # TODO: implement
-    raise NotImplementedError("generate_badge_svg is not yet implemented — see TODO above")
+
+    color = STATUS_COLORS.get(compliance_status, "#9ca3af") #(fallback to gray if unknown)
+
+    status_label = compliance_status.replace("_", " ").title()
+
+    risk_text = ""
+    if risk_level:
+        risk_text = f" ({RISK_LABELS.get(risk_level, risk_level.title())})"
+
+    full_label = f"{status_label}{risk_text}"
+
+    # SVG badge
+    svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="220" height="20">
+  <rect width="100" height="20" fill="#555"/>
+  <rect x="100" width="120" height="20" fill="{color}"/>
+  <text x="50" y="14" fill="#fff" font-size="11" font-family="sans-serif" text-anchor="middle">AegisAI</text>
+  <text x="160" y="14" fill="#fff" font-size="11" font-family="sans-serif" text-anchor="middle">{full_label}</text>
+</svg>'''
+
+    return svg
