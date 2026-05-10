@@ -16,6 +16,7 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token
 
 router = APIRouter()
+users_router = APIRouter()
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -78,7 +79,7 @@ def get_current_user_info(current_user: User = Depends(get_current_user)):
     return current_user
 
 
-@router.patch("/me", response_model=UserResponse)
+@users_router.patch("/me", response_model=UserResponse)
 def update_current_user_info(
     user_data: UserUpdateSchema,
     current_user: User = Depends(get_current_user),

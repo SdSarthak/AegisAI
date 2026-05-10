@@ -51,7 +51,7 @@ def test_patch_me_updates_profile_fields(tmp_path):
 
     client = TestClient(app)
     response = client.patch(
-        "/api/v1/auth/me",
+        "/api/v1/users/me",
         json={"full_name": "New Name", "company_name": "New Company"},
     )
 
