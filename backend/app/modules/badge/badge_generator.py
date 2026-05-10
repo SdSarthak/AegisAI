@@ -48,5 +48,12 @@ def generate_badge_svg(
     TODO (good first issue): implement the body of this function.
     Hint: build the SVG as an f-string using STATUS_COLORS and RISK_LABELS.
     """
-    # TODO: implement
-    raise NotImplementedError("generate_badge_svg is not yet implemented — see TODO above")
+    color = STATUS_COLORS.get(compliance_status, "#9ca3af")
+    status_label = compliance_status.replace("_", " ").title()
+    
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="200" height="20">
+  <rect width="80" height="20" fill="#555"/>
+  <rect x="80" width="120" height="20" fill="{color}"/>
+  <text x="40" y="14" fill="#fff" font-size="11" font-family="sans-serif" text-anchor="middle">AegisAI</text>
+  <text x="140" y="14" fill="#fff" font-size="11" font-family="sans-serif" text-anchor="middle">{status_label}</text>
+</svg>"""
