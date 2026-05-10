@@ -16,6 +16,7 @@ from app.schemas.ai_system import (
     AISystemResponse,
     BulkImportResponse,
     ComplianceStatusUpdateSchema,
+    AuditLogResponse
 )
 from app.schemas.pagination import PaginatedResponse
 
@@ -315,41 +316,34 @@ def update_ai_system_status(
     return system
 
 
-
-@router.get("/{system_id}/history")
+@router.get("/{system_id}/history", response_model=List[AuditLogResponse])
 def get_ai_system_history(
     system_id: int,
+    limit: int = 20,
+    offset: int = 0,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user)
 ):
-    """Get audit history for a specific AI system."""
-
+    """Get change history for a specific AI system."""
     system = db.query(AISystem).filter(
         AISystem.id == system_id,
-        AISystem.owner_id == current_user.id,
+        AISystem.owner_id == current_user.id
     ).first()
 
     if not system:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="AI system not found",
+            detail="AI system not found"
         )
 
-    history = (
+    logs = (
         db.query(AISystemAuditLog)
         .filter(AISystemAuditLog.ai_system_id == system_id)
-        .order_by(desc(AISystemAuditLog.changed_at))
+        .order_by(AISystemAuditLog.changed_at.desc())
+        .offset(offset)
+        .limit(limit)
         .all()
     )
 
-    return [
-        {
-            "id": log.id,
-            "ai_system_id": log.ai_system_id,
-            "changed_by_id": log.changed_by_id,
-            "old_values": log.old_values,
-            "new_values": log.new_values,
-            "changed_at": log.changed_at,
-        }
-        for log in history
-    ]
+    return logs
+

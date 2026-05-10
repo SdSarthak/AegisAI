@@ -111,3 +111,12 @@ class QuestionnaireRiskFactor(BaseModel):
     question: str
     article: str
     triggers_level: RiskLevel
+class AuditLogResponse(BaseModel):
+    id: int
+    changed_by_id: int
+    old_values: Dict[str, Any]
+    new_values: Dict[str, Any]
+    changed_at: datetime
+
+    class Config:
+        from_attributes = True
