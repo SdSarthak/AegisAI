@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, ForeignKey, JSON, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -38,7 +38,7 @@ class AISystem(Base):
     
     # Compliance tracking
     compliance_status = Column(Enum(ComplianceStatus), default=ComplianceStatus.NOT_STARTED)
-    compliance_score = Column(Integer, default=0)  # 0-100
+    compliance_score = Column(Float, nullable=True, default=None)  # 0.0–100.0, null until classification runs
     
     # Questionnaire responses (JSON)
     questionnaire_responses = Column(JSON, default=dict)
