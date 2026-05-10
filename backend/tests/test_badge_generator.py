@@ -17,7 +17,8 @@ def test_generate_badge_svg_in_progress():
     assert ">In Progress</text>" in svg
 
 
-def test_generate_badge_svg_contains_system_name():
-    svg = generate_badge_svg("AegisAI", "high", "compliant")
+def test_generate_badge_svg_contains_aegisai_label():
+    svg = generate_badge_svg("Other System", "high", "compliant")
 
     assert ">AegisAI</text>" in svg
+

@@ -54,6 +54,7 @@ def generate_badge_svg(
     return f"""<svg xmlns="http://www.w3.org/2000/svg" width="200" height="20">
   <rect width="80" height="20" fill="#555"/>
   <rect x="80" width="120" height="20" fill="{color}"/>
-<text x="40" y="14" fill="#fff" font-size="11" font-family="sans-serif" text-anchor="middle">{system_name}</text>
+<text x="40" y="14" fill="#fff" font-size="11" font-family="sans-serif" text-anchor="middle">AegisAI</text>
   <text x="140" y="14" fill="#fff" font-size="11" font-family="sans-serif" text-anchor="middle">{status_label}</text>
 </svg>"""
+
