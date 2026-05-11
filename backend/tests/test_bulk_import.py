@@ -3,8 +3,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
-from io import StringIO
-
+from io import BytesIO
 
 @pytest.fixture
 def client():
@@ -42,8 +41,8 @@ Fraud Detector,Flags anomalous transactions,Risk Assessment,Finance,2.1"""
 
         response = test_client.post(
             "/api/v1/ai-systems/import",
-            files={"file": ("test.csv", StringIO(csv_content), "text/csv")}
-        )
+                files={"file": ("test.csv", BytesIO(csv_content.encode('utf-8')), "text/csv")}        
+                )
 
         assert response.status_code == 200
         data = response.json()
