@@ -33,8 +33,6 @@ interface ComplianceChecklistProps {
 }
 
 export default function ComplianceChecklist({
-  systemId,
-  riskLevel,
   items,
 }: ComplianceChecklistProps) {
   const [checked, setChecked] = useState<Set<string>>(new Set())

@@ -1,0 +1,14 @@
+{
+  "name": "aegis-ai-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "AegisAI — Open-source AI Governance, Risk & Compliance Platform",
+  "scripts": {
+    "dev": "npm run dev --prefix frontend",
+    "build": "npm run build --prefix frontend",
+    "install:frontend": "npm install --prefix frontend",
+    "install:all": "npm run install:frontend && echo 'Next: manually install python requirements in backend/venv'",
+    "backend": "cd backend && venv\\Scripts\\activate && uvicorn app.main:app --reload",
+    "frontend": "npm run dev --prefix frontend"
+  }
+}

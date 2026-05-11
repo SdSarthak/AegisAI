@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus } from 'lucide-react'
+import { FileText, Download, Trash2, Plus, Search, Filter, X } from 'lucide-react'
 
 interface Document {
   id: number
@@ -23,6 +23,9 @@ export default function Documents() {
   const [showModal, setShowModal] = useState(false)
   const [selectedSystem, setSelectedSystem] = useState<number | null>(null)
   const [selectedType, setSelectedType] = useState('technical_documentation')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterType, setFilterType] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('all')
 
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ['documents'],
@@ -57,6 +60,13 @@ export default function Documents() {
     { value: 'transparency_notice', label: 'Transparency Notice' },
     { value: 'human_oversight_plan', label: 'Human Oversight Plan' },
   ]
+
+  const filteredDocuments = documents.filter((doc: Document) => {
+    const matchesSearch = doc.title.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesType = filterType === 'all' || doc.document_type === filterType
+    const matchesStatus = filterStatus === 'all' || doc.status === filterStatus
+    return matchesSearch && matchesType && matchesStatus
+  })
 
   const handleGenerate = () => {
     if (!selectedSystem) return
@@ -104,19 +114,85 @@ export default function Documents() {
         </div>
       )}
 
+      {/* Search and Filter Bar */}
+      <div className="flex flex-wrap gap-4 items-center bg-white p-4 rounded-xl border border-gray-200">
+        <div className="flex-1 min-w-[240px] relative">
+          <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search documents by title..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:bg-white transition-all"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+        
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Filter className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="pl-9 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 appearance-none cursor-pointer"
+            >
+              <option value="all">All Types</option>
+              {documentTypes.map(type => (
+                <option key={type.value} value={type.value}>{type.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 cursor-pointer"
+          >
+            <option value="all">All Status</option>
+            <option value="generated">Generated</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="approved">Approved</option>
+          </select>
+
+          {(searchQuery || filterType !== 'all' || filterStatus !== 'all') && (
+            <button
+              onClick={() => {
+                setSearchQuery('')
+                setFilterType('all')
+                setFilterStatus('all')
+              }}
+              className="text-sm text-primary-600 hover:text-primary-700 font-medium"
+            >
+              Reset
+            </button>
+          )}
+        </div>
+      </div>
+
       {isLoading ? (
         <div className="text-center py-12 text-gray-500">Loading...</div>
-      ) : documents.length === 0 ? (
+      ) : filteredDocuments.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-medium text-gray-900">No documents yet</h3>
+          <h3 className="text-lg font-medium text-gray-900">
+            {documents.length === 0 ? 'No documents yet' : 'No matching documents'}
+          </h3>
           <p className="text-gray-500 mt-1">
-            Generate your first compliance document
+            {documents.length === 0 
+              ? 'Generate your first compliance document'
+              : 'Try adjusting your search or filters'}
           </p>
         </div>
       ) : (
         <div className="grid gap-4">
-          {documents.map((doc: Document) => (
+          {filteredDocuments.map((doc: Document) => (
             <div
               key={doc.id}
               className="bg-white rounded-xl border border-gray-200 p-6"
