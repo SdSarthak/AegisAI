@@ -93,6 +93,11 @@ class RiskAssessmentResponse(BaseModel):
         from_attributes = True
 
 
+# Compliance Status Update
+class ComplianceStatusUpdateSchema(BaseModel):
+    compliance_status: ComplianceStatus
+
+
 # Bulk Import
 class BulkImportResponse(BaseModel):
     created: int

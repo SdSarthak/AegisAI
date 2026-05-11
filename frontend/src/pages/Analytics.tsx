@@ -1,4 +1,7 @@
+
 import { TrendingUp, BarChart2 } from 'lucide-react'
+
+
 
 /**
  * Analytics page — compliance score timeline and aggregate stats.
@@ -19,6 +22,8 @@ import { TrendingUp, BarChart2 } from 'lucide-react'
  *   - Acceptance criteria: selecting a system renders its real compliance
  *     score over the last 30 days as a line chart.
  */
+
+
 
 // TODO (help wanted): replace with real API call
 // const analyticsApi = {

@@ -1,19 +1,31 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
 from app.core.database import get_db
 from app.core.security import (
-    verify_password, 
-    get_password_hash, 
+    verify_password,
+    get_password_hash,
     create_access_token,
     get_current_user
 )
 from app.core.config import settings
-from app.core.database import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_new_password(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("new_password must be at least 8 characters")
+        return v
 
 router = APIRouter()
 users_router = APIRouter()
@@ -77,6 +89,25 @@ def login(
 def get_current_user_info(current_user: User = Depends(get_current_user)):
     """Get current user information."""
     return current_user
+
+
+@router.post("/change-password", status_code=status.HTTP_200_OK)
+def change_password(
+    payload: ChangePasswordRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Change the authenticated user's password."""
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Current password is incorrect",
+        )
+
+    current_user.hashed_password = get_password_hash(payload.new_password)
+    current_user = db.merge(current_user)
+    db.commit()
+    return {"message": "Password updated successfully"}
 
 
 @users_router.patch("/me", response_model=UserResponse)

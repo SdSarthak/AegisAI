@@ -9,7 +9,7 @@ description = "Standalone LLM prompt injection guard — extracted from the Aegi
 readme = "README.md"
 license = { text = "AGPL-3.0-only" }
 requires-python = ">=3.11"
-authors = [{ name = "Sarthak Doshi", email = "github.com/SdSarthak" }]
+authors = [{ name = "Sarthak Doshi", email = "sarthak@example.com" }]
 keywords = ["llm", "prompt-injection", "ai-security", "guardrails"]
 classifiers = [
     "Development Status :: 3 - Alpha",

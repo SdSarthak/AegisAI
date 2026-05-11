@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus } from 'lucide-react'
+import { FileText, Download, Trash2, Plus, Edit } from 'lucide-react'
+import DocumentEditor from '../components/DocumentEditor'
 
 interface Document {
   id: number
@@ -23,6 +24,7 @@ export default function Documents() {
   const [showModal, setShowModal] = useState(false)
   const [selectedSystem, setSelectedSystem] = useState<number | null>(null)
   const [selectedType, setSelectedType] = useState('technical_documentation')
+  const [editingDoc, setEditingDoc] = useState<Document | null>(null)
 
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ['documents'],
@@ -64,6 +66,26 @@ export default function Documents() {
       document_type: selectedType,
       ai_system_id: selectedSystem,
     })
+  }
+
+  const handleSaveDocument = async (content: string) => {
+    if (!editingDoc) return
+
+    try {
+      const response = await fetch(`/api/v1/documents/${editingDoc.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content })
+      })
+
+      if (response.ok) {
+        queryClient.invalidateQueries({ queryKey: ['documents'] })
+      }
+    } catch (error) {
+      console.error('Save failed:', error)
+    }
   }
 
   const getStatusColor = (status: string) => {
@@ -146,6 +168,13 @@ export default function Documents() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setEditingDoc(doc)}
+                    className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
+                    title="Edit"
+                  >
+                    <Edit className="w-5 h-5" />
+                  </button>
                   <button
                     onClick={() => {
                       // Download as text file
@@ -242,6 +271,20 @@ export default function Documents() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Editor Modal */}
+      {editingDoc && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl w-full max-w-6xl h-[90vh]">
+            <DocumentEditor
+              documentId={editingDoc.id}
+              initialContent={editingDoc.content || ''}
+              onSave={handleSaveDocument}
+              onClose={() => setEditingDoc(null)}
+            />
           </div>
         </div>
       )}
