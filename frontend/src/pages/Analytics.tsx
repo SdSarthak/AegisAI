@@ -1,5 +1,4 @@
-import { useQuery } from '@tanstack/react-query'
-import { TrendingUp, BarChart2 } from 'lucide-react'
+import { BarChart2, TrendingUp } from 'lucide-react'
 
 /**
  * Analytics page — compliance score timeline and aggregate stats.
@@ -21,10 +20,7 @@ import { TrendingUp, BarChart2 } from 'lucide-react'
  *     score over the last 30 days as a line chart.
  */
 
-interface SnapshotPoint {
-  snapshotted_at: string
-  compliance_score: number
-}
+
 
 // TODO (help wanted): replace with real API call
 // const analyticsApi = {

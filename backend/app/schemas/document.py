@@ -16,6 +16,9 @@ class DocumentUpdate(BaseModel):
     content: Optional[str] = None
     status: Optional[DocumentStatus] = None
 
+class DocumentUpdateRequest(BaseModel):
+    """Request to update document content only."""
+    content: str
 
 class DocumentResponse(BaseModel):
     id: int

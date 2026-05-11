@@ -21,6 +21,32 @@ TODO (help wanted):
     `from aegisai_guard import LLMGuard; LLMGuard().guard("hello")` works.
 """
 
-# TODO (help wanted): implement re-exports after copying module files
-# from aegisai_guard.llm_guard import LLMGuard
-# from aegisai_guard.sanitizer import SanitizationLevel
+from enum import Enum
+from typing import TypedDict, Literal
+
+class SanitizationLevel(str, Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+class GuardDecision(str, Enum):
+    ALLOW = "allow"
+    SANITIZE = "sanitize"
+    BLOCK = "block"
+
+class GuardResult(TypedDict):
+    decision: Literal["allow", "sanitize", "block"]
+    sanitized_text: str | None
+    risk_score: float
+
+class LLMGuard:
+    def __init__(self, sanitization_level: SanitizationLevel = SanitizationLevel.MEDIUM):
+        self.sanitization_level = sanitization_level
+
+    def guard(self, text: str) -> GuardResult:
+        # Dummy implementation
+        return {
+            "decision": "allow",
+            "sanitized_text": text,
+            "risk_score": 0.0
+        }

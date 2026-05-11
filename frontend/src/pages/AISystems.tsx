@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
-import { Bot, Plus, Trash2, Edit } from 'lucide-react'
+import { Bot, Plus, Trash2, Edit, Search, Filter, X } from 'lucide-react'
 
 interface AISystem {
   id: number
@@ -23,6 +23,9 @@ export default function AISystems() {
     use_case: '',
     sector: '',
   })
+  const [searchTerm, setSearchTerm] = useState('')
+  const [riskFilter, setRiskFilter] = useState('')
+  const [complianceFilter, setComplianceFilter] = useState('')
 
   const { data: systems = [], isLoading } = useQuery({
     queryKey: ['ai-systems'],
@@ -43,6 +46,17 @@ export default function AISystems() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-systems'] })
     },
+  })
+
+  const filteredSystems = systems.filter((system: AISystem) => {
+    const matchesSearch =
+      system.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (system.description?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
+
+    const matchesRisk = !riskFilter || system.risk_level === riskFilter
+    const matchesCompliance = !complianceFilter || system.compliance_status === complianceFilter
+
+    return matchesSearch && matchesRisk && matchesCompliance
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -87,25 +101,91 @@ export default function AISystems() {
         </button>
       </div>
 
+      {/* Search and Filters */}
+      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search AI systems..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+          />
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <div className="relative">
+            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <select
+              value={riskFilter}
+              onChange={(e) => setRiskFilter(e.target.value)}
+              className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
+            >
+              <option value="">All Risk Levels</option>
+              <option value="unacceptable">Unacceptable Risk</option>
+              <option value="high">High Risk</option>
+              <option value="limited">Limited Risk</option>
+              <option value="minimal">Minimal Risk</option>
+            </select>
+          </div>
+          <div className="relative">
+            <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <select
+              value={complianceFilter}
+              onChange={(e) => setComplianceFilter(e.target.value)}
+              className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
+            >
+              <option value="">All Statuses</option>
+              <option value="not_started">Not Started</option>
+              <option value="in_progress">In Progress</option>
+              <option value="under_review">Under Review</option>
+              <option value="compliant">Compliant</option>
+              <option value="non_compliant">Non Compliant</option>
+            </select>
+          </div>
+          {(searchTerm || riskFilter || complianceFilter) && (
+            <button
+              onClick={() => {
+                setSearchTerm('')
+                setRiskFilter('')
+                setComplianceFilter('')
+              }}
+              className="flex items-center gap-1 px-3 py-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all text-sm font-medium"
+            >
+              <X className="w-4 h-4" />
+              Clear
+            </button>
+          )}
+        </div>
+      </div>
+
       {isLoading ? (
         <div className="text-center py-12 text-gray-500">Loading...</div>
-      ) : systems.length === 0 ? (
+      ) : filteredSystems.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-medium text-gray-900">No AI systems yet</h3>
+          <h3 className="text-lg font-medium text-gray-900">
+            {searchTerm || riskFilter || complianceFilter 
+              ? 'No matching AI systems' 
+              : 'No AI systems yet'}
+          </h3>
           <p className="text-gray-500 mt-1">
-            Add your first AI system to start tracking compliance
+            {searchTerm || riskFilter || complianceFilter 
+              ? 'Try adjusting your filters or search term'
+              : 'Add your first AI system to start tracking compliance'}
           </p>
-          <button
-            onClick={() => setShowModal(true)}
-            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-          >
-            Add AI System
-          </button>
+          {!searchTerm && !riskFilter && !complianceFilter && (
+            <button
+              onClick={() => setShowModal(true)}
+              className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+            >
+              Add AI System
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid gap-4">
-          {systems.map((system: AISystem) => (
+          {filteredSystems.map((system: AISystem) => (
             <div
               key={system.id}
               className="bg-white rounded-xl border border-gray-200 p-6"

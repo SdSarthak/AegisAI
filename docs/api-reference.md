@@ -19,7 +19,11 @@ Authorization: Bearer <token>
 - [Documents](#documents)
 - [LLM Guard](#llm-guard)
 - [RAG Intelligence](#rag-intelligence)
+- [Analytics](#analytics)
+- [Badge](#badge)
+- [Notifications](#notifications)
 - [Health](#health)
+- [Error format](#error-format)
 
 ---
 
@@ -47,7 +51,7 @@ Create a new user account.
   "full_name": "Jane Smith",
   "company_name": "Acme AI Ltd",
   "subscription_tier": "free",
-  "created_at": "2026-04-05T10:00:00Z"
+  "created_at": "2026-05-11T10:00:00Z"
 }
 ```
 
@@ -88,9 +92,25 @@ Return the authenticated user's profile.
   "full_name": "Jane Smith",
   "company_name": "Acme AI Ltd",
   "subscription_tier": "free",
-  "created_at": "2026-04-05T10:00:00Z"
+  "created_at": "2026-05-11T10:00:00Z"
 }
 ```
+
+---
+
+### PATCH /users/me
+
+Update the authenticated user's profile. All fields are optional.
+
+**Request body:**
+```json
+{
+  "full_name": "Jane Smith-Jones",
+  "company_name": "New Company Ltd"
+}
+```
+
+**Response `200`:** Updated user object.
 
 **Errors:** `401` invalid or expired token.
 
@@ -124,19 +144,56 @@ Register a new AI system for compliance tracking.
   "sector": "Employment",
   "risk_level": null,
   "compliance_status": "not_started",
+  "compliance_score": null,
   "owner_id": 1,
-  "created_at": "2026-04-05T10:00:00Z",
-  "updated_at": "2026-04-05T10:00:00Z"
+  "created_at": "2026-05-11T10:00:00Z",
+  "updated_at": "2026-05-11T10:00:00Z"
 }
 ```
+
+Note: `compliance_score` is a nullable Float — it remains `null` until a rollup job or manual action computes it.
+
+---
+
+### POST /ai-systems/import
+
+Bulk import AI systems from a CSV file.
+
+**Request:** `multipart/form-data` with a `file` field.
+
+CSV format (header row required):
+```csv
+name,description,use_case,sector,version
+CV Screening Tool,Screens CVs automatically,HR recruitment,Employment,1.0
+Fraud Detector,Detects payment fraud,Risk management,Banking,2.0
+```
+
+**Response `200`:**
+```json
+{
+  "imported": 2,
+  "failed": 0,
+  "errors": []
+}
+```
+
+**Errors:** `400` malformed CSV. `422` per-row validation failures (reported in `errors` array).
 
 ---
 
 ### GET /ai-systems
 
-List all AI systems owned by the authenticated user.
+List all AI systems owned by the authenticated user. Supports search and filtering.
 
-**Response `200`:** Array of AI system objects (same shape as above).
+**Query parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `search` | string | Filter by name (case-insensitive substring) |
+| `risk_level` | string | Filter: `minimal`, `limited`, `high`, `unacceptable` |
+| `compliance_status` | string | Filter: `not_started`, `in_progress`, `compliant`, `non_compliant` |
+
+**Response `200`:** Array of AI system objects.
 
 ---
 
@@ -150,15 +207,7 @@ Fetch a single AI system by ID.
 
 ### PUT /ai-systems/{id}
 
-Update an AI system. All fields optional — only provided fields are updated.
-
-**Request body:**
-```json
-{
-  "name": "CV Screening Tool v3",
-  "version": "3.0"
-}
-```
+Update an AI system. All fields optional.
 
 **Response `200`:** Updated AI system object.
 
@@ -168,11 +217,9 @@ Update an AI system. All fields optional — only provided fields are updated.
 
 ### DELETE /ai-systems/{id}
 
-Delete an AI system and all its associated documents.
+Delete an AI system and all associated documents.
 
 **Response `204`:** No content.
-
-**Errors:** `404` not found or not owned by you.
 
 ---
 
@@ -180,10 +227,9 @@ Delete an AI system and all its associated documents.
 
 ### POST /classification/classify
 
-Classify a system's EU AI Act risk level without saving to the database. Use this to preview before committing.
+Classify a system's EU AI Act risk level without saving to the database (preview mode).
 
-**Request body** — answer each questionnaire field (`true`/`false`):
-
+**Request body:**
 ```json
 {
   "hr_recruitment_screening": false,
@@ -231,8 +277,7 @@ Classify a system's EU AI Act risk level without saving to the database. Use thi
   ],
   "next_steps": [
     "Implement transparency notices for users",
-    "Document your disclosure mechanisms",
-    "Review interaction points with users"
+    "Document your disclosure mechanisms"
   ]
 }
 ```
@@ -243,9 +288,9 @@ Classify a system's EU AI Act risk level without saving to the database. Use thi
 
 ### POST /classification/classify/{system_id}
 
-Classify a system and save the result — updates `risk_level` on the AI system and creates a `RiskAssessment` record.
+Classify a system and persist the result — updates `risk_level` on the AI system and creates a `RiskAssessment` record.
 
-Same request body as above. Same response shape.
+Same request body and response shape as above.
 
 **Errors:** `404` system not found or not owned by you.
 
@@ -255,7 +300,7 @@ Same request body as above. Same response shape.
 
 ### POST /documents/generate
 
-Generate a compliance document for an AI system from a built-in template.
+Generate a compliance document from a built-in template.
 
 **Request body:**
 ```json
@@ -280,14 +325,30 @@ Generate a compliance document for an AI system from a built-in template.
   "title": "Technical Documentation - CV Screening Tool",
   "document_type": "technical_documentation",
   "status": "generated",
-  "content": "# Technical Documentation - CV Screening Tool\n\n## 1. General Description...",
+  "content": "# Technical Documentation - CV Screening Tool\n\n...",
   "ai_system_id": 42,
   "owner_id": 1,
-  "created_at": "2026-04-05T10:00:00Z"
+  "created_at": "2026-05-11T10:00:00Z"
 }
 ```
 
 **Errors:** `404` system not found. `400` unsupported document type.
+
+---
+
+### GET /documents/{id}/pdf
+
+Export a document as a PDF file.
+
+**Response `200`:** `application/pdf` binary stream.
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/v1/documents/7/pdf \
+  --output document.pdf
+```
+
+**Errors:** `404` document not found or not owned by you.
 
 ---
 
@@ -321,6 +382,8 @@ Delete a document.
 
 Scan a prompt for injection risks through the four-layer pipeline.
 
+> **Rate limited** — per-user limit applies. Returns `429` when exceeded.
+
 **Request body:**
 ```json
 {
@@ -347,7 +410,7 @@ Scan a prompt for injection risks through the four-layer pipeline.
 | `sanitize` | Suspicious but recoverable | Meta-instructions stripped, cleaned prompt sent to LLM |
 | `block` | Malicious intent detected | Safe error message returned, no LLM call |
 
-**Errors:** `500` if the Guard module fails to load (e.g. missing dependencies).
+**Errors:** `429` rate limit exceeded. `500` if the Guard module fails to load.
 
 ---
 
@@ -366,7 +429,7 @@ Check if the Guard module is loaded and available.
 
 ### POST /rag/query
 
-Ask a regulatory question and receive an answer grounded in the ingested source documents.
+Ask a regulatory question and receive a grounded answer.
 
 **Request body:**
 ```json
@@ -378,21 +441,64 @@ Ask a regulatory question and receive an answer grounded in the ingested source 
 **Response `200`:**
 ```json
 {
-  "answer": "Yes. CV-screening tools fall under Annex III point 4(a) as high-risk AI systems used in employment. Under Article 43, high-risk systems must undergo conformity assessment before market placement...",
-  "sources": [
-    "eu_ai_act.pdf",
-    "eu_ai_act.pdf"
-  ]
+  "answer": "Yes. CV-screening tools fall under Annex III point 4(a) as high-risk AI systems...",
+  "answer_id": "a7f3c291-4b2e-...",
+  "sources": ["eu_ai_act.pdf", "eu_ai_act.pdf"]
 }
 ```
 
-**Errors:** `503` if the RAG knowledge base has not been ingested yet. Run `POST /rag/ingest` first (contributor opportunity — see issue tracker).
+Save `answer_id` to submit feedback later.
+
+**Errors:** `503` if the RAG knowledge base has not been ingested yet.
+
+---
+
+### POST /rag/feedback
+
+Submit a vote on a RAG answer quality.
+
+**Request body:**
+```json
+{
+  "answer_id": "a7f3c291-4b2e-...",
+  "vote": "down"
+}
+```
+
+**Vote values:** `"up"` | `"down"`
+
+**Response `200`:**
+```json
+{"status": "recorded"}
+```
+
+---
+
+### GET /rag/low-quality-chunks
+
+Surface document chunks with high thumbs-down ratios. Admin / scale subscription tier only.
+
+**Query parameters:**
+
+| Parameter | Default | Description |
+|---|---|---|
+| `threshold` | `0.3` | Minimum thumbs-down ratio to include |
+
+**Response `200`:**
+```json
+[
+  {
+    "chunk": "eu_ai_act.pdf::page_42",
+    "thumbs_down": 7,
+    "total": 9,
+    "ratio": 0.78
+  }
+]
+```
 
 ---
 
 ### GET /rag/health
-
-Check if the RAG module is available.
 
 **Response `200`:**
 ```json
@@ -401,11 +507,75 @@ Check if the RAG module is available.
 
 ---
 
+## Analytics
+
+### GET /analytics
+
+Return compliance metrics aggregated across the authenticated user's AI systems.
+
+**Response `200`:**
+```json
+{
+  "total_systems": 5,
+  "by_risk_level": {
+    "minimal": 1,
+    "limited": 2,
+    "high": 2,
+    "unacceptable": 0
+  },
+  "by_compliance_status": {
+    "not_started": 1,
+    "in_progress": 2,
+    "compliant": 2,
+    "non_compliant": 0
+  },
+  "documents_generated": 6,
+  "average_compliance_score": 0.74
+}
+```
+
+---
+
+## Badge
+
+### GET /badge/{system_id}
+
+Return an SVG compliance badge for embedding in READMEs or dashboards.
+
+**Response `200`:** `image/svg+xml`
+
+Embed example:
+```markdown
+![Compliance Badge](https://your-aegisai-instance/api/v1/badge/42)
+```
+
+Badge colour by risk level:
+- Green — Minimal / Compliant
+- Yellow — Limited
+- Orange — High
+- Red — Unacceptable / Non-compliant
+
+**Errors:** `404` system not found.
+
+---
+
+## Notifications
+
+> **Status:** Model and Alembic migration in progress (PR #175). Endpoint scaffold present — responses will be empty until the migration is applied.
+
+### GET /notifications
+
+List notifications for the authenticated user.
+
+**Response `200`:** Array of notification objects.
+
+---
+
 ## Health
 
 ### GET /
 
-Root endpoint — returns project metadata.
+Root endpoint — project metadata.
 
 **Response `200`:**
 ```json
@@ -448,6 +618,6 @@ All errors follow a consistent shape:
 | `403` | Forbidden — authenticated but not authorised |
 | `404` | Not found — resource doesn't exist or isn't yours |
 | `422` | Validation error — request body failed schema validation |
-| `429` | Rate limited — too many requests |
+| `429` | Rate limited — too many requests (Guard scan endpoint) |
 | `500` | Internal server error — unexpected failure |
 | `503` | Service unavailable — module not ready (e.g. RAG not ingested) |

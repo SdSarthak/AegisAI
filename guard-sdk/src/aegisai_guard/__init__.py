@@ -25,8 +25,7 @@ TODO (help wanted — re-export):
   - Acceptance criteria: the package works without a running FastAPI server.
 """
 
-# TODO (help wanted): uncomment once guard.py re-exports are implemented
-# from aegisai_guard.guard import LLMGuard, SanitizationLevel, GuardDecision
-
+from aegisai_guard.guard import LLMGuard, SanitizationLevel, GuardDecision
+ 
 __version__ = "0.1.0"
-__all__: list[str] = []
+__all__: list[str] = ["LLMGuard", "SanitizationLevel", "GuardDecision"]

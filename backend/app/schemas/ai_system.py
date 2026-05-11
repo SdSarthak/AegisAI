@@ -30,7 +30,7 @@ class AISystemResponse(BaseModel):
     sector: Optional[str]
     risk_level: Optional[RiskLevel]
     compliance_status: ComplianceStatus
-    compliance_score: int
+    compliance_score: Optional[float] = None
     created_at: datetime
     updated_at: datetime
 
@@ -91,6 +91,11 @@ class RiskAssessmentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+# Compliance Status Update
+class ComplianceStatusUpdateSchema(BaseModel):
+    compliance_status: ComplianceStatus
 
 
 # Bulk Import

@@ -10,7 +10,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem
 from app.models.document import Document, DocumentType, DocumentStatus
-from app.schemas.document import DocumentCreate, DocumentResponse, DocumentGenerateRequest
+from app.schemas.document import DocumentCreate, DocumentResponse, DocumentGenerateRequest, DocumentUpdateRequest
 
 # PDF generation
 from reportlab.lib.pagesizes import letter, A4
@@ -204,6 +204,32 @@ def get_document(
         )
     return document
 
+@router.put("/{document_id}", response_model=DocumentResponse)
+def update_document(
+    document_id: int,
+    body: DocumentUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update document content."""
+    # Fetch document
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+    
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    # Update content
+    document.content = body.content
+    db.commit()
+    db.refresh(document)
+    
+    return document
 
 @router.post("/generate", response_model=DocumentResponse)
 def generate_document(
