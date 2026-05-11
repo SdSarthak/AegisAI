@@ -86,3 +86,49 @@ class TestChangePassword:
             json={"current_password": "oldpassword", "new_password": "short"},
         )
         assert resp.status_code == 422
+def test_password_missing_uppercase_returns_422(self, client):
+        c, user = client
+        resp = c.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "oldpassword", "new_password": "alllower1!"},
+        )
+        assert resp.status_code == 422
+        assert "uppercase" in resp.text.lower()
+
+    def test_password_missing_digit_returns_422(self, client):
+        c, user = client
+        resp = c.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "oldpassword", "new_password": "NoDigits!"},
+        )
+        assert resp.status_code == 422
+        assert "digit" in resp.text.lower()
+
+    def test_password_missing_special_char_returns_422(self, client):
+        c, user = client
+        resp = c.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "oldpassword", "new_password": "NoSpecial1"},
+        )
+        assert resp.status_code == 422
+        assert "special character" in resp.text.lower()
+
+    def test_password_all_rules_failed_lists_all_errors(self, client):
+        c, user = client
+        resp = c.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "oldpassword", "new_password": "weak"},
+        )
+        assert resp.status_code == 422
+        assert "uppercase" in resp.text.lower()
+        assert "digit" in resp.text.lower()
+        assert "special character" in resp.text.lower()
+
+    def test_valid_strong_password_returns_200(self, client):
+        c, user = client
+        resp = c.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "oldpassword", "new_password": "StrongPass1!"},
+        )
+        assert resp.status_code == 200
+        assert resp.json()["message"] == "Password updated successfully"
