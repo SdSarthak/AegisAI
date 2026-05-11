@@ -1,4 +1,3 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bell, Check, Trash2 } from 'lucide-react'
 
 /**
@@ -54,7 +53,6 @@ const DUMMY_NOTIFICATIONS: Notification[] = [
 ]
 
 export default function Notifications() {
-  const queryClient = useQueryClient()
 
   // TODO (help wanted): replace dummy data with real query
   // const { data: notifications = [] } = useQuery({ queryKey: ['notifications'], queryFn: notificationsApi.list })

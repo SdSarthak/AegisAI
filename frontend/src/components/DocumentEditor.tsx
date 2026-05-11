@@ -28,7 +28,6 @@ interface DocumentEditorProps {
 }
 
 export default function DocumentEditor({
-  documentId,
   initialContent,
   onSave,
 }: DocumentEditorProps) {
