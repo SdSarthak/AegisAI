@@ -94,7 +94,7 @@ def list_ai_systems(
 def bulk_import_systems(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Import AI systems from a CSV file."""
     errors = []
