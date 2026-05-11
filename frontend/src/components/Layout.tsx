@@ -17,6 +17,7 @@ const navigation = [
   { name: 'AI Systems', href: '/ai-systems', icon: Bot },
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
+  { name: 'RAG Chat', href: '/rag-chat', icon: FileText },
 ]
 
 export default function Layout() {
