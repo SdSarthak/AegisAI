@@ -97,3 +97,7 @@ class RiskAssessmentResponse(BaseModel):
 class BulkImportResponse(BaseModel):
     created: int
     errors: List[Dict[str, Any]]
+
+#Checklist persistence 
+class ChecklistUpdateRequest(BaseModel):
+    checked_ids : List[str]

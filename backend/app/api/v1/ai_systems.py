@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified 
 from typing import List
-import csv
+import csv 
 import io
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -11,7 +12,8 @@ from app.schemas.ai_system import (
     AISystemCreate, 
     AISystemUpdate, 
     AISystemResponse,
-    BulkImportResponse
+    BulkImportResponse,
+    ChecklistUpdateRequest 
 )
 
 router = APIRouter()
@@ -185,3 +187,52 @@ async def bulk_import_systems(
         )
     
     return BulkImportResponse(created=created_count, errors=errors)
+
+
+@router.get("/{system_id}/checklist")
+def get_checklist(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get checklist state for an AI system."""
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id).first()
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found"
+        )
+    return system.checklist_state or {}
+
+
+@router.post("/{system_id}/checklist")
+def update_checklist(
+    system_id: int,
+    body: ChecklistUpdateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update checklist state for an AI system."""
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id
+    ).first()
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found"
+        )
+
+    current = dict(system.checklist_state or {})
+    all_known = set(current.keys()) | set(body.checked_ids)
+    new_state = {item_id: (item_id in body.checked_ids) for item_id in all_known}
+
+    system.checklist_state = new_state
+    flag_modified(system, "checklist_state")
+    db.commit()
+    db.refresh(system)
+    return system.checklist_state 

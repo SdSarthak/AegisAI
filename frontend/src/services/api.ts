@@ -81,6 +81,16 @@ export const aiSystemsApi = {
   delete: async (id: number) => {
     await api.delete(`/ai-systems/${id}`)
   },
+  getChecklist: async (id: number) => {
+    const { data } = await api.get(`/ai-systems/${id}/checklist`)
+    return data
+  },
+  updateChecklist: async (id: number, checkedIds: string[]) => {
+    const { data } = await api.post(`/ai-systems/${id}/checklist`, {
+      checked_ids: checkedIds,
+    })
+    return data
+  },
 }
 
 // Classification API

@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState , useEffect,useRef } from 'react'
 import { CheckSquare, Square } from 'lucide-react'
-
+import { aiSystemsApi } from '../services/api'  
 /**
  * ComplianceChecklist — interactive per-risk-level task checklist.
  *
@@ -38,7 +38,23 @@ export default function ComplianceChecklist({
   items,
 }: ComplianceChecklistProps) {
   const [checked, setChecked] = useState<Set<string>>(new Set())
-
+  const [loading, setLoading] = useState(true)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null) 
+  useEffect(() => {
+    aiSystemsApi.getChecklist(systemId).then((data: Record<string, boolean>) => {
+      const checkedIds = Object.entries(data)
+        .filter(([, v]) => v)
+        .map(([k]) => k)
+      setChecked(new Set(checkedIds))
+    }).finally(() => setLoading(false))
+  }, [systemId])
+  const persist = (nextChecked : Set<string>) => {
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      debounceRef.current = setTimeout(() => {
+        aiSystemsApi.updateChecklist(systemId ,Array.from(nextChecked))
+      },500)
+      }
+  }
   const toggle = (id: string) => {
     setChecked((prev) => {
       const next = new Set(prev)
@@ -47,7 +63,7 @@ export default function ComplianceChecklist({
       } else {
         next.add(id)
       }
-      // TODO (help wanted): debounce and POST updated set to API
+      persist(next) 
       return next
     })
   }
