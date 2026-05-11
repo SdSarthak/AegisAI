@@ -317,6 +317,13 @@ export default function Documents() {
                   </button>
 
                   <button
+                    onClick={() => setEditingDoc(doc)}
+                    className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
+                    title="Edit"
+                  >
+                    <Edit className="w-5 h-5" />
+                  </button>
+                  <button
                     onClick={() => {
                       // Download as text file
                       const blob = new Blob([doc.content || ''], {
