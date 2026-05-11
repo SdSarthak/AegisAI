@@ -17,9 +17,10 @@ class PromptSanitizer:
 
     # Meta-instruction phrases to remove
     META_INSTRUCTIONS = [
-        r"ignore\s+(all\s+)?(previous|prior|above)\s+instructions",
+        r"ignore\s+(all\s+)?(previous|prior|above|existing)(\s+instructions)?",
         r"forget\s+(everything|all).*?before",
-        r"disregard\s+(the\s+)?system\s+prompt",
+        r"disregard\s+(the\s+)?(system\s+prompt|instructions)",
+        r"override\s+(all\s+)?(instructions|prompts|settings)",
         r"you\s+are\s+now\s+in\s+(jailbreak|developer)\s+mode",
         r"act\s+as\s+.*?\s+instead",
         r"pretend\s+(you\s+)?are",
@@ -33,6 +34,8 @@ class PromptSanitizer:
         r"in\s+the\s+role\s+of",
         r"acting\s+as",
         r"pretending\s+to\s+be",
+        r"you\s+are\s+a\s+\w+",
+        r"role:\s*\w+",
     ]
 
     # Dangerous multi-line separators
