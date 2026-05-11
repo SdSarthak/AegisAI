@@ -6,7 +6,8 @@ import io
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.models.ai_system import AISystem
+from app.models.ai_system import AISystem, RiskAssessment
+from app.core.scoring import compute_compliance_score
 from app.schemas.ai_system import (
     AISystemCreate, 
     AISystemUpdate, 
@@ -134,8 +135,6 @@ async def bulk_import_systems(
         csv_reader = csv.DictReader(io.StringIO(decoded_content))
         
         for row_num, row in enumerate(csv_reader, start=2):
-            row_errors = []
-            
             if not row.get("name", "").strip():
                 errors.append({"row": row_num, "error": "name is required"})
                 continue
@@ -185,3 +184,32 @@ async def bulk_import_systems(
         )
     
     return BulkImportResponse(created=created_count, errors=errors)
+
+
+@router.post("/{system_id}/recalculate-score")
+def recalculate_score(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Recalculate compliance score from the latest risk assessment."""
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id
+    ).first()
+    if not system:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found")
+
+    assessment = (
+        db.query(RiskAssessment)
+        .filter(RiskAssessment.ai_system_id == system_id)
+        .order_by(RiskAssessment.assessed_at.desc())
+        .first()
+    )
+
+    if assessment:
+        system.compliance_score = compute_compliance_score(assessment)
+        db.commit()
+        return {"id": system_id, "assessment_id": assessment.id, "compliance_score": system.compliance_score}
+
+    return {"id": system_id, "assessment_id": None, "compliance_score": system.compliance_score}

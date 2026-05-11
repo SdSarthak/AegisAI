@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
 
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem, RiskLevel, RiskAssessment, ComplianceStatus
 from app.schemas.ai_system import RiskClassificationRequest, RiskClassificationResponse
+from app.core.scoring import compute_compliance_score
 
 router = APIRouter()
 
@@ -20,11 +20,7 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
     risk_level = RiskLevel.MINIMAL
     confidence = 0.9
     
-    # Check for UNACCEPTABLE risk (Article 5 - Prohibited practices)
-    # Social scoring, real-time biometric identification in public spaces, etc.
-    # These are typically banned outright
-    
-    # Check for HIGH risk (Article 6 + Annex III)
+    # HIGH risk (Article 6 + Annex III)
     high_risk_indicators = []
     
     # HR and recruitment AI (Annex III, point 4)
@@ -61,11 +57,8 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
         high_risk_indicators.append("Law enforcement/justice system use")
         reasons.append("Use in law enforcement, border control, or justice is HIGH risk")
     
-    # Determine if HIGH risk
     if high_risk_indicators:
         risk_level = RiskLevel.HIGH
-    
-    # Check for LIMITED risk (Article 52 - Transparency obligations)
     elif data.interacts_with_humans or data.emotion_recognition or data.generates_synthetic_content:
         risk_level = RiskLevel.LIMITED
         if data.interacts_with_humans:
@@ -78,12 +71,10 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
             reasons.append("System generates synthetic/manipulated content")
             requirements.append("Label AI-generated content appropriately")
     
-    # MINIMAL risk - no specific requirements
     else:
         reasons.append("System does not fall into high-risk or limited-risk categories")
         requirements.append("No mandatory requirements, but voluntary codes of conduct encouraged")
     
-    # Generate next steps based on risk level
     next_steps = []
     if risk_level == RiskLevel.HIGH:
         next_steps = [
@@ -138,7 +129,6 @@ def classify_and_save(
     """
     Classify an AI system and save the result to the database.
     """
-    # Get the AI system
     system = db.query(AISystem).filter(
         AISystem.id == system_id,
         AISystem.owner_id == current_user.id
@@ -150,25 +140,30 @@ def classify_and_save(
             detail="AI system not found"
         )
     
-    # Perform classification
     result = classify_risk(data)
-    
-    # Update the AI system
+
     system.risk_level = result.risk_level
     system.compliance_status = ComplianceStatus.IN_PROGRESS
     system.questionnaire_responses = data.model_dump()
     
-    # Create risk assessment record
+    base_score = 70 if result.risk_level == RiskLevel.MINIMAL else (50 if result.risk_level == RiskLevel.LIMITED else 30)
     assessment = RiskAssessment(
         ai_system_id=system.id,
         assessment_type="initial",
         risk_level=result.risk_level,
         findings=[{"type": "classification", "reasons": result.reasons}],
         recommendations=[{"requirements": result.requirements, "next_steps": result.next_steps}],
-        overall_score=70 if result.risk_level == RiskLevel.MINIMAL else 30
+        overall_score=base_score,
+        data_governance_score=base_score,
+        transparency_score=base_score,
+        human_oversight_score=base_score,
+        robustness_score=base_score,
     )
     db.add(assessment)
-    
+    db.flush()
+
+    system.compliance_score = compute_compliance_score(assessment)
+
     db.commit()
     db.refresh(system)
     
