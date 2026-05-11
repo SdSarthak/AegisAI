@@ -55,6 +55,7 @@ const DUMMY_NOTIFICATIONS: Notification[] = [
 export default function Notifications() {
 
   // TODO (help wanted): replace dummy data with real query
+
   // const { data: notifications = [] } = useQuery({ queryKey: ['notifications'], queryFn: notificationsApi.list })
   const notifications = DUMMY_NOTIFICATIONS
 

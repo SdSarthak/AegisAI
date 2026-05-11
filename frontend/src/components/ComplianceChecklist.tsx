@@ -27,8 +27,6 @@ export interface ChecklistItem {
 }
 
 interface ComplianceChecklistProps {
-  systemId: number
-  riskLevel: 'minimal' | 'limited' | 'high' | 'unacceptable'
   items: ChecklistItem[]
 }
 

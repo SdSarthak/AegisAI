@@ -5,7 +5,6 @@ import { markdown } from '@codemirror/lang-markdown'
 import { marked } from 'marked'
 
 interface DocumentEditorProps {
-  documentId: number
   initialContent: string
   onSave?: (content: string) => void
   onClose?: () => void

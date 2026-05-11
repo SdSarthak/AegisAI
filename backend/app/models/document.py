@@ -29,23 +29,23 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     ai_system_id = Column(Integer, ForeignKey("ai_systems.id"), nullable=True)
-    
+
     # Document info
     title = Column(String(255), nullable=False)
     document_type = Column(Enum(DocumentType), nullable=False)
     status = Column(Enum(DocumentStatus), default=DocumentStatus.DRAFT)
-    
+
     # Content
     content = Column(Text)  # Markdown or HTML content
     file_path = Column(String(500))  # Path to generated PDF
-    
+
     # Versioning
     version = Column(String(20), default="1.0")
-    
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    
+
     # Relationships
     owner = relationship("User", back_populates="documents")
     ai_system = relationship("AISystem", back_populates="documents")

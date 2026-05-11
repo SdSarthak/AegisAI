@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.api.v1 import api_router
+from app.api.v1 import api_router, badge
 import app.models  # ensure all ORM models are imported so tables are created
 
 # -------------------------------------------------------------------
@@ -89,6 +89,7 @@ app.add_middleware(
 # Routing
 # -------------------------------------------------------------------
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+app.include_router(badge.router, prefix="/badge")
 
 # -------------------------------------------------------------------
 # Root & Health Endpoints

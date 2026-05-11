@@ -21,7 +21,6 @@ import { BarChart2, TrendingUp } from 'lucide-react'
  */
 
 
-
 // TODO (help wanted): replace with real API call
 // const analyticsApi = {
 //   timeline: (systemId: number) =>
