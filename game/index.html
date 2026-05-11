@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Memory Matching Game</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="bg-orbs" aria-hidden="true">
+      <span class="orb orb-1"></span>
+      <span class="orb orb-2"></span>
+      <span class="orb orb-3"></span>
+    </div>
+
+    <div class="container">
+      <header class="game-header">
+        <div class="logo">🧠</div>
+        <div class="title-group">
+          <h1>Memory Match</h1>
+          <p class="subtitle">Flip &amp; find all pairs</p>
+        </div>
+      </header>
+
+      <div class="stats">
+        <div class="stat-card">
+          <span class="stat-icon">🎯</span>
+          <span id="score-board" class="stat-value">0</span>
+          <span class="stat-label">Matches</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-icon">👆</span>
+          <span id="moves" class="stat-value">0</span>
+          <span class="stat-label">Moves</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-icon">⏱️</span>
+          <span id="timer" class="stat-value">0s</span>
+          <span class="stat-label">Time</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-icon">🏆</span>
+          <span id="best-time" class="stat-value">--</span>
+          <span class="stat-label">Best</span>
+        </div>
+      </div>
+
+      <div id="game-board"></div>
+
+      <button id="reset-btn" class="reset-btn">
+        <span class="btn-icon">🔄</span> New Game
+      </button>
+    </div>
+
+    <div id="win-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+      <div class="modal">
+        <div class="modal-emoji">🎉</div>
+        <h2 id="modal-title">You Won!</h2>
+        <p id="modal-body" class="modal-body"></p>
+        <div id="modal-best" class="modal-best"></div>
+        <button id="modal-play-again" class="reset-btn modal-btn">🔄 Play Again</button>
+      </div>
+    </div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
