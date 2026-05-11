@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
-from io import StringIO
+from io import BytesIO
 
 
 @pytest.fixture
@@ -34,7 +34,7 @@ class TestBulkImport:
         """Valid CSV creates systems and returns correct created count."""
         test_client, mock_session = client
 
-        csv_content = """name,description,use_case,sector,version
+        csv_content = b"""name,description,use_case,sector,version
 CV Screener,Ranks candidates by CV content,CV Screening,HR Tech,1.0
 Fraud Detector,Flags anomalous transactions,Risk Assessment,Finance,2.1"""
 
@@ -42,7 +42,7 @@ Fraud Detector,Flags anomalous transactions,Risk Assessment,Finance,2.1"""
 
         response = test_client.post(
             "/api/v1/ai-systems/import",
-            files={"file": ("test.csv", StringIO(csv_content), "text/csv")}
+            files={"file": ("test.csv", BytesIO(csv_content), "text/csv")}
         )
 
         assert response.status_code == 200
@@ -54,7 +54,7 @@ Fraud Detector,Flags anomalous transactions,Risk Assessment,Finance,2.1"""
         """Row with missing name is skipped and appears in errors."""
         test_client, mock_session = client
 
-        csv_content = """name,description,use_case,sector,version
+        csv_content = b"""name,description,use_case,sector,version
 CV Screener,Ranks candidates,CV Screening,HR Tech,1.0
 ,Missing name system,Test,Test,1.0
 Fraud Detector,Flags transactions,Risk Assessment,Finance,2.1"""
@@ -68,7 +68,7 @@ Fraud Detector,Flags transactions,Risk Assessment,Finance,2.1"""
 
         response = test_client.post(
             "/api/v1/ai-systems/import",
-            files={"file": ("test.csv", StringIO(csv_content), "text/csv")}
+            files={"file": ("test.csv", BytesIO(csv_content), "text/csv")}
         )
 
         assert response.status_code == 200
@@ -82,7 +82,7 @@ Fraud Detector,Flags transactions,Risk Assessment,Finance,2.1"""
         """Duplicate name is reported in errors."""
         test_client, mock_session = client
 
-        csv_content = """name,description,use_case,sector,version
+        csv_content = b"""name,description,use_case,sector,version
 CV Screener,Ranks candidates,CV Screening,HR Tech,1.0
 CV Screener,Duplicate name,Risk Assessment,Finance,2.1"""
 
@@ -96,7 +96,7 @@ CV Screener,Duplicate name,Risk Assessment,Finance,2.1"""
 
         response = test_client.post(
             "/api/v1/ai-systems/import",
-            files={"file": ("test.csv", StringIO(csv_content), "text/csv")}
+            files={"file": ("test.csv", BytesIO(csv_content), "text/csv")}
         )
 
         assert response.status_code == 200
@@ -111,7 +111,7 @@ CV Screener,Duplicate name,Risk Assessment,Finance,2.1"""
 
         response = test_client.post(
             "/api/v1/ai-systems/import",
-            files={"file": ("test.txt", StringIO("not a csv file content"), "text/plain")}
+            files={"file": ("test.txt", BytesIO(b"not a csv file content"), "text/plain")}
         )
 
         assert response.status_code == 400
@@ -121,11 +121,11 @@ CV Screener,Duplicate name,Risk Assessment,Finance,2.1"""
         """Empty CSV returns 0 created with no errors."""
         test_client, mock_session = client
 
-        csv_content = """name,description,use_case,sector,version"""
+        csv_content = b"""name,description,use_case,sector,version"""
 
         response = test_client.post(
             "/api/v1/ai-systems/import",
-            files={"file": ("test.csv", StringIO(csv_content), "text/csv")}
+            files={"file": ("test.csv", BytesIO(csv_content), "text/csv")}
         )
 
         assert response.status_code == 200
@@ -137,7 +137,7 @@ CV Screener,Duplicate name,Risk Assessment,Finance,2.1"""
         """Multiple errors in different rows are all reported."""
         test_client, mock_session = client
 
-        csv_content = """name,description,use_case,sector,version
+        csv_content = b"""name,description,use_case,sector,version
 ,Missing name 1,Test,Test,1.0
 Duplicate Test,First occurrence,Test,Test,1.0
 Duplicate Test,Second occurrence,Test,Test,1.0"""
@@ -156,7 +156,7 @@ Duplicate Test,Second occurrence,Test,Test,1.0"""
 
         response = test_client.post(
             "/api/v1/ai-systems/import",
-            files={"file": ("test.csv", StringIO(csv_content), "text/csv")}
+            files={"file": ("test.csv", BytesIO(csv_content), "text/csv")}
         )
 
         assert response.status_code == 200
@@ -168,14 +168,14 @@ Duplicate Test,Second occurrence,Test,Test,1.0"""
         """Response has correct BulkImportResponse schema."""
         test_client, mock_session = client
 
-        csv_content = """name,description,use_case,sector,version
+        csv_content = b"""name,description,use_case,sector,version
 Test System,Test description,Test,Test,1.0"""
 
         mock_session.query.return_value.filter.return_value.first.return_value = None
 
         response = test_client.post(
             "/api/v1/ai-systems/import",
-            files={"file": ("test.csv", StringIO(csv_content), "text/csv")}
+            files={"file": ("test.csv", BytesIO(csv_content), "text/csv")}
         )
 
         assert response.status_code == 200

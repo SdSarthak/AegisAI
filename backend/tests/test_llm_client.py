@@ -39,7 +39,7 @@ class TestLLMClient:
 
         mock_client = MagicMock()
         mock_client.chat.completions.create.side_effect = [
-            APIError("Rate limit", response=MagicMock()),
+            APIError("Rate limit"),
             mock_response,
         ]
 
@@ -58,7 +58,7 @@ class TestLLMClient:
     def test_three_consecutive_api_errors_raises(self):
         mock_client = MagicMock()
         mock_client.chat.completions.create.side_effect = APIError(
-            "Server error", response=MagicMock()
+            "Server error"
         )
 
         with patch("app.modules.llm.llm_client.settings") as mock_settings:
@@ -79,7 +79,7 @@ class TestLLMClient:
 
         mock_client = MagicMock()
         mock_client.chat.completions.create.side_effect = [
-            APIError("Fail", response=MagicMock()),
+            APIError("Fail"),
             mock_response,
         ]
 
