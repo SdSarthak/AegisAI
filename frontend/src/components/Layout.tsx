@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
+import ThemeToggle from './ThemeToggle'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -96,25 +97,28 @@ export default function Layout() {
               <p className="text-sm font-medium text-gray-900 truncate">
                 {displayName}
               </p>
-              <p className="text-xs text-gray-500 truncate">
+              <p className="text-xs text-gray-500 truncate dark:text-gray-400">
                 {companyName}
               </p>
             </div>
-            <button
-              onClick={logout}
-              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-              aria-label="Log out"
-              title="Log out"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <ThemeToggle />
+              <button
+                onClick={logout}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                aria-label="Log out"
+                title="Log out"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main content */}
       <div className={isCollapsed ? 'pl-20' : 'pl-64'}>
-        <main className="p-8">
+        <main className="p-8 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
           <Outlet />
         </main>
       </div>
