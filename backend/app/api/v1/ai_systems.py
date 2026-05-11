@@ -13,7 +13,8 @@ from app.schemas.ai_system import (
     AISystemCreate,
     AISystemUpdate,
     AISystemResponse,
-    BulkImportResponse
+    BulkImportResponse,
+    ComplianceStatusUpdateSchema,
 )
 
 router = APIRouter()
@@ -278,3 +279,28 @@ def delete_ai_system(
 
     db.delete(system)
     db.commit()
+
+
+@router.patch("/{system_id}/status", response_model=AISystemResponse)
+def update_ai_system_status(
+    system_id: int,
+    payload: ComplianceStatusUpdateSchema,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update only the compliance_status of an AI system."""
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id,
+    ).first()
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found",
+        )
+
+    system.compliance_status = payload.compliance_status
+    db.commit()
+    db.refresh(system)
+    return system
