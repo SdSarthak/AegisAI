@@ -2,30 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { Bell, Clock, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-/*──────────────────────────────────────────────────────────────────────────────
-  NotificationBell — bell icon with unread badge + dropdown panel.
-
-  STATUS:  Static UI only (Issue #113).
-  NEXT:    Wire to GET /api/v1/notifications via useQuery (help wanted).
-
-  KEY DECISIONS
-  ─────────────
-  1. We keep all notification data as a local constant (DUMMY_PREVIEWS) so the
-     component works with zero backend.  When the API is ready, swap for
-     useQuery and everything else stays the same.
-
-  2. Click‑outside detection uses a single useEffect with a ref on the wrapper
-     <div>.  This is the lightest pattern that avoids an extra library.
-
-  3. The dropdown fades + translates via Tailwind transition utilities.  We
-     render the panel at all times but toggle opacity/translate/pointer-events
-     so the exit animation plays (conditional rendering with {isOpen && ...}
-     would unmount instantly, losing the close animation).
-
-  4. The badge caps at "9+" to avoid layout jitter from wide numbers.
-──────────────────────────────────────────────────────────────────────────────*/
-
-// ── Types ────────────────────────────────────────────────────────────────────
+// TODO: Wire to GET /api/v1/notifications via useQuery (Issue #113)
 
 interface NotificationPreview {
   id: number
@@ -36,8 +13,6 @@ interface NotificationPreview {
   type: 'alert' | 'update' | 'ai' | 'news'
 }
 
-// ── Static dummy data ────────────────────────────────────────────────────────
-// Gives us 3 unread + 2 read → badge shows "3".
 
 const DUMMY_PREVIEWS: NotificationPreview[] = [
   {
@@ -87,10 +62,9 @@ const DUMMY_PREVIEWS: NotificationPreview[] = [
   },
 ]
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
-/** Tiny relative‑time formatter.  Avoids pulling in a library like date‑fns
- *  for a single use case. */
+
+/** Relative‑time formatter (e.g. "5m ago", "2h ago"). */
 function timeAgo(isoDate: string): string {
   const seconds = Math.floor(
     (Date.now() - new Date(isoDate).getTime()) / 1000,
@@ -104,7 +78,7 @@ function timeAgo(isoDate: string): string {
   return `${days}d ago`
 }
 
-/** Accent colour for the left stripe, keyed by notification type. */
+/** Accent colour for the notification type stripe. */
 function typeColor(type: NotificationPreview['type']): string {
   switch (type) {
     case 'alert':  return 'bg-red-500'
@@ -114,46 +88,16 @@ function typeColor(type: NotificationPreview['type']): string {
   }
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
+
 
 export default function NotificationBell() {
-  /*
-   * isOpen — controls the dropdown visibility.
-   * We use a simple boolean toggle rather than a reducer because the state
-   * machine only has two states (open / closed).
-   */
   const [isOpen, setIsOpen] = useState(false)
 
-  /*
-   * wrapperRef — a ref attached to the outermost <div>.  The click‑outside
-   * handler checks if the click target lives inside this element.  If it
-   * doesn't, we close the dropdown.
-   *
-   * WHY a ref?  Because we need a stable DOM reference that persists across
-   * renders. Using document.getElementById would be fragile and un‑React‑like.
-   */
   const wrapperRef = useRef<HTMLDivElement>(null)
 
-  // Derived state — avoids redundant state for the badge count.
   const unreadCount = DUMMY_PREVIEWS.filter((n) => !n.is_read).length
 
-  /*
-   * ── Click‑outside effect ──────────────────────────────────────────────
-   *
-   * HOW IT WORKS:
-   *   1. We attach a `mousedown` listener to the whole document.
-   *   2. On every click, we check: "did the click land INSIDE wrapperRef?"
-   *   3. If not → close the dropdown.
-   *
-   * WHY mousedown instead of click?
-   *   `mousedown` fires before `click`, so the dropdown closes before any
-   *   other click handlers run.  This prevents race conditions where the
-   *   bell button's onClick would immediately re‑open the panel.
-   *
-   * CLEANUP:
-   *   The returned function removes the listener when the component unmounts
-   *   (or when `isOpen` changes) to avoid memory leaks.
-   */
+  // Close dropdown on click outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -172,10 +116,7 @@ export default function NotificationBell() {
     }
   }, [isOpen])
 
-  /*
-   * ── Escape‑key handler ────────────────────────────────────────────────
-   * Accessibility best practice: pressing Escape should close an overlay.
-   */
+  // Close dropdown on Escape key
   useEffect(() => {
     function handleEscape(e: KeyboardEvent) {
       if (e.key === 'Escape') setIsOpen(false)
@@ -188,22 +129,11 @@ export default function NotificationBell() {
     }
   }, [isOpen])
 
-  // ── Render ──────────────────────────────────────────────────────────────
+
 
   return (
     <div ref={wrapperRef} className="relative">
-      {/* ── Bell button ───────────────────────────────────────────────────
-       *
-       * Styling breakdown:
-       *   p-2          → 8 px padding all sides (touch‑friendly 40 × 40 target)
-       *   rounded-lg   → consistent with ThemeToggle and Layout icon buttons
-       *   text-gray-500 hover:text-gray-700 → muted → emphasis on hover
-       *   hover:bg-gray-100                 → subtle background lift
-       *   transition-colors                 → smooth colour shift (150 ms default)
-       *
-       * The aria‑label dynamically includes the unread count so screen
-       * readers announce "Notifications (3 unread)" instead of just "Notifications".
-       */}
+
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
@@ -214,17 +144,7 @@ export default function NotificationBell() {
       >
         <Bell className="w-5 h-5" />
 
-        {/* ── Unread badge ──────────────────────────────────────────────
-         *
-         * Positioned absolutely in the top‑right corner of the button.
-         * We cap at "9+" to prevent the badge from growing wider than
-         * 16 px and causing layout jitter.
-         *
-         * The `animate-pulse` is a subtle Tailwind animation (opacity
-         * oscillation) that draws the eye without being obnoxious.
-         * We intentionally only apply it when the dropdown is CLOSED
-         * so it doesn't compete with the panel itself.
-         */}
+        {/* Unread badge — caps at 9+ */}
         {unreadCount > 0 && (
           <span
             className={`absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full ring-2 ring-white ${
@@ -236,34 +156,7 @@ export default function NotificationBell() {
         )}
       </button>
 
-      {/* ── Dropdown panel ──────────────────────────────────────────────
-       *
-       * ANIMATION APPROACH:
-       * Instead of conditionally rendering ({isOpen && <div>…</div>}),
-       * we always render the panel and toggle Tailwind utility classes:
-       *
-       *   OPEN  → opacity-100  translate-y-0    pointer-events-auto
-       *   CLOSE → opacity-0    -translate-y-2   pointer-events-none
-       *
-       * Combined with `transition-all duration-200 ease-out`, this gives
-       * a smooth fade + slide on BOTH open and close.  Conditional
-       * rendering would unmount the element instantly on close, losing
-       * the exit animation entirely.
-       *
-       * pointer-events-none ensures the invisible panel doesn't block
-       * clicks on elements behind it when closed.
-       *
-       * Z‑INDEX:
-       * z-50 places the dropdown above the main content and sidebar.
-       * The Layout sidebar is fixed but has no explicit z‑index, and
-       * the header bar we're adding uses z-30, so z-50 is safe.
-       *
-       * POSITIONING:
-       * `right-0` aligns the dropdown's right edge with the bell button's
-       * right edge, which prevents overflow on smaller screens.  On very
-       * narrow viewports, the `sm:w-96` → `w-80` fallback keeps it from
-       * overflowing the viewport.
-       */}
+      {/* Dropdown panel */}
       <div
         className={`absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl border border-gray-200 shadow-xl z-50 transition-all duration-200 ease-out origin-top-right ${
           isOpen
@@ -273,7 +166,7 @@ export default function NotificationBell() {
         role="menu"
         aria-label="Notifications panel"
       >
-        {/* ── Header ─────────────────────────────────────────────────── */}
+
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-semibold text-gray-900">
@@ -295,15 +188,7 @@ export default function NotificationBell() {
           </button>
         </div>
 
-        {/* ── Notification list ───────────────────────────────────────
-         *
-         * max-h-80 + overflow-y-auto creates a scrollable region so the
-         * dropdown never grows taller than 320 px regardless of how many
-         * notifications exist.
-         *
-         * divide-y + divide-gray-50 adds ultra‑subtle 1 px lines between
-         * rows without needing explicit border classes on each item.
-         */}
+
         <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
           {DUMMY_PREVIEWS.length === 0 ? (
             <div className="px-4 py-8 text-center">
@@ -312,16 +197,7 @@ export default function NotificationBell() {
             </div>
           ) : (
             DUMMY_PREVIEWS.map((notification) => (
-              /*
-               * Each row:
-               *   - Left colour stripe (3 px wide) indicates notification type.
-               *   - Unread rows get a faint primary-50 background tint.
-               *   - hover:bg-gray-50 provides feedback on all rows.
-               *   - The entire row is a <button> so it's keyboard‑focusable.
-               *
-               * FUTURE: onClick will call POST /notifications/read and
-               *         navigate to the relevant page.
-               */
+              // TODO: onClick → POST /notifications/read + navigate
               <button
                 key={notification.id}
                 type="button"
@@ -330,14 +206,14 @@ export default function NotificationBell() {
                 }`}
                 role="menuitem"
               >
-                {/* Type colour stripe */}
+
                 <div
                   className={`w-1 self-stretch rounded-full flex-shrink-0 ${typeColor(
                     notification.type,
                   )}`}
                 />
 
-                {/* Content */}
+
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <p
@@ -349,7 +225,7 @@ export default function NotificationBell() {
                     >
                       {notification.title}
                     </p>
-                    {/* Unread dot */}
+
                     {!notification.is_read && (
                       <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0" />
                     )}
@@ -367,7 +243,7 @@ export default function NotificationBell() {
           )}
         </div>
 
-        {/* ── Footer ─────────────────────────────────────────────────── */}
+
         <div className="border-t border-gray-100">
           <Link
             to="/notifications"

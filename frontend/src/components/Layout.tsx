@@ -14,26 +14,7 @@ import {
 import NotificationBell from './NotificationBell'
 import ThemeToggle from './ThemeToggle'
 
-/*──────────────────────────────────────────────────────────────────────────────
-  Layout — app shell with collapsible sidebar + sticky top bar.
 
-  WHAT CHANGED (Issue #113):
-    • Added a sticky header bar between the sidebar padding wrapper and the
-      <main> content area.  This bar hosts the NotificationBell and
-      ThemeToggle components.
-    • The header uses `sticky top-0 z-30` so it stays visible while the
-      user scrolls page content.  `bg-white/80 backdrop-blur-md` gives a
-      frosted-glass effect that lets underlying content peek through.
-
-  WHY A TOP BAR AND NOT THE SIDEBAR?
-    Notification bells are conventionally top-right in SaaS dashboards
-    because:
-      1. They sit in the user's natural reading scan path (top → right).
-      2. Dropdown panels need horizontal space; a sidebar placement would
-         overlap the nav links or push outside the viewport.
-      3. The sidebar is already dense with navigation — adding more icons
-         there hurts scannability.
-──────────────────────────────────────────────────────────────────────────────*/
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -141,21 +122,7 @@ export default function Layout() {
           isCollapsed ? 'pl-20' : 'pl-64'
         }`}
       >
-        {/*
-         * ── Sticky header bar ──────────────────────────────────────────
-         *
-         * STYLING RATIONALE:
-         *   sticky top-0     → sticks to viewport top while scrolling
-         *   z-30             → above page content, below sidebar (z-40)
-         *                      and below notification dropdown (z-50)
-         *   bg-white/80      → 80 % white opacity
-         *   backdrop-blur-md → frosted-glass blur behind the bar
-         *   border-b         → subtle separator from page content
-         *
-         * The flex container pushes the controls to the right edge via
-         * justify-end.  gap-1 keeps icons tight together — they're small
-         * interactive controls, not navigation items.
-         */}
+
         <header className="sticky top-0 z-30 flex items-center justify-end gap-1 px-8 py-3 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
           <NotificationBell />
           <ThemeToggle />
