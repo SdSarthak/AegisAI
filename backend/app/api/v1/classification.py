@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
+from app.services.compliance_score import calculate_compliance_score
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem, RiskLevel, RiskAssessment, ComplianceStatus
@@ -168,7 +169,7 @@ def classify_and_save(
         overall_score=70 if result.risk_level == RiskLevel.MINIMAL else 30
     )
     db.add(assessment)
-    
+    system.compliance_score = calculate_compliance_score(assessment)
     db.commit()
     db.refresh(system)
     
