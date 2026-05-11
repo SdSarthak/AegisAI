@@ -6,11 +6,12 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 from pydantic import BaseModel
 from datetime import datetime
+from typing import Optional
 
 
 class ComplianceSnapshotResponse(BaseModel):
     ai_system_id: int
-    compliance_score: int
+    compliance_score: Optional[float] = None
     compliance_status: str
     risk_level: str | None
     snapshotted_at: datetime

@@ -10,6 +10,7 @@ This guide gets AegisAI running locally in under 10 minutes.
 - [Option A — Docker (recommended)](#option-a--docker-recommended)
 - [Option B — Manual setup](#option-b--manual-setup)
 - [Option C — Ollama (free, no API key)](#option-c--ollama-free-no-api-key)
+- [LLM provider options](#llm-provider-options)
 - [First steps in the UI](#first-steps-in-the-ui)
 - [Using the API directly](#using-the-api-directly)
 - [Running tests](#running-tests)
@@ -24,7 +25,7 @@ This guide gets AegisAI running locally in under 10 minutes.
 | Git | Any | |
 | Docker & Docker Compose | Latest | Required for Option A |
 | Python | 3.11+ | Required for Option B |
-| Node.js | 18+ | Required for Option B |
+| Node.js | 20+ | Required for Option B |
 | An LLM API key | — | OpenAI / Groq / Ollama — see options below |
 
 ---
@@ -100,7 +101,7 @@ The frontend will be available at http://localhost:5173.
 
 ### 3. Database
 
-You need a running PostgreSQL instance. The easiest way without Docker:
+You need a running PostgreSQL 15 instance. The easiest way without Docker:
 
 ```bash
 # macOS
@@ -159,7 +160,7 @@ LLM_MODEL=llama3.2
 docker compose up -d
 ```
 
-Ollama runs separately on your machine; the backend connects to it via the `LLM_BASE_URL`.
+Ollama runs separately on your machine; the backend connects to it via `LLM_BASE_URL`.
 
 ---
 
@@ -167,10 +168,10 @@ Ollama runs separately on your machine; the backend connects to it via the `LLM_
 
 | Provider | Cost | Setup |
 |---|---|---|
-| **Ollama** (local) | Free | `LLM_API_KEY=ollama` `LLM_BASE_URL=http://localhost:11434/v1` |
-| **Groq** (cloud, free tier) | Free tier | `LLM_API_KEY=gsk_...` `LLM_BASE_URL=https://api.groq.com/openai/v1` `LLM_MODEL=llama-3.3-70b-versatile` |
+| **Ollama** (local) | Free | `LLM_API_KEY=ollama`, `LLM_BASE_URL=http://localhost:11434/v1` |
+| **Groq** (cloud, free tier) | Free tier | `LLM_API_KEY=gsk_...`, `LLM_BASE_URL=https://api.groq.com/openai/v1`, `LLM_MODEL=llama-3.3-70b-versatile` |
 | **OpenAI** | Paid | `LLM_API_KEY=sk-...` (leave `LLM_BASE_URL` empty) |
-| **Together AI** | Free trial | `LLM_API_KEY=...` `LLM_BASE_URL=https://api.together.xyz/v1` |
+| **Together AI** | Free trial | `LLM_API_KEY=...`, `LLM_BASE_URL=https://api.together.xyz/v1` |
 
 ---
 
@@ -182,11 +183,15 @@ Go to http://localhost:5173 and click **Register**. Fill in your email, password
 
 ### 2. Register an AI system
 
-From the Dashboard, click **Add AI System**. Fill in:
+From the Dashboard, click **Add AI System**. You can also bulk-import systems using a CSV file via the **Import CSV** button on the AI Systems page.
+
+Fill in:
 - **Name** — e.g. "CV Screening Tool v2"
 - **Use case** — what it does
 - **Sector** — Healthcare, Employment, Finance, etc.
 - **Version** — e.g. "1.0"
+
+Use the search bar and risk/compliance filters to find systems in large registries.
 
 ### 3. Run risk classification
 
@@ -199,15 +204,31 @@ Click **Classify Risk** on your system. Answer the questionnaire — each questi
 | **Limited** | Transparency obligations apply | Article 52 |
 | **Minimal** | No mandatory requirements | — |
 
-### 4. Generate compliance documents
+### 4. Generate and export compliance documents
 
-Once classified, go to **Documents** and click **Generate Document**. Choose your system and one of:
+Once classified, go to **Documents** and click **Generate Document**. Choose:
 
 - **Technical Documentation** — required for High risk systems (Article 11)
 - **Risk Assessment Report** — formal risk documentation (Article 9)
 - **EU Declaration of Conformity** — required to affix CE mark
 
-Download the generated Markdown for editing, or export as PDF.
+Click **Export PDF** to download a PDF version of any document.
+
+### 5. Protect your LLM with the Guard
+
+Send prompts to `POST /guard/scan` before forwarding them to your LLM. The Guard runs a 4-layer pipeline and returns `allow`, `sanitize`, or `block`. The endpoint enforces per-user rate limiting. See [Guard Module](guard-module.md) for full details and SDK usage.
+
+### 6. Query the regulatory knowledge base
+
+Once documents are ingested, use `POST /rag/query` to ask natural language questions about regulations. Submit thumbs up/down feedback via `POST /rag/feedback` to help surface low-quality chunks for re-ingestion.
+
+### 7. Embed a compliance badge
+
+```markdown
+![Compliance](http://localhost:8000/api/v1/badge/42)
+```
+
+Replace `42` with your AI system ID. The badge colour reflects the current risk level.
 
 ---
 
@@ -237,6 +258,16 @@ curl -X POST http://localhost:8000/api/v1/ai-systems \
   }'
 ```
 
+### Bulk import from CSV
+
+```bash
+curl -X POST http://localhost:8000/api/v1/ai-systems/import \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@my_systems.csv"
+```
+
+CSV format (header row required): `name,description,use_case,sector,version`
+
 ### Run risk classification
 
 ```bash
@@ -251,15 +282,12 @@ curl -X POST http://localhost:8000/api/v1/classification/classify \
   }'
 ```
 
-Response:
-```json
-{
-  "risk_level": "HIGH",
-  "confidence": 0.9,
-  "reasons": ["AI systems used for recruitment, CV screening, or employment decisions are classified as HIGH risk under Annex III"],
-  "requirements": ["Implement risk management system (Article 9)", "..."],
-  "next_steps": ["Complete the full risk assessment questionnaire", "..."]
-}
+### Export a document as PDF
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  http://localhost:8000/api/v1/documents/7/pdf \
+  --output document.pdf
 ```
 
 ### Scan a prompt with the Guard
@@ -290,7 +318,32 @@ curl -X POST http://localhost:8000/api/v1/rag/query \
   -d '{"question": "Does my CV-screening tool require a conformity assessment?"}'
 ```
 
-> **Note:** Returns `503` until documents are ingested. See the `POST /rag/ingest` contributor issue.
+### Submit RAG feedback
+
+```bash
+curl -X POST http://localhost:8000/api/v1/rag/feedback \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"answer_id": "a7f3c291-...", "vote": "down"}'
+```
+
+---
+
+## Using the Postman collection
+
+Import `postman/AegisAI.postman_collection.json` into Postman. Set the `base_url` and `token` collection variables and all endpoints are ready to run.
+
+---
+
+## Scanning .prompts/ files in CI
+
+AegisAI ships a GitHub Action (`.github/workflows/guard-scan.yml`) that automatically scans `.prompts/` files on every PR. Add your prompt files to a `.prompts/` directory and the action will call the Guard API and fail if any prompt is classified as malicious.
+
+Run the scan locally:
+
+```bash
+python scripts/scan_prompts.py --dir .prompts/ --api http://localhost:8000
+```
 
 ---
 
@@ -306,24 +359,27 @@ pytest tests/ -v
 # With coverage report
 pytest tests/ -v --cov=app --cov-report=term-missing
 
-# Specific module
-pytest tests/test_guard.py -v
+# Specific modules
+pytest tests/test_guard.py tests/test_sanitizer.py tests/test_llm_client.py -v
+
+# Integration tests only
+pytest tests/integration/ -v
 ```
 
-The CI pipeline (`/.github/workflows/ci.yml`) runs these automatically on every PR.
+The CI pipeline (`.github/workflows/ci.yml`) runs all tests automatically on every PR.
 
 ---
 
 ## Training the Guard classifier
 
-By default, the Guard module uses the pre-trained `microsoft/deberta-v3-small` model. For better performance, fine-tune it on the included dataset:
+By default, the Guard module uses `microsoft/deberta-v3-small` with random classification head weights. Fine-tune it for real accuracy:
 
 ### Option 1 — Google Colab (recommended, free GPU)
 
 Open `notebooks/train_guard_classifier.ipynb` in Google Colab. The notebook:
 1. Installs dependencies
-2. Downloads the `xTRam1/safe-guard-prompt-injection` dataset from HuggingFace (~10k prompts)
-3. Fine-tunes DeBERTa-v3-small for 3 epochs
+2. Downloads `xTRam1/safe-guard-prompt-injection` dataset from HuggingFace (~10k prompts)
+3. Fine-tunes DeBERTa-v3-small for 3 epochs (~5 min on T4 GPU)
 4. Saves the model to Google Drive
 
 Copy the saved model to `backend/app/modules/guard/models/intent_classifier/` and restart the backend.
@@ -335,4 +391,4 @@ cd backend
 python -m app.modules.guard.train --all --epochs 3
 ```
 
-Training takes ~30 minutes on CPU, ~5 minutes on GPU. The fine-tuned model is saved to `backend/app/modules/guard/models/intent_classifier/` and picked up automatically on the next backend restart.
+Training takes ~30 min on CPU, ~5 min on GPU. Model is saved to `backend/app/modules/guard/models/intent_classifier/` and picked up automatically on restart.
