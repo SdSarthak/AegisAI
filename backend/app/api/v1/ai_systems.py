@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from fastapi.responses import StreamingResponse
+from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import csv
@@ -39,13 +40,42 @@ def create_ai_system(
     return ai_system
 
 
+_SORTABLE_FIELDS = {
+    "name": AISystem.name,
+    "risk_level": AISystem.risk_level,
+    "compliance_score": AISystem.compliance_score,
+    "created_at": AISystem.created_at,
+}
+
+
 @router.get("/", response_model=List[AISystemResponse])
 def list_ai_systems(
+    sort_by: Optional[str] = Query("created_at", description="Sort field: name, risk_level, compliance_score, created_at"),
+    order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """List all AI systems for the current user."""
-    systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
+    """List all AI systems for the current user, with optional sorting."""
+    if sort_by not in _SORTABLE_FIELDS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid sort_by '{sort_by}'. Allowed: {', '.join(sorted(_SORTABLE_FIELDS))}",
+        )
+    if order not in ("asc", "desc"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid order. Use 'asc' or 'desc'.",
+        )
+
+    column = _SORTABLE_FIELDS[sort_by]
+    direction = asc(column) if order == "asc" else desc(column)
+
+    systems = (
+        db.query(AISystem)
+        .filter(AISystem.owner_id == current_user.id)
+        .order_by(direction)
+        .all()
+    )
     return systems
 
 
