@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus } from 'lucide-react'
+import { FileText, Download, Trash2, Plus, Search, X } from 'lucide-react'
 
 interface Document {
   id: number
@@ -23,6 +23,9 @@ export default function Documents() {
   const [showModal, setShowModal] = useState(false)
   const [selectedSystem, setSelectedSystem] = useState<number | null>(null)
   const [selectedType, setSelectedType] = useState('technical_documentation')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ['documents'],
@@ -66,6 +69,24 @@ export default function Documents() {
     })
   }
 
+  const filteredDocuments = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim()
+    return (documents as Document[]).filter((doc) => {
+      if (query && !doc.title.toLowerCase().includes(query)) return false
+      if (typeFilter && doc.document_type !== typeFilter) return false
+      if (statusFilter && doc.status !== statusFilter) return false
+      return true
+    })
+  }, [documents, searchQuery, typeFilter, statusFilter])
+
+  const hasActiveFilters = searchQuery || typeFilter || statusFilter
+
+  const clearFilters = () => {
+    setSearchQuery('')
+    setTypeFilter('')
+    setStatusFilter('')
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'approved':
@@ -104,6 +125,62 @@ export default function Documents() {
         </div>
       )}
 
+      {/* Search and filter bar */}
+      {!isLoading && documents.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search documents..."
+                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-primary-500 focus:border-primary-500"
+                aria-label="Search documents"
+              />
+            </div>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-primary-500 focus:border-primary-500"
+              aria-label="Filter by document type"
+            >
+              <option value="">All types</option>
+              {documentTypes.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </select>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-primary-500 focus:border-primary-500"
+              aria-label="Filter by status"
+            >
+              <option value="">All statuses</option>
+              <option value="generated">Generated</option>
+              <option value="reviewed">Reviewed</option>
+              <option value="approved">Approved</option>
+            </select>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="flex items-center gap-1 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-4 h-4" />
+                Clear
+              </button>
+            )}
+          </div>
+          {hasActiveFilters && (
+            <p className="text-xs text-gray-500 mt-2">
+              Showing {filteredDocuments.length} of {documents.length} documents
+            </p>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="text-center py-12 text-gray-500">Loading...</div>
       ) : documents.length === 0 ? (
@@ -114,9 +191,21 @@ export default function Documents() {
             Generate your first compliance document
           </p>
         </div>
+      ) : filteredDocuments.length === 0 && hasActiveFilters ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <Search className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+          <h3 className="text-lg font-medium text-gray-900">No matching documents</h3>
+          <p className="text-gray-500 mt-1">Try adjusting your search or filters</p>
+          <button
+            onClick={clearFilters}
+            className="mt-4 px-4 py-2 text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+          >
+            Clear all filters
+          </button>
+        </div>
       ) : (
         <div className="grid gap-4">
-          {documents.map((doc: Document) => (
+          {filteredDocuments.map((doc: Document) => (
             <div
               key={doc.id}
               className="bg-white rounded-xl border border-gray-200 p-6"
