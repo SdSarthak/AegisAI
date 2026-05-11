@@ -148,7 +148,7 @@ async def bulk_import_systems(
         
         # Check if we have headers
         if not csv_reader.fieldnames:
-             raise HTTPException(
+            raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid CSV format: No headers found"
             )
@@ -184,7 +184,6 @@ async def bulk_import_systems(
                 db.add(ai_system)
                 created_count += 1
             except Exception as e:
-                db.rollback()
                 errors.append({"row": row_num, "error": str(e)})
         
         db.commit()
