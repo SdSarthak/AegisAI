@@ -119,7 +119,7 @@ def delete_ai_system(
 
 
 @router.post("/import", response_model=BulkImportResponse)
-async def bulk_import_systems(
+def bulk_import_systems(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -129,14 +129,14 @@ async def bulk_import_systems(
     created_count = 0
     
     # Basic validation: check file extension
-    if not file.filename.lower().endswith('.csv'):
+    if not file.filename or not file.filename.lower().endswith('.csv'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid CSV format: File must have .csv extension"
         )
 
     try:
-        content = await file.read()
+        content = file.file.read()
         decoded_content = content.decode("utf-8")
         
         # Check if file is empty
