@@ -22,13 +22,12 @@ import { Save, Eye, EyeOff } from 'lucide-react'
  */
 
 interface DocumentEditorProps {
-  documentId: number
+  _documentId: number
   initialContent: string
   onSave?: (content: string) => void
 }
 
 export default function DocumentEditor({
-  documentId,
   initialContent,
   onSave,
 }: DocumentEditorProps) {
