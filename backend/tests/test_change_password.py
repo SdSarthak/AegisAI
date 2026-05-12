@@ -64,17 +64,17 @@ class TestChangePassword:
         c, user = client
         resp = c.post(
             "/api/v1/auth/change-password",
-            json={"current_password": "oldpassword", "new_password": "newsecret123"},
+            json={"current_password": "oldpassword", "new_password": "Newsecret1!"},
         )
         assert resp.status_code == 200
         assert resp.json()["message"] == "Password updated successfully"
-        assert verify_password("newsecret123", user.hashed_password)
+        assert verify_password("Newsecret1!", user.hashed_password)
 
     def test_wrong_current_password_returns_400(self, client):
         c, user = client
         resp = c.post(
             "/api/v1/auth/change-password",
-            json={"current_password": "wrongpassword", "new_password": "newsecret123"},
+            json={"current_password": "wrongpassword", "new_password": "Newsecret1!"},
         )
         assert resp.status_code == 400
         assert "incorrect" in resp.json()["detail"].lower()
@@ -86,7 +86,8 @@ class TestChangePassword:
             json={"current_password": "oldpassword", "new_password": "short"},
         )
         assert resp.status_code == 422
-def test_password_missing_uppercase_returns_422(self, client):
+
+    def test_password_missing_uppercase_returns_422(self, client):
         c, user = client
         resp = c.post(
             "/api/v1/auth/change-password",
