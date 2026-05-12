@@ -1,17 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from typing import List
 
+from app.core.scoring import compute_compliance_score
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.scoring import compute_compliance_score
 
 from app.models.user import User
-from app.models.ai_system import (
-    AISystem,
-    RiskLevel,
-    RiskAssessment,
-    ComplianceStatus,
-)
+from app.models.ai_system import AISystem, RiskLevel, ComplianceStatus
 
 from app.schemas.ai_system import (
     RiskClassificationRequest,
@@ -231,35 +227,10 @@ def classify_and_save(
     system.compliance_status = ComplianceStatus.IN_PROGRESS
     system.questionnaire_responses = data.model_dump()
 
-    assessment = RiskAssessment(
-        ai_system_id=system.id,
-        assessment_type="initial",
+    system.compliance_score = compute_compliance_score(
         risk_level=result.risk_level,
-        findings=[
-            {
-                "type": "classification",
-                "reasons": result.reasons,
-            }
-        ],
-        recommendations=[
-            {
-                "requirements": result.requirements,
-                "next_steps": result.next_steps,
-            }
-        ],
-        overall_score=(
-            70
-            if result.risk_level == RiskLevel.MINIMAL
-            else 30
-        ),
+        questionnaire=data.model_dump(),
     )
-
-    db.add(assessment)
-
-    system.compliance_score = (
-        compute_compliance_score(assessment)
-    )
-
     db.commit()
     db.refresh(system)
 
