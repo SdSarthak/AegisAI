@@ -241,7 +241,6 @@ def bulk_classify_systems(
         result = classify_risk(classification_data)
         system.risk_level = result.risk_level
         system.compliance_status = ComplianceStatus.IN_PROGRESS
-        system.questionnaire_responses = system.questionnaire_responses
 
         assessment = RiskAssessment(
             ai_system_id=system.id,
@@ -251,7 +250,19 @@ def bulk_classify_systems(
             recommendations=[{"requirements": result.requirements, "next_steps": result.next_steps}],
             overall_score=70 if result.risk_level == RiskLevel.MINIMAL else 30
         )
-        db.add(assessment)
+
+        try:
+            db.add(assessment)
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            results.append(
+                BulkClassificationItem(
+                    system_id=system_id,
+                    error=f"Database error: {exc}"
+                )
+            )
+            continue
 
         results.append(
             BulkClassificationItem(
@@ -260,5 +271,4 @@ def bulk_classify_systems(
             )
         )
 
-    db.commit()
     return BulkClassificationResponse(results=results)
