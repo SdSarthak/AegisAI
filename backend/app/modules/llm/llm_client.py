@@ -101,11 +101,18 @@ class LLMClient:
 
             except APIError as e:
                 if attempt < max_retries - 1:
-                    wait = retry_delay * (2 ** attempt)
-                    logger.warning("LLM API error (attempt %d): %s — retrying in %.1fs", attempt + 1, e, wait)
+                    wait = retry_delay * (2**attempt)
+                    logger.warning(
+                        "LLM API error (attempt %d): %s — retrying in %.1fs",
+                        attempt + 1,
+                        e,
+                        wait,
+                    )
                     time.sleep(wait)
                 else:
-                    raise Exception(f"LLM API call failed after {max_retries} attempts: {e}") from e
+                    raise Exception(
+                        f"LLM API call failed after {max_retries} attempts: {e}"
+                    ) from e
 
     def stream(
         self,

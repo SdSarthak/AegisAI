@@ -23,9 +23,9 @@ class ComplianceSnapshot(Base):
     ai_system_id = Column(Integer, ForeignKey("ai_systems.id"), nullable=False)
 
     # Captured values at snapshot time
-    compliance_score = Column(Integer, nullable=False)            # 0-100
-    compliance_status = Column(String(50), nullable=False)        # ComplianceStatus value
-    risk_level = Column(String(50), nullable=True)                # RiskLevel value
+    compliance_score = Column(Integer, nullable=False)  # 0-100
+    compliance_status = Column(String(50), nullable=False)  # ComplianceStatus value
+    risk_level = Column(String(50), nullable=True)  # RiskLevel value
 
     snapshotted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

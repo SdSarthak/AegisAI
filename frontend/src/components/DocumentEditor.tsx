@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Save, Eye, EyeOff } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
@@ -13,7 +13,10 @@ interface DocumentEditorProps {
 
 export default function DocumentEditor({
 
+
   documentId: _documentId,
+
+  documentId,
 
   initialContent,
   onSave,
@@ -22,28 +25,9 @@ export default function DocumentEditor({
   const [content, setContent] = useState(initialContent)
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
 
-  // Auto-save after 2 seconds
-  useEffect(() => {
-    if (content === initialContent) return
-
-    if (saveTimeout) clearTimeout(saveTimeout)
-
-    const timeout = setTimeout(async () => {
-      setIsSaving(true)
-      await handleSave()
-      setIsSaving(false)
-    }, 2000)
-
-    setSaveTimeout(timeout)
-
-    return () => {
-      if (timeout) clearTimeout(timeout)
-    }
-  }, [content])
-
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setIsSaving(true)
     // Call PUT endpoint
     try {
@@ -63,7 +47,26 @@ export default function DocumentEditor({
       console.error('Save failed:', error)
     }
     setIsSaving(false)
-  }
+  }, [content, documentId, onSave])
+
+  // Auto-save after 2 seconds
+  useEffect(() => {
+    if (content === initialContent) return
+
+    if (saveTimeout) clearTimeout(saveTimeout)
+
+    const timeout = setTimeout(async () => {
+      setIsSaving(true)
+      await handleSave()
+      setIsSaving(false)
+    }, 2000)
+
+    setSaveTimeout(timeout)
+
+    return () => {
+      if (timeout) clearTimeout(timeout)
+    }
+  }, [content, handleSave, initialContent, saveTimeout])
 
   return (
     <div className="flex flex-col h-full border border-gray-200 rounded-xl overflow-hidden">

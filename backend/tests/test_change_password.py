@@ -38,7 +38,7 @@ def db(engine):
 def client(db):
     user = User(
         email="pw@test.com",
-        hashed_password=get_password_hash("oldpassword"),
+        hashed_password=get_password_hash("OldPass1!"),
         full_name="Password Tester",
     )
     db.add(user)
@@ -64,17 +64,17 @@ class TestChangePassword:
         c, user = client
         resp = c.post(
             "/api/v1/auth/change-password",
-            json={"current_password": "oldpassword", "new_password": "newsecret123"},
+            json={"current_password": "OldPass1!", "new_password": "NewSecret1!"},
         )
         assert resp.status_code == 200
         assert resp.json()["message"] == "Password updated successfully"
-        assert verify_password("newsecret123", user.hashed_password)
+        assert verify_password("NewSecret1!", user.hashed_password)
 
     def test_wrong_current_password_returns_400(self, client):
         c, user = client
         resp = c.post(
             "/api/v1/auth/change-password",
-            json={"current_password": "wrongpassword", "new_password": "newsecret123"},
+            json={"current_password": "WrongPass1!", "new_password": "NewSecret1!"},
         )
         assert resp.status_code == 400
         assert "incorrect" in resp.json()["detail"].lower()
@@ -83,6 +83,47 @@ class TestChangePassword:
         c, user = client
         resp = c.post(
             "/api/v1/auth/change-password",
-            json={"current_password": "oldpassword", "new_password": "short"},
+            json={"current_password": "OldPass1!", "new_password": "Ab1!"},
         )
         assert resp.status_code == 422
+        assert "at least 8 characters" in str(resp.json())
+
+    def test_missing_uppercase_returns_422(self, client):
+        c, user = client
+        resp = c.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "OldPass1!", "new_password": "alllower1!"},
+        )
+        assert resp.status_code == 422
+        assert "uppercase" in str(resp.json())
+
+    def test_missing_digit_returns_422(self, client):
+        c, user = client
+        resp = c.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "OldPass1!", "new_password": "AllUpper!!"},
+        )
+        assert resp.status_code == 422
+        assert "digit" in str(resp.json())
+
+    def test_missing_special_char_returns_422(self, client):
+        c, user = client
+        resp = c.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "OldPass1!", "new_password": "NoSpecial1A"},
+        )
+        assert resp.status_code == 422
+        assert "special character" in str(resp.json())
+
+    def test_multiple_missing_criteria_returns_422(self, client):
+        c, user = client
+        resp = c.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "OldPass1!", "new_password": "abc"},
+        )
+        assert resp.status_code == 422
+        body = str(resp.json())
+        assert "at least 8 characters" in body
+        assert "uppercase" in body
+        assert "digit" in body
+        assert "special character" in body

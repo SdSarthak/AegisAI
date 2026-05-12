@@ -22,7 +22,9 @@ classifiers = [
 # TODO (help wanted): pin exact versions from backend/requirements.txt
 dependencies = [
     "torch>=2.0",
-    "transformers>=4.40",
+    "transformers>=4.37",
+    "numpy>=1.24",
+    "sentencepiece>=0.2.0",
 ]
 
 [project.optional-dependencies]
