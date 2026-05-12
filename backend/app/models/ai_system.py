@@ -41,9 +41,9 @@ class AISystem(Base):
     compliance_score = Column(Float, nullable=True, default=None)  # 0.0–100.0, null until classification runs
     
     # Questionnaire responses (JSON)
-    questionnaire_responses = Column(JSON, default=dict) 
+    questionnaire_responses = Column(JSON, default=dict)
 
-    #Checklist persistence 
+    #Checklist persistence
     checklist_state = Column(JSON, default=dict)
     
     # Timestamps
