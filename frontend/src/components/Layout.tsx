@@ -6,6 +6,7 @@ import {
   Bot,
   FileCheck,
   FileText,
+  MessageSquare,
   LogOut,
   Shield,
   ChevronLeft,
@@ -17,9 +18,8 @@ const navigation = [
   { name: 'AI Systems', href: '/ai-systems', icon: Bot },
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
-  { name: 'RAG Chat', href: '/rag-chat', icon: FileText },
+{ name: 'RAG Chat', href: '/rag-chat', icon: MessageSquare },
 ]
-
 export default function Layout() {
   const location = useLocation()
   const { user, logout } = useAuthStore()

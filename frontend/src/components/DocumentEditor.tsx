@@ -31,18 +31,21 @@ export default function DocumentEditor({
   documentId,
   initialContent,
   onSave,
-}: DocumentEditorProps) {
+}: DocumentEditorProps)  {
   const [content, setContent] = useState(initialContent)
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
   const handleSave = async () => {
-    setIsSaving(true)
-    // TODO (help wanted): call PUT /api/v1/documents/{documentId}
-    // await axios.put(`/api/v1/documents/${documentId}`, { content })
-    onSave?.(content)
-    setIsSaving(false)
-  }
+  setIsSaving(true)
+  // TODO (help wanted): call PUT /api/v1/documents/{documentId}
+  // await axios.put(`/api/v1/documents/${documentId}`, { content })
+  onSave?.(content)
+
+  void documentId
+
+  setIsSaving(false)
+}
 
   return (
     <div className="flex flex-col h-full border border-gray-200 rounded-xl overflow-hidden">
