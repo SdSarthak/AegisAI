@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified 
 from typing import List
-import csv 
+import csv
 import io
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -235,4 +235,5 @@ def update_checklist(
     flag_modified(system, "checklist_state")
     db.commit()
     db.refresh(system)
-    return system.checklist_state 
+    return system.checklist_state
+    
