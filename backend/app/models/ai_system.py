@@ -44,7 +44,7 @@ class AISystem(Base):
     questionnaire_responses = Column(JSON, default=dict) 
 
     #Checklist persistence 
-    checklist_state = Column(JSON, default = dict)
+    checklist_state = Column(JSON, default=dict)
     
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
