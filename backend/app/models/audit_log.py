@@ -78,5 +78,13 @@ def after_ai_system_update(mapper, connection, target):
                 new_values=new_values,
                 changed_at=datetime.utcnow(),
             )
-        )
+        ) 
+            
+            
+            
+            
+            
+        
+        
+        
         
