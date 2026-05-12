@@ -85,6 +85,36 @@ export default function AISystems() {
     'Other',
   ]
 
+  const getRiskBadge = (riskLevel: string | null) => {
+    switch (riskLevel) {
+      case 'unacceptable':
+        return {
+          label: 'Unacceptable',
+          className: 'bg-red-100 text-red-700',
+        }
+      case 'high':
+        return {
+          label: 'High',
+          className: 'bg-orange-100 text-orange-700',
+        }
+      case 'limited':
+        return {
+          label: 'Limited',
+          className: 'bg-yellow-100 text-yellow-700',
+        }
+      case 'minimal':
+        return {
+          label: 'Minimal',
+          className: 'bg-green-100 text-green-700',
+        }
+      default:
+        return {
+          label: 'Unknown',
+          className: 'bg-gray-100 text-gray-700',
+        }
+    }
+  }
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -213,15 +243,9 @@ export default function AISystems() {
                       )}
                       {system.risk_level && (
                         <span
-                          className={`text-xs px-2 py-1 rounded ${
-                            system.risk_level === 'high'
-                              ? 'bg-red-100 text-red-700'
-                              : system.risk_level === 'limited'
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : 'bg-green-100 text-green-700'
-                          }`}
+                          className={`text-xs px-2 py-1 rounded ${getRiskBadge(system.risk_level).className}`}
                         >
-                          {system.risk_level} risk
+                          {getRiskBadge(system.risk_level).label}
                         </span>
                       )}
                     </div>
