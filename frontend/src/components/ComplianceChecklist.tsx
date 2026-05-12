@@ -53,8 +53,8 @@ export default function ComplianceChecklist({
       debounceRef.current = setTimeout(() => {
         aiSystemsApi.updateChecklist(systemId ,Array.from(nextChecked))
       },500)
-      }
   }
+  
   const toggle = (id: string) => {
     setChecked((prev) => {
       const next = new Set(prev)
