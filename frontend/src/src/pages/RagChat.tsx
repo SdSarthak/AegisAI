@@ -33,8 +33,14 @@ export default function RagChat() {
       const data: RagResponse = await ragApi.query(query)
       setAnswer(data.answer)
       setSources(data.sources || [])
-    } catch (err: any) {
-      if (err.response?.status === 503) {
+    } catch (err: unknown) {
+      if (
+        typeof err === 'object' &&
+        err !== null &&
+        'response' in err &&
+        typeof (err as { response?: { status?: number } }).response?.status === 'number' &&
+        (err as { response?: { status?: number } }).response?.status === 503
+      ) {
         setError('Knowledge base is not yet ready. Please ingest documents first.')
       } else {
         setError('Something went wrong. Please try again.')
@@ -108,18 +114,24 @@ export default function RagChat() {
                 <span className="font-medium">Sources ({sources.length})</span>
                 {sourcesOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
+
               {sourcesOpen && (
                 <ul className="px-5 pb-4 space-y-2">
                   {sources.map((src, i) => (
                     <li key={i} className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
                       {src.url ? (
-                        <a href={src.url} target="_blank" rel="noopener noreferrer"
-                          className="text-primary-600 hover:underline font-medium">
+                        <a
+                          href={src.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-primary-600 hover:underline font-medium"
+                        >
                           {src.title || src.url}
                         </a>
                       ) : (
                         <span className="font-medium">{src.title}</span>
                       )}
+
                       {src.content && (
                         <p className="text-gray-500 mt-1 text-xs">{src.content}</p>
                       )}
