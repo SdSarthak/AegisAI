@@ -125,16 +125,16 @@ class IntentClassifier:
         has_weights = model_exists and os.path.exists(os.path.join(model_path, "pytorch_model.bin"))
         
         if model_exists and has_weights:
-            print(f"✓ Loading fine-tuned model from {model_path}")
+            print(f"[OK] Loading fine-tuned model from {model_path}")
             try:
                 self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
                 self.model = AutoModelForSequenceClassification.from_pretrained(model_path)
-                print(f"✓ Model and tokenizer loaded successfully")
+                print(f"[OK] Model and tokenizer loaded successfully")
             except Exception as e:
-                print(f"⚠ Failed to load model: {e}. Falling back to pre-trained.")
+                print(f"[WARNING] Failed to load model: {e}. Falling back to pre-trained.")
                 self._load_pretrained()
         else:
-            print(f"⚠ Fine-tuned model not found at {model_path}")
+            print(f"[WARNING] Fine-tuned model not found at {model_path}")
             print(f"  Using pre-trained DeBERTa (train with notebook for better results)")
             self._load_pretrained()
         

@@ -47,23 +47,23 @@ class LLMGuard:
 
         # Layer 1: Fast regex filter
         self.regex_filter = RegexFilter()
-        logger.info("✓ Regex filter initialized")
+        logger.info("[OK] Regex filter initialized")
 
         # Layer 2: ML intent classifier (loads trained model or pre-trained fallback)
         try:
             self.classifier = IntentClassifier(model_path=classifier_model_path)
-            logger.info("✓ Intent classifier initialized")
+            logger.info("[OK] Intent classifier initialized")
         except Exception as e:
             logger.error(f"Failed to initialize classifier: {e}")
             raise
 
         # Layer 3: Decision engine
         self.decision_engine = DecisionEngine()
-        logger.info("✓ Decision engine initialized")
+        logger.info("[OK] Decision engine initialized")
 
         # Layer 4: Sanitizer
         self.sanitizer = PromptSanitizer(level=sanitization_level)
-        logger.info(f"✓ Sanitizer initialized (level: {sanitization_level.value})")
+        logger.info(f"[OK] Sanitizer initialized (level: {sanitization_level.value})")
 
     def guard(self, user_prompt: str) -> Dict:
         """
