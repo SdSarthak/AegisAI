@@ -10,6 +10,7 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
+  BarChart,
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
 import ThemeToggle from './ThemeToggle'
@@ -18,6 +19,7 @@ import ThemeToggle from './ThemeToggle'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Analytics', href: '/analytics', icon: BarChart },
   { name: 'AI Systems', href: '/ai-systems', icon: Bot },
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
