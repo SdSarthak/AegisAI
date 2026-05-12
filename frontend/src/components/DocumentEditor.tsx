@@ -5,12 +5,14 @@ import { markdown } from '@codemirror/lang-markdown'
 import { marked } from 'marked'
 
 interface DocumentEditorProps {
+  documentId: number
   initialContent: string
   onSave?: (content: string) => void
   onClose?: () => void
 }
 
 export default function DocumentEditor({
+  documentId,
   initialContent,
   onSave,
   onClose,
@@ -18,7 +20,7 @@ export default function DocumentEditor({
   const [content, setContent] = useState(initialContent)
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveTimeout, setSaveTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
 
   // Auto-save after 2 seconds
   useEffect(() => {
