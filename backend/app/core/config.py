@@ -45,6 +45,16 @@ class Settings(BaseSettings):
     RAG_CHUNK_OVERLAP: int = 200
     FAISS_INDEX_PATH: str = "faiss_index"
 
+    # Redis (for rate limiting and task queues)
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_DB: int = 0
+    REDIS_PASSWORD: str | None = None
+
+    # Bulk Import Limits
+    MAX_IMPORT_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
+    MAX_IMPORT_ROWS: int = 1000
+
     class Config:
         env_file = ".env"
         case_sensitive = True

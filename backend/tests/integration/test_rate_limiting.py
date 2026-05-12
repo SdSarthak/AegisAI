@@ -64,6 +64,7 @@ def test_per_user_rate_limit_blocks_61st_guard_scan_request(client, db_session):
         status_codes = []
         payload = {"prompt": "Hello, this is a harmless test prompt."}
 
+        # Original test count: 60
         for _ in range(60):
             response = client.post(
                 "/api/v1/guard/scan", json=payload, headers=auth_headers

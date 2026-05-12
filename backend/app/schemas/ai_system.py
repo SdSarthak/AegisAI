@@ -102,5 +102,6 @@ class ComplianceStatusUpdateSchema(BaseModel):
 
 # Bulk Import
 class BulkImportResponse(BaseModel):
-    created: int
-    errors: List[Dict[str, Any]]
+    message: Optional[str] = None
+    created: Optional[int] = 0
+    errors: Optional[List[Dict[str, Any]]] = []
