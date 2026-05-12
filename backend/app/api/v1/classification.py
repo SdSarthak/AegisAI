@@ -16,7 +16,7 @@ router = APIRouter()
 class BulkClassificationItem(BaseModel):
     system_id: int
     classification: Optional[RiskClassificationResponse] = None
-    error: Optional[str] = None
+    error: Optional[str] = None 
 
 
 class BulkClassificationRequest(BaseModel):
@@ -272,3 +272,4 @@ def bulk_classify_systems(
         )
 
     return BulkClassificationResponse(results=results)
+    #done
