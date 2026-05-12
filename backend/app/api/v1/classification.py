@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+
+from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -9,6 +11,20 @@ from app.models.ai_system import AISystem, RiskLevel, RiskAssessment, Compliance
 from app.schemas.ai_system import RiskClassificationRequest, RiskClassificationResponse
 
 router = APIRouter()
+
+
+class BulkClassificationItem(BaseModel):
+    system_id: int
+    classification: Optional[RiskClassificationResponse] = None
+    error: Optional[str] = None
+
+
+class BulkClassificationRequest(BaseModel):
+    system_ids: List[int]
+
+
+class BulkClassificationResponse(BaseModel):
+    results: List[BulkClassificationItem]
 
 
 def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse:
@@ -173,3 +189,76 @@ def classify_and_save(
     db.refresh(system)
     
     return result
+
+
+@router.post("/bulk", response_model=BulkClassificationResponse)
+def bulk_classify_systems(
+    request: BulkClassificationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Classify multiple AI systems in one request.
+    Returns per-system classification results and partial failure details.
+    """
+    results: List[BulkClassificationItem] = []
+
+    for system_id in request.system_ids:
+        system = db.query(AISystem).filter(
+            AISystem.id == system_id,
+            AISystem.owner_id == current_user.id
+        ).first()
+
+        if not system:
+            results.append(
+                BulkClassificationItem(
+                    system_id=system_id,
+                    error="AI system not found"
+                )
+            )
+            continue
+
+        if not system.questionnaire_responses:
+            results.append(
+                BulkClassificationItem(
+                    system_id=system_id,
+                    error="Questionnaire responses missing"
+                )
+            )
+            continue
+
+        try:
+            classification_data = RiskClassificationRequest(**system.questionnaire_responses)
+        except Exception as exc:
+            results.append(
+                BulkClassificationItem(
+                    system_id=system_id,
+                    error=f"Invalid questionnaire responses: {exc}"
+                )
+            )
+            continue
+
+        result = classify_risk(classification_data)
+        system.risk_level = result.risk_level
+        system.compliance_status = ComplianceStatus.IN_PROGRESS
+        system.questionnaire_responses = system.questionnaire_responses
+
+        assessment = RiskAssessment(
+            ai_system_id=system.id,
+            assessment_type="bulk",
+            risk_level=result.risk_level,
+            findings=[{"type": "classification", "reasons": result.reasons}],
+            recommendations=[{"requirements": result.requirements, "next_steps": result.next_steps}],
+            overall_score=70 if result.risk_level == RiskLevel.MINIMAL else 30
+        )
+        db.add(assessment)
+
+        results.append(
+            BulkClassificationItem(
+                system_id=system_id,
+                classification=result
+            )
+        )
+
+    db.commit()
+    return BulkClassificationResponse(results=results)
