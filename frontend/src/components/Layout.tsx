@@ -16,6 +16,7 @@ import {
   ChevronRight,
   BarChart,
 } from 'lucide-react'
+import ThemeToggle from './ThemeToggle'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
