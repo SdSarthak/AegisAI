@@ -116,5 +116,12 @@ export const documentsApi = {
     await api.delete(`/documents/${id}`)
   },
 }
+// RAG API
+export const ragApi = {
+  query: async (query: string) => {
+    const { data } = await api.post('/rag/query', { query })
+    return data
+  },
+}
 
 export default api

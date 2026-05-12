@@ -10,6 +10,7 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
+  MessageSquare,
 } from 'lucide-react'
 
 const navigation = [
@@ -17,6 +18,7 @@ const navigation = [
   { name: 'AI Systems', href: '/ai-systems', icon: Bot },
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
+  { name: 'RAG Intelligence', href: '/rag', icon: MessageSquare },
 ]
 
 export default function Layout() {
