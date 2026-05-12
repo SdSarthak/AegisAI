@@ -8,6 +8,11 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 
+# At the top of security.py, before CryptContext initialization
+import bcrypt
+import passlib.handlers.bcrypt
+passlib.handlers.bcrypt.bcrypt.__about__ = type('obj', (object,), {'__version__': bcrypt.__version__})()
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_PREFIX}/auth/login")
 
