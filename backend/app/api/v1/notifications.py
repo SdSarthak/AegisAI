@@ -16,19 +16,22 @@ TODO for contributors (help wanted):
     notification appears in GET /notifications for that user.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.notification import NotificationResponse, NotificationMarkRead
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
 
 
-@router.get("", response_model=list[NotificationResponse])
+@router.get("", response_model=PaginatedResponse[NotificationResponse])
 def list_notifications(
     unread_only: bool = False,
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(50, ge=1, le=100, description="Items per page"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -39,7 +42,9 @@ def list_notifications(
     optionally filter is_read=False, order by created_at DESC.
     """
     # TODO: implement — replace with real DB query
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    )
 
 
 @router.post("/read", status_code=status.HTTP_204_NO_CONTENT)
@@ -55,7 +60,9 @@ def mark_notifications_read(
     ensuring they belong to current_user (prevent IDOR).
     """
     # TODO: implement
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    )
 
 
 @router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -70,4 +77,6 @@ def delete_notification(
     TODO (help wanted): fetch by ID + user_id, return 404 if not found, then delete.
     """
     # TODO: implement
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    )

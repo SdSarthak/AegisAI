@@ -48,6 +48,7 @@ def query_knowledge_base(
     """
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
+
         qa_chain = get_qa_chain()
         result = qa_chain({"query": request.question})
         source_docs = result.get("source_documents", [])
