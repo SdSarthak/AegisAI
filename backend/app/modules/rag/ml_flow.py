@@ -1,5 +1,6 @@
 import mlflow
 
+
 def log_query(question: str, answer: str, sources: list):
     with mlflow.start_run():
         mlflow.log_param("question", question)

@@ -16,6 +16,9 @@ class DocumentUpdate(BaseModel):
     content: Optional[str] = None
     status: Optional[DocumentStatus] = None
 
+class DocumentUpdateRequest(BaseModel):
+    """Request to update document content only."""
+    content: str
 
 class DocumentResponse(BaseModel):
     id: int
@@ -35,6 +38,7 @@ class DocumentResponse(BaseModel):
 
 class DocumentGenerateRequest(BaseModel):
     """Request to generate a compliance document."""
+
     document_type: DocumentType
     ai_system_id: int
     include_recommendations: bool = True

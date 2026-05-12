@@ -19,6 +19,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.models.ai_system import AISystem
+from app.modules.badge.badge_generator import generate_badge_svg
 
 router = APIRouter()
 
@@ -26,16 +28,25 @@ router = APIRouter()
 @router.get("/{system_id}", tags=["Compliance Badge"])
 def get_compliance_badge(
     system_id: int,
-    format: str = "svg",      # "svg" | "json"
+    format: str = "svg",  # "svg" | "json"
     db: Session = Depends(get_db),
 ):
     """
     Return a public compliance badge for an AI system.
-
-    TODO (help wanted): look up the AISystem by ID (no auth check — public),
-    generate an SVG from the badge template in
-    app/modules/badge/badge_generator.py, return with Content-Type image/svg+xml.
-    Return 404 if the system does not exist.
     """
-    # TODO: implement
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    system = db.query(AISystem).filter(AISystem.id == system_id).first()
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="System not found"
+        )
+
+    if format == "json":
+        return {
+            "system_id": system_id,
+            "name": system.name,
+            "risk_level": system.risk_level,
+            "compliance_status": system.compliance_status,
+        }
+
+    svg = generate_badge_svg(system.name, system.risk_level, system.compliance_status)
+    return Response(content=svg, media_type="image/svg+xml")

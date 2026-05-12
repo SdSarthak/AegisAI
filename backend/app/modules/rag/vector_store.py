@@ -46,4 +46,6 @@ def load_vector_store():
             "Call POST /api/v1/rag/ingest to build it first."
         )
     embeddings = get_embeddings()
-    return FAISS.load_local(index_path, embeddings, allow_dangerous_deserialization=True)
+    return FAISS.load_local(
+        index_path, embeddings, allow_dangerous_deserialization=True
+    )
