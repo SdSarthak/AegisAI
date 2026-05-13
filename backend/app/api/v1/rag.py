@@ -6,10 +6,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 TODO for contributors (high difficulty):
   - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
   - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
-  - Integrate MLflow tracking from modules/rag/ml_flow.py
   - Add streaming responses via SSE for long answers
 """
 
+import time
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from app.core.security import get_current_user
@@ -49,30 +49,45 @@ def query_knowledge_base(
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
         qa_chain = get_qa_chain()
+
+        t_start = time.monotonic()
         result = qa_chain({"query": request.question})
+        latency_ms = (time.monotonic() - t_start) * 1000
+
         source_docs = result.get("source_documents", [])
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
+        answer = str(result.get("result", ""))
 
         # Ensure tables exist on this DB bind (useful for test DB overrides)
         from app.core.database import Base
         try:
             Base.metadata.create_all(bind=db.get_bind())
         except Exception:
-            # best-effort: ignore if bind not available
             pass
 
-        # Persist an initial RAGFeedback row to capture the answer and contributing chunks
+        # Persist feedback row
         feedback = RAGFeedback(
             question=request.question,
-            answer=str(result.get("result", "")),
+            answer=answer,
             source_chunks=sources,
         )
         db.add(feedback)
         db.commit()
         db.refresh(feedback)
-        answer_id = feedback.id
 
-        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
+        # Log to MLflow (non-blocking — failures are swallowed inside log_query)
+        try:
+            from app.modules.rag.ml_flow import log_query
+            log_query(
+                question=request.question,
+                answer=answer,
+                sources=sources,
+                latency_ms=latency_ms,
+            )
+        except Exception:
+            pass
+
+        return RAGQueryResponse(answer=answer, sources=sources, answer_id=feedback.id)
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
