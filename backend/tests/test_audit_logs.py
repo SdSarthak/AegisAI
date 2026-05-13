@@ -1,6 +1,7 @@
 """Tests for AI system audit logging and history endpoint."""
 
 import os
+from urllib import response
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
@@ -113,3 +114,17 @@ class TestAuditLogs:
         assert log["old_values"]["name"] == "Fraud Detector"
 
         assert log["new_values"]["name"] == "AI Fraud Detector"
+
+    def test_history_endpoint_returns_paginated_response(self, client):
+        response = client.get(
+        "/api/v1/ai-systems/1/history?page=1&limit=10"
+        )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert "items" in data
+        assert "total" in data
+        assert "page" in data
+        assert "limit" in data
