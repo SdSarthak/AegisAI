@@ -1,16 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
-import { TrendingUp, BarChart2 } from 'lucide-react'
+import { TrendingUp} from 'lucide-react'
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+} from 'recharts'
 
 /**
  * Analytics page — compliance score timeline and aggregate stats.
- *
- * TODO (good first issue — static layout):
- *   - Build the static page shell: a header, a placeholder chart area,
- *     and a stats summary row (4 stat cards).
- *   - No API calls needed yet — use hardcoded dummy data for the chart.
- *   - Acceptance criteria: the page renders without errors and shows
- *     a placeholder chart and 4 stat cards.
- *
  * TODO (help wanted — API wiring):
  *   - Install a chart library: `npm install recharts` (already listed as a
  *     potential dependency in docs/architecture.md).
@@ -25,6 +19,14 @@ interface SnapshotPoint {
   snapshotted_at: string
   compliance_score: number
 }
+
+const dummyData = [
+      { date: '2026-05-01', score: 42 },
+      { date: '2026-05-02', score: 55 },
+      { date: '2026-05-03', score: 68 },
+      { date: '2026-05-07', score: 72 },
+      { date: '2026-05-10', score: 80 },
+    ]
 
 // TODO (help wanted): replace with real API call
 // const analyticsApi = {
@@ -45,15 +47,32 @@ export default function Analytics() {
       </div>
 
       {/* Summary stats row */}
-      {/* TODO (good first issue): implement 4 stat cards here */}
+      
       <div className="grid grid-cols-4 gap-4">
-        {['Total Systems', 'Avg Score', 'Compliant', 'High Risk'].map((label) => (
+        {[
+          { label: 'Total Systems', value: '5' },
+          { label: 'Avg Score',     value: '68%' },
+          { label: 'Compliant',     value: '6' },
+          { label: 'High Risk',     value: '7' },
+        ].map(({label, value}) => (
           <div key={label} className="bg-white rounded-xl border border-gray-200 p-6">
             <p className="text-sm text-gray-500">{label}</p>
             {/* TODO (help wanted): replace — with real value from API */}
-            <p className="text-2xl font-bold text-gray-900 mt-1">—</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
           </div>
         ))}
+      </div>
+
+      {/*Summary selector*/}
+      <div className="flex items-center gap-3">
+        <label className="text-sm font-medium text-gray-700">Select System:</label>
+        <select className="border border-gray-300 rounded-lg px-3 py-2 text-sm">
+          <option>System A</option>
+          <option>System B</option>
+          <option>System C</option>
+          <option>System D</option>
+          <option>System E</option>
+        </select>
       </div>
 
       {/* Chart area */}
@@ -63,16 +82,48 @@ export default function Analytics() {
           <h2 className="font-semibold text-gray-900">Compliance Score Timeline</h2>
         </div>
 
-        {/* TODO (good first issue): replace this placeholder with a Recharts LineChart */}
-        <div className="h-64 flex items-center justify-center bg-gray-50 rounded-lg border border-dashed border-gray-300">
-          <div className="text-center text-gray-400">
-            <BarChart2 className="w-12 h-12 mx-auto mb-2 opacity-40" />
-            <p className="text-sm">Chart — implement me with Recharts</p>
-            <p className="text-xs mt-1">
-              Wire to GET /api/v1/analytics/compliance-timeline
-            </p>
+        <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+            <LineChart margin={{
+              top: 20,
+              right: 20,
+              left: 30,
+              bottom: 40,
+            }} data={dummyData}>
+              <CartesianGrid strokeDasharray="3 3" />
+
+              <XAxis
+                dataKey="date"
+                angle={-40}
+                textAnchor="end"
+                height={60}
+                tickMargin={10}
+                label={{
+                  value: "Date",
+                  position: "bottom",
+                  offset: 20,
+                }}
+                />
+
+            <YAxis
+              tickMargin={10}
+              label={{
+                value: "Score",
+                angle: -90,
+                position: "left",
+              }}
+            />
+
+            <Tooltip
+              labelFormatter={(label) => `Date: ${label}`}
+              formatter={(value) => [`Score: ${value}`, "Score"]}
+            />
+
+            <Line type="monotone" dataKey="score" stroke="#2563EB" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
+          
           </div>
-        </div>
       </div>
     </div>
   )
