@@ -219,24 +219,29 @@ def export_ai_systems(
     )
 
 
+# ---------- THIS IS THE ADDED ENDPOINT FOR ISSUE ----------
 @router.get("/{system_id}", response_model=AISystemResponse)
 def get_ai_system(
     system_id: int,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get a specific AI system."""
+    """
+    Get a specific AI system by ID.
+    Returns 404 if the system does not exist or does not belong to the current user.
+    """
     system = (
         db.query(AISystem)
         .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
         .first()
     )
-
     if not system:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found"
         )
     return system
+# ----------------------------------------------------------
 
 
 @router.put("/{system_id}", response_model=AISystemResponse)
