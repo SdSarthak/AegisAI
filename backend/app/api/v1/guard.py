@@ -30,14 +30,27 @@ _rate_limit_lock = Lock()
 
 # Persistent Redis client
 _redis_client: Optional['redis.Redis'] = None
+_redis_unavailable_until: Optional[datetime] = None
+
+
+def _mark_redis_unavailable() -> None:
+    global _redis_unavailable_until
+    _redis_unavailable_until = (
+        datetime.now(timezone.utc) + timedelta(seconds=RATE_LIMIT_WINDOW_SECONDS)
+    )
 
 def get_redis_client():
     """Lazy initialization of the Redis client."""
-    global _redis_client
+    global _redis_client, _redis_unavailable_until
+
+    if _redis_unavailable_until and datetime.now(timezone.utc) < _redis_unavailable_until:
+        return None
+
+    _redis_unavailable_until = None
     if _redis_client is None and settings.REDIS_HOST:
         try:
             import redis
-            _redis_client = redis.Redis(
+            client = redis.Redis(
                 host=settings.REDIS_HOST,
                 port=settings.REDIS_PORT,
                 db=settings.REDIS_DB,
@@ -46,10 +59,14 @@ def get_redis_client():
                 socket_connect_timeout=2,
                 socket_timeout=2
             )
+            client.ping()
+            _redis_client = client
         except ImportError:
             logger.warning("redis-py not installed, falling back to in-memory rate limiting.")
         except Exception as e:
             logger.error(f"Failed to initialize Redis client: {e}")
+            _redis_client = None
+            _mark_redis_unavailable()
     return _redis_client
 
 
@@ -85,6 +102,7 @@ def _check_rate_limit_memory(user_id: int) -> tuple[bool, int]:
 
 def _check_rate_limit_redis(user_id: int) -> tuple[bool, int]:
     """Distributed rate limit check using Redis."""
+    global _redis_client
     r = get_redis_client()
     if not r:
         return _check_rate_limit_memory(user_id)
@@ -110,6 +128,8 @@ def _check_rate_limit_redis(user_id: int) -> tuple[bool, int]:
         return False, 0
     except Exception as e:
         logger.error(f"Redis rate limit operation failed, falling back to memory: {str(e)}")
+        _redis_client = None
+        _mark_redis_unavailable()
         return _check_rate_limit_memory(user_id)
 
 
@@ -164,3 +184,73 @@ def scan_prompt(
 def guard_health():
     """Check if the Guard module is available."""
     return {"module": "llm_guard", "status": "available"}
+class BulkScanRequest(BaseModel):
+    prompts: list[str]
+
+    def validate_prompts(self):
+        if len(self.prompts) > 50:
+            raise ValueError("Maximum 50 prompts allowed per batch request.")
+        return self
+
+class BulkScanResponse(BaseModel):
+    results: list[ScanResponse]
+    total: int
+    processed: int
+
+@router.post("/scan/batch", response_model=BulkScanResponse)
+def bulk_scan_prompts(
+    request: BulkScanRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Scan a batch of prompts (max 50) for injection risks.
+    Processes sequentially to respect memory constraints.
+    Returns a decision for each prompt.
+    """
+    if len(request.prompts) > 50:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 50 prompts allowed per batch request."
+        )
+
+    limited, retry_after = _check_rate_limit_redis(current_user.id)
+    if limited:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={"detail": "Rate limit exceeded. Please try again later."},
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    try:
+        from app.modules.guard.llm_guard import LLMGuard
+        from app.modules.guard.sanitizer import SanitizationLevel
+        level_map = {
+            "low": SanitizationLevel.LOW,
+            "medium": SanitizationLevel.MEDIUM,
+            "high": SanitizationLevel.HIGH,
+        }
+        san_level = level_map.get(settings.GUARD_SANITIZATION_LEVEL, SanitizationLevel.MEDIUM)
+        guard = LLMGuard(sanitization_level=san_level)
+
+        results = []
+        for prompt in request.prompts:
+            result = guard.guard(prompt)
+            results.append(ScanResponse(
+                decision=result["decision"],
+                confidence=result["metadata"]["decision_reasoning"]["confidence"],
+                reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
+                sanitized_prompt=None,
+                matched_patterns=result["metadata"]["regex_analysis"].get("matched_patterns", []),
+            ))
+
+        return BulkScanResponse(
+            results=results,
+            total=len(request.prompts),
+            processed=len(results),
+        )
+    except Exception as e:
+        logger.error(f"Error during Bulk Guard scan: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An internal error occurred during the batch scan."
+        )

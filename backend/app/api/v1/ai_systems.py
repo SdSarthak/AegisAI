@@ -1,23 +1,25 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi.responses import StreamingResponse
+from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import csv
 import io
-import logging
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem
 from app.schemas.ai_system import (
-    AISystemCreate, 
-    AISystemUpdate, 
+    AISystemCreate,
+    AISystemUpdate,
     AISystemResponse,
-    BulkImportResponse
+    BulkImportResponse,
+    ComplianceStatusUpdateSchema,
 )
 from app.core.config import settings
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
-logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=AISystemResponse, status_code=status.HTTP_201_CREATED)
@@ -41,14 +43,213 @@ def create_ai_system(
     return ai_system
 
 
-@router.get("/", response_model=List[AISystemResponse])
+_SORTABLE_FIELDS = {
+    "name": AISystem.name,
+    "risk_level": AISystem.risk_level,
+    "compliance_score": AISystem.compliance_score,
+    "created_at": AISystem.created_at,
+}
+
+
+@router.get("/", response_model=PaginatedResponse[AISystemResponse])
 def list_ai_systems(
+    sort_by: Optional[str] = Query("created_at", description="Sort field: name, risk_level, compliance_score, created_at"),
+    order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(50, ge=1, le=100, description="Items per page"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all AI systems for the current user, with optional sorting and pagination."""
+    if sort_by not in _SORTABLE_FIELDS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid sort_by '{sort_by}'. Allowed: {', '.join(sorted(_SORTABLE_FIELDS))}",
+        )
+    if order not in ("asc", "desc"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid order. Use 'asc' or 'desc'.",
+        )
+
+    column = _SORTABLE_FIELDS[sort_by]
+    direction = asc(column) if order == "asc" else desc(column)
+
+    base_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
+    total = base_query.count()
+    offset = (page - 1) * limit
+
+    systems = (
+        base_query
+        .order_by(direction)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return PaginatedResponse(items=systems, total=total, page=page, limit=limit)
+
+
+async def _read_upload_with_size_limit(file: UploadFile) -> bytes:
+    chunks: list[bytes] = []
+    total_size = 0
+    chunk_size = 1024 * 1024
+
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+
+        total_size += len(chunk)
+        if total_size > settings.MAX_IMPORT_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File too large. Maximum size is {settings.MAX_IMPORT_FILE_SIZE / 1024 / 1024}MB",
+            )
+        chunks.append(chunk)
+
+    return b"".join(chunks)
+
+
+@router.post("/import", response_model=BulkImportResponse)
+async def bulk_import_systems(
+    file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List all AI systems for the current user."""
-    systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
-    return systems
+    """Import AI systems from a CSV file."""
+    errors = []
+    created_count = 0
+
+    if not file.filename or not file.filename.lower().endswith('.csv'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid CSV format: File must have .csv extension"
+        )
+
+    try:
+        content = await _read_upload_with_size_limit(file)
+        decoded_content = content.decode("utf-8")
+
+        if not decoded_content.strip():
+            return BulkImportResponse(created=0, errors=[])
+
+        csv_reader = csv.DictReader(io.StringIO(decoded_content))
+        if not csv_reader.fieldnames:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid CSV format: No headers found",
+            )
+
+        normalized_headers = {
+            header.strip().lower() for header in csv_reader.fieldnames if header
+        }
+        if "name" not in normalized_headers:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid CSV format: 'name' column is required"
+            )
+
+        for row_num, row in enumerate(csv_reader, start=2):
+            if row_num - 1 > settings.MAX_IMPORT_ROWS:
+                errors.append(
+                    {
+                        "row": row_num,
+                        "error": f"Import truncated: exceeded {settings.MAX_IMPORT_ROWS} rows",
+                    }
+                )
+                break
+
+            if not any((value or "").strip() for value in row.values()):
+                continue
+
+            name = (row.get("name") or "").strip()
+            if not name:
+                errors.append({"row": row_num, "error": "name is required"})
+                continue
+
+            existing = db.query(AISystem).filter(
+                AISystem.owner_id == current_user.id,
+                AISystem.name == name
+            ).first()
+            if existing:
+                errors.append({"row": row_num, "error": f"duplicate name '{name}'"})
+                continue
+
+            ai_system = AISystem(
+                owner_id=current_user.id,
+                name=name,
+                description=(row.get("description") or "").strip() or None,
+                version=(row.get("version") or "").strip() or None,
+                use_case=(row.get("use_case") or "").strip() or None,
+                sector=(row.get("sector") or "").strip() or None
+            )
+            db.add(ai_system)
+            created_count += 1
+
+        db.commit()
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file encoding. Please upload a UTF-8 encoded CSV."
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Error processing CSV: {str(e)}"
+        )
+
+    return BulkImportResponse(created=created_count, errors=errors)
+
+
+@router.get("/export")
+def export_ai_systems(
+    risk_level: Optional[str] = Query(None, description="Filter by risk level: minimal, limited, high, unacceptable"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Export the authenticated user's AI systems registry as a CSV file."""
+    query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
+
+    if risk_level is not None:
+        allowed = {"minimal", "limited", "high", "unacceptable"}
+        if risk_level.lower() not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid risk_level '{risk_level}'. Allowed: {', '.join(sorted(allowed))}",
+            )
+        query = query.filter(AISystem.risk_level == risk_level.lower())
+
+    systems = query.all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "id", "name", "description", "version", "use_case", "sector",
+        "risk_level", "compliance_status", "compliance_score", "created_at",
+    ])
+    for s in systems:
+        writer.writerow([
+            s.id,
+            s.name,
+            s.description or "",
+            s.version or "",
+            s.use_case or "",
+            s.sector or "",
+            s.risk_level.value if s.risk_level else "",
+            s.compliance_status.value if s.compliance_status else "",
+            s.compliance_score if s.compliance_score is not None else "",
+            s.created_at.isoformat() if s.created_at else "",
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=\"ai_systems.csv\""},
+    )
 
 
 @router.get("/{system_id}", response_model=AISystemResponse)
@@ -62,7 +263,7 @@ def get_ai_system(
         AISystem.id == system_id,
         AISystem.owner_id == current_user.id
     ).first()
-    
+
     if not system:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -83,17 +284,42 @@ def update_ai_system(
         AISystem.id == system_id,
         AISystem.owner_id == current_user.id
     ).first()
-    
+
     if not system:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="AI system not found"
         )
-    
+
     update_data = system_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(system, field, value)
-    
+
+    db.commit()
+    db.refresh(system)
+    return system
+
+
+@router.patch("/{system_id}/status", response_model=AISystemResponse)
+def update_ai_system_status(
+    system_id: int,
+    payload: ComplianceStatusUpdateSchema,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update only the compliance_status of an AI system."""
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id,
+    ).first()
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found",
+        )
+
+    system.compliance_status = payload.compliance_status
     db.commit()
     db.refresh(system)
     return system
@@ -110,105 +336,12 @@ def delete_ai_system(
         AISystem.id == system_id,
         AISystem.owner_id == current_user.id
     ).first()
-    
+
     if not system:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="AI system not found"
         )
-    
+
     db.delete(system)
     db.commit()
-
-
-def _process_import_task(
-    content: bytes,
-    user_id: int
-):
-    """Background task to process AI system imports."""
-    from app.core.database import SessionLocal
-    db_session = SessionLocal()
-    try:
-        decoded_content = content.decode("utf-8")
-        csv_reader = csv.DictReader(io.StringIO(decoded_content))
-        
-        for row_num, row in enumerate(csv_reader, start=2):
-            if row_num - 2 >= settings.MAX_IMPORT_ROWS:
-                logger.warning(f"Import truncated for user {user_id}: exceeded {settings.MAX_IMPORT_ROWS} rows")
-                break
-                
-            name = row.get("name", "").strip()
-            if not name:
-                continue
-            
-            # Check for existing using local session
-            existing = db_session.query(AISystem).filter(
-                AISystem.owner_id == user_id,
-                AISystem.name == name
-            ).first()
-            
-            if existing:
-                continue
-
-            try:
-                system = AISystem(
-                    owner_id=user_id,
-                    name=name,
-                    description=row.get("description", "").strip() or None,
-                    version=row.get("version", "").strip() or None,
-                    use_case=row.get("use_case", "").strip() or None,
-                    sector=row.get("sector", "").strip() or None
-                )
-                db_session.add(system)
-            except Exception as e:
-                logger.error(f"Error creating system in import: {str(e)}")
-            
-        db_session.commit()
-    except Exception as e:
-        logger.error(f"Error in bulk import background task: {str(e)}")
-        db_session.rollback()
-    finally:
-        db_session.close()
-
-
-@router.post("/import", response_model=BulkImportResponse)
-async def bulk_import_systems(
-    background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Import AI systems from a CSV file.
-    Processing is handled in the background to prevent DoS.
-    """
-    # 1. Enforce File Size Limit (DoS Mitigation)
-    content = await file.read()
-    if len(content) > settings.MAX_IMPORT_FILE_SIZE:
-        raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"File too large. Maximum size is {settings.MAX_IMPORT_FILE_SIZE / 1024 / 1024}MB"
-        )
-
-    # 2. Basic Header Validation
-    try:
-        header_check = content[:1024].decode("utf-8")
-        if "name" not in header_check.lower():
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid CSV format: 'name' column is required"
-            )
-    except UnicodeDecodeError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid file encoding. Please upload a UTF-8 encoded CSV."
-        )
-
-    # 3. Offload to Background Task
-    background_tasks.add_task(_process_import_task, content, current_user.id)
-    
-    return BulkImportResponse(
-        message="Bulk import started in the background. Systems will appear in your dashboard shortly.",
-        created=0, 
-        errors=[]
-    )
