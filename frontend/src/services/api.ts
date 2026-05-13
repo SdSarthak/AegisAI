@@ -119,7 +119,7 @@ export const documentsApi = {
 // RAG API
 export const ragApi = {
   query: async (query: string) => {
-    const { data } = await api.post('/rag/query', { query })
+    const { data } = await api.post('/rag/query', { question: query })
     return data
   },
 }
