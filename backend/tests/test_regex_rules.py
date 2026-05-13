@@ -1,4 +1,4 @@
-from backend.app.modules.guard.regex_rules import RegexFilter 
+from app.modules.guard.regex_rules import RegexFilter 
 #Issue 96
 """ 6 Test cases for regex rules"""
 # Test instruction override pattern
