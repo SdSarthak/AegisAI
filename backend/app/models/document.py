@@ -49,3 +49,26 @@ class Document(Base):
     # Relationships
     owner = relationship("User", back_populates="documents")
     ai_system = relationship("AISystem", back_populates="documents")
+
+class DocumentVersion(Base):
+    __tablename__ = "document_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    document_id = Column(
+        Integer,
+        ForeignKey("documents.id"),
+        nullable=False
+    )
+
+    version_number = Column(String(20), nullable=False)
+
+    content = Column(Text, nullable=False)
+
+    created_at = Column(
+        DateTime,
+        default=datetime.utcnow
+    )
+
+    # Relationship
+    document = relationship("Document")
