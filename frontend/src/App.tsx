@@ -8,6 +8,7 @@ import AISystems from './pages/AISystems'
 import Classification from './pages/Classification'
 import Documents from './pages/Documents'
 import Notifications from './pages/Notifications'
+import Analytics from './pages/Analytics'
 import { Toaster } from 'react-hot-toast'
 import RagChat from './pages/RagChat'
 
@@ -51,6 +52,7 @@ function App() {
           }
         >
           <Route index element={<Dashboard />} />
+          <Route path="analytics" element={<Analytics />} />
           <Route path="ai-systems" element={<AISystems />} />
           <Route path="classification/:systemId?" element={<Classification />} />
           <Route path="documents" element={<Documents />} />

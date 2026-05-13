@@ -43,9 +43,15 @@ def load_vector_store():
     if not os.path.exists(index_path):
         raise FileNotFoundError(
             f"FAISS index not found at '{index_path}'. "
-            "Call POST /api/v1/rag/ingest to build it first."
+            "The RAG module requires regulatory documents to be ingested first. "
+            "Please contact your administrator or check the documentation for setup instructions."
         )
     embeddings = get_embeddings()
     return FAISS.load_local(
         index_path, embeddings, allow_dangerous_deserialization=True
     )
+
+
+def check_index_exists():
+    """Check if FAISS index exists on disk."""
+    return os.path.exists(settings.FAISS_INDEX_PATH)

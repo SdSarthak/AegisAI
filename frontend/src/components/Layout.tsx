@@ -20,6 +20,7 @@ import ThemeToggle from './ThemeToggle'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Analytics', href: '/analytics', icon: BarChart },
   { name: 'AI Systems', href: '/ai-systems', icon: Bot },
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
@@ -127,7 +128,6 @@ export default function Layout() {
           isCollapsed ? 'pl-20' : 'pl-64'
         }`}
       >
-
         <header className="sticky top-0 z-30 flex items-center justify-end gap-1 px-8 py-3 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
           <NotificationBell />
           <ThemeToggle />
@@ -140,4 +140,3 @@ export default function Layout() {
     </div>
   )
 }
-

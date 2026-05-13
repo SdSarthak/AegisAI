@@ -74,17 +74,38 @@ def query_knowledge_base(
         answer_id = feedback.id
 
         return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
+    except FileNotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e),
+        )
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"RAG module not ready: {str(e)}. Run POST /rag/ingest first.",
+            detail=f"RAG module error: {str(e)}",
         )
 
 
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health():
     """Check if the RAG module is available."""
-    return {"module": "rag_intelligence", "status": "available"}
+    from app.modules.rag.vector_store import check_index_exists
+    
+    index_loaded = check_index_exists()
+    
+    if not index_loaded:
+        return {
+            "module": "rag_intelligence",
+            "status": "unavailable",
+            "index_loaded": False,
+            "message": "FAISS index not found. RAG module requires document ingestion before use."
+        }
+    
+    return {
+        "module": "rag_intelligence",
+        "status": "available",
+        "index_loaded": True
+    }
 
 
 class RAGFeedbackRequest(BaseModel):
