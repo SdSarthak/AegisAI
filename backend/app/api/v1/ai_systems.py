@@ -25,7 +25,7 @@ router = APIRouter()
 def create_ai_system(
     system_data: AISystemCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Create a new AI system for compliance tracking."""
     ai_system = AISystem(
@@ -34,7 +34,7 @@ def create_ai_system(
         description=system_data.description,
         version=system_data.version,
         use_case=system_data.use_case,
-        sector=system_data.sector
+        sector=system_data.sector,
     )
     db.add(ai_system)
     db.commit()
@@ -223,18 +223,18 @@ def export_ai_systems(
 def get_ai_system(
     system_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Get a specific AI system."""
-    system = db.query(AISystem).filter(
-        AISystem.id == system_id,
-        AISystem.owner_id == current_user.id
-    ).first()
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .first()
+    )
 
     if not system:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="AI system not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
         )
     return system
 
@@ -244,18 +244,18 @@ def update_ai_system(
     system_id: int,
     system_data: AISystemUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Update an AI system."""
-    system = db.query(AISystem).filter(
-        AISystem.id == system_id,
-        AISystem.owner_id == current_user.id
-    ).first()
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .first()
+    )
 
     if not system:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="AI system not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
         )
 
     update_data = system_data.model_dump(exclude_unset=True)
@@ -271,18 +271,18 @@ def update_ai_system(
 def delete_ai_system(
     system_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Delete an AI system."""
-    system = db.query(AISystem).filter(
-        AISystem.id == system_id,
-        AISystem.owner_id == current_user.id
-    ).first()
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .first()
+    )
 
     if not system:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="AI system not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
         )
 
     db.delete(system)

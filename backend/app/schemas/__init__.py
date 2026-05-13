@@ -1,7 +1,7 @@
 from app.schemas.user import UserCreate, UserLogin, UserResponse, UserUpdateSchema, Token
 from app.schemas.ai_system import (
-    AISystemCreate, 
-    AISystemUpdate, 
+    AISystemCreate,
+    AISystemUpdate,
     AISystemResponse,
     ComplianceStatusUpdateSchema,
     RiskClassificationRequest,

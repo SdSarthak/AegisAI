@@ -42,7 +42,9 @@ def list_notifications(
     optionally filter is_read=False, order by created_at DESC.
     """
     # TODO: implement — replace with real DB query
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    )
 
 
 @router.post("/read", status_code=status.HTTP_204_NO_CONTENT)
@@ -58,7 +60,9 @@ def mark_notifications_read(
     ensuring they belong to current_user (prevent IDOR).
     """
     # TODO: implement
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    )
 
 
 @router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -73,4 +77,6 @@ def delete_notification(
     TODO (help wanted): fetch by ID + user_id, return 404 if not found, then delete.
     """
     # TODO: implement
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    )
