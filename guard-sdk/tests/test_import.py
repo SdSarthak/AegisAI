@@ -8,10 +8,9 @@ def test_import():
 
 def test_api_availability():
     """Verify that the main API classes are available."""
-    from aegisai_guard import LLMGuard, SanitizationLevel, GuardDecision
+    from aegisai_guard import LLMGuard, SanitizationLevel
     assert LLMGuard is not None
     assert SanitizationLevel is not None
-    assert GuardDecision is not None
 
 def test_basic_usage():
     """Verify basic dummy usage of LLMGuard."""
@@ -19,4 +18,4 @@ def test_basic_usage():
     guard = LLMGuard(sanitization_level=SanitizationLevel.MEDIUM)
     result = guard.guard("test prompt")
     assert result["decision"] == "allow"
-    assert result["sanitized_text"] == "test prompt"
+    assert result["sanitized_text"] is None

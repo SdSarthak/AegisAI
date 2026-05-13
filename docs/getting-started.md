@@ -1,4 +1,6 @@
 # Getting Started
+### Windows Users
+Make sure Git and Python are installed and added to PATH before running setup commands.
 
 This guide gets AegisAI running locally in under 10 minutes.
 

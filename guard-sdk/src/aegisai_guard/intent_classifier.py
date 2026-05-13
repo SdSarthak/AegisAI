@@ -4,6 +4,7 @@ import os
 import json
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
+from pathlib import Path
 import numpy as np
 
 import torch
@@ -14,15 +15,45 @@ from transformers import (
     AdamW,
     get_linear_schedule_with_warmup,
 )
-from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
-from . import guard_config as config
+# ---------------------------------------------------------------------------
+# Constants (inlined from backend guard_config to keep SDK self-contained)
+# ---------------------------------------------------------------------------
+INTENT_CLASSES = ["benign", "suspicious", "malicious"]
+INTENT_TO_ID = {"benign": 0, "suspicious": 1, "malicious": 2}
+ID_TO_INTENT = {v: k for k, v in INTENT_TO_ID.items()}
+
+
+def _detect_model_path() -> str:
+    """
+    Auto-detect a trained model on disk.
+
+    Checks (in order):
+      1. ``CLASSIFIER_MODEL_PATH`` environment variable
+      2. ``./models/intent_classifier`` relative to this file
+      3. ``./intent_classifier`` in the current working directory
+
+    Returns the first path that contains ``pytorch_model.bin``, or the
+    env-var path (which will trigger a pre-trained fallback later).
+    """
+    env_path = os.getenv("CLASSIFIER_MODEL_PATH", "")
+    if env_path and os.path.exists(env_path):
+        return env_path
+
+    candidates = [
+        str(Path(__file__).parent / "models" / "intent_classifier"),
+        "./intent_classifier",
+    ]
+    for path in candidates:
+        if os.path.exists(path) and os.path.exists(os.path.join(path, "pytorch_model.bin")):
+            return path
+
+    return env_path or str(Path(__file__).parent / "models" / "intent_classifier")
 
 
 @dataclass
 class ClassificationResult:
     """Result of intent classification."""
-
     intent: str  # "benign", "suspicious", "malicious"
     confidence: float  # 0.0 to 1.0
     class_scores: Dict[str, float]  # Scores for each class
@@ -31,9 +62,7 @@ class ClassificationResult:
 class PromptDataset(Dataset):
     """PyTorch Dataset for prompt classification."""
 
-    def __init__(
-        self, texts: List[str], labels: List[int], tokenizer, max_length: int = 128
-    ):
+    def __init__(self, texts: List[str], labels: List[int], tokenizer, max_length: int = 128):
         self.texts = texts
         self.labels = labels
         self.tokenizer = tokenizer
@@ -67,11 +96,11 @@ class IntentClassifier:
     def __init__(self, model_path: Optional[str] = None, device: Optional[str] = None):
         """
         Initialize classifier with fine-tuned or pre-trained model.
-
+        
         Tries to load fine-tuned model first, falls back to pre-trained DeBERTa-v3-small.
-
+        
         Args:
-            model_path: Path to trained model directory. If None, auto-detects using config.
+            model_path: Path to trained model directory. If None, auto-detects.
             device: Device to use ('cpu' or 'cuda'). Auto-detects GPU if None.
         """
         # Auto-detect device
@@ -79,55 +108,42 @@ class IntentClassifier:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device)
-
-        # Use intent classes from config
-        self.intent_to_id = config.INTENT_TO_ID
-        self.id_to_intent = config.ID_TO_INTENT
-
+        
+        # Use intent classes
+        self.intent_to_id = INTENT_TO_ID
+        self.id_to_intent = ID_TO_INTENT
+        
         # Determine model path
         if model_path is None:
-            model_path = config.get_trained_model_path()
-
+            model_path = _detect_model_path()
+        
         # Load tokenizer from model directory
         tokenizer_path = model_path
-
+        
         # Load model
         model_exists = model_path and os.path.exists(model_path)
-        has_weights = model_exists and os.path.exists(
-            os.path.join(model_path, "pytorch_model.bin")
-        )
-
+        has_weights = model_exists and os.path.exists(os.path.join(model_path, "pytorch_model.bin"))
+        
         if model_exists and has_weights:
-            print(f"✓ Loading fine-tuned model from {model_path}")
+            print(f"[OK] Loading fine-tuned model from {model_path}")
             try:
-                from transformers import (
-                    AutoTokenizer,
-                    AutoModelForSequenceClassification,
-                )
-
                 self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-                self.model = AutoModelForSequenceClassification.from_pretrained(
-                    model_path
-                )
-                print(f"✓ Model and tokenizer loaded successfully")
+                self.model = AutoModelForSequenceClassification.from_pretrained(model_path)
+                print(f"[OK] Model and tokenizer loaded successfully")
             except Exception as e:
-                print(f"⚠ Failed to load model: {e}. Falling back to pre-trained.")
+                print(f"[WARNING] Failed to load model: {e}. Falling back to pre-trained.")
                 self._load_pretrained()
         else:
-            print(f"⚠ Fine-tuned model not found at {model_path}")
-            print(
-                f"  Using pre-trained DeBERTa (train with notebook for better results)"
-            )
+            print(f"[WARNING] Fine-tuned model not found at {model_path}")
+            print(f"  Using pre-trained DeBERTa (train with notebook for better results)")
             self._load_pretrained()
-
+        
         self.model.to(self.device)
         self.model.eval()
-
+    
     def _load_pretrained(self):
         """Load pre-trained DeBERTa model."""
         print("Loading pre-trained DeBERTa v3 small...")
-        from transformers import AutoTokenizer, AutoModelForSequenceClassification
-
         model_name = "microsoft/deberta-v3-small"
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(
@@ -137,10 +153,10 @@ class IntentClassifier:
     def classify(self, prompt: str) -> ClassificationResult:
         """
         Classify a prompt's intent.
-
+        
         Args:
             prompt: Prompt to classify
-
+            
         Returns:
             ClassificationResult with intent, confidence, and class scores
         """
@@ -166,8 +182,7 @@ class IntentClassifier:
 
         # Create class scores dict
         class_scores = {
-            self.id_to_intent[i]: float(probabilities[i])
-            for i in range(len(probabilities))
+            self.id_to_intent[i]: float(probabilities[i]) for i in range(len(probabilities))
         }
 
         return ClassificationResult(
@@ -177,10 +192,10 @@ class IntentClassifier:
     def batch_classify(self, prompts: List[str]) -> List[ClassificationResult]:
         """
         Classify multiple prompts at once.
-
+        
         Args:
             prompts: List of prompts to classify
-
+            
         Returns:
             List of ClassificationResult objects
         """
@@ -202,7 +217,7 @@ class IntentClassifier:
     ) -> Dict:
         """
         Fine-tune the model on labeled prompt data.
-
+        
         Args:
             train_texts: Training prompt texts
             train_labels: Training labels ("benign", "suspicious", "malicious")
@@ -212,10 +227,12 @@ class IntentClassifier:
             batch_size: Batch size for training
             learning_rate: Learning rate for optimizer
             output_dir: Directory to save fine-tuned model
-
+            
         Returns:
             Dictionary with training metrics
         """
+        from sklearn.metrics import f1_score  # optional dep, only needed for training
+
         # Convert labels to ids
         train_label_ids = [self.intent_to_id[label] for label in train_labels]
         val_label_ids = [self.intent_to_id[label] for label in val_labels]
@@ -274,9 +291,7 @@ class IntentClassifier:
                     attention_mask = batch["attention_mask"].to(self.device)
                     labels = batch["labels"].to(self.device)
 
-                    outputs = self.model(
-                        input_ids=input_ids, attention_mask=attention_mask
-                    )
+                    outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
                     logits = outputs.logits
                     preds = torch.argmax(logits, dim=1)
 

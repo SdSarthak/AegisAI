@@ -25,4 +25,5 @@ class NotificationResponse(BaseModel):
 
 class NotificationMarkRead(BaseModel):
     """Body for marking one or more notifications as read."""
+
     ids: list[int]

@@ -41,16 +41,18 @@ class AISystemResponse(BaseModel):
 # Risk Classification
 class RiskClassificationRequest(BaseModel):
     """Questionnaire for EU AI Act risk classification."""
-    
+
     # Basic use case
     use_case_category: str  # "hr_recruitment", "credit_scoring", "healthcare", etc.
-    
+
     # High-risk indicators (Article 6)
     is_safety_component: bool = False  # Part of a safety component of a product
-    affects_fundamental_rights: bool = False  # Employment, education, essential services
+    affects_fundamental_rights: bool = (
+        False  # Employment, education, essential services
+    )
     uses_biometric_data: bool = False
     makes_automated_decisions: bool = True  # Decisions without human review
-    
+
     # Specific high-risk areas (Annex III)
     hr_recruitment_screening: bool = False  # CV filtering, candidate ranking
     hr_promotion_termination: bool = False  # Promotion/termination decisions
@@ -59,7 +61,7 @@ class RiskClassificationRequest(BaseModel):
     law_enforcement: bool = False
     border_control: bool = False
     justice_system: bool = False
-    
+
     # Transparency (Article 52)
     interacts_with_humans: bool = True  # Chatbots, virtual assistants
     generates_synthetic_content: bool = False  # Deepfakes, AI-generated media
