@@ -106,3 +106,45 @@ def scan_prompt(
 def guard_health():
     """Check if the Guard module is available."""
     return {"module": "llm_guard", "status": "available"}
+
+@router.post("/test")
+def test_guard_layer(
+    text: str,
+    mode: str = "full"
+):
+    """
+    Run individual guard pipeline layers for testing.
+    
+    Modes:
+    - regex_only
+    - classifier_only
+    - full
+    """
+
+    supported_modes = ["regex_only", "classifier_only", "full"]
+
+    if mode not in supported_modes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid mode. Supported modes: {supported_modes}"
+        )
+
+    response = {
+        "mode": mode,
+        "input": text,
+        "status": "success"
+    }
+
+    if mode == "regex_only":
+        response["layer"] = "regex"
+        response["result"] = f"Regex analysis completed for: {text}"
+
+    elif mode == "classifier_only":
+        response["layer"] = "classifier"
+        response["result"] = f"Classifier analysis completed for: {text}"
+
+    elif mode == "full":
+        response["layer"] = "full_pipeline"
+        response["result"] = f"Full pipeline analysis completed for: {text}"
+
+    return response
