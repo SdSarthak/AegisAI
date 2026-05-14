@@ -121,7 +121,7 @@ export default function AISystems() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">AI Systems</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Systems</h1>
           <p className="text-gray-600">Manage your AI systems for compliance tracking</p>
         </div>
         <button
@@ -134,7 +134,7 @@ export default function AISystems() {
       </div>
 
       {/* Search and Filters */}
-      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+      <div className="flex flex-col md:flex-row gap-4 bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-600 shadow-sm">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
@@ -142,7 +142,7 @@ export default function AISystems() {
             placeholder="Search AI systems..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+            className="w-full pl-10 pr-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
           />
         </div>
         <div className="flex flex-wrap gap-3">
@@ -151,7 +151,7 @@ export default function AISystems() {
             <select
               value={riskFilter}
               onChange={(e) => setRiskFilter(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
+              className="pl-9 pr-4 py-2 bg-white dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="">All Risk Levels</option>
               <option value="unacceptable">Unacceptable Risk</option>
@@ -165,7 +165,7 @@ export default function AISystems() {
             <select
               value={complianceFilter}
               onChange={(e) => setComplianceFilter(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
+              className="pl-9 pr-4 py-2 bg-white dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="">All Statuses</option>
               <option value="not_started">Not Started</option>
@@ -181,7 +181,7 @@ export default function AISystems() {
               id="sort-by-select"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
+              className="pl-9 pr-4 py-2 bg-white dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="created_at">Sort by Date</option>
               <option value="name">Sort by Name</option>
@@ -194,8 +194,9 @@ export default function AISystems() {
               id="sort-order-select"
               value={order}
               onChange={(e) => setOrder(e.target.value)}
-              className="px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
-            >
+              className="px-3 py-2 bg-white dark:bg-gray-800 dark:text-gray-400 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
+            >`12345 90-= 90-\53
+            `
               <option value="desc">Descending</option>
               <option value="asc">Ascending</option>
             </select>
@@ -207,7 +208,7 @@ export default function AISystems() {
                 setRiskFilter('')
                 setComplianceFilter('')
               }}
-              className="flex items-center gap-1 px-3 py-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all text-sm font-medium"
+              className="flex items-center gap-1 px-3 py-2 text-gray-500 dark:text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900 rounded-lg transition-all text-sm font-medium"
             >
               <X className="w-4 h-4" />
               Clear
@@ -217,16 +218,16 @@ export default function AISystems() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-500">Loading...</div>
+        <div className="text-center py-12 text-gray-500 dark:text-gray-400">Loading...</div>
       ) : filteredSystems.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600">
           <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-medium text-gray-900">
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
             {searchTerm || riskFilter || complianceFilter 
               ? 'No matching AI systems' 
               : 'No AI systems yet'}
           </h3>
-          <p className="text-gray-500 mt-1">
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
             {searchTerm || riskFilter || complianceFilter 
               ? 'Try adjusting your filters or search term'
               : 'Add your first AI system to start tracking compliance'}
@@ -245,7 +246,7 @@ export default function AISystems() {
           {filteredSystems.map((system: AISystem) => (
             <div
               key={system.id}
-              className="bg-white rounded-xl border border-gray-200 p-6"
+              className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 p-6"
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4">
@@ -253,9 +254,9 @@ export default function AISystems() {
                     <Bot className="w-6 h-6 text-primary-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">{system.name}</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">{system.name}</h3>
                     {system.description && (
-                      <p className="text-gray-600 text-sm mt-1">{system.description}</p>
+                      <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">{system.description}</p>
                     )}
                     <div className="flex items-center gap-3 mt-2">
                       {system.sector && (
@@ -279,12 +280,12 @@ export default function AISystems() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+                  <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600">
                     <Edit className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => deleteMutation.mutate(system.id)}
-                    className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
+                    className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-900"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
@@ -318,13 +319,13 @@ export default function AISystems() {
       {/* Add Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          <div className="bg-white dark:bg-gray-800 dark:text-gray-400 rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Add AI System
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   System Name *
                 </label>
                 <input
@@ -332,30 +333,30 @@ export default function AISystems() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full px-3 py-2 border dark:bg-gray-700 border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
                   placeholder="e.g., CV Screening AI"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Description
                 </label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full px-3 py-2 border dark:bg-gray-700 border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
                   rows={3}
                   placeholder="Brief description of what your AI system does"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Sector
                 </label>
                 <select
                   value={formData.sector}
                   onChange={(e) => setFormData({ ...formData, sector: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full px-3 py-2 border dark:bg-gray-700 border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
                 >
                   <option value="">Select sector...</option>
                   {sectors.map((s) => (
@@ -364,13 +365,13 @@ export default function AISystems() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 ">
                   Use Case
                 </label>
                 <select
                   value={formData.use_case}
                   onChange={(e) => setFormData({ ...formData, use_case: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full px-3 py-2 border dark:bg-gray-700 border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
                 >
                   <option value="">Select use case...</option>
                   {useCases.map((u) => (
@@ -382,7 +383,7 @@ export default function AISystems() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                  className="px-4 py-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-600 rounded-lg"
                 >
                   Cancel
                 </button>

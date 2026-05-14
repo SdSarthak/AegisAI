@@ -1,79 +1,79 @@
-import { useState } from 'react'
-import { useParams } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
-import { classificationApi } from '../services/api'
-import { AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react'
+import { useState } from "react";
+import { useParams } from "react-router-dom";
+import { useMutation } from "@tanstack/react-query";
+import { classificationApi } from "../services/api";
+import { AlertTriangle, CheckCircle, Info, XCircle } from "lucide-react";
 import ComplianceChecklist, {
   ChecklistItem,
-} from '../components/ComplianceChecklist'
+} from "../components/ComplianceChecklist";
 
 interface ClassificationResult {
-  risk_level: string
-  confidence: number
-  reasons: string[]
-  requirements: string[]
-  next_steps: string[]
+  risk_level: string;
+  confidence: number;
+  reasons: string[];
+  requirements: string[];
+  next_steps: string[];
 }
 
 const CHECKLIST_ITEMS: Record<string, ChecklistItem[]> = {
   high: [
     {
-      id: 'tech-doc',
-      label: 'Create Technical Documentation',
-      article: 'Article 11',
+      id: "tech-doc",
+      label: "Create Technical Documentation",
+      article: "Article 11",
       required: true,
     },
     {
-      id: 'risk-assessment',
-      label: 'Conduct Risk Assessment',
-      article: 'Article 9',
+      id: "risk-assessment",
+      label: "Conduct Risk Assessment",
+      article: "Article 9",
       required: true,
     },
     {
-      id: 'human-oversight',
-      label: 'Establish Human Oversight',
-      article: 'Article 14',
+      id: "human-oversight",
+      label: "Establish Human Oversight",
+      article: "Article 14",
       required: true,
     },
     {
-      id: 'conformity',
-      label: 'EU Declaration of Conformity',
-      article: 'Article 47',
+      id: "conformity",
+      label: "EU Declaration of Conformity",
+      article: "Article 47",
       required: true,
     },
     {
-      id: 'logging',
-      label: 'Implement automatic logging',
-      article: 'Article 12',
+      id: "logging",
+      label: "Implement automatic logging",
+      article: "Article 12",
       required: true,
     },
   ],
 
   limited: [
     {
-      id: 'transparency',
-      label: 'Disclose AI interaction to users',
-      article: 'Article 52',
+      id: "transparency",
+      label: "Disclose AI interaction to users",
+      article: "Article 52",
       required: true,
     },
   ],
 
   minimal: [
     {
-      id: 'best-practice',
-      label: 'Follow voluntary AI best practices',
+      id: "best-practice",
+      label: "Follow voluntary AI best practices",
       required: false,
     },
   ],
 
   unacceptable: [],
-}
+};
 
 export default function Classification() {
-  const { systemId } = useParams()
-  const [result, setResult] = useState<ClassificationResult | null>(null)
+  const { systemId } = useParams();
+  const [result, setResult] = useState<ClassificationResult | null>(null);
   const [formData, setFormData] = useState({
-    use_case_category: 'hr_recruitment',
+    use_case_category: "hr_recruitment",
     is_safety_component: false,
     affects_fundamental_rights: true,
     uses_biometric_data: false,
@@ -89,72 +89,78 @@ export default function Classification() {
     generates_synthetic_content: false,
     emotion_recognition: false,
     biometric_categorization: false,
-  })
+  });
 
   const classifyMutation = useMutation({
     mutationFn: () => {
       if (systemId) {
-        return classificationApi.classifyAndSave(parseInt(systemId), formData)
+        return classificationApi.classifyAndSave(parseInt(systemId), formData);
       }
-      return classificationApi.classify(formData)
+      return classificationApi.classify(formData);
     },
     onSuccess: (data) => {
-      setResult(data)
+      setResult(data);
     },
-  })
+  });
 
   const getRiskIcon = (level: string) => {
     switch (level) {
-      case 'unacceptable':
-        return <XCircle className="w-8 h-8 text-red-600" />
-      case 'high':
-        return <AlertTriangle className="w-8 h-8 text-orange-600" />
-      case 'limited':
-        return <Info className="w-8 h-8 text-yellow-600" />
+      case "unacceptable":
+        return <XCircle className="w-8 h-8 text-red-600" />;
+      case "high":
+        return <AlertTriangle className="w-8 h-8 text-orange-600" />;
+      case "limited":
+        return <Info className="w-8 h-8 text-yellow-600" />;
       default:
-        return <CheckCircle className="w-8 h-8 text-green-600" />
+        return <CheckCircle className="w-8 h-8 text-green-600" />;
     }
-  }
+  };
 
   const getRiskColor = (level: string) => {
     switch (level) {
-      case 'unacceptable':
-        return 'bg-red-50 border-red-200'
-      case 'high':
-        return 'bg-orange-50 border-orange-200'
-      case 'limited':
-        return 'bg-yellow-50 border-yellow-200'
+      case "unacceptable":
+        return "bg-red-50 border-red-200";
+      case "high":
+        return "bg-orange-50 border-orange-200";
+      case "limited":
+        return "bg-yellow-50 border-yellow-200";
       default:
-        return 'bg-green-50 border-green-200'
+        return "bg-green-50 border-green-200";
     }
-  }
+  };
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Risk Classification</h1>
-        <p className="text-gray-600">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          {" "}
+          Risk Classification
+        </h1>
+        <p className="text-gray-600 dark:text-gray-300">
           Determine your AI system's risk level under EU AI Act
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Questionnaire */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Classification Questionnaire
           </h2>
 
           <form className="space-y-6">
             {/* Use Case Category */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Primary Use Case
               </label>
               <select
                 value={formData.use_case_category}
                 onChange={(e) =>
-                  setFormData({ ...formData, use_case_category: e.target.value })
+                  setFormData({
+                    ...formData,
+                    use_case_category: e.target.value,
+                  })
                 }
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg"
               >
@@ -169,7 +175,7 @@ export default function Classification() {
 
             {/* High-Risk Indicators */}
             <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-3">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
                 High-Risk Indicators (Annex III)
               </h3>
               <div className="space-y-3">
@@ -185,7 +191,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>CV Screening / Candidate Ranking</strong>
                     <br />
                     AI filters CVs or ranks candidates for recruitment
@@ -204,7 +210,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Promotion/Termination Decisions</strong>
                     <br />
                     AI influences employment status decisions
@@ -223,7 +229,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Credit Worthiness Assessment</strong>
                     <br />
                     AI evaluates creditworthiness or credit scoring
@@ -242,7 +248,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Affects Fundamental Rights</strong>
                     <br />
                     Impacts employment, education, or essential services
@@ -261,7 +267,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Automated Decision Making</strong>
                     <br />
                     Makes decisions without meaningful human review
@@ -288,7 +294,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Direct Human Interaction</strong>
                     <br />
                     System interacts directly with users (chatbot, assistant)
@@ -307,7 +313,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Emotion Recognition</strong>
                     <br />
                     System detects or analyzes emotions
@@ -326,7 +332,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Synthetic Content Generation</strong>
                     <br />
                     Generates deepfakes, AI images, or synthetic media
@@ -341,7 +347,9 @@ export default function Classification() {
               disabled={classifyMutation.isPending}
               className="w-full py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
             >
-              {classifyMutation.isPending ? 'Classifying...' : 'Classify Risk Level'}
+              {classifyMutation.isPending
+                ? "Classifying..."
+                : "Classify Risk Level"}
             </button>
           </form>
         </div>
@@ -349,14 +357,16 @@ export default function Classification() {
         {/* Results */}
         <div>
           {result ? (
-            <div className={`rounded-xl border p-6 ${getRiskColor(result.risk_level)}`}>
+            <div
+              className={`rounded-xl border p-6 ${getRiskColor(result.risk_level)}`}
+            >
               <div className="flex items-center gap-4 mb-6">
                 {getRiskIcon(result.risk_level)}
                 <div>
                   <h2 className="text-xl font-bold text-gray-900 capitalize">
                     {result.risk_level} Risk
                   </h2>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
                     Confidence: {Math.round(result.confidence * 100)}%
                   </p>
                 </div>
@@ -364,10 +374,15 @@ export default function Classification() {
 
               {/* Reasons */}
               <div className="mb-6">
-                <h3 className="font-medium text-gray-900 mb-2">Classification Reasons</h3>
+                <h3 className="font-medium text-gray-900 mb-2">
+                  Classification Reasons
+                </h3>
                 <ul className="space-y-2">
                   {result.reasons.map((reason, i) => (
-                    <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+                    <li
+                      key={i}
+                      className="text-sm text-gray-600 dark:text-gray-300 flex items-start gap-2"
+                    >
                       <span className="text-gray-400">•</span>
                       {reason}
                     </li>
@@ -377,10 +392,15 @@ export default function Classification() {
 
               {/* Requirements */}
               <div className="mb-6">
-                <h3 className="font-medium text-gray-900 mb-2">Compliance Requirements</h3>
+                <h3 className="font-medium text-gray-900 mb-2">
+                  Compliance Requirements
+                </h3>
                 <ul className="space-y-2">
                   {result.requirements.map((req, i) => (
-                    <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+                    <li
+                      key={i}
+                      className="text-sm text-gray-600 dark:text-gray-300 flex items-start gap-2"
+                    >
                       <CheckCircle className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
                       {req}
                     </li>
@@ -394,7 +414,10 @@ export default function Classification() {
                 <h3 className="font-medium text-gray-900 mb-2">Next Steps</h3>
                 <ol className="space-y-2">
                   {result.next_steps.map((step, i) => (
-                    <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+                    <li
+                      key={i}
+                      className="text-sm text-gray-600 dark:text-gray-300 flex items-start gap-2"
+                    >
                       <span className="w-5 h-5 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs flex-shrink-0">
                         {i + 1}
                       </span>
@@ -405,7 +428,7 @@ export default function Classification() {
               </div>
 
               {/* Compliance Checklist */}
-              {result.risk_level !== 'unacceptable' && (
+              {result.risk_level !== "unacceptable" && (
                 <div className="mt-6">
                   <h3 className="font-medium text-gray-900 mb-3">
                     Compliance Checklist
@@ -415,10 +438,10 @@ export default function Classification() {
                     systemId={Number(systemId || 0)}
                     riskLevel={
                       result.risk_level as
-                      | 'minimal'
-                      | 'limited'
-                      | 'high'
-                      | 'unacceptable'
+                        | "minimal"
+                        | "limited"
+                        | "high"
+                        | "unacceptable"
                     }
                     items={CHECKLIST_ITEMS[result.risk_level] || []}
                   />
@@ -426,19 +449,19 @@ export default function Classification() {
               )}
             </div>
           ) : (
-            <div className="bg-gray-50 rounded-xl border border-gray-200 p-8 text-center">
+            <div className="bg-gray-50 dark:bg-gray-800 rounded-xl border border-gray-200 p-8 text-center">
               <AlertTriangle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-300">
                 Complete the Questionnaire
               </h3>
-              <p className="text-gray-500 mt-2">
-                Answer the questions to determine your AI system's risk classification
-                under the EU AI Act.
+              <p className="text-gray-500 dark:text-gray-400 mt-2">
+                Answer the questions to determine your AI system's risk
+                classification under the EU AI Act.
               </p>
             </div>
           )}
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -44,8 +44,8 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Overview of your EU AI Act compliance status</p>
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+        <p className="text-gray-600 dark:text-gray-300">Overview of your EU AI Act compliance status</p>
       </div>
 
       {/* Stats */}
@@ -53,15 +53,15 @@ export default function Dashboard() {
         {stats.map((stat) => (
           <div
             key={stat.name}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+            className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
           >
             <div className="flex items-center gap-4">
               <div className={`p-3 rounded-lg ${stat.color}`}>
-                <stat.icon className="w-6 h-6 text-white" />
+                <stat.icon className="w-6 h-6 text-white dark:text-gray-700" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">{stat.name}</p>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">{stat.name}</p>
+                <p className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
               </div>
             </div>
           </div>
@@ -69,26 +69,26 @@ export default function Dashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Link
             to="/ai-systems"
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+            className="flex items-center gap-3 p-4 rounded-lg border text-gray-600 border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors"
           >
             <Bot className="w-5 h-5 text-primary-600" />
             <span className="font-medium">Add AI System</span>
           </Link>
           <Link
             to="/classification"
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+            className="flex items-center gap-3 p-4 rounded-lg border text-gray-600 border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors"
           >
             <AlertTriangle className="w-5 h-5 text-primary-600" />
             <span className="font-medium">Risk Classification</span>
           </Link>
           <Link
             to="/documents"
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+            className="flex items-center gap-3 p-4 rounded-lg border text-gray-600 border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors"
           >
             <FileText className="w-5 h-5 text-primary-600" />
             <span className="font-medium">Generate Documents</span>
@@ -97,8 +97,8 @@ export default function Dashboard() {
       </div>
 
       {/* Recent AI Systems */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Your AI Systems</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Your AI Systems</h2>
         {systems.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <Bot className="w-12 h-12 mx-auto mb-3 text-gray-300" />
@@ -120,10 +120,10 @@ export default function Dashboard() {
             }) => (
               <div
                 key={system.id}
-                className="flex items-center justify-between p-4 rounded-lg border border-gray-200"
+                className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700"
               >
                 <div>
-                  <p className="font-medium text-gray-900">{system.name}</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{system.name}</p>
                   <div className="flex items-center gap-2 mt-1">
                     {system.risk_level && (
                       <span
