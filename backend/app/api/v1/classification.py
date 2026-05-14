@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+
+from pydantic import BaseModel
 
 from app.core.scoring import compute_compliance_score
 from app.core.database import get_db

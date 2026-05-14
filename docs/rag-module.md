@@ -1,20 +1,3 @@
-## Maintaining Knowledge Base Quality
-
-### Low-quality chunk aggregation
-
-The API provides an administrative endpoint to surface RAG chunks that receive low user feedback (thumbs-down). Use this to decide which chunks to re-ingest, repair, or remove from the FAISS index.
-
-- GET `/api/v1/rag/low-quality-chunks?threshold=0.3`
-  - Protected: admin/system-owner only (users on the `scale` subscription tier).
-  - Returns a list of chunk identifiers (the `source` metadata saved during ingestion) that have a thumbs-down ratio greater than `threshold`.
-
-Workflow:
-
-1. Query the RAG endpoint as usual: `POST /api/v1/rag/query` — the server stores the returned `answer_id` and the list of contributing chunk sources.
-2. Have users submit feedback: `POST /api/v1/rag/feedback` with `{"answer_id": "...", "vote": "down"}`.
-3. Run the aggregation endpoint: `GET /api/v1/rag/low-quality-chunks` to get candidate chunks for re-ingestion.
-
-The endpoint returns objects with `chunk`, `thumbs_down`, `total` and `ratio` fields to help prioritize remediation.
 # RAG Intelligence Module
 
 The RAG (Retrieval-Augmented Generation) module lets you ask natural language questions about AI regulations and receive grounded answers with source citations — rather than relying on an LLM's potentially outdated or hallucinated knowledge.
@@ -27,10 +10,12 @@ The RAG (Retrieval-Augmented Generation) module lets you ask natural language qu
 - [Current status](#current-status)
 - [Ingesting regulatory documents](#ingesting-regulatory-documents)
 - [Querying the knowledge base](#querying-the-knowledge-base)
+- [Feedback and quality tracking](#feedback-and-quality-tracking)
 - [Using the API](#using-the-api)
 - [Example questions](#example-questions)
 - [Configuration reference](#configuration-reference)
 - [Architecture details](#architecture-details)
+- [Evaluation dataset](#evaluation-dataset)
 - [Contributing](#contributing)
 
 ---
@@ -50,10 +35,16 @@ FAISS vector store
 LangChain RetrievalQA chain
       │  LLM reads chunks + question → generates grounded answer
       ▼
-Answer + source citations
+Answer + answer_id + source citations
+      │
+      ▼  (optional)
+User submits vote via POST /rag/feedback
+      │
+      ▼
+Low-quality chunks surfaced via GET /rag/low-quality-chunks
 ```
 
-The key difference from asking an LLM directly: the answer is **grounded in the actual regulation text**. The LLM is used to synthesise and explain, not to recall from training data. Every answer includes references to the source document so you can verify it.
+The key difference from asking an LLM directly: the answer is **grounded in the actual regulation text**. Every answer includes references to the source document so you can verify it.
 
 ---
 
@@ -64,10 +55,13 @@ The key difference from asking an LLM directly: the answer is **grounded in the 
 | `/rag/query` endpoint | Ready |
 | FAISS vector store | Ready (needs documents ingested) |
 | LangChain 0.2 retrieval chain | Ready |
-| `/rag/ingest` endpoint | **Not yet implemented** — contributor opportunity |
-| Pre-loaded regulatory documents | **Not yet added** — contributor opportunity |
+| `/rag/feedback` — thumbs up/down on answers | Ready |
+| `/rag/low-quality-chunks` — admin quality view | Ready |
+| EU AI Act PDF in `regulatory_docs/` | PR #176 open |
+| `/rag/ingest` endpoint | Contributor opportunity |
+| Pre-loaded GDPR, ISO 42001, NIST AI RMF | Contributor opportunity |
 
-The module returns `503 Service Unavailable` until documents are ingested. This is by design — it gives a clear, actionable error rather than hallucinated answers from an empty index.
+The module returns `503 Service Unavailable` until documents are ingested — a clear actionable error rather than hallucinated answers from an empty index.
 
 ---
 
@@ -81,12 +75,10 @@ Download the source PDFs and place them in `backend/data/regulatory_docs/`:
 
 | Document | Source |
 |---|---|
-| EU AI Act (Regulation EU 2024/1689) | EUR-Lex |
+| EU AI Act (Regulation EU 2024/1689) | EUR-Lex (PR #176 is adding this) |
 | GDPR (Regulation EU 2016/679) | EUR-Lex |
+| ISO/IEC 42001:2023 | iso.org (publicly available portions) |
 | NIST AI RMF 1.0 | nist.gov |
-| ISO/IEC 42001:2023 overview | iso.org (publicly available portions) |
-
-> See the contributor issues for downloading and adding these documents.
 
 ### Step 2 — Build the FAISS index
 
@@ -102,7 +94,7 @@ create_vector_store([
 # Index saved to: faiss_index/ (or FAISS_INDEX_PATH from .env)
 ```
 
-This processes the PDFs into ~1000-character chunks with 200-character overlap, generates embeddings, and saves the FAISS index to disk. Depending on document size and provider, this may take 1–5 minutes.
+This processes PDFs into ~1000-character chunks with 200-character overlap, generates embeddings, and saves the FAISS index to disk. Takes 1–5 minutes depending on document size and provider.
 
 ### Step 3 — Verify
 
@@ -112,7 +104,7 @@ ls -la backend/faiss_index/
 # index.pkl
 ```
 
-Once the index exists, `/rag/query` will return answers instead of 503.
+Once the index exists, `/rag/query` returns answers instead of 503.
 
 ---
 
@@ -131,7 +123,8 @@ curl -X POST http://localhost:8000/api/v1/rag/query \
 **Response:**
 ```json
 {
-  "answer": "Under Article 52(1) of the EU AI Act, providers of AI systems intended to interact with natural persons must ensure those systems disclose that the person is interacting with an AI, unless this is obvious from context. This obligation applies at the point of interaction and must be clear and comprehensible...",
+  "answer": "Under Article 52(1) of the EU AI Act, providers of AI systems intended to interact with natural persons must ensure those systems disclose that the person is interacting with an AI...",
+  "answer_id": "a7f3c291-4b2e-...",
   "sources": [
     "eu_ai_act.pdf",
     "eu_ai_act.pdf",
@@ -140,11 +133,56 @@ curl -X POST http://localhost:8000/api/v1/rag/query \
 }
 ```
 
+Save the `answer_id` — you'll need it to submit feedback.
+
+---
+
+## Feedback and quality tracking
+
+After receiving an answer, submit a vote to help improve the knowledge base.
+
+### Submit feedback
+
+```bash
+curl -X POST http://localhost:8000/api/v1/rag/feedback \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "answer_id": "a7f3c291-4b2e-...",
+    "vote": "down"
+  }'
+```
+
+**Vote values:** `"up"` | `"down"`
+
+### View low-quality chunks (admin/scale tier)
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/rag/low-quality-chunks?threshold=0.3"
+```
+
+**Response:**
+```json
+[
+  {
+    "chunk": "eu_ai_act.pdf::page_42",
+    "thumbs_down": 7,
+    "total": 9,
+    "ratio": 0.78
+  }
+]
+```
+
+**Knowledge base maintenance workflow:**
+1. Users query → server stores `answer_id` + contributing chunk sources
+2. Users submit `"down"` votes on poor answers
+3. Admin queries `low-quality-chunks` to identify chunks to re-ingest or remove
+4. Re-ingest corrected documents → rebuild FAISS index
+
 ---
 
 ## Example questions
-
-The RAG module is designed to answer practical compliance questions:
 
 **Risk classification:**
 - "Does my CV-screening tool qualify as high-risk under the EU AI Act?"
@@ -164,6 +202,8 @@ The RAG module is designed to answer practical compliance questions:
 - "How does NIST AI RMF Map function compare to EU AI Act risk assessment requirements?"
 - "What does ISO 42001 require that goes beyond the EU AI Act?"
 
+See [regulations.md](regulations.md) for a full comparison of EU AI Act, UK AI Bill, and India DPDP.
+
 ---
 
 ## Using the API
@@ -174,15 +214,14 @@ The RAG module is designed to answer practical compliance questions:
 curl -X POST http://localhost:8000/api/v1/rag/query \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "question": "What are the penalties for non-compliance with the EU AI Act?"
-  }'
+  -d '{"question": "What are the penalties for non-compliance with the EU AI Act?"}'
 ```
 
 **Response `200`:**
 ```json
 {
   "answer": "The EU AI Act establishes a tiered penalty regime...",
+  "answer_id": "a7f3c291-4b2e-...",
   "sources": ["eu_ai_act.pdf", "eu_ai_act.pdf"]
 }
 ```
@@ -192,6 +231,22 @@ curl -X POST http://localhost:8000/api/v1/rag/query \
 {
   "detail": "RAG module not ready: FAISS index not found at 'faiss_index'. Run POST /rag/ingest first."
 }
+```
+
+### POST /rag/feedback
+
+```bash
+curl -X POST http://localhost:8000/api/v1/rag/feedback \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"answer_id": "a7f3c291-...", "vote": "up"}'
+```
+
+### GET /rag/low-quality-chunks
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" \
+  "http://localhost:8000/api/v1/rag/low-quality-chunks?threshold=0.3"
 ```
 
 ### GET /rag/health
@@ -215,15 +270,13 @@ curl http://localhost:8000/api/v1/rag/health
 | `RAG_CHUNK_OVERLAP` | `200` | Overlap between adjacent chunks |
 | `S3_BUCKET_NAME` | — | S3 bucket for document storage (optional) |
 
-**Choosing chunk size:** Smaller chunks (500–800) give more precise retrieval but less context per chunk. Larger chunks (1500–2000) give more context but may dilute relevance. 1000 is a good default for regulatory documents.
+**Choosing chunk size:** Smaller chunks (500–800) give more precise retrieval. Larger chunks (1500–2000) give more context per chunk. 1000 is a good default for regulatory documents.
 
 ---
 
 ## Architecture details
 
 ### Document chunking
-
-The `RecursiveCharacterTextSplitter` splits documents by trying paragraph breaks (`\n\n`), then line breaks (`\n`), then sentences, then characters — preserving semantic boundaries as much as possible.
 
 ```
 PDF (e.g. 200 pages)
@@ -239,39 +292,48 @@ RecursiveCharacterTextSplitter
 ~800–2000 chunks with metadata: {source, page}
 ```
 
+The `RecursiveCharacterTextSplitter` preserves semantic boundaries by trying paragraph breaks, then line breaks, then sentences, then characters.
+
 ### Embedding model
 
-By default uses `text-embedding-ada-002` (OpenAI) or the equivalent from your configured provider. Embeddings are generated once during ingest and stored in the FAISS index — query embeddings are generated on each request.
+By default uses `text-embedding-ada-002` (OpenAI) or the equivalent from your configured provider. Embeddings are generated once during ingest and stored in the FAISS index. Query embeddings are generated on each request.
 
-With Ollama:
-- Use `nomic-embed-text` for embeddings: `ollama pull nomic-embed-text`
-- Note: Ollama embeddings and Ollama chat completions use different model names
+With Ollama: `ollama pull nomic-embed-text` then set your embedding model in `.env`.
 
 ### Retrieval
 
-`k=5` — the five most semantically similar chunks are retrieved for each query. These chunks are injected into the LLM prompt as context using LangChain's `stuff` chain type (all chunks in a single prompt).
+`k=5` — the five most semantically similar chunks are retrieved per query. Chunks are injected into the LLM prompt using LangChain's `stuff` chain type.
 
-For very long regulatory documents, `map_reduce` or `refine` chain types may give better results — this is a contributor improvement opportunity.
+---
+
+## Evaluation dataset
+
+`backend/data/regulatory_qa.csv` contains 75 question-answer pairs covering EU AI Act, GDPR, and ISO 42001. Use this dataset to evaluate retrieval quality after ingesting regulatory documents:
+
+```bash
+# Example: measure answer accuracy against the QA dataset
+python scripts/evaluate_rag.py --dataset data/regulatory_qa.csv
+```
+
+(Evaluation script is a contributor opportunity — see issue tracker.)
 
 ---
 
 ## Contributing
 
-The RAG module has several open contributor issues in the tracker:
-
-**Beginner:**
-- Download and add EU AI Act PDF to `backend/data/regulatory_docs/`
+**Good first issue:**
+- Download and add the EU AI Act PDF to `backend/data/regulatory_docs/` (see PR #176)
 - Add GDPR, ISO 42001, and NIST AI RMF documents
 
 **Intermediate:**
 - Implement `POST /rag/ingest` endpoint (PDF upload → FAISS rebuild)
-- Add RAG document management endpoints (list/delete ingested documents)
 - Add source citation with article/paragraph reference to responses
 - Add question history per user
-- Integrate MLflow tracking
 - Add streaming SSE responses
+- Write RAG evaluation script using `regulatory_qa.csv`
+- Integrate MLflow tracking
 
 **Advanced:**
 - Fine-tune an open-source regulatory model (Mistral/Llama) for better QA quality
 - Add regulatory change detection feed (monitor EUR-Lex for amendments)
-- Build compliance benchmarking API
+- Build compliance benchmarking API using the QA dataset

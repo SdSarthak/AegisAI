@@ -10,10 +10,16 @@ import {
   Shield,
   ChevronLeft,
   ChevronRight,
+  BarChart,
 } from 'lucide-react'
+import NotificationBell from './NotificationBell'
+import ThemeToggle from './ThemeToggle'
+
+
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'Analytics', href: '/analytics', icon: BarChart },
   { name: 'AI Systems', href: '/ai-systems', icon: Bot },
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
@@ -30,7 +36,7 @@ export default function Layout() {
     <div className="min-h-screen bg-gray-50">
       {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 bg-white border-r border-gray-200 transition-[width] duration-200 ${
+        className={`fixed inset-y-0 left-0 bg-white border-r border-gray-200 transition-[width] duration-200 z-40 ${
           isCollapsed ? 'w-20' : 'w-64'
         }`}
       >
@@ -96,25 +102,37 @@ export default function Layout() {
               <p className="text-sm font-medium text-gray-900 truncate">
                 {displayName}
               </p>
-              <p className="text-xs text-gray-500 truncate">
+              <p className="text-xs text-gray-500 truncate dark:text-gray-400">
                 {companyName}
               </p>
             </div>
-            <button
-              onClick={logout}
-              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-              aria-label="Log out"
-              title="Log out"
-            >
-              <LogOut className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={logout}
+                className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 dark:hover:text-gray-300"
+                aria-label="Log out"
+                title="Log out"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Main content */}
-      <div className={isCollapsed ? 'pl-20' : 'pl-64'}>
-        <main className="p-8">
+      {/* Main content area (right of sidebar) */}
+      <div
+        className={`transition-[padding] duration-200 ${
+          isCollapsed ? 'pl-20' : 'pl-64'
+        }`}
+      >
+
+        <header className="sticky top-0 z-30 flex items-center justify-end gap-1 px-8 py-3 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
+          <NotificationBell />
+          <ThemeToggle />
+        </header>
+
+        <main className="p-8 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
           <Outlet />
         </main>
       </div>

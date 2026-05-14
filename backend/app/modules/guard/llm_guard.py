@@ -29,10 +29,10 @@ class LLMGuard:
     ):
         """
         Initialize the guard with all defense layers.
-        
+
         The classifier automatically loads the fine-tuned model trained by the notebook
         if available, otherwise falls back to pre-trained DistilBERT.
-        
+
         Args:
             classifier_model_path: Path to fine-tuned classifier model.
                                   If None, auto-detects using config.get_trained_model_path()
@@ -47,7 +47,7 @@ class LLMGuard:
         # Layer 2: ML intent classifier (loads trained model or pre-trained fallback)
         if classifier_model_path is None:
             classifier_model_path = config.get_trained_model_path()
-        
+
         try:
             self.classifier = IntentClassifier(model_path=classifier_model_path)
             logger.info("✓ Intent classifier initialized")
@@ -74,10 +74,10 @@ class LLMGuard:
     def guard(self, user_prompt: str) -> Dict:
         """
         Run the complete guard pipeline on a user prompt.
-        
+
         Args:
             user_prompt: Raw user input
-            
+
         Returns:
             Dictionary with decision, response, and metadata
         """
@@ -115,7 +115,9 @@ class LLMGuard:
             "confidence": intent_result.confidence,
             "class_scores": intent_result.class_scores,
         }
-        logger.info(f"Intent: {intent_result.intent}, Confidence: {intent_result.confidence}")
+        logger.info(
+            f"Intent: {intent_result.intent}, Confidence: {intent_result.confidence}"
+        )
 
         # Step 3: Decision Engine
         logger.debug("Step 3: Making decision...")
@@ -131,7 +133,9 @@ class LLMGuard:
             "confidence": decision_result.confidence,
             "rule_matched": decision_result.rule_matched,
         }
-        logger.info(f"Decision: {decision_result.decision.value} (confidence: {decision_result.confidence})")
+        logger.info(
+            f"Decision: {decision_result.decision.value} (confidence: {decision_result.confidence})"
+        )
 
         # Step 4: Handle Decision
         if decision_result.decision == Decision.BLOCK:
@@ -141,7 +145,9 @@ class LLMGuard:
 
         elif decision_result.decision == Decision.SANITIZE:
             logger.info("Prompt marked for SANITIZATION")
-            sanitized_prompt, sanitization_summary = self.sanitizer.sanitize(user_prompt)
+            sanitized_prompt, sanitization_summary = self.sanitizer.sanitize(
+                user_prompt
+            )
             result["metadata"]["sanitization"] = {
                 "original_length": len(user_prompt),
                 "sanitized_length": len(sanitized_prompt),
@@ -184,11 +190,11 @@ class LLMGuard:
     def evaluate_on_test_set(self, test_prompts: list, true_labels: list) -> Dict:
         """
         Evaluate the guard on a test set.
-        
+
         Args:
             test_prompts: List of test prompts
             true_labels: Ground truth labels ("allow", "sanitize", "block")
-            
+
         Returns:
             Evaluation metrics
         """
@@ -243,7 +249,9 @@ def main():
             # Display results
             print("\n" + "-" * 60)
             print(f"Decision: {result['decision'].upper()}")
-            print(f"Confidence: {result['metadata']['decision_reasoning']['confidence']:.2%}")
+            print(
+                f"Confidence: {result['metadata']['decision_reasoning']['confidence']:.2%}"
+            )
             print(f"Reasoning: {result['metadata']['decision_reasoning']['reasoning']}")
             print(f"\nResponse:\n{result['response']}")
             print("-" * 60 + "\n")
