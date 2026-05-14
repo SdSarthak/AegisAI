@@ -1,0 +1,28 @@
+[build]
+  base      = "frontend"
+  command   = "npm run build"
+  publish   = "dist"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# Redirect all routes to index.html so React Router handles client-side navigation
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
+
+# Proxy /api/* requests to the backend (update the :splat URL to your deployed backend)
+[[redirects]]
+  from   = "/api/*"
+  to     = "https://your-backend-url.onrender.com/api/:splat"
+  status = 200
+  force  = true
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options        = "DENY"
+    X-XSS-Protection       = "1; mode=block"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy        = "strict-origin-when-cross-origin"

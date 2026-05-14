@@ -9,10 +9,44 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109-009688?logo=fastapi)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://react.dev)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20Now-4f46e5?style=flat&logo=vercel)](https://aegisai-demo.vercel.app)
 
-[Getting Started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [API Reference](docs/api-reference.md) · [Guard Module](docs/guard-module.md) · [RAG Module](docs/rag-module.md) · [Regulations](docs/regulations.md) · [Report a Bug](https://github.com/SdSarthak/AegisAI/issues)
+[🌐 Live Demo](https://aegisai-demo.vercel.app) · [Getting Started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [API Reference](docs/api-reference.md) · [Guard Module](docs/guard-module.md) · [RAG Module](docs/rag-module.md) · [Regulations](docs/regulations.md) · [Report a Bug](https://github.com/SdSarthak/AegisAI/issues)
 
 </div>
+
+---
+
+## 🌐 Live Demo
+
+> **Try AegisAI instantly — no setup required.**
+
+| Platform | Link | Status |
+|---|---|---|
+| **Vercel (Frontend)** | [aegisai-demo.vercel.app](https://aegisai-demo.vercel.app) | [![Vercel](https://img.shields.io/badge/Deployed-Vercel-black?logo=vercel)](https://aegisai-demo.vercel.app) |
+| **Render (Backend API)** | [aegisai-api.onrender.com](https://aegisai-api.onrender.com) | [![Render](https://img.shields.io/badge/Deployed-Render-46E3B7?logo=render)](https://aegisai-api.onrender.com) |
+| **API Docs (Swagger)** | [aegisai-api.onrender.com/docs](https://aegisai-api.onrender.com/docs) | [![Swagger](https://img.shields.io/badge/API-Swagger-85EA2D?logo=swagger)](https://aegisai-api.onrender.com/docs) |
+
+### Deploy Your Own Instance
+
+#### ⚡ One-Click Vercel Deploy (Frontend)
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/SdSarthak/AegisAI&root=frontend&build-command=npm+run+build&output-directory=dist)
+
+#### 🌿 One-Click Netlify Deploy (Frontend)
+
+[![Deploy to Netlify](https://www.netlify.com/img/deploy/button.svg)](https://app.netlify.com/start/deploy?repository=https://github.com/SdSarthak/AegisAI)
+
+#### 🐳 Backend on Render
+
+1. Fork this repository
+2. Go to [render.com](https://render.com) → **New Web Service** → Connect your fork
+3. Set **Root Directory** to `backend`
+4. Set **Build Command**: `pip install -r requirements.txt`
+5. Set **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port 10000`
+6. Add environment variables from `backend/.env.example`
+
+> **Note:** The live demo uses a shared read-only database for demonstration purposes. For full functionality, deploy your own instance with your own API keys.
 
 ---
 
