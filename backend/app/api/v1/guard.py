@@ -106,3 +106,67 @@ def scan_prompt(
 def guard_health():
     """Check if the Guard module is available."""
     return {"module": "llm_guard", "status": "available"}
+class GuardConfigRequest(BaseModel):
+    sanitization_level: str
+    malicious_threshold: float
+    suspicious_threshold: float
+
+
+# Temporary in-memory config store
+user_guard_configs = {}
+
+VALID_SANITIZATION_LEVELS = {"low", "medium", "high"}
+
+
+@router.get("/config", tags=["LLM Guard"])
+def get_guard_config(current_user: User = Depends(get_current_user)):
+    """
+    Get per-user guard configuration.
+    """
+
+    default_config = {
+        "sanitization_level": "medium",
+        "malicious_threshold": 0.8,
+        "suspicious_threshold": 0.5,
+    }
+
+    return user_guard_configs.get(current_user.id, default_config)
+
+
+@router.patch("/config", tags=["LLM Guard"])
+def update_guard_config(
+    config: GuardConfigRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Update per-user guard configuration.
+    """
+
+    if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid sanitization level",
+        )
+
+    if not (0.0 <= config.malicious_threshold <= 1.0):
+        raise HTTPException(
+            status_code=400,
+            detail="malicious_threshold must be between 0 and 1",
+        )
+
+    if not (0.0 <= config.suspicious_threshold <= 1.0):
+        raise HTTPException(
+            status_code=400,
+            detail="suspicious_threshold must be between 0 and 1",
+        )
+
+    user_guard_configs[current_user.id] = {
+        "sanitization_level": config.sanitization_level,
+        "malicious_threshold": config.malicious_threshold,
+        "suspicious_threshold": config.suspicious_threshold,
+    }
+
+    return {
+        "message": "Guard configuration updated successfully",
+        "config": user_guard_configs[current_user.id],
+    }
