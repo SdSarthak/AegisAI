@@ -8,6 +8,7 @@ import {
   FileText,
   LogOut,
   Shield,
+  ShieldAlert,
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
@@ -17,6 +18,7 @@ const navigation = [
   { name: 'AI Systems', href: '/ai-systems', icon: Bot },
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
+  { name: 'Guard Scanner', href: '/guard', icon: ShieldAlert },
 ]
 
 export default function Layout() {

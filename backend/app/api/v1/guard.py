@@ -13,11 +13,17 @@ from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import json
+
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from app.core.security import get_current_user
+from app.core.database import get_db
 from app.models.user import User
+from sqlalchemy.orm import Session
+from jose import JWTError
+from app.core.config import settings
 
 router = APIRouter()
 
@@ -100,6 +106,90 @@ def scan_prompt(
         )
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.websocket("/stream")
+async def stream_guard_pipeline(websocket: WebSocket, db: Session = Depends(get_db)):
+    """
+    Stream pipeline progress as each layer completes.
+    Client must send: {"prompt": "...", "token": "<jwt>"}
+    Server emits one JSON message per layer, then closes.
+    """
+    await websocket.accept()
+    try:
+        data = await websocket.receive_json()
+    except Exception:
+        await websocket.close(code=1003)
+        return
+
+    # Authenticate via token sent in the first message
+    token = data.get("token", "")
+    prompt = data.get("prompt", "").strip()
+
+    if not prompt:
+        await websocket.send_json({"error": "prompt is required"})
+        await websocket.close(code=1003)
+        return
+
+    try:
+        from jose import jwt
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id = payload.get("sub")
+        if not user_id:
+            raise ValueError("no sub")
+        from app.models.user import User
+        user = db.query(User).filter(User.id == int(user_id)).first()
+        if not user:
+            raise ValueError("user not found")
+    except Exception:
+        await websocket.send_json({"error": "unauthorized"})
+        await websocket.close(code=1008)
+        return
+
+    try:
+        from app.modules.guard.regex_rules import RegexFilter
+        from app.modules.guard.intent_classifier import IntentClassifier
+        from app.modules.guard.decision_engine import DecisionEngine
+        from app.modules.guard.sanitizer import SanitizationLevel
+        from app.core.config import settings as cfg
+
+        # Layer 1: Regex
+        regex_result = RegexFilter().check(prompt)
+        await websocket.send_json({
+            "layer": "regex",
+            "flag": regex_result.flag,
+            "score": round(regex_result.score, 4),
+            "matched_patterns": regex_result.matched_patterns,
+        })
+
+        # Layer 2: Classifier
+        classifier = IntentClassifier()
+        intent_result = classifier.classify(prompt)
+        await websocket.send_json({
+            "layer": "classifier",
+            "intent": intent_result.intent,
+            "confidence": round(intent_result.confidence, 4),
+            "class_scores": {k: round(v, 4) for k, v in intent_result.class_scores.items()},
+        })
+
+        # Layer 3: Decision
+        decision_result = DecisionEngine().decide(
+            regex_flag=regex_result.flag,
+            regex_score=regex_result.score,
+            intent=intent_result.intent,
+            intent_score=intent_result.confidence,
+        )
+        await websocket.send_json({
+            "layer": "decision",
+            "decision": decision_result.decision.value,
+            "confidence": round(decision_result.confidence, 4),
+            "reasoning": decision_result.reasoning,
+        })
+
+    except Exception as e:
+        await websocket.send_json({"error": str(e)})
+    finally:
+        await websocket.close()
 
 
 @router.get("/health", tags=["LLM Guard"])
