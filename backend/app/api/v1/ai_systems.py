@@ -304,3 +304,6 @@ def update_ai_system_status(
     db.commit()
     db.refresh(system)
     return system
+
+
+@router.get("/{system_id}/history")
