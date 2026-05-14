@@ -38,6 +38,8 @@ class TestVectorStore:
         # Assertions
         assert result == mock_vs
         mock_load_local.assert_called_once()
+        _, kwargs = mock_load_local.call_args
+        assert kwargs["allow_dangerous_deserialization"] is True
 
 
 class TestRetrievalChain:

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, JSON
+from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey
 from datetime import datetime
 import uuid
 from app.core.database import Base
@@ -8,6 +8,7 @@ class RAGFeedback(Base):
     __tablename__ = "rag_feedback"
 
     id = Column(String(64), primary_key=True, default=lambda: str(uuid.uuid4()))
+    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     question = Column(String(2000), nullable=True)
     answer = Column(String(4000), nullable=True)
     thumbs_up = Column(Integer, default=0)

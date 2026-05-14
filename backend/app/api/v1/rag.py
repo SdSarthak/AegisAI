@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from app.core.security import get_current_user
 from app.models.user import User
 from app.core.database import get_db
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 from app.models.rag_feedback import RAGFeedback
 from app.models.user import SubscriptionTier
@@ -31,6 +32,30 @@ class RAGQueryResponse(BaseModel):
     answer: str
     sources: list[str] = []
     answer_id: Optional[str] = None
+
+
+def _ensure_rag_feedback_owner_column(db: Session) -> None:
+    """
+    Backfill-compatible schema guard for deployments that created rag_feedback
+    before owner_id existed.
+    """
+    from app.core.database import Base
+
+    bind = db.get_bind()
+    Base.metadata.create_all(bind=bind)
+
+    inspector = inspect(bind)
+    tables = set(inspector.get_table_names())
+    if "rag_feedback" not in tables:
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("rag_feedback")}
+    if "owner_id" in columns:
+        return
+
+    db.execute(text("ALTER TABLE rag_feedback ADD COLUMN owner_id INTEGER"))
+    db.execute(text("UPDATE rag_feedback SET owner_id = 0 WHERE owner_id IS NULL"))
+    db.commit()
 
 
 @router.post("/query", response_model=RAGQueryResponse)
@@ -54,16 +79,11 @@ def query_knowledge_base(
         source_docs = result.get("source_documents", [])
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
 
-        # Ensure tables exist on this DB bind (useful for test DB overrides)
-        from app.core.database import Base
-        try:
-            Base.metadata.create_all(bind=db.get_bind())
-        except Exception:
-            # best-effort: ignore if bind not available
-            pass
+        _ensure_rag_feedback_owner_column(db)
 
         # Persist an initial RAGFeedback row to capture the answer and contributing chunks
         feedback = RAGFeedback(
+            owner_id=current_user.id,
             question=request.question,
             answer=str(result.get("result", "")),
             source_chunks=sources,
@@ -73,7 +93,9 @@ def query_knowledge_base(
         db.refresh(feedback)
         answer_id = feedback.id
 
-        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
+        return RAGQueryResponse(
+            answer=result["result"], sources=sources, answer_id=answer_id
+        )
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -90,22 +112,18 @@ def query_knowledge_base(
 def rag_health():
     """Check if the RAG module is available."""
     from app.modules.rag.vector_store import check_index_exists
-    
+
     index_loaded = check_index_exists()
-    
+
     if not index_loaded:
         return {
             "module": "rag_intelligence",
             "status": "unavailable",
             "index_loaded": False,
-            "message": "FAISS index not found. RAG module requires document ingestion before use."
+            "message": "FAISS index not found. RAG module requires document ingestion before use.",
         }
-    
-    return {
-        "module": "rag_intelligence",
-        "status": "available",
-        "index_loaded": True
-    }
+
+    return {"module": "rag_intelligence", "status": "available", "index_loaded": True}
 
 
 class RAGFeedbackRequest(BaseModel):
@@ -120,7 +138,15 @@ def rag_feedback(
     db: Session = Depends(get_db),
 ):
     """Record a thumbs-up or thumbs-down for a previously returned answer."""
-    fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
+    _ensure_rag_feedback_owner_column(db)
+    fb = (
+        db.query(RAGFeedback)
+        .filter(
+            RAGFeedback.id == payload.answer_id,
+            RAGFeedback.owner_id == current_user.id,
+        )
+        .first()
+    )
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
     if payload.vote == "up":
@@ -151,15 +177,16 @@ def get_low_quality_chunks(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     # Aggregate counts per chunk
+    _ensure_rag_feedback_owner_column(db)
     counts: dict[str, dict[str, int]] = {}
-    rows = db.query(RAGFeedback).all()
+    rows = db.query(RAGFeedback).filter(RAGFeedback.owner_id == current_user.id).all()
     for r in rows:
         total = (r.thumbs_up or 0) + (r.thumbs_down or 0)
-        for chunk in (r.source_chunks or []):
+        for chunk in r.source_chunks or []:
             if chunk not in counts:
                 counts[chunk] = {"thumbs_up": 0, "thumbs_down": 0, "total": 0}
-            counts[chunk]["thumbs_up"] += (r.thumbs_up or 0)
-            counts[chunk]["thumbs_down"] += (r.thumbs_down or 0)
+            counts[chunk]["thumbs_up"] += r.thumbs_up or 0
+            counts[chunk]["thumbs_down"] += r.thumbs_down or 0
             counts[chunk]["total"] += total
 
     low_quality = []
@@ -168,6 +195,13 @@ def get_low_quality_chunks(
             continue
         ratio = c["thumbs_down"] / c["total"]
         if ratio > threshold:
-            low_quality.append({"chunk": chunk, "thumbs_down": c["thumbs_down"], "total": c["total"], "ratio": ratio})
+            low_quality.append(
+                {
+                    "chunk": chunk,
+                    "thumbs_down": c["thumbs_down"],
+                    "total": c["total"],
+                    "ratio": ratio,
+                }
+            )
 
     return {"threshold": threshold, "low_quality_chunks": low_quality}
