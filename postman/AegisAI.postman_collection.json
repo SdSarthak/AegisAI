@@ -48,9 +48,10 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "// TODO (good first issue): parse response and save token",
-                  "// var json = pm.response.json();",
-                  "// pm.collectionVariables.set('aegisai_token', json.access_token);"
+                  "var json = pm.response.json();",
+                  "pm.collectionVariables.set('aegisai_token', json.access_token);"
+                  
+                  
                 ]
               }
             }
