@@ -22,6 +22,7 @@ class ComplianceSnapshotResponse(BaseModel):
 
 class ComplianceTimelineResponse(BaseModel):
     """Timeline of daily compliance snapshots for one AI system."""
+
     ai_system_id: int
     ai_system_name: str
     snapshots: list[ComplianceSnapshotResponse]

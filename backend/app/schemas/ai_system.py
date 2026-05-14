@@ -74,6 +74,20 @@ class RiskClassificationRequest(BaseModel):
     makes_automated_decisions: bool = True
     hr_recruitment_screening: bool = False
     hr_promotion_termination: bool = False
+    # Basic use case
+    use_case_category: str  # "hr_recruitment", "credit_scoring", "healthcare", etc.
+
+    # High-risk indicators (Article 6)
+    is_safety_component: bool = False  # Part of a safety component of a product
+    affects_fundamental_rights: bool = (
+        False  # Employment, education, essential services
+    )
+    uses_biometric_data: bool = False
+    makes_automated_decisions: bool = True  # Decisions without human review
+
+    # Specific high-risk areas (Annex III)
+    hr_recruitment_screening: bool = False  # CV filtering, candidate ranking
+    hr_promotion_termination: bool = False  # Promotion/termination decisions
     credit_worthiness: bool = False
     insurance_risk_assessment: bool = False
     law_enforcement: bool = False
@@ -81,6 +95,10 @@ class RiskClassificationRequest(BaseModel):
     justice_system: bool = False
     interacts_with_humans: bool = True
     generates_synthetic_content: bool = False
+
+    # Transparency (Article 52)
+    interacts_with_humans: bool = True  # Chatbots, virtual assistants
+    generates_synthetic_content: bool = False  # Deepfakes, AI-generated media
     emotion_recognition: bool = False
     biometric_categorization: bool = False
 
@@ -111,6 +129,12 @@ class RiskAssessmentResponse(BaseModel):
         from_attributes = True
 
 
+# Compliance Status Update
+class ComplianceStatusUpdateSchema(BaseModel):
+    compliance_status: ComplianceStatus
+
+
+# Bulk Import
 class BulkImportResponse(BaseModel):
     created: int
     errors: List[Dict[str, Any]]

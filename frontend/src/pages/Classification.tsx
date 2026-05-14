@@ -3,6 +3,9 @@ import { useParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { classificationApi } from '../services/api'
 import { AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react'
+import ComplianceChecklist, {
+  ChecklistItem,
+} from '../components/ComplianceChecklist'
 
 interface ClassificationResult {
   risk_level: string
@@ -10,6 +13,60 @@ interface ClassificationResult {
   reasons: string[]
   requirements: string[]
   next_steps: string[]
+}
+
+const CHECKLIST_ITEMS: Record<string, ChecklistItem[]> = {
+  high: [
+    {
+      id: 'tech-doc',
+      label: 'Create Technical Documentation',
+      article: 'Article 11',
+      required: true,
+    },
+    {
+      id: 'risk-assessment',
+      label: 'Conduct Risk Assessment',
+      article: 'Article 9',
+      required: true,
+    },
+    {
+      id: 'human-oversight',
+      label: 'Establish Human Oversight',
+      article: 'Article 14',
+      required: true,
+    },
+    {
+      id: 'conformity',
+      label: 'EU Declaration of Conformity',
+      article: 'Article 47',
+      required: true,
+    },
+    {
+      id: 'logging',
+      label: 'Implement automatic logging',
+      article: 'Article 12',
+      required: true,
+    },
+  ],
+
+  limited: [
+    {
+      id: 'transparency',
+      label: 'Disclose AI interaction to users',
+      article: 'Article 52',
+      required: true,
+    },
+  ],
+
+  minimal: [
+    {
+      id: 'best-practice',
+      label: 'Follow voluntary AI best practices',
+      required: false,
+    },
+  ],
+
+  unacceptable: [],
 }
 
 export default function Classification() {
@@ -332,6 +389,7 @@ export default function Classification() {
               </div>
 
               {/* Next Steps */}
+
               <div>
                 <h3 className="font-medium text-gray-900 mb-2">Next Steps</h3>
                 <ol className="space-y-2">
@@ -345,6 +403,27 @@ export default function Classification() {
                   ))}
                 </ol>
               </div>
+
+              {/* Compliance Checklist */}
+              {result.risk_level !== 'unacceptable' && (
+                <div className="mt-6">
+                  <h3 className="font-medium text-gray-900 mb-3">
+                    Compliance Checklist
+                  </h3>
+
+                  <ComplianceChecklist
+                    systemId={Number(systemId || 0)}
+                    riskLevel={
+                      result.risk_level as
+                      | 'minimal'
+                      | 'limited'
+                      | 'high'
+                      | 'unacceptable'
+                    }
+                    items={CHECKLIST_ITEMS[result.risk_level] || []}
+                  />
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-gray-50 rounded-xl border border-gray-200 p-8 text-center">

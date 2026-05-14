@@ -1,5 +1,5 @@
 """LLM client module for Gemini API integration."""
 
-from .llm_client import GeminiClient
+from .llm_client import LLMClient
 
-__all__ = ["GeminiClient"]
+__all__ = ["LLMClient"]

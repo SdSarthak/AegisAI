@@ -8,9 +8,11 @@ from pathlib import Path
 from unittest.mock import patch
 
 import importlib.util, sys
+
 spec = importlib.util.spec_from_file_location(
     "guard_config",
-    __import__("pathlib").Path(__file__).parent.parent / "app/modules/guard/guard_config.py",
+    __import__("pathlib").Path(__file__).parent.parent
+    / "app/modules/guard/guard_config.py",
 )
 guard_config = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(guard_config)
