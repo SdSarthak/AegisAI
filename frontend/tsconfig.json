@@ -16,6 +16,7 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",// Ignore TypeScript 7.0 baseUrl deprecation warnings
     "paths": {
       "@/*": ["src/*"]
     }
