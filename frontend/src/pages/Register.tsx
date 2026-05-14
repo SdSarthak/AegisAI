@@ -95,6 +95,7 @@ export default function Register() {
             <input
               id="full_name"
               type="text"
+              required
               value={formData.full_name}
               onChange={(e) =>
                 setFormData({ ...formData, full_name: e.target.value })
@@ -110,6 +111,7 @@ export default function Register() {
             <input
               id="company_name"
               type="text"
+              required
               value={formData.company_name}
               onChange={(e) =>
                 setFormData({ ...formData, company_name: e.target.value })

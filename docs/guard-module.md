@@ -1,6 +1,6 @@
 # LLM Guard Module
 
-The Guard module is a four-layer prompt injection defence pipeline. It sits between your users and your LLM, inspecting every prompt before it reaches the model.
+The Guard module is a four-layer prompt injection defence pipeline. It sits between your users and your LLM, inspecting every prompt before it reaches the model. It ships both as part of the AegisAI platform and as a standalone Python package (`guard-sdk/`).
 
 ---
 
@@ -12,7 +12,10 @@ The Guard module is a four-layer prompt injection defence pipeline. It sits betw
 - [Layer 2 — Intent classifier (DeBERTa)](#layer-2--intent-classifier-deberta)
 - [Layer 3 — Decision engine](#layer-3--decision-engine)
 - [Layer 4 — Sanitizer](#layer-4--sanitizer)
+- [Rate limiting](#rate-limiting)
 - [Using the API](#using-the-api)
+- [Guard scan in CI](#guard-scan-in-ci)
+- [Standalone SDK](#standalone-sdk)
 - [Training your own classifier](#training-your-own-classifier)
 - [Configuration reference](#configuration-reference)
 - [Using the Guard outside the web server](#using-the-guard-outside-the-web-server)
@@ -40,8 +43,11 @@ Every call to `POST /api/v1/guard/scan` runs through four layers in sequence:
 User prompt
      │
      ▼
+ Per-user rate limit check  (429 if exceeded)
+     │
+     ▼
 ┌─────────────────────────────┐
-│  Layer 1: Regex Filter      │  ~0ms   Catches obvious, known patterns
+│  Layer 1: Regex Filter      │  ~0ms    Catches obvious, known patterns
 │  regex_rules.py             │
 └──────────────┬──────────────┘
                │  flag (bool), score (0–1), matched_patterns
@@ -53,7 +59,7 @@ User prompt
                │  intent (benign/suspicious/malicious), confidence
                ▼
 ┌─────────────────────────────┐
-│  Layer 3: Decision Engine   │  ~0ms   Combines signals → final verdict
+│  Layer 3: Decision Engine   │  ~0ms    Combines signals → final verdict
 │  decision_engine.py         │
 └──────────────┬──────────────┘
                │
@@ -70,15 +76,15 @@ User prompt
  (original) (cleaned)  (no LLM)
 ```
 
-The pipeline is **fail-safe**: if the DeBERTa model fails to load (e.g. on a constrained environment), it falls back to the pre-trained base model and logs a warning. The regex layer always runs regardless.
+The pipeline is **fail-safe**: if DeBERTa fails to load, it falls back to the pre-trained base model and logs a warning. The regex layer always runs.
 
 ---
 
 ## Layer 1 — Regex filter
 
-**File:** [backend/app/modules/guard/regex_rules.py](../backend/app/modules/guard/regex_rules.py)
+**File:** `backend/app/modules/guard/regex_rules.py`
 
-Fast heuristic filter. Runs in under 1ms with zero model loading. Catches well-known, documented injection patterns across six categories:
+Fast heuristic filter. Under 1ms, zero model loading. Catches well-known injection patterns across six categories:
 
 | Category | Example patterns | Severity |
 |---|---|---|
@@ -100,9 +106,9 @@ The regex layer contributes **40% weight** to the final combined score.
 
 ## Layer 2 — Intent classifier (DeBERTa)
 
-**File:** [backend/app/modules/guard/intent_classifier.py](../backend/app/modules/guard/intent_classifier.py)
+**File:** `backend/app/modules/guard/intent_classifier.py`
 
-A fine-tuned `microsoft/deberta-v3-small` transformer that classifies the *semantic intent* of a prompt into three classes:
+A fine-tuned `microsoft/deberta-v3-small` transformer classifying the *semantic intent* of a prompt:
 
 | Class | Meaning |
 |---|---|
@@ -112,7 +118,7 @@ A fine-tuned `microsoft/deberta-v3-small` transformer that classifies the *seman
 
 This layer catches attacks that regex misses: obfuscated phrasings, foreign-language injections, Base64-encoded instructions, and creative reformulations of known attacks.
 
-**By default** the module uses the pre-trained DeBERTa-v3-small base model with random classification head weights (random outputs until fine-tuned). **Fine-tuning is strongly recommended** — see [Training your own classifier](#training-your-own-classifier).
+**By default** the module uses the pre-trained DeBERTa-v3-small base model with random classification head weights. **Fine-tuning is strongly recommended** — see [Training your own classifier](#training-your-own-classifier).
 
 **Output fields:**
 - `intent: str` — `"benign"` | `"suspicious"` | `"malicious"`
@@ -125,11 +131,11 @@ The classifier contributes **60% weight** to the final combined score.
 
 ## Layer 3 — Decision engine
 
-**File:** [backend/app/modules/guard/decision_engine.py](../backend/app/modules/guard/decision_engine.py)
+**File:** `backend/app/modules/guard/decision_engine.py`
 
-Pure logic — no ML. Combines the regex and classifier outputs into a single decision using configurable thresholds.
+Pure logic — no ML. Combines regex and classifier outputs using configurable thresholds.
 
-**Decision rules** (evaluated in order):
+**Decision rules (evaluated in order):**
 
 | Condition | Decision |
 |---|---|
@@ -147,27 +153,27 @@ combined = (0.4 × regex_score) + (0.6 × intent_confidence)
 **Output fields:**
 - `decision: Decision` — `ALLOW` | `SANITIZE` | `BLOCK`
 - `confidence: float`
-- `reasoning: str` — human-readable explanation
-- `rule_matched: str` — which rule triggered the decision
+- `reasoning: str`
+- `rule_matched: str`
 
 ---
 
 ## Layer 4 — Sanitizer
 
-**File:** [backend/app/modules/guard/sanitizer.py](../backend/app/modules/guard/sanitizer.py)
+**File:** `backend/app/modules/guard/sanitizer.py`
 
-Only runs when the decision is `SANITIZE`. Removes hostile elements from the prompt while preserving the user's underlying intent as much as possible.
+Only runs when the decision is `SANITIZE`. Removes hostile elements while preserving user intent.
 
 Three aggressiveness levels, set via `GUARD_SANITIZATION_LEVEL` in `.env`:
 
 | Level | What it removes |
 |---|---|
-| `low` | Nothing — prompt passed through unchanged (for logging only) |
+| `low` | Nothing — prompt passed through unchanged (logging only) |
 | `medium` (default) | Meta-instructions, section separators |
 | `high` | Meta-instructions + role-playing directives |
 
 **What gets removed:**
-- Meta-instructions: "ignore all previous instructions", "forget everything before", "disregard the system prompt"
+- Meta-instructions: "ignore all previous instructions", "forget everything before"
 - Role-playing directives (HIGH only): "as a [role]", "acting as", "pretending to be"
 - Section separators: `---`, `===`, `####`, `|||` (keeps only the first section)
 - Prompts over 2000 characters are truncated
@@ -180,6 +186,16 @@ Answer the following only:
 
 Provide a direct response without additional instructions.
 ```
+
+Unit tests covering all three sanitization levels are in `backend/tests/test_sanitizer.py`.
+
+---
+
+## Rate limiting
+
+`POST /guard/scan` enforces **per-user rate limiting** to prevent abuse. When the limit is exceeded, the endpoint returns `429 Too Many Requests`.
+
+The limit is configurable via environment variables. Integration tests are in `backend/tests/integration/test_rate_limiting.py`.
 
 ---
 
@@ -230,17 +246,47 @@ curl -X POST http://localhost:8000/api/v1/guard/scan \
 
 ---
 
+## Guard scan in CI
+
+AegisAI ships a GitHub Action (`.github/workflows/guard-scan.yml`) that automatically scans `.prompts/` files on every PR. If any prompt is classified as malicious, the CI check fails.
+
+Run the scan locally:
+
+```bash
+python scripts/scan_prompts.py --dir .prompts/ --api http://localhost:8000
+```
+
+Tests for the scan script are in `tests/test_scan_prompts.py`.
+
+---
+
+## Standalone SDK
+
+The Guard pipeline ships as a standalone package in `guard-sdk/`:
+
+```bash
+# Install locally
+pip install -e ./guard-sdk
+
+# Coming soon: install from PyPI
+pip install aegisai-guard
+```
+
+This lets you use the Guard without running the full AegisAI server.
+
+---
+
 ## Training your own classifier
 
-The pre-trained DeBERTa base has random classification weights — it needs fine-tuning to be useful. The included training data (`backend/data/prompts.csv`) has ~50 examples to start with. For production quality, fine-tune on the HuggingFace dataset.
+Fine-tuning is strongly recommended for production accuracy.
 
 ### Option A — Google Colab (recommended)
 
-Open `notebooks/train_guard_classifier.ipynb` in Colab. Select **Runtime → Change runtime type → T4 GPU**. The notebook:
+Open `notebooks/train_guard_classifier.ipynb`. Select **Runtime → T4 GPU**. The notebook:
 1. Installs all dependencies
-2. Downloads `xTRam1/safe-guard-prompt-injection` (~10k labelled prompts) from HuggingFace
+2. Downloads `xTRam1/safe-guard-prompt-injection` (~10k labelled prompts)
 3. Fine-tunes DeBERTa-v3-small for 3 epochs (~5 min on T4)
-4. Evaluates on the validation split and logs F1/accuracy
+4. Evaluates on the validation split
 5. Saves model weights to Google Drive
 
 Copy the saved model folder to:
@@ -256,7 +302,7 @@ Restart the backend — it picks up the fine-tuned model automatically.
 cd backend
 source venv/bin/activate
 
-# Download dataset + train (recommended)
+# Download dataset + train
 python -m app.modules.guard.train --all --epochs 3
 
 # Download only
@@ -264,16 +310,11 @@ python -m app.modules.guard.train --download-only
 
 # Train only (if data already exists)
 python -m app.modules.guard.train --train-only --epochs 5
-
-# Force re-download dataset
-python -m app.modules.guard.train --all --force-download
 ```
-
-Model is saved to `backend/app/modules/guard/models/intent_classifier/`.
 
 ### Expected training metrics
 
-On the `xTRam1/safe-guard-prompt-injection` dataset with 3 epochs:
+On `xTRam1/safe-guard-prompt-injection` with 3 epochs:
 
 | Metric | Expected |
 |---|---|
@@ -286,7 +327,7 @@ On the `xTRam1/safe-guard-prompt-injection` dataset with 3 epochs:
 
 ## Configuration reference
 
-All Guard settings live in `backend/.env`:
+All Guard settings in `backend/.env`:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -295,9 +336,8 @@ All Guard settings live in `backend/.env`:
 | `LLM_API_KEY` | — | API key for the LLM provider |
 | `LLM_BASE_URL` | — | Base URL for OpenAI-compatible endpoint (empty = OpenAI default) |
 | `LLM_MODEL` | `gpt-4o-mini` | Model name |
-| `CLASSIFIER_MODEL_PATH` | auto-detected | Override path to fine-tuned model directory |
 
-Internal thresholds (set in `guard_config.py`, not `.env` — contributor opportunity to expose these):
+Internal thresholds (in `guard_config.py`):
 
 | Setting | Default | Description |
 |---|---|---|
@@ -310,8 +350,6 @@ Internal thresholds (set in `guard_config.py`, not `.env` — contributor opport
 ---
 
 ## Using the Guard outside the web server
-
-The Guard pipeline can be imported and used directly in Python — no FastAPI or database required:
 
 ```python
 from app.modules.guard.llm_guard import LLMGuard

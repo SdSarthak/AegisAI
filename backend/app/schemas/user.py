@@ -30,7 +30,7 @@ class UserResponse(BaseModel):
         from_attributes = True
 
 
-class UserUpdate(BaseModel):
+class UserUpdateSchema(BaseModel):
     full_name: Optional[str] = None
     company_name: Optional[str] = None
 

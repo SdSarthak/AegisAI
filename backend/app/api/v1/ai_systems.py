@@ -1,18 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi.responses import StreamingResponse
+from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 import csv
 import io
 from app.core.database import get_db
 from app.core.security import require_role
 from app.models.user import User, UserRole
 from app.models.ai_system import AISystem
+from app.models.audit_log import AISystemAuditLog
 from app.schemas.ai_system import (
-    AISystemCreate, 
-    AISystemUpdate, 
+    AISystemCreate,
+    AISystemUpdate,
     AISystemResponse,
-    BulkImportResponse
+    BulkImportResponse,
+    ComplianceStatusUpdateSchema,
 )
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
 
@@ -21,7 +26,11 @@ router = APIRouter()
 def create_ai_system(
     system_data: AISystemCreate,
     db: Session = Depends(get_db),
+ user-role-access
     current_user: User = Depends(require_role(UserRole.ADMIN))
+
+    current_user: User = Depends(get_current_user),
+ main
 ):
     """Create a new AI system for compliance tracking."""
     ai_system = AISystem(
@@ -30,7 +39,7 @@ def create_ai_system(
         description=system_data.description,
         version=system_data.version,
         use_case=system_data.use_case,
-        sector=system_data.sector
+        sector=system_data.sector,
     )
     db.add(ai_system)
     db.commit()
@@ -38,6 +47,7 @@ def create_ai_system(
     return ai_system
 
 
+ user-role-access
 @router.get("/", response_model=List[AISystemResponse])
 def list_ai_systems(
     db: Session = Depends(get_db),
@@ -47,24 +57,35 @@ def list_ai_systems(
     systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
     return systems
 
+_SORTABLE_FIELDS = {
+    "name": AISystem.name,
+    "risk_level": AISystem.risk_level,
+    "compliance_score": AISystem.compliance_score,
+    "created_at": AISystem.created_at,
+}
+ main
 
-@router.get("/{system_id}", response_model=AISystemResponse)
-def get_ai_system(
-    system_id: int,
+
+@router.get("/", response_model=PaginatedResponse[AISystemResponse])
+def list_ai_systems(
+    sort_by: Optional[str] = Query("created_at", description="Sort field: name, risk_level, compliance_score, created_at"),
+    order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(50, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
+ user-role-access
     current_user: User = Depends(require_role(UserRole.VIEWER, UserRole.ANALYST, UserRole.ADMIN))
+
+    current_user: User = Depends(get_current_user),
+ main
 ):
-    """Get a specific AI system."""
-    system = db.query(AISystem).filter(
-        AISystem.id == system_id,
-        AISystem.owner_id == current_user.id
-    ).first()
-    
-    if not system:
+    """List all AI systems for the current user, with optional sorting and pagination."""
+    if sort_by not in _SORTABLE_FIELDS:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="AI system not found"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid sort_by '{sort_by}'. Allowed: {', '.join(sorted(_SORTABLE_FIELDS))}",
         )
+ user-role-access
     return system
 
 
@@ -82,20 +103,18 @@ def update_ai_system(
     ).first()
     
     if not system:
+
+    if order not in ("asc", "desc"):
+ main
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="AI system not found"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid order. Use 'asc' or 'desc'.",
         )
-    
-    update_data = system_data.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(system, field, value)
-    
-    db.commit()
-    db.refresh(system)
-    return system
 
+    column = _SORTABLE_FIELDS[sort_by]
+    direction = asc(column) if order == "asc" else desc(column)
 
+ user-role-access
 @router.delete("/{system_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_ai_system(
     system_id: int,
@@ -117,9 +136,22 @@ def delete_ai_system(
     db.delete(system)
     db.commit()
 
+    base_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
+    total = base_query.count()
+    offset = (page - 1) * limit
+
+    systems = (
+        base_query
+        .order_by(direction)
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+ main
+
 
 @router.post("/import", response_model=BulkImportResponse)
-async def bulk_import_systems(
+def bulk_import_systems(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role(UserRole.ADMIN))
@@ -127,30 +159,47 @@ async def bulk_import_systems(
     """Import AI systems from a CSV file."""
     errors = []
     created_count = 0
-    
+
+    if not file.filename or not file.filename.lower().endswith('.csv'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid CSV format: File must have .csv extension"
+        )
+
     try:
-        content = await file.read()
+        content = file.file.read()
         decoded_content = content.decode("utf-8")
-        csv_reader = csv.DictReader(io.StringIO(decoded_content))
-        
+
+        if not decoded_content.strip():
+            return BulkImportResponse(created=0, errors=[])
+
+        f = io.StringIO(decoded_content)
+        csv_reader = csv.DictReader(f)
+
+        if not csv_reader.fieldnames:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid CSV format: No headers found"
+            )
+
         for row_num, row in enumerate(csv_reader, start=2):
-            row_errors = []
-            
-            if not row.get("name", "").strip():
+            if not any(row.values()):
+                continue
+
+            name = row.get("name", "").strip()
+            if not name:
                 errors.append({"row": row_num, "error": "name is required"})
                 continue
-            
-            name = row["name"].strip()
-            
+
             existing = db.query(AISystem).filter(
                 AISystem.owner_id == current_user.id,
                 AISystem.name == name
             ).first()
-            
+
             if existing:
                 errors.append({"row": row_num, "error": f"duplicate name '{name}'"})
                 continue
-            
+
             try:
                 ai_system = AISystem(
                     owner_id=current_user.id,
@@ -164,24 +213,204 @@ async def bulk_import_systems(
                 created_count += 1
             except Exception as e:
                 errors.append({"row": row_num, "error": str(e)})
-        
+
         db.commit()
-        
-    except csv.Error as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid CSV format: {str(e)}"
-        )
+
     except UnicodeDecodeError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File must be UTF-8 encoded CSV"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error processing CSV: {str(e)}"
         )
-    
+
     return BulkImportResponse(created=created_count, errors=errors)
+
+
+@router.get("/export")
+def export_ai_systems(
+    risk_level: Optional[str] = Query(None, description="Filter by risk level: minimal, limited, high, unacceptable"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Export the authenticated user's AI systems registry as a CSV file."""
+    query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
+
+    if risk_level is not None:
+        allowed = {"minimal", "limited", "high", "unacceptable"}
+        if risk_level.lower() not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid risk_level '{risk_level}'. Allowed: {', '.join(sorted(allowed))}",
+            )
+        query = query.filter(AISystem.risk_level == risk_level.lower())
+
+    systems = query.all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "id", "name", "description", "version", "use_case", "sector",
+        "risk_level", "compliance_status", "compliance_score", "created_at",
+    ])
+    for s in systems:
+        writer.writerow([
+            s.id,
+            s.name,
+            s.description or "",
+            s.version or "",
+            s.use_case or "",
+            s.sector or "",
+            s.risk_level.value if s.risk_level else "",
+            s.compliance_status.value if s.compliance_status else "",
+            s.compliance_score if s.compliance_score is not None else "",
+            s.created_at.isoformat() if s.created_at else "",
+        ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=\"ai_systems.csv\""},
+    )
+
+
+@router.get("/{system_id}", response_model=AISystemResponse)
+def get_ai_system(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get a specific AI system."""
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .first()
+    )
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
+        )
+    return system
+
+
+@router.put("/{system_id}", response_model=AISystemResponse)
+def update_ai_system(
+    system_id: int,
+    system_data: AISystemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update an AI system."""
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .first()
+    )
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
+        )
+
+    update_data = system_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(system, field, value)
+
+    db.commit()
+    db.refresh(system)
+    return system
+
+
+@router.delete("/{system_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_ai_system(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Delete an AI system."""
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .first()
+    )
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
+        )
+
+    db.delete(system)
+    db.commit()
+
+
+@router.patch("/{system_id}/status", response_model=AISystemResponse)
+def update_ai_system_status(
+    system_id: int,
+    payload: ComplianceStatusUpdateSchema,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update only the compliance_status of an AI system."""
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id,
+    ).first()
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found",
+        )
+
+    system.compliance_status = payload.compliance_status
+    db.commit()
+    db.refresh(system)
+    return system
+
+
+
+@router.get("/{system_id}/history")
+def get_ai_system_history(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get audit history for a specific AI system."""
+
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id,
+    ).first()
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found",
+        )
+
+    history = (
+        db.query(AISystemAuditLog)
+        .filter(AISystemAuditLog.ai_system_id == system_id)
+        .order_by(desc(AISystemAuditLog.changed_at))
+        .all()
+    )
+
+    return [
+        {
+            "id": log.id,
+            "ai_system_id": log.ai_system_id,
+            "changed_by_id": log.changed_by_id,
+            "old_values": log.old_values,
+            "new_values": log.new_values,
+            "changed_at": log.changed_at,
+        }
+        for log in history
+    ]

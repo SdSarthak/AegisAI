@@ -33,16 +33,22 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     if expires_delta:
         expire = datetime.utcnow() + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.utcnow() + timedelta(
+            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        )
     to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    encoded_jwt = jwt.encode(
+        to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
+    )
     return encoded_jwt
 
 
 def decode_token(token: str) -> dict:
     """Decode and verify a JWT token."""
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+        )
         return payload
     except JWTError:
         raise HTTPException(
@@ -53,12 +59,11 @@ def decode_token(token: str) -> dict:
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db)
+    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ):
     """Get the current authenticated user."""
     from app.models.user import User
-    
+
     payload = decode_token(token)
     user_id: str = payload.get("sub")
     if user_id is None:
@@ -67,11 +72,15 @@ async def get_current_user(
             detail="Could not validate credentials",
         )
 
+ user-role-access
     try:
         user = db.query(User).filter(User.id == int(user_id)).first()
     except (TypeError, ValueError):
         user = db.query(User).filter(User.email == user_id).first()
 
+        
+    user = db.query(User).filter(User.id == int(user_id)).first()
+  main
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

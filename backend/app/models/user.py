@@ -8,6 +8,7 @@ from app.core.database import Base
 # Subscription tiers
 class SubscriptionTier(str, enum.Enum):
     FREE = "free"
+ user-role-access
     STARTER = "starter"      # $99/mo
     GROWTH = "growth"        # $299/mo
     SCALE = "scale"          # $499/mo"
@@ -18,6 +19,11 @@ class UserRole(str, enum.Enum):
     ADMIN = "admin"
     ANALYST = "analyst"
     VIEWER = "viewer"
+
+    STARTER = "starter"  # $99/mo
+    GROWTH = "growth"  # $299/mo
+    SCALE = "scale"  # $499/mo
+ main
 
 
 class User(Base):
@@ -37,6 +43,7 @@ class User(Base):
     stripe_customer_id = Column(String(255), nullable=True)
     stripe_subscription_id = Column(String(255), nullable=True)
 
+ user-role-access
     # Role-based access control
     role = Column(
         Enum(UserRole, values_callable=lambda roles: [role.value for role in roles]),
@@ -44,6 +51,8 @@ class User(Base):
         nullable=False,
     )
 
+
+ main
     # Status
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
