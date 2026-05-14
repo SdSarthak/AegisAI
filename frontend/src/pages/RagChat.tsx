@@ -70,36 +70,36 @@ export default function RagChat() {
   }
 
   return (
-    <div className="h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)] flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-white">
+    <div className="h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)] flex flex-col bg-white  rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
         <div className="flex items-center gap-3">
           <div className="p-2 sm:p-3 bg-primary-50 rounded-xl">
             <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-primary-600" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Chatbot</h1>
-            <p className="text-sm sm:text-base text-gray-600">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white">Chatbot</h1>
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
               Ask regulatory and compliance questions with source-backed answers
             </p>
           </div>
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-gray-50">
+      <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-700">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
           {!submittedQuestion && !answer && !isLoading && !error && (
             <div className="min-h-[320px] sm:min-h-[420px] flex flex-col items-center justify-center text-center">
               <div className="p-3 sm:p-4 bg-primary-50 rounded-2xl mb-5">
                 <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-primary-600" />
               </div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">
+              <h2 className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">
                 How can I help with AI compliance?
               </h2>
-              <p className="text-sm sm:text-base text-gray-500 mt-2 max-w-xl">
+              <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 mt-2 max-w-xl">
                 Ask about EU AI Act risk classification, compliance documentation,
                 human oversight, or source-backed regulatory guidance.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mt-6 sm:mt-8 w-full">
+              <div className=" grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mt-6 sm:mt-8 w-full">
                 {[
                   'Does my system qualify as high-risk?',
                   'Which documents are needed for compliance?',
@@ -109,7 +109,7 @@ export default function RagChat() {
                     key={example}
                     type="button"
                     onClick={() => setQuestion(example)}
-                    className="text-left bg-white border border-gray-200 rounded-xl p-4 text-sm text-gray-700 hover:border-primary-200 hover:bg-primary-50 transition-colors"
+                    className="text-left bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl p-4 text-sm text-gray-700 dark:text-gray-300 hover:border-primary-200 hover:bg-primary-50 transition-colors"
                   >
                     {example}
                   </button>
@@ -133,12 +133,12 @@ export default function RagChat() {
 
               {isLoading && (
                 <div className="flex justify-start">
-                  <div className="w-full max-w-3xl bg-white border border-gray-200 rounded-2xl sm:rounded-bl-md px-4 sm:px-5 py-4 shadow-sm">
+                  <div className="w-full max-w-3xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-2xl sm:rounded-bl-md px-4 sm:px-5 py-4 shadow-sm">
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2 bg-primary-50 rounded-lg">
+                      <div className="p-2 bg-primary-50 dark:bg-gray-800 rounded-lg">
                         <Bot className="w-5 h-5 text-primary-600" />
                       </div>
-                      <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
+                      <div className="flex items-center gap-2 text-sm font-medium text-gray-900 dark:text-white">
                         <Loader2 className="w-4 h-4 animate-spin text-primary-600" />
                         Searching knowledge base
                       </div>
@@ -173,30 +173,30 @@ export default function RagChat() {
 
               {!isLoading && !error && answer && (
                 <div className="flex justify-start">
-                  <div className="w-full max-w-3xl bg-white border border-gray-200 rounded-2xl sm:rounded-bl-md px-4 sm:px-5 py-4 shadow-sm">
+                  <div className="w-full max-w-3xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-800 rounded-2xl sm:rounded-bl-md px-4 sm:px-5 py-4 shadow-sm">
                     <div className="flex items-start gap-3">
-                      <div className="p-2 bg-primary-50 rounded-lg flex-shrink-0">
+                      <div className="p-2 bg-primary-50 dark:bg-gray-800 rounded-lg flex-shrink-0">
                         <Bot className="w-5 h-5 text-primary-600" />
                       </div>
                       <div className="space-y-5 min-w-0">
                         <p className="text-gray-700 leading-7">{answer.answer}</p>
                         <div className="border-t border-gray-100 pt-5">
-                          <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                          <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
                             Source citations
                           </h3>
                           <div className="space-y-3">
                             {answer.sources.map((source) => (
                               <div
                                 key={source.title}
-                                className="bg-gray-50 border border-gray-200 rounded-lg p-4"
+                                className="bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg p-4"
                               >
                                 <div className="flex items-center gap-2 mb-2">
                                   <FileText className="w-4 h-4 text-primary-600" />
-                                  <h4 className="text-sm font-medium text-gray-900">
+                                  <h4 className="text-sm font-medium text-gray-900 dark:text-white">
                                     {source.title}
                                   </h4>
                                 </div>
-                                <p className="text-sm text-gray-600">{source.excerpt}</p>
+                                <p className="text-sm text-gray-600 dark:text-gray-300">{source.excerpt}</p>
                               </div>
                             ))}
                           </div>
@@ -211,10 +211,10 @@ export default function RagChat() {
         </div>
       </div>
 
-      <div className="border-t border-gray-200 bg-white px-4 sm:px-6 py-3 sm:py-4">
+      <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-700 px-4 sm:px-6 py-3 sm:py-4">
         <form onSubmit={handleAsk} className="max-w-4xl mx-auto">
-          <div className="flex items-end gap-2 sm:gap-3 bg-gray-50 border border-gray-300 rounded-2xl px-3 sm:px-4 py-3 focus-within:ring-2 focus-within:ring-primary-500 focus-within:border-primary-500">
-            <label htmlFor="rag-question" className="sr-only">
+          <div className="flex items-end gap-2 sm:gap-3 bg-gray-50 dark:bg-gray-600 border border-gray-300 dark:border-gray-500 rounded-2xl px-3 sm:px-4 py-3 focus-within:ring-2 focus-within:ring-primary-500 focus-within:border-primary-500">
+            <label htmlFor="rag-question" className="sr-only ">
               Question
             </label>
             <textarea
@@ -224,7 +224,7 @@ export default function RagChat() {
               placeholder="Ask a compliance question..."
               rows={1}
               disabled={isLoading}
-              className="min-w-0 flex-1 resize-none bg-transparent border-0 p-0 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 disabled:text-gray-500"
+              className="min-w-0 flex-1 resize-none bg-transparent border-0 p-0 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 focus:outline-none focus:ring-0 disabled:text-gray-500"
             />
             <button
               type="submit"
@@ -241,11 +241,11 @@ export default function RagChat() {
             </button>
           </div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 mt-2">
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
               Try typing `error` to preview the error state. 
               {/* TODO: This statement is just for testing. Remove it after integration of API */}
             </p>
-            <p className="text-xs text-gray-400">
+            <p className="text-xs text-gray-400 dark:text-gray-300">
               Use this assistant to explore risk, documentation, and governance obligations.
             </p>
           </div>
