@@ -8,6 +8,7 @@ import AISystems from './pages/AISystems'
 import Classification from './pages/Classification'
 import Documents from './pages/Documents'
 import Notifications from './pages/Notifications'
+import CivicIssues from './pages/CivicIssues'
 import { Toaster } from 'react-hot-toast'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -54,6 +55,7 @@ function App() {
           <Route path="classification/:systemId?" element={<Classification />} />
           <Route path="documents" element={<Documents />} />
           <Route path="notifications" element={<Notifications />} />
+          <Route path="civic-issues" element={<CivicIssues />} />
         </Route>
       </Routes>
     </>

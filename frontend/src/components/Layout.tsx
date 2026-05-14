@@ -6,6 +6,7 @@ import {
   Bot,
   FileCheck,
   FileText,
+  AlertTriangle,
   LogOut,
   Shield,
   ChevronLeft,
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'AI Systems', href: '/ai-systems', icon: Bot },
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
+  { name: 'Civic Issues', href: '/civic-issues', icon: AlertTriangle },
 ]
 
 export default function Layout() {
