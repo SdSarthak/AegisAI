@@ -20,9 +20,9 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import require_role
 from app.models.guard_scan_log import GuardScanLog
-from app.models.user import User
+from app.models.user import User, UserRole
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.pagination import PaginatedResponse
 
@@ -75,8 +75,7 @@ def _check_rate_limit(user_id: int) -> tuple[bool, int]:
 @router.post("/scan", response_model=ScanResponse)
 def scan_prompt(
     request: ScanRequest,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ANALYST, UserRole.ADMIN)),
 ):
     """
     Scan a prompt for injection risks.

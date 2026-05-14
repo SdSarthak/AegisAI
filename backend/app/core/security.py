@@ -2,7 +2,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -14,7 +13,6 @@ if TYPE_CHECKING:
     from app.models.user import User  # Prevent circular imports during runtime
 
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_PREFIX}/auth/login")
 
 
@@ -91,3 +89,30 @@ async def get_current_user(
         raise _get_credentials_exception()
 
     return user
+
+
+def _normalize_role(role) -> str:
+    from app.models.user import UserRole
+
+    if isinstance(role, UserRole):
+        return role.value
+    if isinstance(role, str):
+        role_value = role.lower()
+        role_names = {item.name.lower(): item.value for item in UserRole}
+        return role_names.get(role_value, role_value)
+    return UserRole.VIEWER.value
+
+
+def require_role(*allowed_roles):
+    allowed = {_normalize_role(role) for role in allowed_roles}
+
+    def dependency(current_user=Depends(get_current_user)):
+        role = _normalize_role(getattr(current_user, "role", None))
+        if role not in allowed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+        return current_user
+
+    return dependency

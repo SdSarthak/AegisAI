@@ -29,9 +29,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import require_role
 from app.models.rag_feedback import RAGFeedback
-from app.models.user import SubscriptionTier, User
+from app.models.user import SubscriptionTier, User, UserRole
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.vector_store import create_vector_store
 from app.models.rag_query import RagQuery
@@ -149,7 +149,7 @@ def ingest_documents(
 @router.post("/query", response_model=RAGQueryResponse)
 def query_knowledge_base(
     request: RAGQueryRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ANALYST, UserRole.ADMIN)),
     db: Session = Depends(get_db),
 ):
     """

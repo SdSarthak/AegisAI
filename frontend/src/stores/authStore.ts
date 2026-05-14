@@ -13,20 +13,32 @@ interface AuthState {
   token: string | null
   user: User | null
   isAuthenticated: boolean
-  setAuth: (token: string, user: User) => void
+  setAuth: (token: string, user: User | null) => void
   logout: () => void
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       token: null,
       user: null,
-      isAuthenticated: false,
+
+      // derive authentication instead of manually trusting a flag
+      get isAuthenticated() {
+        return !!get().token
+      },
+
       setAuth: (token, user) =>
-        set({ token, user, isAuthenticated: true }),
+        set({
+          token,
+          user,
+        }),
+
       logout: () =>
-        set({ token: null, user: null, isAuthenticated: false }),
+        set({
+          token: null,
+          user: null,
+        }),
     }),
     {
       name: 'auth-storage',

@@ -6,8 +6,8 @@ from typing import List, Optional
 import csv
 import io
 from app.core.database import get_db
-from app.core.security import get_current_user
-from app.models.user import User
+from app.core.security import require_role
+from app.models.user import User, UserRole
 from app.models.ai_system import AISystem
 from app.models.audit_log import AISystemAuditLog
 from app.schemas.ai_system import (
@@ -27,7 +27,7 @@ router = APIRouter()
 def create_ai_system(
     system_data: AISystemCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     """Create a new AI system for compliance tracking."""
     ai_system = AISystem(
@@ -59,42 +59,88 @@ def list_ai_systems(
     page: int = Query(1, ge=1, description="Page number (1-indexed)"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.VIEWER, UserRole.ANALYST, UserRole.ADMIN))
 ):
-    """List all AI systems for the current user, with optional sorting and pagination."""
-    if sort_by not in _SORTABLE_FIELDS:
+    """List all AI systems for the current user."""
+    systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
+    return systems
+
+
+@router.get("/{system_id}", response_model=AISystemResponse)
+def get_ai_system(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.VIEWER, UserRole.ANALYST, UserRole.ADMIN))
+):
+    """Get a specific AI system."""
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id
+    ).first()
+    
+    if not system:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid sort_by '{sort_by}'. Allowed: {', '.join(sorted(_SORTABLE_FIELDS))}",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found"
         )
-    if order not in ("asc", "desc"):
+    return system
+
+
+@router.put("/{system_id}", response_model=AISystemResponse)
+def update_ai_system(
+    system_id: int,
+    system_data: AISystemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN))
+):
+    """Update an AI system."""
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id
+    ).first()
+    
+    if not system:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid order. Use 'asc' or 'desc'.",
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found"
         )
+    
+    update_data = system_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(system, field, value)
+    
+    db.commit()
+    db.refresh(system)
+    return system
 
-    column = _SORTABLE_FIELDS[sort_by]
-    direction = asc(column) if order == "asc" else desc(column)
 
-    base_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
-    total = base_query.count()
-    offset = (page - 1) * limit
-
-    systems = (
-        base_query
-        .order_by(direction)
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
-    return PaginatedResponse(items=systems, total=total, page=page, limit=limit)
+@router.delete("/{system_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_ai_system(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role(UserRole.ADMIN))
+):
+    """Delete an AI system."""
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id
+    ).first()
+    
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found"
+        )
+    
+    db.delete(system)
+    db.commit()
 
 
 @router.post("/import", response_model=BulkImportResponse)
 def bulk_import_systems(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRole.ADMIN))
 ):
     """Import AI systems from a CSV file."""
     errors = []
