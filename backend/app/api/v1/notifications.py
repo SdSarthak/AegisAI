@@ -1,3 +1,8 @@
+"""
+Notifications API — in-app event feed for users.
+Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
+SPDX-License-Identifier: AGPL-3.0-only
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -111,3 +116,4 @@ def delete_notification(
 
     db.delete(notification)
     db.commit()
+    
