@@ -8,6 +8,7 @@ from dataclasses import dataclass
 @dataclass
 class RegexResult:
     """Result of regex pattern matching."""
+
     flag: bool
     matched_patterns: List[str]
     score: float  # 0.0 to 1.0
@@ -78,22 +79,34 @@ class RegexFilter:
     def _compile_patterns(self) -> Dict[str, List[re.Pattern]]:
         """Compile all regex patterns with appropriate flags."""
         patterns = {
-            "high_override": [re.compile(p, re.IGNORECASE) for p in self.INSTRUCTION_OVERRIDE_PATTERNS],
-            "high_role": [re.compile(p, re.IGNORECASE) for p in self.ROLE_HIJACKING_PATTERNS],
-            "medium_disclosure": [re.compile(p, re.IGNORECASE) for p in self.PROMPT_DISCLOSURE_PATTERNS],
-            "medium_bypass": [re.compile(p, re.IGNORECASE) for p in self.POLICY_BYPASS_PATTERNS],
-            "medium_code": [re.compile(p, re.IGNORECASE) for p in self.DANGEROUS_CODE_PATTERNS],
-            "low_keywords": [re.compile(p, re.IGNORECASE) for p in self.SUSPICIOUS_KEYWORDS],
+            "high_override": [
+                re.compile(p, re.IGNORECASE) for p in self.INSTRUCTION_OVERRIDE_PATTERNS
+            ],
+            "high_role": [
+                re.compile(p, re.IGNORECASE) for p in self.ROLE_HIJACKING_PATTERNS
+            ],
+            "medium_disclosure": [
+                re.compile(p, re.IGNORECASE) for p in self.PROMPT_DISCLOSURE_PATTERNS
+            ],
+            "medium_bypass": [
+                re.compile(p, re.IGNORECASE) for p in self.POLICY_BYPASS_PATTERNS
+            ],
+            "medium_code": [
+                re.compile(p, re.IGNORECASE) for p in self.DANGEROUS_CODE_PATTERNS
+            ],
+            "low_keywords": [
+                re.compile(p, re.IGNORECASE) for p in self.SUSPICIOUS_KEYWORDS
+            ],
         }
         return patterns
 
     def check(self, prompt: str) -> RegexResult:
         """
         Check prompt against regex patterns.
-        
+
         Args:
             prompt: User input prompt to check
-            
+
         Returns:
             RegexResult with flag, matched patterns, and risk score
         """
@@ -148,5 +161,5 @@ class RegexFilter:
         return RegexResult(
             flag=len(matched_patterns) > 0,
             matched_patterns=matched_patterns,
-            score=risk_score
+            score=risk_score,
         )

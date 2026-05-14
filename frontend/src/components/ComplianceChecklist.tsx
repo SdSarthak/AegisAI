@@ -33,8 +33,10 @@ interface ComplianceChecklistProps {
 }
 
 export default function ComplianceChecklist({
-  systemId,
-  riskLevel,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  systemId: _systemId,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  riskLevel: _riskLevel,
   items,
 }: ComplianceChecklistProps) {
   const [checked, setChecked] = useState<Set<string>>(new Set())

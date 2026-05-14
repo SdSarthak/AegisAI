@@ -17,43 +17,49 @@
 ## High-level diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                      React 18 Frontend                          │
-│                                                                 │
-│  Dashboard  ·  AI Systems  ·  Classification  ·  Documents      │
-│  [Guard Scanner — coming]  ·  [RAG Chat — coming]              │
-│                                                                 │
-│  Zustand auth store  ·  TanStack Query  ·  Tailwind CSS         │
-└──────────────────────────────┬──────────────────────────────────┘
-                               │  REST/JSON  (axios + Bearer JWT)
-┌──────────────────────────────▼──────────────────────────────────┐
-│                    FastAPI Backend  /api/v1/                     │
-│                                                                 │
-│  ┌──────────────────┐  ┌───────────────┐  ┌─────────────────┐  │
-│  │  Compliance      │  │  LLM Guard    │  │ RAG Intelligence│  │
-│  │  Engine          │  │  Module       │  │ Module          │  │
-│  │                  │  │               │  │                 │  │
-│  │  /ai-systems     │  │  /guard/scan  │  │ /rag/query      │  │
-│  │  /classification │  │  /guard/info  │  │ /rag/ingest*    │  │
-│  │  /documents      │  │               │  │                 │  │
-│  │                  │  │  1. Regex     │  │ FAISS index     │  │
-│  │  Risk classifier │  │  2. DeBERTa   │  │ LangChain chain │  │
-│  │  Doc templates   │  │  3. Decision  │  │ MLflow tracking │  │
-│  │  EU AI Act rules │  │  4. Sanitizer │  │                 │  │
-│  └────────┬─────────┘  └───────┬───────┘  └────────┬────────┘  │
-│           │                    │                    │           │
-│  ┌────────▼────────────────────▼────────────────────▼────────┐  │
-│  │          Core: JWT Auth  ·  SQLAlchemy ORM  ·  Config     │  │
-│  └───────────────────────────────┬────────────────────────────┘  │
-└──────────────────────────────────┼──────────────────────────────┘
-                                   │
-              ┌────────────────────▼─────────────────┐
-              │           PostgreSQL 15               │
-              │  users · ai_systems · documents       │
-              │  risk_assessments                     │
-              └──────────────────────────────────────┘
-
-* /rag/ingest not yet implemented — contributor opportunity
+┌──────────────────────────────────────────────────────────────────────┐
+│                         React 18 Frontend                            │
+│                                                                      │
+│  Dashboard · AI Systems · Classification · Documents · Analytics     │
+│  Notifications · Onboarding · [RAG Chat — in progress]              │
+│                                                                      │
+│  Zustand auth store · TanStack Query · Tailwind CSS                  │
+│  react-hot-toast · react-hook-form + zod                             │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                │  REST/JSON  (axios + Bearer JWT)
+┌───────────────────────────────▼──────────────────────────────────────┐
+│                     FastAPI Backend  /api/v1/                        │
+│                                                                      │
+│  ┌─────────────────┐  ┌────────────────┐  ┌──────────────────────┐  │
+│  │ Compliance      │  │ LLM Guard      │  │ RAG Intelligence     │  │
+│  │ Engine          │  │ Module         │  │ Module               │  │
+│  │                 │  │                │  │                      │  │
+│  │ /ai-systems     │  │ /guard/scan    │  │ /rag/query           │  │
+│  │   + import CSV  │  │   (rate-       │  │ /rag/feedback        │  │
+│  │   + search/     │  │    limited)    │  │ /rag/low-quality-    │  │
+│  │     filter      │  │ /guard/health  │  │   chunks             │  │
+│  │ /classification │  │                │  │ /rag/health          │  │
+│  │ /documents      │  │ 1. Regex       │  │                      │  │
+│  │   + PDF export  │  │ 2. DeBERTa-v3  │  │ FAISS index          │  │
+│  │ /analytics      │  │ 3. Decision    │  │ LangChain chain      │  │
+│  │ /badge/{id}     │  │ 4. Sanitizer   │  │ Feedback model       │  │
+│  │ /notifications  │  │                │  │ MLflow (stub)        │  │
+│  │ /webhooks       │  │ guard-sdk/     │  │                      │  │
+│  │ /users/me PATCH │  │ (standalone)   │  │                      │  │
+│  └────────┬────────┘  └───────┬────────┘  └──────────┬───────────┘  │
+│           │                   │                       │              │
+│  ┌────────▼───────────────────▼───────────────────────▼───────────┐  │
+│  │         Core: JWT Auth · SQLAlchemy ORM · Pydantic Config      │  │
+│  └────────────────────────────┬───────────────────────────────────┘  │
+└───────────────────────────────┼──────────────────────────────────────┘
+                                │
+             ┌──────────────────▼──────────────────┐
+             │           PostgreSQL 15              │
+             │  users · ai_systems · documents      │
+             │  rag_feedback                        │
+             │  audit_log (migration pending)       │
+             │  notifications (migration pending)   │
+             └─────────────────────────────────────┘
 ```
 
 ---
@@ -66,14 +72,16 @@ Handles EU AI Act compliance tracking from system registration through document 
 
 | File | Responsibility |
 |---|---|
-| `api/v1/ai_systems.py` | CRUD for AI system registry |
-| `api/v1/classification.py` | Risk classification logic (Article 5, 6, 52 + Annex III) |
-| `api/v1/documents.py` | Compliance document generation from templates |
-| `models/ai_system.py` | `AISystem`, `RiskAssessment` ORM models |
+| `api/v1/ai_systems.py` | CRUD + bulk CSV import + search/risk/compliance filter |
+| `api/v1/classification.py` | Risk classification (Article 5, 6, 52 + Annex III) |
+| `api/v1/documents.py` | Document generation from templates + PDF export |
+| `api/v1/analytics.py` | Compliance metrics aggregation |
+| `api/v1/badge.py` | SVG compliance badge endpoint |
+| `models/ai_system.py` | `AISystem` ORM; `compliance_score` is nullable Float |
 | `models/document.py` | `Document` ORM model |
-| `schemas/ai_system.py` | `RiskClassificationRequest`, questionnaire fields |
+| `modules/badge/badge_generator.py` | SVG badge renderer |
 
-**Risk levels and their EU AI Act basis:**
+**Risk levels:**
 
 | Level | EU AI Act basis | Examples |
 |---|---|---|
@@ -86,7 +94,7 @@ Handles EU AI Act compliance tracking from system registration through document 
 
 ### Module 2 — LLM Guard
 
-A four-layer defence pipeline that runs on every prompt before it reaches an LLM. Designed to catch prompt injection, jailbreaks, and policy bypass attempts.
+A four-layer defence pipeline that inspects every prompt before it reaches an LLM.
 
 | File | Responsibility |
 |---|---|
@@ -94,24 +102,27 @@ A four-layer defence pipeline that runs on every prompt before it reaches an LLM
 | `modules/guard/intent_classifier.py` | Layer 2: DeBERTa-v3-small transformer, CPU ~200ms |
 | `modules/guard/decision_engine.py` | Layer 3: combines regex + ML scores into a decision |
 | `modules/guard/sanitizer.py` | Layer 4: removes meta-instructions from SANITIZE-level prompts |
-| `modules/guard/llm_guard.py` | Orchestrator — runs all 4 layers in sequence |
+| `modules/guard/llm_guard.py` | Orchestrator — runs all 4 layers |
 | `modules/guard/guard_config.py` | Paths, thresholds, intent class mappings |
 | `modules/guard/train.py` | Training script for fine-tuning the classifier |
-| `api/v1/guard.py` | REST endpoint wrapping the pipeline |
-| `notebooks/train_guard_classifier.ipynb` | Colab-ready fine-tuning notebook |
+| `api/v1/guard.py` | REST endpoint with per-user rate limiting |
+| `guard-sdk/` | Standalone package (`pip install aegisai-guard`) |
+| `scripts/scan_prompts.py` | CLI to scan `.prompts/` files against the Guard API |
+| `.github/workflows/guard-scan.yml` | CI action — scans `.prompts/` on every PR |
+| `notebooks/train_guard_classifier.ipynb` | Colab fine-tuning notebook |
 
-**Regex categories** (6 categories in `regex_rules.py`):
+**Regex categories:**
 
 | Category | Examples | Severity |
 |---|---|---|
-| Instruction override | "ignore all previous instructions" | High |
-| Role hijacking | "you are now DAN", "act as an evil AI" | High |
-| Prompt disclosure | "repeat your system prompt", "show your instructions" | Medium |
-| Policy bypass | "pretend you have no restrictions" | Medium |
-| Dangerous code | `exec()`, `eval()`, `os.system()` patterns | Medium/High |
-| Suspicious keywords | "jailbreak", "override", "bypass" | Low |
+| Instruction override | "ignore all previous instructions" | High (0.9) |
+| Role hijacking | "you are now DAN", "act as an evil AI" | High (0.8) |
+| Prompt disclosure | "repeat your system prompt" | Medium (0.6) |
+| Policy bypass | "pretend you have no restrictions" | Medium (0.7) |
+| Dangerous code | `exec()`, `eval()`, `os.system()` | Medium/High |
+| Suspicious keywords | "jailbreak", "override", "bypass" | Low (0.3) |
 
-**Decision thresholds** (configurable in `.env`):
+**Decision thresholds (configurable via `.env`):**
 
 | Signal | Weight |
 |---|---|
@@ -124,22 +135,17 @@ A four-layer defence pipeline that runs on every prompt before it reaches an LLM
 
 ### Module 3 — RAG Intelligence
 
-A retrieval-augmented generation pipeline that answers regulatory questions grounded in source documents.
+A retrieval-augmented generation pipeline with answer quality feedback.
 
 | File | Responsibility |
 |---|---|
-| `modules/rag/document_loader.py` | Loads PDFs from local paths or S3, splits into chunks |
-| `modules/rag/vector_store.py` | Builds and persists FAISS index; loads existing index |
+| `modules/rag/document_loader.py` | Loads PDFs, splits into chunks |
+| `modules/rag/vector_store.py` | Builds and persists FAISS index |
 | `modules/rag/retrieval_chain.py` | LangChain RetrievalQA chain (k=5 chunks) |
 | `modules/rag/ml_flow.py` | MLflow query tracking stub |
-| `api/v1/rag.py` | REST endpoints |
-
-**Planned regulatory sources** (contributor opportunity):
-
-- EU AI Act (Regulation EU 2024/1689)
-- GDPR (Regulation EU 2016/679)
-- ISO/IEC 42001:2023
-- NIST AI RMF 1.0
+| `api/v1/rag.py` | Query, feedback, and low-quality-chunk endpoints |
+| `models/rag_feedback.py` | Vote storage per answer |
+| `data/regulatory_qa.csv` | 75-row QA evaluation dataset |
 
 ---
 
@@ -151,29 +157,29 @@ A retrieval-augmented generation pipeline that answers regulatory questions grou
 POST /api/v1/guard/scan
         │
         ▼
-  JWT auth check
+  JWT auth + per-user rate limit check  (429 if exceeded)
         │
         ▼
   LLMGuard.guard(prompt)
         │
         ├─► Layer 1: RegexFilter.check(prompt)
-        │       Returns: flag (bool), score (0–1), matched_patterns
+        │       flag, score (0–1), matched_patterns
         │
         ├─► Layer 2: IntentClassifier.classify(prompt)
-        │       Returns: intent (benign/suspicious/malicious), confidence
+        │       intent (benign/suspicious/malicious), confidence
         │
-        ├─► Layer 3: DecisionEngine.decide(regex_flag, regex_score, intent, confidence)
-        │       Returns: decision (ALLOW/SANITIZE/BLOCK), reasoning
+        ├─► Layer 3: DecisionEngine.decide(regex, intent)
+        │       decision (ALLOW/SANITIZE/BLOCK), reasoning
         │
         └─► Layer 4 (if SANITIZE): PromptSanitizer.sanitize(prompt)
-                Returns: cleaned_prompt, changes_summary
+                Returns cleaned_prompt
                     │
                     ▼
-              LLMClient.call(cleaned_prompt)  ← any OpenAI-compatible provider
+              LLMClient.call(cleaned_prompt)
 
-Decision: BLOCK → return safe error message (no LLM call)
-Decision: ALLOW → LLMClient.call(prompt)
-Decision: SANITIZE → sanitize, then LLMClient.call(sanitized_prompt)
+BLOCK    → return safe error (no LLM call)
+ALLOW    → LLMClient.call(prompt)
+SANITIZE → LLMClient.call(sanitized_prompt)
 ```
 
 ### Risk classification flow
@@ -182,20 +188,16 @@ Decision: SANITIZE → sanitize, then LLMClient.call(sanitized_prompt)
 POST /api/v1/classification/classify/{system_id}
         │
         ▼
-  Receive RiskClassificationRequest
-  (questionnaire answers — ~15 boolean fields)
+  Receive RiskClassificationRequest (~12 boolean fields)
         │
         ▼
   Check Article 5 prohibited uses
-  (social scoring, real-time biometrics, subliminal manipulation)
         │
         ▼
   Check Annex III high-risk categories
-  (HR, credit, law enforcement, safety components, etc.)
         │
         ▼
   Check Article 52 transparency obligations
-  (chatbots, emotion recognition, synthetic content)
         │
         ▼
   Return RiskClassificationResponse
@@ -203,26 +205,31 @@ POST /api/v1/classification/classify/{system_id}
   + update AISystem.risk_level
 ```
 
-### RAG query flow
+### RAG query + feedback flow
 
 ```
 POST /api/v1/rag/query
         │
         ▼
-  JWT auth check
+  load_vector_store()  (503 if index not built)
         │
         ▼
-  load_vector_store()
-  (raises 503 if FAISS index not built yet)
+  FAISS semantic search (k=5)
         │
         ▼
-  FAISS semantic search (k=5 chunks)
+  LangChain RetrievalQA.run(question, chunks)
         │
         ▼
-  LangChain RetrievalQA.run(question, context_chunks)
-        │
-        ▼
-  Return answer + source_documents metadata
+  Return {answer, answer_id, sources}
+
+          ▼  (later, optional)
+POST /api/v1/rag/feedback {"answer_id": ..., "vote": "down"}
+          │
+          ▼
+  Store in rag_feedback table
+
+GET /api/v1/rag/low-quality-chunks?threshold=0.3
+  → aggregate by chunk source, return high thumbs-down ratio chunks
 ```
 
 ---
@@ -234,36 +241,21 @@ users
   id (PK)
   email (unique)
   hashed_password
-  full_name
-  company_name
+  full_name, company_name
   subscription_tier          ENUM(free, starter, growth, scale)
-  stripe_customer_id
-  stripe_subscription_id
+  stripe_customer_id, stripe_subscription_id
   is_active
   created_at / updated_at
 
 ai_systems
   id (PK)
   owner_id (FK → users)
-  name
-  description
-  version
-  use_case
-  sector
+  name, description, version, use_case, sector
   risk_level                 ENUM(minimal, limited, high, unacceptable)
   compliance_status          ENUM(not_started, in_progress, compliant, non_compliant)
+  compliance_score           Float (nullable)
   questionnaire_responses    JSON
   created_at / updated_at
-
-risk_assessments
-  id (PK)
-  ai_system_id (FK → ai_systems)
-  assessment_type
-  risk_level
-  findings                   JSON
-  recommendations            JSON
-  overall_score              Float
-  assessed_at
 
 documents
   id (PK)
@@ -271,12 +263,25 @@ documents
   ai_system_id (FK → ai_systems)
   title
   document_type              ENUM(technical_documentation, risk_assessment,
-                                  conformity_declaration, data_governance,
-                                  transparency_notice, ...)
+                                  conformity_declaration, ...)
   status                     ENUM(draft, generated, approved, archived)
   content                    Text (Markdown)
   file_path                  nullable (PDF path)
   created_at / updated_at
+
+rag_feedback
+  id (PK)
+  answer_id                  String (UUID from /rag/query response)
+  chunk_source               String (source document + page ref)
+  vote                       ENUM(up, down)
+  user_id (FK → users)
+  created_at
+
+-- Pending migrations:
+audit_log                    (PR #160 open)
+notifications                (PR #175 open)
+webhooks                     (scaffold — no migration yet)
+compliance_snapshots         (scaffold — no migration yet)
 ```
 
 ---
@@ -285,8 +290,9 @@ documents
 
 ```
 POST /api/v1/auth/register  →  hash password (bcrypt)  →  store user  →  201
-POST /api/v1/auth/login     →  verify password  →  issue JWT (30min expiry)  →  200
+POST /api/v1/auth/login     →  verify password  →  issue JWT (30min)  →  200
 GET  /api/v1/auth/me        →  decode JWT  →  load user  →  200
+PATCH /api/v1/users/me      →  decode JWT  →  update fields  →  200
 
 All protected routes:
   Authorization: Bearer <token>
@@ -296,9 +302,8 @@ All protected routes:
       │
       ▼
   python-jose JWT decode  →  load User from DB
-      │
-      ├── Invalid token  →  401
-      └── Valid          →  inject User into route handler
+      ├── Invalid/expired  →  401
+      └── Valid            →  inject User into route handler
 ```
 
 **JWT payload:**
@@ -314,94 +319,92 @@ All protected routes:
 AegisAI/
 ├── backend/
 │   ├── app/
-│   │   ├── api/
-│   │   │   └── v1/
-│   │   │       ├── __init__.py          ← router registration
-│   │   │       ├── auth.py              ← register, login, /me
-│   │   │       ├── ai_systems.py        ← CRUD for AI system registry
-│   │   │       ├── classification.py    ← EU AI Act risk classification
-│   │   │       ├── documents.py         ← compliance document generation
-│   │   │       ├── guard.py             ← prompt injection scan endpoint
-│   │   │       └── rag.py               ← regulatory Q&A endpoint
+│   │   ├── api/v1/
+│   │   │   ├── __init__.py          ← router registration
+│   │   │   ├── auth.py              ← register, login, /me
+│   │   │   ├── ai_systems.py        ← CRUD + import CSV + search/filter
+│   │   │   ├── classification.py    ← EU AI Act risk classification
+│   │   │   ├── documents.py         ← doc generation + PDF export
+│   │   │   ├── guard.py             ← prompt scan + per-user rate limiting
+│   │   │   ├── rag.py               ← query + feedback + low-quality chunks
+│   │   │   ├── analytics.py         ← compliance metrics aggregation
+│   │   │   ├── badge.py             ← SVG badge endpoint
+│   │   │   ├── notifications.py     ← in-app notifications (scaffold)
+│   │   │   └── webhooks.py          ← webhook listeners (scaffold)
 │   │   ├── core/
-│   │   │   ├── config.py                ← pydantic-settings (reads .env)
-│   │   │   ├── database.py              ← SQLAlchemy engine + session
-│   │   │   └── security.py             ← JWT encode/decode, bcrypt, get_current_user
+│   │   │   ├── config.py            ← pydantic-settings (reads .env)
+│   │   │   ├── database.py          ← SQLAlchemy engine + session
+│   │   │   └── security.py          ← JWT, bcrypt, get_current_user
 │   │   ├── models/
-│   │   │   ├── user.py                  ← User ORM model
-│   │   │   ├── ai_system.py             ← AISystem, RiskAssessment ORM models
-│   │   │   └── document.py              ← Document ORM model
+│   │   │   ├── user.py
+│   │   │   ├── ai_system.py         ← includes compliance_score (nullable Float)
+│   │   │   ├── document.py
+│   │   │   ├── rag_feedback.py      ← vote storage per answer
+│   │   │   ├── audit_log.py         ← scaffold (migration pending PR #160)
+│   │   │   ├── compliance_snapshot.py ← scaffold
+│   │   │   ├── notification.py      ← scaffold (migration pending PR #175)
+│   │   │   └── webhook.py           ← scaffold
 │   │   ├── schemas/
-│   │   │   ├── user.py                  ← UserCreate, UserResponse, Token
-│   │   │   ├── ai_system.py             ← RiskClassificationRequest/Response
-│   │   │   └── document.py              ← DocumentGenerateRequest/Response
+│   │   │   ├── user.py              ← UserCreate, UserResponse, UserUpdate, Token
+│   │   │   ├── ai_system.py         ← RiskClassificationRequest/Response
+│   │   │   ├── document.py
+│   │   │   └── analytics.py
 │   │   ├── modules/
-│   │   │   ├── guard/
-│   │   │   │   ├── __init__.py          ← exports RegexFilter, IntentClassifier, etc.
-│   │   │   │   ├── guard_config.py      ← paths, thresholds, model config
-│   │   │   │   ├── regex_rules.py       ← Layer 1: regex heuristics
-│   │   │   │   ├── intent_classifier.py ← Layer 2: DeBERTa-v3 classifier
-│   │   │   │   ├── decision_engine.py   ← Layer 3: combine signals
-│   │   │   │   ├── sanitizer.py         ← Layer 4: remove meta-instructions
-│   │   │   │   ├── llm_guard.py         ← orchestrator
-│   │   │   │   └── train.py             ← CLI training script
-│   │   │   ├── rag/
-│   │   │   │   ├── document_loader.py   ← PDF loading + chunking
-│   │   │   │   ├── vector_store.py      ← FAISS build + load
-│   │   │   │   ├── retrieval_chain.py   ← LangChain RetrievalQA
-│   │   │   │   └── ml_flow.py           ← MLflow tracking stub
-│   │   │   └── llm/
-│   │   │       └── llm_client.py        ← OpenAI-compatible LLM wrapper
-│   │   └── main.py                      ← FastAPI app, CORS, router mount
+│   │   │   ├── guard/               ← 4-layer pipeline + train script
+│   │   │   ├── rag/                 ← FAISS + LangChain + feedback aggregation
+│   │   │   ├── llm/llm_client.py    ← OpenAI-compatible LLM wrapper
+│   │   │   └── badge/badge_generator.py  ← SVG renderer
+│   │   ├── tasks/scheduler.py       ← APScheduler scaffold
+│   │   └── main.py                  ← FastAPI app, CORS, router mount
 │   ├── data/
-│   │   ├── prompts.csv                  ← Guard classifier training data
-│   │   └── regulatory_docs/             ← RAG source PDFs (add yours here)
+│   │   ├── regulatory_qa.csv        ← 75-row QA evaluation dataset
+│   │   └── regulatory_docs/         ← Add regulatory PDFs here
 │   ├── tests/
-│   │   └── test_guard.py                ← Guard module test suite
+│   │   ├── conftest.py              ← Shared fixtures (TestClient, DB session)
+│   │   ├── test_guard.py, test_guard_config.py, test_sanitizer.py
+│   │   ├── test_llm_client.py
+│   │   ├── test_retrieval_chain.py
+│   │   ├── test_badge.py
+│   │   ├── test_bulk_import.py
+│   │   ├── test_auth_me.py
+│   │   └── integration/
+│   │       ├── test_pdf_export.py
+│   │       ├── test_rag_feedback.py
+│   │       └── test_rate_limiting.py
 │   ├── .env.example
 │   ├── Dockerfile
 │   └── requirements.txt
 ├── frontend/
-│   ├── src/
-│   │   ├── pages/
-│   │   │   ├── Dashboard.tsx
-│   │   │   ├── AISystems.tsx
-│   │   │   ├── Classification.tsx
-│   │   │   ├── Documents.tsx
-│   │   │   ├── Login.tsx
-│   │   │   └── Register.tsx
-│   │   ├── components/
-│   │   │   └── Layout.tsx               ← sidebar + nav
-│   │   ├── services/
-│   │   │   └── api.ts                   ← axios instance + all API calls
-│   │   ├── stores/
-│   │   │   └── authStore.ts             ← Zustand auth state
-│   │   ├── App.tsx                      ← routes + PrivateRoute wrapper
-│   │   └── main.tsx                     ← React root + QueryClient
-│   ├── Dockerfile
-│   └── package.json
+│   └── src/
+│       ├── pages/
+│       │   ├── Dashboard.tsx, AISystems.tsx, Classification.tsx
+│       │   ├── Documents.tsx, Analytics.tsx, Notifications.tsx
+│       │   ├── Onboarding.tsx, Login.tsx, Register.tsx
+│       ├── components/
+│       │   ├── Layout.tsx, ComplianceChecklist.tsx, DocumentEditor.tsx
+│       │   ├── NotificationBell.tsx, ThemeToggle.tsx
+│       ├── services/api.ts          ← Axios + all API call wrappers
+│       ├── stores/authStore.ts      ← Zustand auth state
+│       └── utils/toast.ts           ← react-hot-toast helpers
+├── guard-sdk/                       ← Standalone PyPI package (v0.1.0)
+├── mcp/server.py                    ← MCP server scaffold
 ├── infra/
-│   ├── deployment.yaml                  ← Kubernetes Deployment + Service + PVC + ConfigMap
-│   ├── hpa.yaml                         ← HorizontalPodAutoscaler (CPU + memory)
-│   └── Dockerfile.rag                   ← separate RAG container (optional)
-├── notebooks/
-│   └── train_guard_classifier.ipynb     ← Colab fine-tuning notebook
+│   ├── deployment.yaml              ← Kubernetes Deployment + Service + PVC
+│   └── hpa.yaml                     ← HorizontalPodAutoscaler
+├── notebooks/train_guard_classifier.ipynb
+├── scripts/scan_prompts.py          ← CLI Guard scan for .prompts/ files
+├── postman/AegisAI.postman_collection.json
 ├── docs/
 │   ├── getting-started.md
-│   ├── architecture.md                  ← this file
+│   ├── architecture.md
 │   ├── api-reference.md
 │   ├── guard-module.md
-│   └── rag-module.md
+│   ├── rag-module.md
+│   └── regulations.md
 ├── .github/
-│   ├── workflows/ci.yml                 ← backend tests + frontend build
-│   ├── ISSUE_TEMPLATE/
-│   └── PULL_REQUEST_TEMPLATE.md
-├── docker-compose.yml
-├── CONTRIBUTING.md
-├── CODE_OF_CONDUCT.md
-├── SECURITY.md
-├── CHANGELOG.md
-└── README.md
+│   ├── workflows/ci.yml             ← backend tests + frontend lint/build
+│   └── workflows/guard-scan.yml     ← prompt injection CI scan (implemented)
+└── docker-compose.yml
 ```
 
 ---
@@ -409,19 +412,25 @@ AegisAI/
 ## Key design decisions
 
 ### 1. OpenAI-compatible LLM client
-Both the Guard module (prompt responses) and the RAG module (QA chain) use a single `LLMClient` that speaks the OpenAI chat-completions API. This means the provider is swappable with a single `.env` change — OpenAI, Ollama, Groq, Together AI, vLLM, or LM Studio all work without any code changes.
+Both Guard and RAG use a single `LLMClient` speaking the OpenAI chat-completions API. Provider is swappable with a single `.env` change — OpenAI, Ollama, Groq, Together AI, vLLM all work without code changes.
 
 ### 2. Four-layer Guard pipeline
-Each layer has a different cost/coverage tradeoff:
-- Regex is near-zero latency and catches obvious patterns
-- DeBERTa catches semantically obfuscated attacks regex misses
-- The decision engine is pure logic — easy to audit and modify thresholds
-- The sanitizer preserves user intent while stripping hostile meta-instructions
+Each layer has a distinct cost/coverage tradeoff. The pipeline is fail-safe: if the DeBERTa model fails to load, it falls back to the pre-trained base rather than disabling the Guard entirely.
 
-The pipeline is fail-safe: if the ML model fails to load, it falls back to the pre-trained DeBERTa base rather than disabling the Guard entirely.
+### 3. Per-user rate limiting on Guard scan
+Prevents abuse without authentication bypass. The limit is configurable via environment variables.
 
-### 3. AGPL-3.0 licence
-AGPL ensures that companies running AegisAI as a hosted service must release their modifications. This is intentional — it prevents closed-source forks while keeping it free for self-hosted deployments and contributions.
+### 4. FAISS local vector store
+Chosen over managed solutions (Pinecone, Weaviate) to keep the stack fully self-contained. The index is persisted to disk and loaded at startup.
 
-### 4. Module isolation
-Each of the three modules (Compliance, Guard, RAG) can be used independently. The Guard module has no database dependency and can be imported and used outside the web server context. The RAG module requires only a FAISS index and an LLM API key.
+### 5. compliance_score as nullable Float
+Allows AI systems to exist without a score until a rollup job or user action computes it — avoids misleading zero-default values.
+
+### 6. RAG feedback model
+The `rag_feedback` table records per-answer votes, enabling the `low-quality-chunks` endpoint to surface chunks needing re-ingestion. This closes the loop between user feedback and knowledge base quality.
+
+### 7. AGPL-3.0 licence
+Ensures companies running AegisAI as a hosted SaaS must release modifications, preventing closed-source forks while keeping it free for self-hosted deployments.
+
+### 8. Module isolation
+Guard has no database dependency and ships as a standalone `guard-sdk` package. RAG requires only a FAISS index and an LLM API key.
