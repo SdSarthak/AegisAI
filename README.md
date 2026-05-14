@@ -97,6 +97,14 @@ Then `docker compose up -d`. See [Getting Started](docs/getting-started.md) for 
 
 ---
 
+## 📓 Colab Notebooks
+
+If you want to train the machine learning models yourself, you can run our official Google Colab notebooks on a free T4 GPU:
+
+- [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/gist/amritanshu2611/7a533926b3df02d2ea0df5bd51641361/finetune_regulatory_model.ipynb) **Fine-tune Regulatory Q&A Model (Llama-3.2-3B QLoRA)**
+
+---
+
 ## Project Structure
 
 ```

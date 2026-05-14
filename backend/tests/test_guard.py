@@ -6,10 +6,10 @@ from unittest.mock import patch, MagicMock
 from app.modules.guard.regex_rules import RegexFilter, RegexResult
 from app.modules.guard.decision_engine import DecisionEngine, Decision, DecisionResult
 
-
 # ---------------------------------------------------------------------------
 # RegexFilter tests (no external deps)
 # ---------------------------------------------------------------------------
+
 
 class TestRegexFilter:
     def setup_method(self):
@@ -68,49 +68,44 @@ class TestRegexFilter:
 # DecisionEngine tests (no external deps)
 # ---------------------------------------------------------------------------
 
+
 class TestDecisionEngine:
     def setup_method(self):
         self.engine = DecisionEngine()
 
     def test_benign_intent_allowed(self):
         result = self.engine.decide(
-            regex_flag=False, regex_score=0.0,
-            intent="benign", intent_score=0.95
+            regex_flag=False, regex_score=0.0, intent="benign", intent_score=0.95
         )
         assert result.decision == Decision.ALLOW
 
     def test_malicious_intent_high_confidence_blocked(self):
         result = self.engine.decide(
-            regex_flag=False, regex_score=0.0,
-            intent="malicious", intent_score=0.9
+            regex_flag=False, regex_score=0.0, intent="malicious", intent_score=0.9
         )
         assert result.decision == Decision.BLOCK
 
     def test_regex_and_malicious_intent_blocked(self):
         result = self.engine.decide(
-            regex_flag=True, regex_score=0.9,
-            intent="malicious", intent_score=0.9
+            regex_flag=True, regex_score=0.9, intent="malicious", intent_score=0.9
         )
         assert result.decision == Decision.BLOCK
 
     def test_suspicious_intent_sanitized(self):
         result = self.engine.decide(
-            regex_flag=False, regex_score=0.0,
-            intent="suspicious", intent_score=0.8
+            regex_flag=False, regex_score=0.0, intent="suspicious", intent_score=0.8
         )
         assert result.decision == Decision.SANITIZE
 
     def test_medium_regex_flag_sanitized(self):
         result = self.engine.decide(
-            regex_flag=True, regex_score=0.7,
-            intent="suspicious", intent_score=0.8
+            regex_flag=True, regex_score=0.7, intent="suspicious", intent_score=0.8
         )
         assert result.decision == Decision.SANITIZE
 
     def test_returns_decision_result_type(self):
         result = self.engine.decide(
-            regex_flag=False, regex_score=0.0,
-            intent="benign", intent_score=0.9
+            regex_flag=False, regex_score=0.0, intent="benign", intent_score=0.9
         )
         assert isinstance(result, DecisionResult)
         assert isinstance(result.decision, Decision)
@@ -134,13 +129,18 @@ class TestDecisionEngine:
         assert isinstance(response, str)
         assert len(response) > 0
 
-    @pytest.mark.parametrize("regex_flag,regex_score,intent,intent_score,expected", [
-        (False, 0.0, "benign", 0.95, Decision.ALLOW),
-        (True, 0.7, "suspicious", 0.8, Decision.SANITIZE),
-        (True, 0.9, "malicious", 0.9, Decision.BLOCK),
-        (False, 0.0, "malicious", 0.85, Decision.BLOCK),
-    ])
-    def test_decision_matrix(self, regex_flag, regex_score, intent, intent_score, expected):
+    @pytest.mark.parametrize(
+        "regex_flag,regex_score,intent,intent_score,expected",
+        [
+            (False, 0.0, "benign", 0.95, Decision.ALLOW),
+            (True, 0.7, "suspicious", 0.8, Decision.SANITIZE),
+            (True, 0.9, "malicious", 0.9, Decision.BLOCK),
+            (False, 0.0, "malicious", 0.85, Decision.BLOCK),
+        ],
+    )
+    def test_decision_matrix(
+        self, regex_flag, regex_score, intent, intent_score, expected
+    ):
         result = self.engine.decide(regex_flag, regex_score, intent, intent_score)
         assert result.decision == expected
 
@@ -178,8 +178,9 @@ def _build_mock_classifier():
         self.model = mock_model
 
     # Patch _load_pretrained so __init__ never touches the network
-    with patch.object(IntentClassifier, "_load_pretrained", _fake_load_pretrained), \
-         patch("os.path.exists", return_value=False):
+    with patch.object(
+        IntentClassifier, "_load_pretrained", _fake_load_pretrained
+    ), patch("os.path.exists", return_value=False):
         clf = IntentClassifier(device="cpu")
 
     return clf
@@ -194,6 +195,7 @@ class TestIntentClassifier:
 
     def test_classify_returns_classification_result(self):
         from app.modules.guard.intent_classifier import ClassificationResult
+
         result = self._clf.classify("What is the capital of France?")
         assert isinstance(result, ClassificationResult)
 

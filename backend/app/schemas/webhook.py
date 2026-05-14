@@ -12,7 +12,7 @@ from datetime import datetime
 class WebhookCreate(BaseModel):
     url: HttpUrl
     secret: Optional[str] = None
-    events: list[str] = []   # e.g. ["guard_block", "compliance_drift"]
+    events: list[str] = []  # e.g. ["guard_block", "compliance_drift"]
 
 
 class WebhookResponse(BaseModel):

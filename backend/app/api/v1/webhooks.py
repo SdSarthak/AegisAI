@@ -38,7 +38,9 @@ def create_webhook(
     TODO (help wanted): create a WebhookConfig row and return it.
     """
     # TODO: implement
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    )
 
 
 @router.get("", response_model=list[WebhookResponse])
@@ -52,7 +54,9 @@ def list_webhooks(
     TODO (help wanted): query WebhookConfig by user_id.
     """
     # TODO: implement
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    )
 
 
 @router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -67,4 +71,6 @@ def delete_webhook(
     TODO (help wanted): fetch by id + user_id, 404 if missing, then delete.
     """
     # TODO: implement
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    )

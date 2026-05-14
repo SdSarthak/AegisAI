@@ -5,3 +5,5 @@ from app.models.rag_feedback import RAGFeedback
 from app.models.guard_feedback import GuardFeedback
 
 __all__ = ["User", "AISystem", "RiskAssessment", "Document", "RAGFeedback", "GuardFeedback"]
+from app.models.audit_log import AISystemAuditLog
+__all__ = ["User", "AISystem", "RiskAssessment", "Document", "RAGFeedback"]
