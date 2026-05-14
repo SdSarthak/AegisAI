@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
-from app.core.security import get_current_user
-from app.models.user import User
+from app.core.security import require_role
+from app.models.user import User, UserRole
 from app.models.ai_system import AISystem, RiskLevel, RiskAssessment, ComplianceStatus
 from app.schemas.ai_system import RiskClassificationRequest, RiskClassificationResponse
 
@@ -119,7 +119,7 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
 @router.post("/classify", response_model=RiskClassificationResponse)
 def classify_ai_system(
     data: RiskClassificationRequest,
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRole.ANALYST, UserRole.ADMIN))
 ):
     """
     Classify an AI system's risk level based on EU AI Act criteria.
@@ -133,7 +133,7 @@ def classify_and_save(
     system_id: int,
     data: RiskClassificationRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(require_role(UserRole.ANALYST, UserRole.ADMIN))
 ):
     """
     Classify an AI system and save the result to the database.

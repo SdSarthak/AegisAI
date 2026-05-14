@@ -7,6 +7,7 @@ import { Shield } from 'lucide-react'
 export default function Login() {
   const navigate = useNavigate()
   const { setAuth } = useAuthStore()
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -18,12 +19,33 @@ export default function Login() {
     setLoading(true)
 
     try {
+      // 1. Login → get token
       const tokenData = await authApi.login(email, password)
+      console.log('LOGIN SUCCESS:', tokenData)
+
+      // 2. Store token immediately (NO user yet)
+      setAuth(tokenData.access_token, null)
+
+      // 3. Small delay ensures interceptor + store sync
+      await new Promise((r) => setTimeout(r, 50))
+
+      // 4. Fetch user safely with token now active
       const user = await authApi.getMe()
+      console.log('USER:', user)
+
+      // 5. Update full auth state
       setAuth(tokenData.access_token, user)
+
+      // 6. Redirect
       navigate('/')
-    } catch {
-      setError('Invalid email or password')
+    } catch (err: any) {
+      console.log('LOGIN ERROR:', err.response?.data || err.message)
+
+      setError(
+        err.response?.data?.detail ||
+        err.response?.data ||
+        'Login failed'
+      )
     } finally {
       setLoading(false)
     }
@@ -32,6 +54,7 @@ export default function Login() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
+
         <div className="text-center">
           <div className="flex justify-center">
             <Shield className="w-12 h-12 text-primary-600" />
@@ -50,37 +73,35 @@ export default function Login() {
           )}
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700">
               Email
             </label>
             <input
-              id="email"
               type="email"
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700">
               Password
             </label>
             <input
-              id="password"
               type="password"
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 px-4 border border-transparent rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+            className="w-full py-2 px-4 rounded-lg text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
           >
             {loading ? 'Signing in...' : 'Sign in'}
           </button>
@@ -88,10 +109,11 @@ export default function Login() {
 
         <p className="text-center text-sm text-gray-600">
           Don't have an account?{' '}
-          <Link to="/register" className="text-primary-600 hover:text-primary-500">
+          <Link to="/register" className="text-primary-600">
             Sign up
           </Link>
         </p>
+
       </div>
     </div>
   )

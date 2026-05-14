@@ -5,7 +5,7 @@ from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 from app.core.security import create_access_token
-from app.models.user import User
+from app.models.user import User, UserRole
 
 
 def _guard_result():
@@ -29,6 +29,7 @@ def _authenticate_test_user(db_session):
         hashed_password="$2b$12$R9h31cIPz0yO8W4gw2love.a4UtcWLU7pHPti3/T.D18SMsKvRHO2",
         is_active=True,
         company_name="AegisAI Tests",
+        role=UserRole.ANALYST.value,
     )
     db_session.add(user)
     db_session.commit()

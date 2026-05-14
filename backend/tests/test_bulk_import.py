@@ -18,6 +18,7 @@ def client():
 
         mock_user = MagicMock()
         mock_user.id = 1
+        mock_user.role = "admin"
 
         app.dependency_overrides[get_current_user] = lambda: mock_user
 

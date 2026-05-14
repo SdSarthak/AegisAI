@@ -5,16 +5,18 @@ import { Shield } from 'lucide-react'
 
 export default function Register() {
   const navigate = useNavigate()
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     full_name: '',
     company_name: '',
   })
+
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError('')
     setLoading(true)
@@ -22,8 +24,9 @@ export default function Register() {
     try {
       await authApi.register(formData)
       navigate('/login')
-    } catch {
-      setError('Registration failed. Email may already be in use.')
+    } catch (err: any) {
+      console.log("REGISTER ERROR:", err.response?.data || err.message)
+      setError(JSON.stringify(err.response?.data))
     } finally {
       setLoading(false)
     }
@@ -32,6 +35,7 @@ export default function Register() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
+        
         <div className="text-center">
           <div className="flex justify-center">
             <Shield className="w-12 h-12 text-primary-600" />
@@ -39,7 +43,9 @@ export default function Register() {
           <h2 className="mt-4 text-3xl font-bold text-gray-900">
             Create Account
           </h2>
-          <p className="mt-2 text-gray-600">Start your compliance journey</p>
+          <p className="mt-2 text-gray-600">
+            Start your compliance journey
+          </p>
         </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
@@ -50,7 +56,7 @@ export default function Register() {
           )}
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700">
               Email
             </label>
             <input
@@ -58,13 +64,15 @@ export default function Register() {
               type="email"
               required
               value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm"
             />
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700">
               Password
             </label>
             <input
@@ -73,41 +81,47 @@ export default function Register() {
               required
               minLength={8}
               value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              onChange={(e) =>
+                setFormData({ ...formData, password: e.target.value })
+              }
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm"
             />
           </div>
 
           <div>
-            <label htmlFor="full_name" className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700">
               Full Name
             </label>
             <input
               id="full_name"
               type="text"
               value={formData.full_name}
-              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              onChange={(e) =>
+                setFormData({ ...formData, full_name: e.target.value })
+              }
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm"
             />
           </div>
 
           <div>
-            <label htmlFor="company_name" className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700">
               Company Name
             </label>
             <input
               id="company_name"
               type="text"
               value={formData.company_name}
-              onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              onChange={(e) =>
+                setFormData({ ...formData, company_name: e.target.value })
+              }
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm"
             />
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 px-4 border border-transparent rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+            className="w-full py-2 px-4 border border-transparent rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
           >
             {loading ? 'Creating account...' : 'Create account'}
           </button>

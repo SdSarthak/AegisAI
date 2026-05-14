@@ -12,8 +12,8 @@ TODO for contributors (high difficulty):
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
-from app.core.security import get_current_user
-from app.models.user import User
+from app.core.security import require_role
+from app.models.user import User, UserRole
 
 router = APIRouter()
 
@@ -30,7 +30,7 @@ class RAGQueryResponse(BaseModel):
 @router.post("/query", response_model=RAGQueryResponse)
 def query_knowledge_base(
     request: RAGQueryRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ANALYST, UserRole.ADMIN)),
 ):
     """
     Ask a regulatory question and get an answer grounded in source documents.

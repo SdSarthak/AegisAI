@@ -16,8 +16,8 @@ from threading import Lock
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from app.core.security import get_current_user
-from app.models.user import User
+from app.core.security import require_role
+from app.models.user import User, UserRole
 
 router = APIRouter()
 
@@ -61,7 +61,7 @@ def _check_rate_limit(user_id: int) -> tuple[bool, int]:
 @router.post("/scan", response_model=ScanResponse)
 def scan_prompt(
     request: ScanRequest,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role(UserRole.ANALYST, UserRole.ADMIN)),
 ):
     """
     Scan a prompt for injection risks.
