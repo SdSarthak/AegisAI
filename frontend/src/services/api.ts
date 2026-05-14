@@ -57,8 +57,8 @@ export const authApi = {
 
 // AI Systems API
 export const aiSystemsApi = {
-  list: async () => {
-    const { data } = await api.get('/ai-systems/')
+  list: async (params?: { sort_by?: string; order?: string }) => {
+    const { data } = await api.get('/ai-systems/', { params })
     return data
   },
   get: async (id: number) => {
@@ -115,6 +115,14 @@ export const documentsApi = {
   delete: async (id: number) => {
     await api.delete(`/documents/${id}`)
   },
+}
+
+// Notifications API
+export const notificationsApi = {
+  list: (unreadOnly = false) =>
+    api.get(`/notifications?unread_only=${unreadOnly}`).then((r) => r.data),
+  markRead: (ids: number[]) =>
+    api.post('/notifications/read', { ids }),
 }
 
 export default api
