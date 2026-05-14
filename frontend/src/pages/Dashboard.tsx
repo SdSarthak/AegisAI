@@ -6,7 +6,7 @@ import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 export default function Dashboard() {
   const { data: systems = [] } = useQuery({
     queryKey: ['ai-systems'],
-    queryFn: aiSystemsApi.list,
+    queryFn: () => aiSystemsApi.list(),
   })
 
   const { data: documents = [] } = useQuery({
