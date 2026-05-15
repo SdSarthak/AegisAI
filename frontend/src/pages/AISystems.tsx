@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X } from 'lucide-react'
+import { RiskBadge } from '../components/AIPredictionBadge'
 
 interface AISystem {
   id: number
@@ -86,36 +87,6 @@ export default function AISystems() {
     'Content Generation',
     'Other',
   ]
-
-  const getRiskBadge = (riskLevel: string | null) => {
-    switch (riskLevel) {
-      case 'unacceptable':
-        return {
-          label: 'Unacceptable',
-          className: 'bg-red-100 text-red-700',
-        }
-      case 'high':
-        return {
-          label: 'High',
-          className: 'bg-orange-100 text-orange-700',
-        }
-      case 'limited':
-        return {
-          label: 'Limited',
-          className: 'bg-yellow-100 text-yellow-700',
-        }
-      case 'minimal':
-        return {
-          label: 'Minimal',
-          className: 'bg-green-100 text-green-700',
-        }
-      default:
-        return {
-          label: 'Unknown',
-          className: 'bg-gray-100 text-gray-700',
-        }
-    }
-  }
 
   return (
     <div className="space-y-8">
@@ -269,11 +240,7 @@ export default function AISystems() {
                         </span>
                       )}
                       {system.risk_level && (
-                        <span
-                          className={`text-xs px-2 py-1 rounded ${getRiskBadge(system.risk_level).className}`}
-                        >
-                          {getRiskBadge(system.risk_level).label}
-                        </span>
+                        <RiskBadge level={system.risk_level} size="sm" />
                       )}
                     </div>
                   </div>

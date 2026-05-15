@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
+import { RiskBadge } from '../components/AIPredictionBadge'
 
 export default function Dashboard() {
   const { data: systems = [] } = useQuery({
@@ -126,17 +127,7 @@ export default function Dashboard() {
                   <p className="font-medium text-gray-900">{system.name}</p>
                   <div className="flex items-center gap-2 mt-1">
                     {system.risk_level && (
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          system.risk_level === 'high'
-                            ? 'bg-red-100 text-red-700'
-                            : system.risk_level === 'limited'
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-green-100 text-green-700'
-                        }`}
-                      >
-                        {system.risk_level} risk
-                      </span>
+                      <RiskBadge level={system.risk_level} size="sm" />
                     )}
                     <span className="text-xs text-gray-500 flex items-center gap-1">
                       <Clock className="w-3 h-3" />

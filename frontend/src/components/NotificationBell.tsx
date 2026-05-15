@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bell, Clock, X } from 'lucide-react'
+import { Bell, Clock, X, AlertTriangle, Bot, RefreshCw, Newspaper } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { notificationsApi } from '../services/api'
 
@@ -37,6 +37,17 @@ function typeColor(type: NotificationPreview['type']): string {
     case 'update': return 'bg-green-500'
     case 'ai':     return 'bg-purple-500'
     case 'news':   return 'bg-primary-500'
+  }
+}
+
+/** Icon for the notification type. */
+function typeIcon(type: NotificationPreview['type']): React.ReactNode {
+  const cls = 'w-3.5 h-3.5 flex-shrink-0'
+  switch (type) {
+    case 'alert':  return <AlertTriangle className={`${cls} text-red-500`} />
+    case 'ai':     return <Bot className={`${cls} text-purple-500`} />
+    case 'update': return <RefreshCw className={`${cls} text-green-500`} />
+    case 'news':   return <Newspaper className={`${cls} text-primary-500`} />
   }
 }
 
@@ -181,15 +192,18 @@ export default function NotificationBell() {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
-                    <p
-                      className={`text-sm truncate ${
-                        !notification.is_read
-                          ? 'font-semibold text-gray-900'
-                          : 'font-medium text-gray-700'
-                      }`}
-                    >
-                      {notification.title}
-                    </p>
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      {typeIcon(notification.type)}
+                      <p
+                        className={`text-sm truncate ${
+                          !notification.is_read
+                            ? 'font-semibold text-gray-900'
+                            : 'font-medium text-gray-700'
+                        }`}
+                      >
+                        {notification.title}
+                      </p>
+                    </div>
 
                     {!notification.is_read && (
                       <span className="w-2 h-2 rounded-full bg-primary-500 flex-shrink-0" />
