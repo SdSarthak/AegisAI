@@ -11,6 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react'
+
 import ThemeToggle from './ThemeToggle'
 
 const navigation = [
@@ -74,12 +75,13 @@ export default function Layout() {
         className={`${sidebarBase} ${isCollapsed ? 'w-20' : 'w-64'}`}
       >
 
-        {/* Logo + controls */}
+        {/* Logo + Controls */}
         <div className="flex items-center justify-between gap-2 px-4 py-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
+
           <div className="flex items-center gap-2 min-w-0">
             <Shield
               className="w-8 h-8 text-primary-600 dark:text-primary-400 shrink-0"
-              aria-hidden
+              aria-hidden="true"
             />
 
             {!isCollapsed && (
@@ -102,9 +104,9 @@ export default function Layout() {
               className={controlBtnClass}
             >
               {isCollapsed ? (
-                <ChevronRight className="w-5 h-5" aria-hidden />
+                <ChevronRight className="w-5 h-5" aria-hidden="true" />
               ) : (
-                <ChevronLeft className="w-5 h-5" aria-hidden />
+                <ChevronLeft className="w-5 h-5" aria-hidden="true" />
               )}
             </button>
           </div>
@@ -115,37 +117,38 @@ export default function Layout() {
           id="sidebar-nav"
           className="flex flex-col gap-1 p-4 flex-1 overflow-y-auto"
         >
-          {navigation.map((item) => {
-            const isActive = location.pathname === item.href
+          {navigation.map(({ name, href, icon: Icon }) => {
+            const isActive = location.pathname === href
 
             return (
               <Link
-                key={item.name}
-                to={item.href}
-                title={isCollapsed ? item.name : undefined}
+                key={name}
+                to={href}
+                title={isCollapsed ? name : undefined}
                 aria-current={isActive ? 'page' : undefined}
                 className={navLinkClass(isActive, isCollapsed)}
               >
-                <item.icon
+                <Icon
                   className="w-5 h-5 shrink-0"
-                  aria-hidden
+                  aria-hidden="true"
                 />
 
                 <span className={isCollapsed ? 'sr-only' : 'truncate'}>
-                  {item.name}
+                  {name}
                 </span>
               </Link>
             )
           })}
         </nav>
 
-        {/* User section */}
+        {/* User Section */}
         <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0">
           <div
             className={`flex items-center gap-2 ${
               isCollapsed ? 'justify-center' : 'justify-between'
             }`}
           >
+
             {!isCollapsed && (
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
@@ -165,13 +168,13 @@ export default function Layout() {
               title="Log out"
               className={logoutBtnClass}
             >
-              <LogOut className="w-5 h-5" aria-hidden />
+              <LogOut className="w-5 h-5" aria-hidden="true" />
             </button>
           </div>
         </div>
       </aside>
 
-      {/* Main content */}
+      {/* Main Content */}
       <div
         className={`flex-1 transition-[padding] duration-200 ${
           isCollapsed ? 'pl-20' : 'pl-64'
