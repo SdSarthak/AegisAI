@@ -7,6 +7,7 @@ from enum import Enum
 
 class SanitizationLevel(Enum):
     """Sanitization aggressiveness levels."""
+
     LOW = "low"  # Preserve intent, minimal risk
     MEDIUM = "medium"  # Balanced approach
     HIGH = "high"  # Aggressive, maximum security
@@ -49,22 +50,24 @@ class PromptSanitizer:
     def __init__(self, level: SanitizationLevel = SanitizationLevel.MEDIUM):
         """
         Initialize sanitizer with aggressiveness level.
-        
+
         Args:
             level: Sanitization level (LOW, MEDIUM, HIGH)
         """
         self.level = level
-        self.meta_patterns = [re.compile(p, re.IGNORECASE | re.MULTILINE) for p in self.META_INSTRUCTIONS]
+        self.meta_patterns = [
+            re.compile(p, re.IGNORECASE | re.MULTILINE) for p in self.META_INSTRUCTIONS
+        ]
         self.role_patterns = [re.compile(p, re.IGNORECASE) for p in self.ROLE_PHRASES]
         self.separator_patterns = [re.compile(p) for p in self.SEPARATORS]
 
     def sanitize(self, prompt: str) -> Tuple[str, str]:
         """
         Sanitize a prompt by removing meta-instructions and dangerous patterns.
-        
+
         Args:
             prompt: Original prompt to sanitize
-            
+
         Returns:
             Tuple of (sanitized_prompt, summary_of_changes)
         """
@@ -103,10 +106,10 @@ class PromptSanitizer:
         if sanitized != original:
             length_reduction = len(original) - len(sanitized)
             changes.append(f"Removed {length_reduction} characters")
-            
+
             if any(pattern.search(original) for pattern in self.meta_patterns):
                 changes.append("Removed meta-instructions")
-            
+
             if self.level == SanitizationLevel.HIGH and any(
                 pattern.search(original) for pattern in self.role_patterns
             ):
@@ -115,14 +118,16 @@ class PromptSanitizer:
         summary = "; ".join(changes) if changes else "No changes"
         return sanitized, summary
 
-    def wrap_safely(self, prompt: str, instruction: str = "Answer the following only:") -> str:
+    def wrap_safely(
+        self, prompt: str, instruction: str = "Answer the following only:"
+    ) -> str:
         """
         Wrap prompt in a safe instruction boundary.
-        
+
         Args:
             prompt: Sanitized prompt to wrap
             instruction: Safe instruction prefix
-            
+
         Returns:
             Wrapped prompt with clear boundaries
         """
@@ -131,10 +136,10 @@ class PromptSanitizer:
     def detect_injection_patterns(self, prompt: str) -> list:
         """
         Detect suspected injection patterns without removing them (for logging).
-        
+
         Args:
             prompt: Prompt to analyze
-            
+
         Returns:
             List of detected injection patterns
         """

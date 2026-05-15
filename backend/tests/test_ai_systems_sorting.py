@@ -65,24 +65,24 @@ class TestAISystemsSorting:
     def test_default_sort_returns_200(self, client):
         resp = client.get("/api/v1/ai-systems/")
         assert resp.status_code == 200
-        assert len(resp.json()) == 3
+        assert len(resp.json()["items"]) == 3
 
     def test_sort_by_name_asc(self, client):
         resp = client.get("/api/v1/ai-systems/?sort_by=name&order=asc")
         assert resp.status_code == 200
-        names = [s["name"] for s in resp.json()]
+        names = [s["name"] for s in resp.json()["items"]]
         assert names == sorted(names)
 
     def test_sort_by_name_desc(self, client):
         resp = client.get("/api/v1/ai-systems/?sort_by=name&order=desc")
         assert resp.status_code == 200
-        names = [s["name"] for s in resp.json()]
+        names = [s["name"] for s in resp.json()["items"]]
         assert names == sorted(names, reverse=True)
 
     def test_sort_by_compliance_score_desc(self, client):
         resp = client.get("/api/v1/ai-systems/?sort_by=compliance_score&order=desc")
         assert resp.status_code == 200
-        scores = [s["compliance_score"] for s in resp.json() if s["compliance_score"] is not None]
+        scores = [s["compliance_score"] for s in resp.json()["items"] if s["compliance_score"] is not None]
         assert scores == sorted(scores, reverse=True)
 
     def test_invalid_sort_by_returns_400(self, client):

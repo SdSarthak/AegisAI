@@ -9,6 +9,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem
+from app.models.audit_log import AISystemAuditLog
 from app.schemas.ai_system import (
     AISystemCreate,
     AISystemUpdate,
@@ -16,6 +17,7 @@ from app.schemas.ai_system import (
     BulkImportResponse,
     ComplianceStatusUpdateSchema,
 )
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
 
@@ -24,7 +26,7 @@ router = APIRouter()
 def create_ai_system(
     system_data: AISystemCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Create a new AI system for compliance tracking."""
     ai_system = AISystem(
@@ -33,7 +35,7 @@ def create_ai_system(
         description=system_data.description,
         version=system_data.version,
         use_case=system_data.use_case,
-        sector=system_data.sector
+        sector=system_data.sector,
     )
     db.add(ai_system)
     db.commit()
@@ -49,14 +51,16 @@ _SORTABLE_FIELDS = {
 }
 
 
-@router.get("/", response_model=List[AISystemResponse])
+@router.get("/", response_model=PaginatedResponse[AISystemResponse])
 def list_ai_systems(
     sort_by: Optional[str] = Query("created_at", description="Sort field: name, risk_level, compliance_score, created_at"),
     order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(50, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List all AI systems for the current user, with optional sorting."""
+    """List all AI systems for the current user, with optional sorting and pagination."""
     if sort_by not in _SORTABLE_FIELDS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -71,13 +75,18 @@ def list_ai_systems(
     column = _SORTABLE_FIELDS[sort_by]
     direction = asc(column) if order == "asc" else desc(column)
 
+    base_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
+    total = base_query.count()
+    offset = (page - 1) * limit
+
     systems = (
-        db.query(AISystem)
-        .filter(AISystem.owner_id == current_user.id)
+        base_query
         .order_by(direction)
+        .offset(offset)
+        .limit(limit)
         .all()
     )
-    return systems
+    return PaginatedResponse(items=systems, total=total, page=page, limit=limit)
 
 
 @router.post("/import", response_model=BulkImportResponse)
@@ -215,18 +224,18 @@ def export_ai_systems(
 def get_ai_system(
     system_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Get a specific AI system."""
-    system = db.query(AISystem).filter(
-        AISystem.id == system_id,
-        AISystem.owner_id == current_user.id
-    ).first()
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .first()
+    )
 
     if not system:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="AI system not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
         )
     return system
 
@@ -236,18 +245,18 @@ def update_ai_system(
     system_id: int,
     system_data: AISystemUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Update an AI system."""
-    system = db.query(AISystem).filter(
-        AISystem.id == system_id,
-        AISystem.owner_id == current_user.id
-    ).first()
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .first()
+    )
 
     if not system:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="AI system not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
         )
 
     update_data = system_data.model_dump(exclude_unset=True)
@@ -263,18 +272,18 @@ def update_ai_system(
 def delete_ai_system(
     system_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     """Delete an AI system."""
-    system = db.query(AISystem).filter(
-        AISystem.id == system_id,
-        AISystem.owner_id == current_user.id
-    ).first()
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .first()
+    )
 
     if not system:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="AI system not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
         )
 
     db.delete(system)
@@ -304,3 +313,43 @@ def update_ai_system_status(
     db.commit()
     db.refresh(system)
     return system
+
+
+
+@router.get("/{system_id}/history")
+def get_ai_system_history(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get audit history for a specific AI system."""
+
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id,
+    ).first()
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found",
+        )
+
+    history = (
+        db.query(AISystemAuditLog)
+        .filter(AISystemAuditLog.ai_system_id == system_id)
+        .order_by(desc(AISystemAuditLog.changed_at))
+        .all()
+    )
+
+    return [
+        {
+            "id": log.id,
+            "ai_system_id": log.ai_system_id,
+            "changed_by_id": log.changed_by_id,
+            "old_values": log.old_values,
+            "new_values": log.new_values,
+            "changed_at": log.changed_at,
+        }
+        for log in history
+    ]

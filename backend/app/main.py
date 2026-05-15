@@ -15,7 +15,7 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
 from app.core.database import engine, Base
-from app.api.v1 import api_router
+from app.api.v1 import api_router, badge
 import app.models  # ensure all ORM models are imported so tables are created
 
 # -------------------------------------------------------------------
@@ -41,9 +41,9 @@ async def lifespan(app: FastAPI):
         # Initialize database tables during application startup
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables initialized.")
-    except Exception as e:
-        logger.error(f"Failed to initialize database tables: {e}")
-        raise e
+    except Exception:
+        logger.exception("Failed to initialize database tables")
+        raise 
 
     yield  # Control is passed to FastAPI and the application runs
 
@@ -89,6 +89,7 @@ app.add_middleware(
 # Routing
 # -------------------------------------------------------------------
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+app.include_router(badge.router, prefix="/badge")
 
 # -------------------------------------------------------------------
 # Root & Health Endpoints
@@ -115,13 +116,14 @@ def health_check() -> Dict[str, Any]:
         # Perform a lightweight ping to the database to ensure connection is alive
         with engine.connect() as connection:
             connection.execute(text("SELECT 1"))
-    except SQLAlchemyError as e:
-        logger.error(f"Database health check failed: {e}")
+    except SQLAlchemyError:
+        logger.exception("Database health check failed")
         db_status = "disconnected"
         overall_status = "degraded"
 
     return {
         "status": overall_status,
         "database": db_status,
-        "version": app.version
+        "version": app.version,
+        "service": "AegisAI Backend"
     }
