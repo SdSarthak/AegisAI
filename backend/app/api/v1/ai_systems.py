@@ -353,3 +353,28 @@ def get_ai_system_history(
         }
         for log in history
     ]
+
+@router.post("/{system_id}/generate-report")
+def generate_report_endpoint(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id
+    ).first()
+
+    if not system:
+        raise HTTPException(status_code=404, detail="System not found")
+
+    from app.modules.rag.report_generator import generate_report
+
+    report = generate_report(
+        metadata=system.name,
+        risk=str(system.risk_level),
+        answers=system.description or "No description provided"
+    )
+
+    return {"report": report}
+
