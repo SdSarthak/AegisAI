@@ -4,11 +4,16 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+
+  // 'class' strategy: dark mode is driven by the `dark` class on <html>,
+  // applied and persisted by ThemeToggle.tsx.
+  darkMode: 'class',
+
   theme: {
     extend: {
       colors: {
         primary: {
-          50: '#eff6ff',
+          50:  '#eff6ff',
           100: '#dbeafe',
           200: '#bfdbfe',
           300: '#93c5fd',
@@ -19,6 +24,13 @@ export default {
           800: '#1e40af',
           900: '#1e3a8a',
         },
+      },
+      // Smooth background/color transitions when theme switches
+      transitionProperty: {
+        theme: 'background-color, border-color, color, fill, stroke',
+      },
+      transitionDuration: {
+        theme: '200ms',
       },
     },
   },
