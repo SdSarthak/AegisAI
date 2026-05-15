@@ -307,6 +307,20 @@ def classify_and_save(
     return result
 
 
+
+@router.get("/risk-factors", response_model=List[QuestionnaireRiskFactor])
+def get_questionnaire_risk_factors(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return the static questionnaire metadata used by the risk classification flow.
+
+    This does not query the database because these factors describe the
+    classification rules themselves, not a user's saved questionnaire answers.
+    Keep this list aligned with RiskClassificationRequest and classify_risk().
+    """
+    return QUESTIONNAIRE_RISK_FACTORS
+
 @router.post("/bulk", response_model=BulkClassificationResponse)
 def bulk_classify_systems(
     request: BulkClassificationRequest,
