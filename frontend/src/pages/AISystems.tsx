@@ -29,10 +29,11 @@ export default function AISystems() {
   const [sortBy, setSortBy] = useState('created_at')
   const [order, setOrder] = useState('desc')
 
-  const { data: systems = [], isLoading } = useQuery({
+  const { data: systemsData, isLoading } = useQuery({
     queryKey: ['ai-systems', sortBy, order],
     queryFn: () => aiSystemsApi.list({ sort_by: sortBy, order }),
   })
+  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 
   const createMutation = useMutation({
     mutationFn: aiSystemsApi.create,
