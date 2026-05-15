@@ -9,6 +9,9 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem, RiskLevel, RiskAssessment, ComplianceStatus
 from app.schemas.ai_system import RiskClassificationRequest, RiskClassificationResponse
+from app.modules.ticket_creator import create_tickets_for_classification
+from app.modules.gap_analysis import analyze_gaps, calculate_compliance_score
+from app.schemas.integration import GapAnalysisResponse, ComplianceGap
 
 router = APIRouter()
 
@@ -207,6 +210,15 @@ def classify_and_save(
     db.commit()
     db.refresh(system)
 
+    # Create tickets in integrated Jira/Linear if configured
+    try:
+        create_tickets_for_classification(
+            db, system, current_user, result.risk_level, data.model_dump()
+        )
+    except Exception as e:
+        # Log error but don't fail the classification
+        print(f"Error creating integration tickets: {e}")
+
     return result
 
 
@@ -280,4 +292,21 @@ def bulk_classify_systems(
         )
 
     db.commit()
+
+    # Create tickets in integrated Jira/Linear for HIGH/UNACCEPTABLE systems
+    for result_item in results:
+        if result_item.classification and result_item.classification.risk_level in [RiskLevel.HIGH, RiskLevel.UNACCEPTABLE]:
+            sys = db.query(AISystem).filter(AISystem.id == result_item.system_id).first()
+            if sys:
+                try:
+                    create_tickets_for_classification(
+                        db,
+                        sys,
+                        current_user,
+                        result_item.classification.risk_level,
+                        sys.questionnaire_responses or {},
+                    )
+                except Exception as e:
+                    print(f"Error creating tickets for system {result_item.system_id}: {e}")
+
     return BulkClassificationResponse(results=results)
