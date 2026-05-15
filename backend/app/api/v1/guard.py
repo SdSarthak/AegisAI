@@ -16,6 +16,9 @@ from threading import Lock
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 
@@ -106,3 +109,79 @@ def scan_prompt(
 def guard_health():
     """Check if the Guard module is available."""
     return {"module": "llm_guard", "status": "available"}
+
+
+# ── Feedback endpoint ─────────────────────────────────────────────────────────
+
+class FeedbackRequest(BaseModel):
+    prompt: str
+    guard_decision: str   # "allow" | "sanitize" | "block"
+    correct_label: str    # "benign" | "malicious"
+    note: str | None = None
+
+
+class FeedbackResponse(BaseModel):
+    id: int
+    feedback_type: str
+    message: str
+
+
+@router.post("/feedback", response_model=FeedbackResponse, status_code=status.HTTP_201_CREATED)
+def submit_feedback(
+    request: FeedbackRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Flag a Guard decision as wrong (false positive or false negative).
+
+    - false_positive : guard_decision=block, correct_label=benign
+    - false_negative : guard_decision=allow, correct_label=malicious
+    - correct        : user confirms the decision was right
+
+    Flagged prompts are queued for export via:
+        python backend/scripts/export_guard_feedback.py
+    """
+    # Validate inputs
+    valid_decisions = {"allow", "sanitize", "block"}
+    valid_labels = {"benign", "malicious"}
+
+    if request.guard_decision not in valid_decisions:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"guard_decision must be one of {valid_decisions}",
+        )
+    if request.correct_label not in valid_labels:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"correct_label must be one of {valid_labels}",
+        )
+
+    # Derive feedback type
+    if request.guard_decision == "block" and request.correct_label == "benign":
+        feedback_type = "false_positive"
+    elif request.guard_decision in ("allow", "sanitize") and request.correct_label == "malicious":
+        feedback_type = "false_negative"
+    else:
+        feedback_type = "correct"
+
+    from app.models.guard_feedback import GuardFeedback
+
+    fb = GuardFeedback(
+        user_id=current_user.id,
+        prompt=request.prompt,
+        guard_decision=request.guard_decision,
+        correct_label=request.correct_label,
+        feedback_type=feedback_type,
+        note=request.note,
+        exported="false",
+    )
+    db.add(fb)
+    db.commit()
+    db.refresh(fb)
+
+    return FeedbackResponse(
+        id=fb.id,
+        feedback_type=feedback_type,
+        message=f"Feedback recorded as '{feedback_type}'. Thank you for helping improve the Guard.",
+    )
