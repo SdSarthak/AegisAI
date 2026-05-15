@@ -5,7 +5,7 @@ from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 from app.core.security import create_access_token
-from app.models.user import User
+from app.models import User
 
 
 def _guard_result():

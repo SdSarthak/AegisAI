@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from io import BytesIO
 import pdfplumber
 
-from app.models.user import User
+from app.models import User
 from app.models.ai_system import AISystem, RiskLevel, ComplianceStatus
 from app.models.document import Document, DocumentType, DocumentStatus
 from app.core.security import create_access_token

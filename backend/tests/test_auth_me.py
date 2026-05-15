@@ -9,7 +9,8 @@ from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.core.database import Base, get_db
 from app.core.security import get_current_user
-from app.models.user import User, SubscriptionTier
+from app.models import User
+from app.models.user import SubscriptionTier
 
 
 def _build_test_session_local(database_url: str):
