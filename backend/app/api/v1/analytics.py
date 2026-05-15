@@ -1,3 +1,4 @@
+"""this module contains analytics-related functions and utilities"""
 """
 Analytics API — compliance score timelines and aggregate stats.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
