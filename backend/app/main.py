@@ -127,3 +127,8 @@ def health_check() -> Dict[str, Any]:
         "version": app.version,
         "service": "AegisAI Backend"
     }
+"""New route in fast api to confirm everything is working end to end"""
+app = FastAPI()
+@app.get("/ping")
+def ping():
+    return{"message":"pong"}
