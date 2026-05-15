@@ -22,8 +22,11 @@ export default function Login() {
       const user = await authApi.getMe()
       setAuth(tokenData.access_token, user)
       navigate('/')
-    } catch {
-      setError('Invalid email or password')
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        'Login failed. Please check your credentials and try again.'
+      setError(message)
     } finally {
       setLoading(false)
     }

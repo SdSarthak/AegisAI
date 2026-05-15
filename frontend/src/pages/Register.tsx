@@ -22,8 +22,11 @@ export default function Register() {
     try {
       await authApi.register(formData)
       navigate('/login')
-    } catch {
-      setError('Registration failed. Email may already be in use.')
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        'Registration failed. Please try again.'
+      setError(message)
     } finally {
       setLoading(false)
     }
