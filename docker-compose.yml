@@ -39,6 +39,8 @@ services:
     container_name: aegisai_frontend
     ports:
       - "5173:5173"
+    environment:
+      - BACKEND_URL=http://backend:8000
     volumes:
       - ./frontend:/app
       - /app/node_modules
