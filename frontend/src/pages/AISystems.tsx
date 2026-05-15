@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X } from 'lucide-react'
+import { AISystemSkeleton } from '../components/skeletons/Skeleton'
 
 interface AISystem {
   id: number
@@ -217,7 +218,11 @@ export default function AISystems() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-500">Loading...</div>
+        <div className="grid gap-4">
+          <AISystemSkeleton />
+          <AISystemSkeleton />
+          <AISystemSkeleton />
+        </div>
       ) : filteredSystems.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />

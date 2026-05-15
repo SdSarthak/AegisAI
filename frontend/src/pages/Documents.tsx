@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { FileText, Download, Trash2, Plus, Edit } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
+import { ReportItemSkeleton } from '../components/skeletons/Skeleton'
 
 interface Document {
   id: number
@@ -127,7 +128,11 @@ export default function Documents() {
       )}
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-500">Loading...</div>
+        <div className="grid gap-4">
+          <ReportItemSkeleton />
+          <ReportItemSkeleton />
+          <ReportItemSkeleton />
+        </div>
       ) : documents.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />

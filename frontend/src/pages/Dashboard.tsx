@@ -2,17 +2,20 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
+import { DashboardStatSkeleton, DashboardCardSkeleton } from '../components/skeletons/Skeleton'
 
 export default function Dashboard() {
-  const { data: systems = [] } = useQuery({
+  const { data: systems = [], isLoading: isLoadingSystems } = useQuery({
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
 
-  const { data: documents = [] } = useQuery({
+  const { data: documents = [], isLoading: isLoadingDocs } = useQuery({
     queryKey: ['documents'],
     queryFn: documentsApi.list,
   })
+
+  const isLoadingStats = isLoadingSystems || isLoadingDocs;
 
   const stats = [
     {
@@ -50,22 +53,31 @@ export default function Dashboard() {
 
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
-          <div
-            key={stat.name}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
-          >
-            <div className="flex items-center gap-4">
-              <div className={`p-3 rounded-lg ${stat.color}`}>
-                <stat.icon className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">{stat.name}</p>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+        {isLoadingStats ? (
+          <>
+            <DashboardStatSkeleton />
+            <DashboardStatSkeleton />
+            <DashboardStatSkeleton />
+            <DashboardStatSkeleton />
+          </>
+        ) : (
+          stats.map((stat) => (
+            <div
+              key={stat.name}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
+            >
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-lg ${stat.color}`}>
+                  <stat.icon className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600">{stat.name}</p>
+                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {/* Quick Actions */}
@@ -99,7 +111,13 @@ export default function Dashboard() {
       {/* Recent AI Systems */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Your AI Systems</h2>
-        {systems.length === 0 ? (
+        {isLoadingSystems ? (
+          <div className="space-y-3">
+            <DashboardCardSkeleton />
+            <DashboardCardSkeleton />
+            <DashboardCardSkeleton />
+          </div>
+        ) : systems.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <Bot className="w-12 h-12 mx-auto mb-3 text-gray-300" />
             <p>No AI systems registered yet</p>

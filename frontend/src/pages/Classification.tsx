@@ -6,6 +6,7 @@ import { AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react'
 import ComplianceChecklist, {
   ChecklistItem,
 } from '../components/ComplianceChecklist'
+import { IssueDetailSkeleton } from '../components/skeletons/Skeleton'
 
 interface ClassificationResult {
   risk_level: string
@@ -348,7 +349,9 @@ export default function Classification() {
 
         {/* Results */}
         <div>
-          {result ? (
+          {classifyMutation.isPending ? (
+            <IssueDetailSkeleton />
+          ) : result ? (
             <div className={`rounded-xl border p-6 ${getRiskColor(result.risk_level)}`}>
               <div className="flex items-center gap-4 mb-6">
                 {getRiskIcon(result.risk_level)}
