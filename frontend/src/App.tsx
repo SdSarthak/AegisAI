@@ -1,3 +1,4 @@
+import NotFound from "./pages/NotFound";
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import Layout from './components/Layout'
@@ -40,6 +41,7 @@ function App() {
         }}
       />
       <Routes>
+        <Route path="*" element={<NotFound />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route
