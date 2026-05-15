@@ -17,6 +17,7 @@ from app.models.user import User
 from app.core.database import get_db
 from sqlalchemy.orm import Session
 from app.models.rag_feedback import RAGFeedback
+from app.models.rag_query import RagQuery
 from app.models.user import SubscriptionTier
 from typing import Optional
 
@@ -69,6 +70,13 @@ def query_knowledge_base(
             source_chunks=sources,
         )
         db.add(feedback)
+        rag_query = RagQuery(
+            user_id=current_user.id,
+            question=request.question,
+            answer_summary=str(result.get("result", ""))[:200],
+            source_count=len(sources),
+        )
+        db.add(rag_query)
         db.commit()
         db.refresh(feedback)
         answer_id = feedback.id
@@ -171,3 +179,36 @@ def get_low_quality_chunks(
             low_quality.append({"chunk": chunk, "thumbs_down": c["thumbs_down"], "total": c["total"], "ratio": ratio})
 
     return {"threshold": threshold, "low_quality_chunks": low_quality}
+
+
+@router.get("/history")
+def get_rag_history(
+    page: int = 1,
+    page_size: int = 10,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return paginated list of the current user's past RAG queries."""
+    offset = (page - 1) * page_size
+    queries = (
+        db.query(RagQuery)
+        .filter(RagQuery.user_id == current_user.id)
+        .order_by(RagQuery.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+    return {
+        "page": page,
+        "page_size": page_size,
+        "results": [
+            {
+                "id": q.id,
+                "question": q.question,
+                "answer_summary": q.answer_summary,
+                "source_count": q.source_count,
+                "created_at": q.created_at,
+            }
+            for q in queries
+        ],
+    }
