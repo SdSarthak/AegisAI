@@ -14,10 +14,10 @@ import {
 import ThemeToggle from './ThemeToggle'
 
 const navigation = [
-  { name: 'Dashboard',           href: '/',               icon: LayoutDashboard },
-  { name: 'AI Systems',          href: '/ai-systems',     icon: Bot             },
-  { name: 'Risk Classification', href: '/classification', icon: FileCheck       },
-  { name: 'Documents',           href: '/documents',      icon: FileText        },
+  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
+  { name: 'AI Systems', href: '/ai-systems', icon: Bot },
+  { name: 'Risk Classification', href: '/classification', icon: FileCheck },
+  { name: 'Documents', href: '/documents', icon: FileText },
 ]
 
 const sidebarBase = [
@@ -42,33 +42,46 @@ const logoutBtnClass = [
 ].join(' ')
 
 function navLinkClass(isActive: boolean, isCollapsed: boolean): string {
-  const base = 'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500'
-  const active = 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
-  const inactive = 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
+  const base =
+    'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500'
+
+  const active =
+    'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+
+  const inactive =
+    'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
+
   const collapsed = isCollapsed ? 'justify-center' : ''
+
   return [base, isActive ? active : inactive, collapsed].join(' ')
 }
 
 export default function Layout() {
   const location = useLocation()
   const { user, logout } = useAuthStore()
+
   const displayName = user?.full_name || user?.email || 'Demo User'
   const companyName = user?.company_name || 'Free Plan'
+
   const [isCollapsed, setIsCollapsed] = useState(false)
 
   return (
     <div className="min-h-screen flex bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
 
-      {/* ── Sidebar ────────────────────────────────────────────────────── */}
+      {/* Sidebar */}
       <aside
         aria-label="Sidebar navigation"
-        className={sidebarBase + (isCollapsed ? ' w-20' : ' w-64')}
+        className={`${sidebarBase} ${isCollapsed ? 'w-20' : 'w-64'}`}
       >
 
         {/* Logo + controls */}
         <div className="flex items-center justify-between gap-2 px-4 py-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <Shield className="w-8 h-8 text-primary-600 dark:text-primary-400 shrink-0" aria-hidden />
+            <Shield
+              className="w-8 h-8 text-primary-600 dark:text-primary-400 shrink-0"
+              aria-hidden
+            />
+
             {!isCollapsed && (
               <span className="text-lg font-semibold text-gray-900 dark:text-white truncate">
                 AI Compliance
@@ -78,6 +91,7 @@ export default function Layout() {
 
           <div className="flex items-center gap-1 shrink-0">
             <ThemeToggle />
+
             <button
               type="button"
               onClick={() => setIsCollapsed((prev) => !prev)}
@@ -87,17 +101,23 @@ export default function Layout() {
               title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               className={controlBtnClass}
             >
-              {isCollapsed
-                ? <ChevronRight className="w-5 h-5" aria-hidden />
-                : <ChevronLeft  className="w-5 h-5" aria-hidden />}
+              {isCollapsed ? (
+                <ChevronRight className="w-5 h-5" aria-hidden />
+              ) : (
+                <ChevronLeft className="w-5 h-5" aria-hidden />
+              )}
             </button>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav id="sidebar-nav" className="flex flex-col gap-1 p-4 flex-1 overflow-y-auto">
+        <nav
+          id="sidebar-nav"
+          className="flex flex-col gap-1 p-4 flex-1 overflow-y-auto"
+        >
           {navigation.map((item) => {
             const isActive = location.pathname === item.href
+
             return (
               <Link
                 key={item.name}
@@ -106,8 +126,14 @@ export default function Layout() {
                 aria-current={isActive ? 'page' : undefined}
                 className={navLinkClass(isActive, isCollapsed)}
               >
-                <item.icon className="w-5 h-5 shrink-0" aria-hidden />
-                <span className={isCollapsed ? 'sr-only' : 'truncate'}>{item.name}</span>
+                <item.icon
+                  className="w-5 h-5 shrink-0"
+                  aria-hidden
+                />
+
+                <span className={isCollapsed ? 'sr-only' : 'truncate'}>
+                  {item.name}
+                </span>
               </Link>
             )
           })}
@@ -115,17 +141,23 @@ export default function Layout() {
 
         {/* User section */}
         <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0">
-          <div className={'flex items-center gap-2 ' + (isCollapsed ? 'justify-center' : 'justify-between')}>
+          <div
+            className={`flex items-center gap-2 ${
+              isCollapsed ? 'justify-center' : 'justify-between'
+            }`}
+          >
             {!isCollapsed && (
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
                   {displayName}
                 </p>
+
                 <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                   {companyName}
                 </p>
               </div>
             )}
+
             <button
               type="button"
               onClick={logout}
@@ -139,13 +171,16 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* ── Main content ──────────────────────────────────────────────── */}
-      <div className={'flex-1 transition-[padding] duration-200 ' + (isCollapsed ? 'pl-20' : 'pl-64')}>
+      {/* Main content */}
+      <div
+        className={`flex-1 transition-[padding] duration-200 ${
+          isCollapsed ? 'pl-20' : 'pl-64'
+        }`}
+      >
         <main className="p-8 min-h-screen text-gray-900 dark:text-gray-100">
           <Outlet />
         </main>
       </div>
-
     </div>
   )
 }
