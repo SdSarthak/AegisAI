@@ -4,15 +4,17 @@ import { aiSystemsApi, documentsApi } from '../services/api'
 import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 
 export default function Dashboard() {
-  const { data: systems = [] } = useQuery({
+  const { data: systemsData } = useQuery({
     queryKey: ['ai-systems'],
     queryFn: aiSystemsApi.list,
   })
+  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 
-  const { data: documents = [] } = useQuery({
+  const { data: documentsData } = useQuery({
     queryKey: ['documents'],
     queryFn: documentsApi.list,
   })
+  const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
 
   const stats = [
     {
