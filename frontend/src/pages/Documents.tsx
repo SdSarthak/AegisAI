@@ -33,7 +33,7 @@ export default function Documents() {
 
   const { data: systems = [] } = useQuery({
     queryKey: ['ai-systems'],
-    queryFn: aiSystemsApi.list,
+    queryFn: () => aiSystemsApi.list(),
   })
 
   const generateMutation = useMutation({

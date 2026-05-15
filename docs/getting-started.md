@@ -394,3 +394,23 @@ python -m app.modules.guard.train --all --epochs 3
 ```
 
 Training takes ~30 min on CPU, ~5 min on GPU. Model is saved to `backend/app/modules/guard/models/intent_classifier/` and picked up automatically on restart.
+## Ollama Setup (Free, No API Key Required)
+
+If you don't have an OpenAI API key, you can run AegisAI locally using Ollama.
+
+### Prerequisites
+- Docker & Docker Compose installed
+
+### Steps
+
+1. Start the stack with Ollama override:
+```bash
+   docker-compose -f docker-compose.yml -f docker-compose.override.yml up
+```
+
+2. Pull the model (first time only):
+```bash
+   docker exec aegisai-ollama ollama pull llama3.2
+```
+
+3. The backend will automatically connect to Ollama at:
