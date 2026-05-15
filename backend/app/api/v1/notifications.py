@@ -2,29 +2,52 @@
 Notifications API — in-app event feed for users.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (help wanted):
-  - Implement GET /notifications — return paginated list of notifications for
-    the current user, newest first. Support ?unread_only=true query param.
-  - Implement POST /notifications/read — accept {"ids": [1, 2, 3]} body and
-    mark those notifications as read (is_read=True).
-  - Implement DELETE /notifications/{id} — delete a single notification
-    (must belong to the current user).
-  - Add a helper function `create_notification(db, user_id, type, title, message)`
-    that other modules can import to emit notifications.
-  - Acceptance criteria: after a Guard scan is blocked, a new GUARD_BLOCK
-    notification appears in GET /notifications for that user.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.schemas.notification import NotificationResponse, NotificationMarkRead
+from app.models.notification import Notification
+from app.schemas.notification import (
+    NotificationResponse,
+    NotificationMarkRead,
+)
 from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
+
+
+def create_notification(
+    db: Session,
+    user_id: int,
+    type: str,
+    title: str,
+    message: str,
+    resource_type: str | None = None,
+    resource_id: int | None = None,
+):
+    """
+    Helper function to create notifications.
+    """
+
+    notification = Notification(
+        user_id=user_id,
+        notification_type=type,
+        title=title,
+        message=message,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        is_read=False,
+    )
+
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
+
+    return notification
 
 
 @router.get("", response_model=PaginatedResponse[NotificationResponse])
@@ -37,13 +60,29 @@ def list_notifications(
 ):
     """
     Return notifications for the current user.
-
-    TODO (help wanted): query the notifications table filtered by user_id,
-    optionally filter is_read=False, order by created_at DESC.
     """
-    # TODO: implement — replace with real DB query
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+
+    query = db.query(Notification).filter(
+        Notification.user_id == current_user.id
+    )
+
+    if unread_only:
+        query = query.filter(Notification.is_read == False)
+
+    total = query.count()
+
+    notifications = (
+        query.order_by(Notification.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+
+    return PaginatedResponse(
+        items=notifications,
+        total=total,
+        page=page,
+        limit=limit,
     )
 
 
@@ -55,14 +94,19 @@ def mark_notifications_read(
 ):
     """
     Mark a list of notification IDs as read.
-
-    TODO (help wanted): bulk-update is_read=True for the given IDs,
-    ensuring they belong to current_user (prevent IDOR).
     """
-    # TODO: implement
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+
+    db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.id.in_(body.ids),
+    ).update(
+        {"is_read": True},
+        synchronize_session=False,
     )
+
+    db.commit()
+
+    return None
 
 
 @router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -73,10 +117,20 @@ def delete_notification(
 ):
     """
     Delete a single notification.
-
-    TODO (help wanted): fetch by ID + user_id, return 404 if not found, then delete.
     """
-    # TODO: implement
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
-    )
+
+    notification = db.query(Notification).filter(
+        Notification.id == notification_id,
+        Notification.user_id == current_user.id,
+    ).first()
+
+    if not notification:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification not found",
+        )
+
+    db.delete(notification)
+    db.commit()
+
+    return None
