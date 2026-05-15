@@ -8,6 +8,7 @@ import AISystems from './pages/AISystems'
 import Classification from './pages/Classification'
 import Documents from './pages/Documents'
 import Notifications from './pages/Notifications'
+import NotFound from './pages/NotFound'
 import Analytics from './pages/Analytics'
 import { Toaster } from 'react-hot-toast'
 
@@ -57,6 +58,7 @@ function App() {
           <Route path="documents" element={<Documents />} />
           <Route path="notifications" element={<Notifications />} />
         </Route>
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </>
   )
