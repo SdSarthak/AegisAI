@@ -20,29 +20,52 @@ const navigation = [
   { name: 'Documents',           href: '/documents',      icon: FileText        },
 ]
 
+const sidebarBase = [
+  'fixed inset-y-0 left-0 z-30 flex flex-col',
+  'bg-white dark:bg-gray-900',
+  'border-r border-gray-200 dark:border-gray-700',
+  'transition-[width] duration-200 overflow-hidden',
+].join(' ')
+
+const controlBtnClass = [
+  'p-2 rounded-lg transition-colors duration-150',
+  'text-gray-500 hover:text-gray-700 hover:bg-gray-100',
+  'dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+].join(' ')
+
+const logoutBtnClass = [
+  'p-2 rounded-lg transition-colors duration-150 shrink-0',
+  'text-gray-400 hover:text-gray-600 hover:bg-gray-100',
+  'dark:text-gray-500 dark:hover:text-gray-200 dark:hover:bg-gray-700',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500',
+].join(' ')
+
+function navLinkClass(isActive: boolean, isCollapsed: boolean): string {
+  const base = 'flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500'
+  const active = 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
+  const inactive = 'text-gray-600 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200'
+  const collapsed = isCollapsed ? 'justify-center' : ''
+  return [base, isActive ? active : inactive, collapsed].join(' ')
+}
+
 export default function Layout() {
-  const location    = useLocation()
+  const location = useLocation()
   const { user, logout } = useAuthStore()
   const displayName = user?.full_name || user?.email || 'Demo User'
   const companyName = user?.company_name || 'Free Plan'
   const [isCollapsed, setIsCollapsed] = useState(false)
 
   return (
-    // transition-theme is a custom utility defined in tailwind.config.js
     <div className="min-h-screen flex bg-gray-50 dark:bg-gray-950 transition-colors duration-200">
 
-      {/* ── Sidebar ──────────────────────────────────────────────────────── */}
+      {/* ── Sidebar ────────────────────────────────────────────────────── */}
       <aside
         aria-label="Sidebar navigation"
-        className={`
-          fixed inset-y-0 left-0 z-30 flex flex-col
-          bg-white dark:bg-gray-900
-          border-r border-gray-200 dark:border-gray-700
-          transition-[width] duration-200 overflow-hidden
-          ${isCollapsed ? 'w-20' : 'w-64'}
-        `}
+        className={sidebarBase + (isCollapsed ? ' w-20' : ' w-64')}
       >
-        {/* ── Logo + controls ──────────────────────────────────────────── */}
+
+        {/* Logo + controls */}
         <div className="flex items-center justify-between gap-2 px-4 py-4 border-b border-gray-200 dark:border-gray-700 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <Shield className="w-8 h-8 text-primary-600 dark:text-primary-400 shrink-0" aria-hidden />
@@ -55,7 +78,6 @@ export default function Layout() {
 
           <div className="flex items-center gap-1 shrink-0">
             <ThemeToggle />
-
             <button
               type="button"
               onClick={() => setIsCollapsed((prev) => !prev)}
@@ -63,12 +85,7 @@ export default function Layout() {
               aria-controls="sidebar-nav"
               aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              className="
-                p-2 rounded-lg transition-colors duration-150
-                text-gray-500 hover:text-gray-700 hover:bg-gray-100
-                dark:text-gray-400 dark:hover:text-gray-200 dark:hover:bg-gray-700
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500
-              "
+              className={controlBtnClass}
             >
               {isCollapsed
                 ? <ChevronRight className="w-5 h-5" aria-hidden />
@@ -77,7 +94,7 @@ export default function Layout() {
           </div>
         </div>
 
-        {/* ── Navigation ───────────────────────────────────────────────── */}
+        {/* Navigation */}
         <nav id="sidebar-nav" className="flex flex-col gap-1 p-4 flex-1 overflow-y-auto">
           {navigation.map((item) => {
             const isActive = location.pathname === item.href
@@ -87,16 +104,7 @@ export default function Layout() {
                 to={item.href}
                 title={isCollapsed ? item.name : undefined}
                 aria-current={isActive ? 'page' : undefined}
-                className={`
-                  flex items-center gap-3 px-3 py-2 rounded-lg transition-colors duration-150
-                  focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500
-                  ${isCollapsed ? 'justify-center' : ''}
-                  ${isActive
-                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-900/30 dark:text-primary-300'
-                    : `text-gray-600 hover:bg-gray-100
-                       dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-200`
-                  }
-                `}
+                className={navLinkClass(isActive, isCollapsed)}
               >
                 <item.icon className="w-5 h-5 shrink-0" aria-hidden />
                 <span className={isCollapsed ? 'sr-only' : 'truncate'}>{item.name}</span>
@@ -105,9 +113,9 @@ export default function Layout() {
           })}
         </nav>
 
-        {/* ── User section ─────────────────────────────────────────────── */}
+        {/* User section */}
         <div className="p-4 border-t border-gray-200 dark:border-gray-700 shrink-0">
-          <div className={`flex items-center gap-2 ${isCollapsed ? 'justify-center' : 'justify-between'}`}>
+          <div className={'flex items-center gap-2 ' + (isCollapsed ? 'justify-center' : 'justify-between')}>
             {!isCollapsed && (
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
@@ -118,18 +126,12 @@ export default function Layout() {
                 </p>
               </div>
             )}
-
             <button
               type="button"
               onClick={logout}
               aria-label="Log out"
               title="Log out"
-              className="
-                p-2 rounded-lg transition-colors duration-150 shrink-0
-                text-gray-400 hover:text-gray-600 hover:bg-gray-100
-                dark:text-gray-500 dark:hover:text-gray-200 dark:hover:bg-gray-700
-                focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500
-              "
+              className={logoutBtnClass}
             >
               <LogOut className="w-5 h-5" aria-hidden />
             </button>
@@ -137,8 +139,8 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* ── Main content ─────────────────────────────────────────────────── */}
-      <div className={`flex-1 transition-[padding] duration-200 ${isCollapsed ? 'pl-20' : 'pl-64'}`}>
+      {/* ── Main content ──────────────────────────────────────────────── */}
+      <div className={'flex-1 transition-[padding] duration-200 ' + (isCollapsed ? 'pl-20' : 'pl-64')}>
         <main className="p-8 min-h-screen text-gray-900 dark:text-gray-100">
           <Outlet />
         </main>
