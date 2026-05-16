@@ -3,6 +3,8 @@ import { Save, Eye, EyeOff } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+import api from '../services/api'
 
 interface DocumentEditorProps {
   documentId: number
@@ -20,26 +22,18 @@ export default function DocumentEditor({
   const [content, setContent] = useState(initialContent)
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
 
   const handleSave = useCallback(async () => {
     setIsSaving(true)
-    // Call PUT endpoint
+    setSaveError(null)
     try {
-      const response = await fetch(`/api/v1/documents/${documentId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          // Add auth header if needed - check how other API calls are done in your app
-        },
-        body: JSON.stringify({ content })
-      })
-
-      if (response.ok) {
-        onSave?.(content)
-      }
+      await api.put(`/documents/${documentId}`, { content })
+      onSave?.(content)
     } catch (error) {
       console.error('Save failed:', error)
+      setSaveError('Save failed. Your changes were not persisted.')
     }
     setIsSaving(false)
   }, [content, documentId, onSave])
@@ -76,6 +70,9 @@ export default function DocumentEditor({
           {showPreview ? 'Edit' : 'Preview'}
         </button>
         <div className="flex items-center gap-3">
+          {saveError && (
+            <span className="text-sm text-red-600">{saveError}</span>
+          )}
           {isSaving && <span className="text-sm text-gray-500">Saving...</span>}
           <button
             type="button"
@@ -101,7 +98,7 @@ export default function DocumentEditor({
       <div className="flex-1 overflow-auto">
         {showPreview ? (
           <div className="prose max-w-none p-6">
-            <div dangerouslySetInnerHTML={{ __html: marked(content) }} />
+            <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked(content) as string) }} />
           </div>
         ) : (
           <div className="h-full">
