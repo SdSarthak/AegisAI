@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1 import auth, ai_systems, documents, classification, guard, rag, badge
+from app.api.v1 import auth, ai_systems, documents, classification, guard, badge
 
 api_router = APIRouter()
 
@@ -11,4 +11,10 @@ api_router.include_router(
 )
 api_router.include_router(documents.router, prefix="/documents", tags=["Documents"])
 api_router.include_router(guard.router, prefix="/guard", tags=["LLM Guard"])
-api_router.include_router(rag.router, prefix="/rag", tags=["RAG Intelligence"])
+
+try:
+    from app.api.v1 import rag
+    api_router.include_router(rag.router, prefix="/rag", tags=["RAG Intelligence"])
+except ImportError:
+    # LangChain or other RAG dependencies are not installed in this environment.
+    rag = None
