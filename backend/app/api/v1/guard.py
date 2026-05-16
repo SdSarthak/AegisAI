@@ -12,6 +12,7 @@ TODO for contributors (medium difficulty):
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -20,6 +21,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 _RATE_LIMIT_REQUESTS = 60
@@ -109,9 +111,12 @@ def scan_prompt(
             ),
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
-        )
+        logger.exception("Guard scan failed")
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="An internal error occurred while processing the Guard scan.",
+    )
 
 
 @router.get("/health", tags=["LLM Guard"])
@@ -185,7 +190,9 @@ def bulk_scan_prompts(
             processed=len(results),
         )
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+        logger.exception("Bulk guard scan failed")
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="An internal error occurred while processing the batch Guard scan.",
+    )
