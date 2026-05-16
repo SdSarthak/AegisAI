@@ -101,7 +101,7 @@ export default function DocumentEditor({
       <div className="flex-1 overflow-auto">
         {showPreview ? (
           <div className="prose max-w-none p-6">
-            <div dangerouslySetInnerHTML={{ __html: marked(content) }} />
+            <div dangerouslySetInnerHTML={{ __html: marked.parse(content, { async: false }) }} />
           </div>
         ) : (
           <div className="h-full">
