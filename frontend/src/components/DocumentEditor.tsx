@@ -20,10 +20,12 @@ export default function DocumentEditor({
   const [content, setContent] = useState(initialContent)
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
 
   const handleSave = useCallback(async () => {
     setIsSaving(true)
+    setSaveError(null)
     // Call PUT endpoint
     try {
       const response = await fetch(`/api/v1/documents/${documentId}`, {
@@ -37,9 +39,12 @@ export default function DocumentEditor({
 
       if (response.ok) {
         onSave?.(content)
+      } else {
+        setSaveError('Save failed. Your changes were not persisted.')
       }
     } catch (error) {
       console.error('Save failed:', error)
+      setSaveError('Save failed. Your changes were not persisted.')
     }
     setIsSaving(false)
   }, [content, documentId, onSave])
@@ -76,6 +81,7 @@ export default function DocumentEditor({
           {showPreview ? 'Edit' : 'Preview'}
         </button>
         <div className="flex items-center gap-3">
+          {saveError && <span className="text-sm text-red-600">{saveError}</span>}
           {isSaving && <span className="text-sm text-gray-500">Saving...</span>}
           <button
             type="button"
