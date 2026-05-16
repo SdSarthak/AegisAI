@@ -3,6 +3,7 @@ import { Save, Eye, EyeOff } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 interface DocumentEditorProps {
   documentId: number
@@ -101,7 +102,7 @@ export default function DocumentEditor({
       <div className="flex-1 overflow-auto">
         {showPreview ? (
           <div className="prose max-w-none p-6">
-            <div dangerouslySetInnerHTML={{ __html: marked(content) }} />
+            <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(marked(content) as string) }} />
           </div>
         ) : (
           <div className="h-full">
