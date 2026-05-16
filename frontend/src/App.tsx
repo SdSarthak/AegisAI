@@ -1,3 +1,4 @@
+import NotFound from './pages/NotFound';
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
 import Layout from './components/Layout'
@@ -56,6 +57,7 @@ function App() {
           <Route path="classification/:systemId?" element={<Classification />} />
           <Route path="documents" element={<Documents />} />
           <Route path="notifications" element={<Notifications />} />
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Routes>
     </>
