@@ -22,8 +22,8 @@ export default function DocumentEditor({
   const [content, setContent] = useState(initialContent)
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
-  const [saveError, setSaveError] = useState('')
   const previewHtml = useMemo(
     () => DOMPurify.sanitize(marked.parse(content, { async: false }) as string),
     [content]
@@ -31,18 +31,16 @@ export default function DocumentEditor({
 
   const handleSave = useCallback(async () => {
     setIsSaving(true)
+    setSaveError(null)
     try {
       await api.put(`/documents/${documentId}`, { content })
       onSave?.(content)
-      setSaveError('')
     } catch (error) {
-  console.error('Save failed:', error)
-  setSaveError(
-    error instanceof Error
-      ? error.message
-      : 'Failed to save changes'
-  )
-}
+      console.error('Save failed:', error)
+      setSaveError(
+        error instanceof Error ? error.message : 'Failed to save changes'
+      )
+    }
     setIsSaving(false)
   }, [content, documentId, onSave])
 
@@ -78,16 +76,8 @@ export default function DocumentEditor({
           {showPreview ? 'Edit' : 'Preview'}
         </button>
         <div className="flex items-center gap-3">
-         {saveError && (
-            <span className="text-sm text-red-500">
-              {saveError}
-            </span>
-          )}
-          {isSaving && (
-            <span className="text-sm text-gray-500">
-              Saving...
-            </span>
-          )} 
+          {saveError && <span className="text-sm text-red-600">{saveError}</span>}
+          {isSaving && <span className="text-sm text-gray-500">Saving...</span>}
           <button
             type="button"
             onClick={handleSave}
