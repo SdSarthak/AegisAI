@@ -50,22 +50,38 @@ _SORTABLE_FIELDS = {
     "created_at": AISystem.created_at,
 }
 
-
 @router.get("/", response_model=PaginatedResponse[AISystemResponse])
 def list_ai_systems(
-    sort_by: Optional[str] = Query("created_at", description="Sort field: name, risk_level, compliance_score, created_at"),
-    order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    limit: int = Query(50, ge=1, le=100, description="Items per page"),
+    sort_by: Optional[str] = Query(
+        "created_at",
+        description="Sort field: name, risk_level, compliance_score, created_at"
+    ),
+    order: Optional[str] = Query(
+        "desc",
+        description="Sort direction: asc, desc"
+    ),
+    skip: int = Query(
+        0,
+        ge=0,
+        description="Number of records to skip"
+    ),
+    limit: int = Query(
+        20,
+        ge=1,
+        le=100,
+        description="Maximum records to return"
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List all AI systems for the current user, with optional sorting and pagination."""
+    """List all AI systems for the current user with optional sorting and pagination."""
+
     if sort_by not in _SORTABLE_FIELDS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid sort_by '{sort_by}'. Allowed: {', '.join(sorted(_SORTABLE_FIELDS))}",
         )
+
     if order not in ("asc", "desc"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -75,18 +91,26 @@ def list_ai_systems(
     column = _SORTABLE_FIELDS[sort_by]
     direction = asc(column) if order == "asc" else desc(column)
 
-    base_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
+    base_query = db.query(AISystem).filter(
+        AISystem.owner_id == current_user.id
+    )
+
     total = base_query.count()
-    offset = (page - 1) * limit
 
     systems = (
         base_query
         .order_by(direction)
-        .offset(offset)
+        .offset(skip)
         .limit(limit)
         .all()
     )
-    return PaginatedResponse(items=systems, total=total, page=page, limit=limit)
+
+    return PaginatedResponse(
+        items=systems,
+        total=total,
+        page=(skip // limit) + 1,
+        limit=limit
+    )
 
 
 @router.post("/import", response_model=BulkImportResponse)
