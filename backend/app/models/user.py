@@ -37,3 +37,10 @@ class User(Base):
     # Relationships
     ai_systems = relationship("AISystem", back_populates="owner")
     documents = relationship("Document", back_populates="owner")
+
+    # Notifications relationship
+    notifications = relationship(
+        "Notification",
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
