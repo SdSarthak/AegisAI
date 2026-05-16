@@ -32,12 +32,34 @@ from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token
 
 
 class ChangePasswordRequest(BaseModel):
+    """
+    Request schema for changing the authenticated user's password.
+
+    Attributes:
+        current_password: The user's current password for verification.
+        new_password: The desired new password, subject to strength validation.
+    """
     current_password: str
     new_password: str
 
     @field_validator("new_password")
     @classmethod
     def validate_new_password(cls, v: str) -> str:
+        """
+        Validate that the new password meets all security requirements.
+
+        Requirements: min 8 characters, one uppercase letter,
+        one digit, and one special character from (!@#$%^&*).
+
+        Args:
+            v: The new password string to validate.
+
+        Raises:
+            ValueError: If any security requirement is not met.
+
+        Returns:
+            str: The validated password unchanged.
+        """
         errors = []
         if len(v) < 8:
             errors.append("at least 8 characters")
@@ -59,7 +81,20 @@ users_router = APIRouter()
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user."""
+    """
+    Register a new user account.
+
+    Args:
+        user_data: Registration payload with email, password, full name,
+                   and optional company name.
+        db: Database session injected by FastAPI.
+
+    Raises:
+        HTTPException 400: If the email is already registered.
+
+    Returns:
+        UserResponse: The newly created user object.
+    """
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
@@ -85,7 +120,20 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
-    """Login and get access token."""
+    """
+    Authenticate a user and return a JWT access token.
+
+    Args:
+        form_data: OAuth2 form with username (email) and password fields.
+        db: Database session injected by FastAPI.
+
+    Raises:
+        HTTPException 401: If the email or password is incorrect.
+        HTTPException 400: If the user account is inactive.
+
+    Returns:
+        Token: A dict containing the access token and token type.
+    """
     user = db.query(User).filter(User.email == form_data.username).first()
 
     if not user or not verify_password(form_data.password, user.hashed_password):
@@ -110,7 +158,15 @@ def login(
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Get current user information."""
+    """
+    Retrieve the currently authenticated user's profile.
+
+    Args:
+        current_user: The authenticated user, resolved from the JWT token.
+
+    Returns:
+        UserResponse: The current user's profile data.
+    """
     return current_user
 
 
@@ -120,7 +176,20 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Change the authenticated user's password."""
+    """
+    Change the authenticated user's password.
+
+    Args:
+        payload: Contains the current password for verification and the new password to set.
+        current_user: The authenticated user, resolved from the JWT token.
+        db: Database session injected by FastAPI.
+
+    Raises:
+        HTTPException 400: If the current password is incorrect.
+
+    Returns:
+        dict: A success message confirming the password was updated.
+    """
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -139,7 +208,21 @@ def update_current_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update the authenticated user's profile details."""
+    """
+    Update the authenticated user's profile details.
+
+    Only fields provided in the request body are updated;
+    omitted fields remain unchanged.
+
+    Args:
+        user_data: Partial update payload with optional full_name
+                   and company_name fields.
+        current_user: The authenticated user, resolved from the JWT token.
+        db: Database session injected by FastAPI.
+
+    Returns:
+        UserResponse: The updated user profile.
+    """
     if user_data.full_name is not None:
         current_user.full_name = user_data.full_name
     if user_data.company_name is not None:
