@@ -116,19 +116,6 @@ export default function Classification() {
     }
   }
 
-  const getRiskColor = (level: string) => {
-    switch (level) {
-      case 'unacceptable':
-        return 'bg-red-50 border-red-200'
-      case 'high':
-        return 'bg-orange-50 border-orange-200'
-      case 'limited':
-        return 'bg-yellow-50 border-yellow-200'
-      default:
-        return 'bg-green-50 border-green-200'
-    }
-  }
-
   return (
     <div className="space-y-8">
       <div>
@@ -146,7 +133,6 @@ export default function Classification() {
           </h2>
 
           <form className="space-y-6">
-            {/* Use Case Category */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Primary Use Case
@@ -167,174 +153,6 @@ export default function Classification() {
               </select>
             </div>
 
-            {/* High-Risk Indicators */}
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-3">
-                High-Risk Indicators (Annex III)
-              </h3>
-              <div className="space-y-3">
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.hr_recruitment_screening}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        hr_recruitment_screening: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>CV Screening / Candidate Ranking</strong>
-                    <br />
-                    AI filters CVs or ranks candidates for recruitment
-                  </span>
-                </label>
-
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.hr_promotion_termination}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        hr_promotion_termination: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Promotion/Termination Decisions</strong>
-                    <br />
-                    AI influences employment status decisions
-                  </span>
-                </label>
-
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.credit_worthiness}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        credit_worthiness: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Credit Worthiness Assessment</strong>
-                    <br />
-                    AI evaluates creditworthiness or credit scoring
-                  </span>
-                </label>
-
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.affects_fundamental_rights}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        affects_fundamental_rights: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Affects Fundamental Rights</strong>
-                    <br />
-                    Impacts employment, education, or essential services
-                  </span>
-                </label>
-
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.makes_automated_decisions}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        makes_automated_decisions: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Automated Decision Making</strong>
-                    <br />
-                    Makes decisions without meaningful human review
-                  </span>
-                </label>
-              </div>
-            </div>
-
-            {/* Transparency Requirements */}
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-3">
-                Transparency Indicators (Article 52)
-              </h3>
-              <div className="space-y-3">
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.interacts_with_humans}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        interacts_with_humans: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Direct Human Interaction</strong>
-                    <br />
-                    System interacts directly with users (chatbot, assistant)
-                  </span>
-                </label>
-
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.emotion_recognition}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        emotion_recognition: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Emotion Recognition</strong>
-                    <br />
-                    System detects or analyzes emotions
-                  </span>
-                </label>
-
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.generates_synthetic_content}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        generates_synthetic_content: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Synthetic Content Generation</strong>
-                    <br />
-                    Generates deepfakes, AI images, or synthetic media
-                  </span>
-                </label>
-              </div>
-            </div>
-
             <button
               type="button"
               onClick={() => classifyMutation.mutate()}
@@ -349,45 +167,68 @@ export default function Classification() {
         {/* Results */}
         <div className="relative">
           {result ? (
-            <div className={`rounded-2xl border-0 p-8 glass animate-in overflow-hidden relative group`}>
-              {/* Background Accent Gradient */}
-              <div className={`absolute -right-20 -top-20 w-64 h-64 rounded-full blur-3xl opacity-20 transition-colors duration-500 ${
-                result.risk_level === 'unacceptable' ? 'bg-red-500' :
-                result.risk_level === 'high' ? 'bg-orange-500' :
-                result.risk_level === 'limited' ? 'bg-yellow-500' : 'bg-green-500'
-              }`} />
-              
+            <div className="rounded-2xl border-0 p-8 glass animate-in overflow-hidden relative group">
+              <div
+                className={`absolute -right-20 -top-20 w-64 h-64 rounded-full blur-3xl opacity-20 transition-colors duration-500 ${
+                  result.risk_level === 'unacceptable'
+                    ? 'bg-red-500'
+                    : result.risk_level === 'high'
+                      ? 'bg-orange-500'
+                      : result.risk_level === 'limited'
+                        ? 'bg-yellow-500'
+                        : 'bg-green-500'
+                }`}
+              />
+
               <div className="relative z-10">
                 <div className="flex items-center gap-5 mb-8">
-                  <div className={`p-4 rounded-2xl shadow-inner ${
-                    result.risk_level === 'unacceptable' ? 'bg-red-100' :
-                    result.risk_level === 'high' ? 'bg-orange-100' :
-                    result.risk_level === 'limited' ? 'bg-yellow-100' : 'bg-green-100'
-                  }`}>
+                  <div
+                    className={`p-4 rounded-2xl shadow-inner ${
+                      result.risk_level === 'unacceptable'
+                        ? 'bg-red-100'
+                        : result.risk_level === 'high'
+                          ? 'bg-orange-100'
+                          : result.risk_level === 'limited'
+                            ? 'bg-yellow-100'
+                            : 'bg-green-100'
+                    }`}
+                  >
                     {getRiskIcon(result.risk_level)}
                   </div>
+
                   <div>
                     <div className="flex items-center gap-2">
                       <h2 className="text-2xl font-black text-gray-900 capitalize tracking-tight">
                         {result.risk_level} Risk
                       </h2>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        result.risk_level === 'unacceptable' ? 'bg-red-200 text-red-800' :
-                        result.risk_level === 'high' ? 'bg-orange-200 text-orange-800' :
-                        result.risk_level === 'limited' ? 'bg-yellow-200 text-yellow-800' : 'bg-green-200 text-green-800'
-                      }`}>
+
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          result.risk_level === 'unacceptable'
+                            ? 'bg-red-200 text-red-800'
+                            : result.risk_level === 'high'
+                              ? 'bg-orange-200 text-orange-800'
+                              : result.risk_level === 'limited'
+                                ? 'bg-yellow-200 text-yellow-800'
+                                : 'bg-green-200 text-green-800'
+                        }`}
+                      >
                         AI Act Classified
                       </span>
                     </div>
+
                     <div className="flex items-center gap-2 mt-1">
                       <div className="w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
+                        <div
                           className={`h-full rounded-full transition-all duration-1000 ease-out ${
-                            result.confidence > 0.8 ? 'bg-green-500' : 'bg-yellow-500'
+                            result.confidence > 0.8
+                              ? 'bg-green-500'
+                              : 'bg-yellow-500'
                           }`}
                           style={{ width: `${result.confidence * 100}%` }}
                         />
                       </div>
+
                       <p className="text-xs font-semibold text-gray-500 uppercase">
                         {Math.round(result.confidence * 100)}% Confidence
                       </p>
@@ -396,17 +237,20 @@ export default function Classification() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {/* Left Column: Reasons & Requirements */}
                   <div className="space-y-8">
                     <div>
                       <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                         <span className="w-1.5 h-4 bg-primary-500 rounded-full"></span>
                         Why this classification?
                       </h3>
+
                       <ul className="space-y-3">
                         {result.reasons.map((reason, i) => (
-                          <li key={i} className="text-sm text-gray-600 flex items-start gap-3 group/item">
-                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary-400 group-hover/item:scale-125 transition-transform" />
+                          <li
+                            key={i}
+                            className="text-sm text-gray-600 flex items-start gap-3"
+                          >
+                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary-400" />
                             <span className="leading-relaxed">{reason}</span>
                           </li>
                         ))}
@@ -418,10 +262,14 @@ export default function Classification() {
                         <span className="w-1.5 h-4 bg-primary-500 rounded-full"></span>
                         Legal Requirements
                       </h3>
+
                       <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
                         <ul className="space-y-3">
                           {result.requirements.map((req, i) => (
-                            <li key={i} className="text-sm text-gray-700 flex items-start gap-3">
+                            <li
+                              key={i}
+                              className="text-sm text-gray-700 flex items-start gap-3"
+                            >
                               <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                               <span className="font-medium">{req}</span>
                             </li>
@@ -431,25 +279,29 @@ export default function Classification() {
                     </div>
                   </div>
 
-                  {/* Right Column: Next Steps & Checklist */}
                   <div className="space-y-8">
                     <div>
                       <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-2">
                         <span className="w-1.5 h-4 bg-primary-500 rounded-full"></span>
                         Action Plan
                       </h3>
+
                       <div className="space-y-4">
                         {result.next_steps.map((step, i) => (
-                          <div key={i} className="flex gap-4 group/step">
+                          <div key={i} className="flex gap-4">
                             <div className="flex flex-col items-center">
-                              <div className="w-8 h-8 rounded-full bg-white border-2 border-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold shadow-sm group-hover/step:border-primary-500 group-hover/step:bg-primary-500 group-hover/step:text-white transition-all">
+                              <div className="w-8 h-8 rounded-full bg-white border-2 border-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold shadow-sm">
                                 {i + 1}
                               </div>
+
                               {i < result.next_steps.length - 1 && (
                                 <div className="w-0.5 h-full bg-primary-50 my-1" />
                               )}
                             </div>
-                            <p className="text-sm text-gray-600 pt-1.5 leading-relaxed">{step}</p>
+
+                            <p className="text-sm text-gray-600 pt-1.5 leading-relaxed">
+                              {step}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -457,13 +309,13 @@ export default function Classification() {
                   </div>
                 </div>
 
-                {/* Compliance Checklist Footer */}
                 {result.risk_level !== 'unacceptable' && (
                   <div className="mt-10 pt-8 border-t border-gray-100">
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-lg font-bold text-gray-900">
                         Interactive Compliance Checklist
                       </h3>
+
                       <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded">
                         {CHECKLIST_ITEMS[result.risk_level]?.length || 0} ITEMS REQUIRED
                       </span>
@@ -473,10 +325,10 @@ export default function Classification() {
                       systemId={Number(systemId || 0)}
                       riskLevel={
                         result.risk_level as
-                        | 'minimal'
-                        | 'limited'
-                        | 'high'
-                        | 'unacceptable'
+                          | 'minimal'
+                          | 'limited'
+                          | 'high'
+                          | 'unacceptable'
                       }
                       items={CHECKLIST_ITEMS[result.risk_level] || []}
                     />
@@ -489,17 +341,15 @@ export default function Classification() {
               <div className="w-20 h-20 bg-gray-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
                 <AlertTriangle className="w-10 h-10 text-gray-300" />
               </div>
+
               <h3 className="text-xl font-bold text-gray-900 mb-2">
                 Ready for Classification
               </h3>
+
               <p className="text-gray-500 max-w-sm mx-auto leading-relaxed">
-                Complete the questionnaire to generate your AI Act risk profile and compliance roadmap.
+                Complete the questionnaire to generate your AI Act risk profile and
+                compliance roadmap.
               </p>
-              <div className="mt-8 flex justify-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-primary-200 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <div className="w-2 h-2 rounded-full bg-primary-200 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <div className="w-2 h-2 rounded-full bg-primary-200 animate-bounce" style={{ animationDelay: '300ms' }} />
-              </div>
             </div>
           )}
         </div>
