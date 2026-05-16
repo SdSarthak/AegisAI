@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
 import { authApi } from '../services/api'
 import { Shield } from 'lucide-react'
@@ -22,8 +23,12 @@ export default function Login() {
       const user = await authApi.getMe()
       setAuth(tokenData.access_token, user)
       navigate('/')
-    } catch {
-      setError('Invalid email or password')
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.data?.detail) {
+        setError(err.response.data.detail)
+      } else {
+        setError('Unable to sign in. Please check your credentials and try again.')
+      }
     } finally {
       setLoading(false)
     }
