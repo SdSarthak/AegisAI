@@ -36,6 +36,7 @@ def create_ai_system(
         version=system_data.version,
         use_case=system_data.use_case,
         sector=system_data.sector,
+        image_url=system_data.image_url,
     )
     db.add(ai_system)
     db.commit()

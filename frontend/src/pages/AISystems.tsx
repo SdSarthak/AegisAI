@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
-import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X } from 'lucide-react'
+import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Image as ImageIcon, Upload } from 'lucide-react'
 
 interface AISystem {
   id: number
@@ -12,6 +12,7 @@ interface AISystem {
   risk_level: string | null
   compliance_status: string
   compliance_score: number
+  image_url: string | null
 }
 
 export default function AISystems() {
@@ -22,7 +23,9 @@ export default function AISystems() {
     description: '',
     use_case: '',
     sector: '',
+    image_url: '',
   })
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [riskFilter, setRiskFilter] = useState('')
   const [complianceFilter, setComplianceFilter] = useState('')
@@ -39,7 +42,8 @@ export default function AISystems() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-systems'] })
       setShowModal(false)
-      setFormData({ name: '', description: '', use_case: '', sector: '' })
+      setFormData({ name: '', description: '', use_case: '', sector: '', image_url: '' })
+      setImagePreview(null)
     },
   })
 
@@ -249,8 +253,12 @@ export default function AISystems() {
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4">
-                  <div className="p-3 bg-primary-50 rounded-lg">
-                    <Bot className="w-6 h-6 text-primary-600" />
+                  <div className="p-3 bg-primary-50 rounded-lg w-12 h-12 flex items-center justify-center overflow-hidden flex-shrink-0">
+                    {system.image_url ? (
+                      <img src={system.image_url} alt={system.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Bot className="w-6 h-6 text-primary-600" />
+                    )}
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900">{system.name}</h3>
@@ -378,6 +386,48 @@ export default function AISystems() {
                   ))}
                 </select>
               </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  System Image / Logo
+                </label>
+                <div className="flex items-center gap-4">
+                  <div className="w-20 h-20 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden bg-gray-50">
+                    {imagePreview ? (
+                      <img src={imagePreview} alt="Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <ImageIcon className="w-8 h-8 text-gray-300" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors">
+                      <Upload className="w-4 h-4" />
+                      Upload Image
+                      <input
+                        type="file"
+                        className="hidden"
+                        accept="image/*"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0]
+                          if (file) {
+                            const reader = new FileReader()
+                            reader.onloadend = () => {
+                              const base64 = reader.result as string
+                              setImagePreview(base64)
+                              setFormData({ ...formData, image_url: base64 })
+                            }
+                            reader.readAsDataURL(file)
+                          }
+                        }}
+                      />
+                    </label>
+                    <p className="text-[10px] text-gray-500 mt-2">
+                      PNG, JPG or GIF. Max 2MB.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex justify-end gap-3 pt-4">
                 <button
                   type="button"
