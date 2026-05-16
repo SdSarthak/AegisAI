@@ -1,6 +1,11 @@
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv():
+        return False
 
 load_dotenv()
 
@@ -14,11 +19,11 @@ MODELS_DIR = PROJECT_ROOT / "models"  # backend/app/modules/guard/models/
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-2.0-flash"  # or gemini-1.5-pro
 
-# Model paths - supports both Colab (Google Drive) and local training
-# Colab notebook saves to: /content/drive/My Drive/llm-guard/intent_classifier
-# Local training saves to: guard/models/intent_classifier
+# Model paths - supports both Colab (Google Drive) and local training.
+# The standardized local training pipeline saves to: guard/models/classifier.
+# Older local training saved to: guard/models/intent_classifier.
 CLASSIFIER_MODEL_PATH = os.getenv(
-    "CLASSIFIER_MODEL_PATH", str(MODELS_DIR / "intent_classifier")
+    "CLASSIFIER_MODEL_PATH", str(MODELS_DIR / "classifier")
 )
 TOKENIZER_PATH = CLASSIFIER_MODEL_PATH  # Tokenizer stored in same directory as model
 
@@ -53,7 +58,7 @@ def get_trained_model_path() -> str:
     """
     Detect trained model location. Checks multiple paths:
     1. Environment variable CLASSIFIER_MODEL_PATH
-    2. Local models directory (guard/models/intent_classifier)
+    2. Local models directory (guard/models/classifier)
     3. Current directory (intent_classifier)
     Returns default path if not found (will use pre-trained model as fallback).
     """
@@ -62,6 +67,7 @@ def get_trained_model_path() -> str:
 
     # Check alternative locations
     alt_paths = [
+        str(MODELS_DIR / "classifier"),
         str(MODELS_DIR / "intent_classifier"),
         "./intent_classifier",
     ]

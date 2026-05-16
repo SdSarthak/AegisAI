@@ -2,17 +2,20 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
+import BackendStatus from '../components/BackendStatus'
 
 export default function Dashboard() {
-  const { data: systems = [] } = useQuery({
+  const { data: systemsData } = useQuery({
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
+  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 
-  const { data: documents = [] } = useQuery({
+  const { data: documentsData } = useQuery({
     queryKey: ['documents'],
     queryFn: documentsApi.list,
   })
+  const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
 
   const stats = [
     {
@@ -43,9 +46,12 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600">Overview of your EU AI Act compliance status</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-600">Overview of your EU AI Act compliance status</p>
+        </div>
+        <BackendStatus />
       </div>
 
       {/* Stats */}
@@ -158,3 +164,5 @@ export default function Dashboard() {
     </div>
   )
 }
+
+
