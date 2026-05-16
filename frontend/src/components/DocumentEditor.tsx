@@ -3,6 +3,7 @@ import { Save, Eye, EyeOff } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { marked } from 'marked'
+import api from '../services/api'
 
 interface DocumentEditorProps {
   documentId: number
@@ -24,20 +25,9 @@ export default function DocumentEditor({
 
   const handleSave = useCallback(async () => {
     setIsSaving(true)
-    // Call PUT endpoint
     try {
-      const response = await fetch(`/api/v1/documents/${documentId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          // Add auth header if needed - check how other API calls are done in your app
-        },
-        body: JSON.stringify({ content })
-      })
-
-      if (response.ok) {
-        onSave?.(content)
-      }
+      await api.put(`/documents/${documentId}`, { content })
+      onSave?.(content)
     } catch (error) {
       console.error('Save failed:', error)
     }
