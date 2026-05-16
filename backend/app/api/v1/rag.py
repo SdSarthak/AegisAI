@@ -1,45 +1,33 @@
 """
-RAG (Retrieval-Augmented Generation) Pipeline Module
+RAG Intelligence Module — Retrieval-Augmented Generation pipeline for regulatory knowledge queries.
+Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
+SPDX-License-Identifier: AGPL-3.0-only
 
-This module implements the RAG pipeline using FAISS vector store and LangChain
-with OpenAI-compatible embeddings for document retrieval and generation.
+Pipeline Overview:
+    - Uses FAISS as the vector store for efficient similarity search
+    - LangChain orchestrates the retrieval and generation steps
+    - OpenAI-compatible embeddings convert documents and queries into vectors
 
-Key Features:
-- FAISS vector store for efficient similarity search
-- LangChain integration for embedding and LLM orchestration
-- Feedback loop system (thumbs up/down) persisted to RAGFeedback table
-- Admin endpoint for viewing/removing low-quality chunks
+Feedback Loop:
+    - Users can submit thumbs up/down feedback on RAG responses
+    - Feedback is persisted to the RAGFeedback model for quality tracking
+    - Negative feedback flags low-quality chunks for admin review
 
-Main Components:
-- Vector store initialization and management
-- Document chunking and embedding generation
-- Retrieval pipeline with relevance filtering
-- Feedback collection and storage
-- Admin utilities for quality control
+Admin Endpoint:
+    - Admins can access a low-quality-chunks endpoint to review and remove
+      poorly performing document chunks from the knowledge base
 
-Dependencies:
-- langchain: For embedding and chain operations
-- faiss-cpu: Vector similarity search
-- openai-compatible embeddings API
-- sqlalchemy: For RAGFeedback persistence
+Endpoints:
+    POST /rag/query   — Ask a regulatory question grounded in source documents
+    GET  /rag/health  — Check if the RAG module is available
 
-Key Endpoints:
-- POST /rag/query - Main RAG query endpoint
-- POST /rag/feedback/{chunk_id} - Submit thumbs up/down
-- GET /admin/rag/low-quality-chunks - View low-quality chunks (admin only)
-- DELETE /admin/rag/low-quality-chunks/{chunk_id} - Remove low-quality chunks
-
-Data Flow:
-1. User query → Embedding generation → FAISS similarity search
-2. Retrieved chunks → Context assembly → LLM generation
-3. User feedback → RAGFeedback table → Low-quality tracking
-4. Admin review → Manual chunk removal from vector store
+TODO for contributors (high difficulty):
+  - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
+  - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
+  - Integrate MLflow tracking from modules/rag/ml_flow.py
+  - Add streaming responses via SSE for long answers
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
-from app.core.security import get_current_user
-from app.models.user import User
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from app.core.security import get_current_user
