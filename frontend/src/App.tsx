@@ -9,6 +9,7 @@ import Classification from './pages/Classification'
 import Documents from './pages/Documents'
 import Notifications from './pages/Notifications'
 import Analytics from './pages/Analytics'
+import NotFound from './pages/NotFound'
 import { Toaster } from 'react-hot-toast'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -57,6 +58,7 @@ function App() {
           <Route path="documents" element={<Documents />} />
           <Route path="notifications" element={<Notifications />} />
         </Route>
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </>
   )
