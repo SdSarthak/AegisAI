@@ -165,7 +165,19 @@ def create_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new document."""
+    
+    """Create a new document for the current user.
+
+    Args:
+        doc_data (DocumentCreate): Document data including title, type,
+            content, and associated AI system ID.
+        db (Session): SQLAlchemy database session.
+        current_user (User): The authenticated user making the request.
+
+    Returns:
+        DocumentResponse: The newly created document object.
+    """
+    
     document = Document(
         owner_id=current_user.id,
         title=doc_data.title,
@@ -186,7 +198,20 @@ def list_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List all documents for the current user with pagination."""
+    """List all documents belonging to the current user with pagination.
+
+    Args:
+        page (int): Page number to retrieve, starting from 1. Defaults to 1.
+        limit (int): Number of documents per page, between 1 and 100.
+            Defaults to 50.
+        db (Session): SQLAlchemy database session.
+        current_user (User): The authenticated user making the request.
+
+    Returns:
+        PaginatedResponse[DocumentResponse]: Paginated list of documents
+            with total count, current page, and limit metadata.
+    """ 
+    
     base_query = db.query(Document).filter(Document.owner_id == current_user.id)
     total = base_query.count()
     offset = (page - 1) * limit
@@ -201,7 +226,20 @@ def get_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get a specific document."""
+    """Retrieve a specific document by ID for the current user.
+
+    Args:
+        document_id (int): The unique ID of the document to retrieve.
+        db (Session): SQLAlchemy database session.
+        current_user (User): The authenticated user making the request.
+
+    Returns:
+        DocumentResponse: The requested document object.
+
+    Raises:
+        HTTPException: 404 if the document is not found or does not
+            belong to the current user.
+    """
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -221,7 +259,22 @@ def update_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update document content."""
+    """Update the content of an existing document.
+
+    Args:
+        document_id (int): The unique ID of the document to update.
+        body (DocumentUpdateRequest): Request body containing the
+            updated document content.
+        db (Session): SQLAlchemy database session.
+        current_user (User): The authenticated user making the request.
+
+    Returns:
+        DocumentResponse: The updated document object.
+
+    Raises:
+        HTTPException: 404 if the document is not found or does not
+            belong to the current user.
+    """
     # Fetch document
     document = db.query(Document).filter(
         Document.id == document_id,
@@ -247,7 +300,27 @@ def generate_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate a compliance document for an AI system."""
+    """Generate a compliance document for an AI system using a predefined template.
+
+    Fetches the AI system and fills the appropriate document template
+    with system metadata and the latest risk assessment data if available.
+    The generated document is persisted to the database.
+
+    Args:
+        request (DocumentGenerateRequest): Contains the AI system ID and
+            the type of document to generate.
+        db (Session): SQLAlchemy database session.
+        current_user (User): The authenticated user making the request.
+
+    Returns:
+        DocumentResponse: The newly generated and saved document object.
+
+    Raises:
+        HTTPException: 404 if the AI system is not found or does not
+            belong to the current user.
+        HTTPException: 400 if no template exists for the requested
+            document type.
+    """
     # Get the AI system
     ai_system = (
         db.query(AISystem)
@@ -322,7 +395,20 @@ def delete_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a document."""
+    """Delete a document by ID for the current user.
+
+    Args:
+        document_id (int): The unique ID of the document to delete.
+        db (Session): SQLAlchemy database session.
+        current_user (User): The authenticated user making the request.
+
+    Returns:
+        None: Returns HTTP 204 No Content on success.
+
+    Raises:
+        HTTPException: 404 if the document is not found or does not
+            belong to the current user.
+    """
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -344,13 +430,19 @@ def export_document_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Export a document as a PDF file.
-    
+    """Export a document as a downloadable PDF file.
+
+    Args:
+        document_id (int): The unique ID of the document to export.
+        db (Session): SQLAlchemy database session.
+        current_user (User): The authenticated user making the request.
+
     Returns:
-        - Response status 200 with PDF bytes
-        - Content-Type: application/pdf
-        - File starts with %PDF- magic bytes
-        - File size > 1KB
+        StreamingResponse: PDF file with application/pdf content type.
+
+    Raises:
+        HTTPException: 404 if document not found, 400 if no content,
+            500 if PDF generation fails.
     """
     # Retrieve the document
     document = db.query(Document).filter(

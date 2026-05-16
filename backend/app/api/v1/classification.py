@@ -28,8 +28,19 @@ class BulkClassificationResponse(BaseModel):
 
 
 def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse:
-    """
-    Classify the risk level of an AI system based on EU AI Act criteria.
+    """Classify the risk level of an AI system based on EU AI Act criteria.
+
+    Evaluates the system against EU AI Act articles including prohibited
+    practices (Article 5), high-risk categories (Article 6, Annex III),
+    and limited risk transparency obligations (Article 52).
+
+    Args:
+        data (RiskClassificationRequest): Questionnaire responses describing
+            the AI system's purpose, deployment context, and capabilities.
+
+    Returns:
+        RiskClassificationResponse: Classification result containing risk level,
+            confidence score, reasons, compliance requirements, and next steps.
     """
     reasons = []
     requirements = []
@@ -154,9 +165,18 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
 def classify_ai_system(
     data: RiskClassificationRequest, current_user: User = Depends(get_current_user)
 ):
-    """
-    Classify an AI system's risk level based on EU AI Act criteria.
-    This is a preliminary classification - full assessment requires more details.
+    """Classify an AI system's risk level based on EU AI Act criteria.
+
+    Performs a preliminary risk classification without persisting results.
+    A full assessment may require additional details beyond this endpoint.
+
+    Args:
+        data (RiskClassificationRequest): Questionnaire responses describing
+            the AI system's characteristics and use case.
+        current_user (User): The authenticated user making the request.
+
+    Returns:
+        RiskClassificationResponse: The preliminary risk classification result.
     """
     return classify_risk(data)
 
@@ -168,8 +188,23 @@ def classify_and_save(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Classify an AI system and save the result to the database.
+    """Classify an AI system and persist the result to the database.
+
+    Runs risk classification and updates the AI system's risk level and
+    compliance status. Also creates a RiskAssessment record for audit purposes.
+
+    Args:
+        system_id (int): ID of the AI system to classify and update.
+        data (RiskClassificationRequest): Questionnaire responses for classification.
+        db (Session): SQLAlchemy database session.
+        current_user (User): The authenticated user making the request.
+
+    Returns:
+        RiskClassificationResponse: The classification result after saving.
+
+    Raises:
+        HTTPException: 404 if the AI system is not found or does not belong
+            to the current user.
     """
     # Get the AI system
     system = (
@@ -216,9 +251,22 @@ def bulk_classify_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Classify multiple AI systems in one request.
-    Returns per-system classification results and partial failure details.
+    """Classify multiple AI systems in a single request.
+
+    Iterates over the provided system IDs, runs risk classification for each,
+    and persists results. Systems that are missing, inaccessible, or have
+    invalid questionnaire responses are returned with error details instead
+    of failing the entire request.
+
+    Args:
+        request (BulkClassificationRequest): Contains a list of AI system IDs
+            to classify.
+        db (Session): SQLAlchemy database session.
+        current_user (User): The authenticated user making the request.
+
+    Returns:
+        BulkClassificationResponse: A list of per-system results, each containing
+            either a classification or an error message.
     """
     results: List[BulkClassificationItem] = []
 
