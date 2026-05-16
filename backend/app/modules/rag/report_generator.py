@@ -1,83 +1,23 @@
-from openai import OpenAI
-import numpy as np
-
-# init client
-client = OpenAI()
+from app.modules.llm.llm_client import LLMClient
 
 
-def get_embedding(text):
-    response = client.embeddings.create(
-        model="text-embedding-3-small",
-        input=text
-    )
-    return response.data[0].embedding
+def generate_report(metadata, risk, answers, retriever):
+    # create LLM client inside function (safe)
+    llm_client = LLMClient()
 
-
-
-def split_text(text, chunk_size=200):
-    words = text.split()
-    chunks = []
-
-    for i in range(0, len(words), chunk_size):
-        chunk = " ".join(words[i:i+chunk_size])
-        chunks.append(chunk)
-
-    return chunks
-
-
-
-def create_vector_store(text):
-    chunks = split_text(text)
-
-    store = []
-    for chunk in chunks:
-        emb = get_embedding(chunk)
-        store.append({
-            "text": chunk,
-            "embedding": emb
-        })
-
-    return store
-
-
-
-def cosine_similarity(a, b):
-    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))
-
-
-
-def retrieve_relevant(query, store, top_k=3):
-    query_emb = get_embedding(query)
-
-    scores = []
-    for item in store:
-        score = cosine_similarity(query_emb, item["embedding"])
-        scores.append((score, item["text"]))
-
-    scores.sort(reverse=True)
-
-    return [text for _, text in scores[:top_k]]
-
-
-def load_context():
-    try:
-        with open("regulations.txt", "r", encoding="utf-8") as f:
-            return f.read()
-    except:
-        return "General compliance regulations apply."
-
-
-def generate_report(metadata, risk, answers, context=None):
-    if context is None:
-        context = load_context()
-
-    store = create_vector_store(context)
-
+    # Step 1: build query
     query = f"{metadata} {risk} {answers}"
-    relevant_chunks = retrieve_relevant(query, store)
 
-    final_context = "\n".join(relevant_chunks)
+    # Step 2: use EXISTING FAISS retriever
+    docs = retriever.get_relevant_documents(query)
 
+    # Step 3: build context
+    if not docs:
+        context = "No relevant regulatory context found."
+    else:
+        context = "\n".join(doc.page_content for doc in docs)
+
+    # Step 4: prompt
     prompt = f"""
     You are a compliance expert.
 
@@ -86,17 +26,16 @@ def generate_report(metadata, risk, answers, context=None):
     Questionnaire Answers: {answers}
 
     Regulatory Context:
-    {final_context}
+    {context}
 
-    Write a professional compliance report with:
+    Generate a structured compliance report with:
     - Overview
     - Risk Analysis
     - Recommendations
     """
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[{"role": "user", "content": prompt}]
-    )
+    # Step 5: use project LLM (NOT OpenAI directly)
+    response = llm_client.call(prompt)
 
-    return response.choices[0].message.content
+    return response
+
