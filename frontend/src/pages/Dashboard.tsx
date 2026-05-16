@@ -3,19 +3,22 @@ import { Link } from 'react-router-dom'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 import BackendStatus from '../components/BackendStatus'
+import { Skeleton } from '../components/Skeleton'
 
 export default function Dashboard() {
-  const { data: systemsData } = useQuery({
+  const { data: systemsData, isLoading: isLoadingSystems } = useQuery({
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
   const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 
-  const { data: documentsData } = useQuery({
+  const { data: documentsData, isLoading: isLoadingDocs } = useQuery({
     queryKey: ['documents'],
     queryFn: documentsApi.list,
   })
   const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
+
+  const isLoading = isLoadingSystems || isLoadingDocs
 
   const stats = [
     {
@@ -67,7 +70,11 @@ export default function Dashboard() {
               </div>
               <div>
                 <p className="text-sm text-gray-600">{stat.name}</p>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                {isLoading ? (
+                  <Skeleton className="h-8 w-12 mt-1" />
+                ) : (
+                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                )}
               </div>
             </div>
           </div>
@@ -105,7 +112,22 @@ export default function Dashboard() {
       {/* Recent AI Systems */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Your AI Systems</h2>
-        {systems.length === 0 ? (
+        {isLoading ? (
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="flex items-center justify-between p-4 rounded-lg border border-gray-200">
+                <div className="space-y-2 flex-1">
+                  <Skeleton className="h-5 w-1/3" />
+                  <div className="flex gap-2">
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                </div>
+                <Skeleton className="h-4 w-12 ml-4" />
+              </div>
+            ))}
+          </div>
+        ) : systems.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             <Bot className="w-12 h-12 mx-auto mb-3 text-gray-300" />
             <p>No AI systems registered yet</p>
@@ -128,8 +150,16 @@ export default function Dashboard() {
                 key={system.id}
                 className="flex items-center justify-between p-4 rounded-lg border border-gray-200"
               >
-                <div>
-                  <p className="font-medium text-gray-900">{system.name}</p>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-100">
+                    {(system as any).image_url ? (
+                      <img src={(system as any).image_url} alt={system.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <Bot className="w-5 h-5 text-gray-400" />
+                    )}
+                  </div>
+                  <div>
+                    <p className="font-medium text-gray-900">{system.name}</p>
                   <div className="flex items-center gap-2 mt-1">
                     {system.risk_level && (
                       <span
