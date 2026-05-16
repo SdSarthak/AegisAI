@@ -139,6 +139,102 @@ def ingest_documents(
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
+class RAGIngestResponse(BaseModel):
+    """Response returned after a successful document ingestion."""
+
+    files_processed: int
+    chunks_created: int
+    index_size_bytes: int
+
+
+# ---------------------------------------------------------------------------
+# POST /rag/ingest
+# ---------------------------------------------------------------------------
+@router.post(
+    "/ingest",
+    response_model=RAGIngestResponse,
+    summary="Upload & index regulatory PDFs",
+    tags=["RAG Intelligence"],
+)
+def ingest_documents(
+    files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Accept one or more PDF uploads, process them through the document loader,
+    build (or rebuild) the FAISS vector index, and persist it to
+    ``settings.FAISS_INDEX_PATH``.
+
+    **Returns**
+    - ``files_processed`` – number of PDFs successfully saved and chunked
+    - ``chunks_created``  – total text chunks fed into the vector store
+    - ``index_size_bytes`` – on-disk size of the persisted FAISS index
+
+    **Errors**
+    - ``400`` if no valid PDF files are supplied
+    - ``503`` if the embedding model or FAISS build step fails
+    """
+
+    # ── 1. Validate: at least one PDF ─────────────────────────────────────
+    pdf_files = [
+        f for f in files
+        if f.filename and f.filename.lower().endswith(".pdf")
+        and f.content_type in ("application/pdf", "binary/octet-stream", None)
+    ]
+    if not pdf_files:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid PDF files supplied. Please upload files with a .pdf extension.",
+        )
+
+    # ── 2. Save uploads to a temporary directory ──────────────────────────
+    tmp_dir = tempfile.mkdtemp(prefix="aegis_ingest_")
+    saved_paths: list[str] = []
+
+    try:
+        for upload in pdf_files:
+            dest = os.path.join(tmp_dir, os.path.basename(upload.filename))
+            with open(dest, "wb") as buf:
+                shutil.copyfileobj(upload.file, buf)
+            saved_paths.append(dest)
+
+        # ── 3. Chunk documents (gives us the accurate chunk count) ────────
+        chunks = load_documents_from_paths(saved_paths)
+        if not chunks:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Could not extract any text from the supplied PDFs. "
+                       "Ensure the files are not scanned images or password-protected.",
+            )
+
+        # ── 4. Build / rebuild FAISS index and persist to disk ────────────
+        try:
+            create_vector_store(saved_paths)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Failed to build FAISS index: {exc}",
+            )
+
+        # ── 5. Calculate on-disk index size ───────────────────────────────
+        index_path = settings.FAISS_INDEX_PATH
+        index_size_bytes = 0
+        for fname in ("index.faiss", "index.pkl"):
+            fpath = os.path.join(index_path, fname)
+            if os.path.exists(fpath):
+                index_size_bytes += os.path.getsize(fpath)
+
+        return RAGIngestResponse(
+            files_processed=len(saved_paths),
+            chunks_created=len(chunks),
+            index_size_bytes=index_size_bytes,
+        )
+
+    finally:
+        # ── 6. Always clean up the temp directory ─────────────────────────
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
 @router.post("/query", response_model=RAGQueryResponse)
 def query_knowledge_base(
     request: RAGQueryRequest,
