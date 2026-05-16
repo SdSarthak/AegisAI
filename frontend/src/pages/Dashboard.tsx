@@ -4,10 +4,12 @@ import { aiSystemsApi, documentsApi } from '../services/api'
 import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 
 export default function Dashboard() {
-  const { data: systems = [] } = useQuery({
+  const { data: systemsResponse } = useQuery({
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
+  const systems: { id: number; name: string; risk_level: string | null; compliance_status: string }[] =
+    Array.isArray(systemsResponse) ? systemsResponse : (systemsResponse?.items ?? [])
 
   const { data: documents = [] } = useQuery({
     queryKey: ['documents'],
@@ -29,13 +31,13 @@ export default function Dashboard() {
     },
     {
       name: 'High Risk',
-      value: systems.filter((s: { risk_level: string }) => s.risk_level === 'high').length,
+      value: systems.filter((s) => s.risk_level === 'high').length,
       icon: AlertTriangle,
       color: 'bg-red-500',
     },
     {
       name: 'Compliant',
-      value: systems.filter((s: { compliance_status: string }) => s.compliance_status === 'compliant').length,
+      value: systems.filter((s) => s.compliance_status === 'compliant').length,
       icon: CheckCircle,
       color: 'bg-emerald-500',
     },
@@ -112,12 +114,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {systems.slice(0, 5).map((system: {
-              id: number
-              name: string
-              risk_level: string | null
-              compliance_status: string
-            }) => (
+            {systems.slice(0, 5).map((system) => (
               <div
                 key={system.id}
                 className="flex items-center justify-between p-4 rounded-lg border border-gray-200"
