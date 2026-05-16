@@ -1,5 +1,6 @@
 """Shared pytest fixtures for all tests."""
-
+from unittest.mock import MagicMock
+from app.core.security import get_current_user
 import os
 import pytest
 from sqlalchemy import create_engine
@@ -29,9 +30,9 @@ def db_session(db_engine) -> Session:
     connection = db_engine.connect()
     transaction = connection.begin()
     session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
-    
+
     yield session
-    
+
     session.close()
     transaction.rollback()
     connection.close()
@@ -41,19 +42,26 @@ def db_session(db_engine) -> Session:
 def client(db_engine):
     """Create test client with test database."""
     from app.core.database import get_db
-    
+
     connection = db_engine.connect()
     transaction = connection.begin()
     session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
-    
+
     def override_get_db():
         yield session
-    
+
+    def override_get_current_user():
+        mock_user = MagicMock()
+        mock_user.id = "test-user-id"
+        mock_user.email = "test@example.com"
+        return mock_user
+
     app.dependency_overrides[get_db] = override_get_db
-    
+    app.dependency_overrides[get_current_user] = override_get_current_user
+
     client = TestClient(app)
     yield client
-    
+
     session.close()
     transaction.rollback()
     connection.close()
