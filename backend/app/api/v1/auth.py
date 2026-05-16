@@ -14,7 +14,9 @@ from app.core.security import (
 )
 from app.core.config import settings
 from app.models.user import User
-from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token
+from app.models.ai_system import AISystem, ComplianceStatus
+from app.models.document import Document
+from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse
 
 
 class ChangePasswordRequest(BaseModel):
@@ -46,14 +48,12 @@ users_router = APIRouter()
 )
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
     """Register a new user."""
-    # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
         )
 
-    # Create new user
     user = User(
         email=user_data.email,
         hashed_password=get_password_hash(user_data.password),
@@ -135,3 +135,30 @@ def update_current_user_info(
     db.commit()
     db.refresh(current_user)
     return current_user
+
+
+@users_router.get("/me/stats", response_model=UserStatsResponse)
+def get_current_user_stats(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Get stats summary for the authenticated user."""
+    systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
+
+    risk_breakdown: dict = {}
+    compliant_systems = 0
+    for system in systems:
+        if system.risk_level:
+            key = system.risk_level.value
+            risk_breakdown[key] = risk_breakdown.get(key, 0) + 1
+        if system.compliance_status == ComplianceStatus.COMPLIANT:
+            compliant_systems += 1
+
+    total_documents = db.query(Document).filter(Document.owner_id == current_user.id).count()
+
+    return UserStatsResponse(
+        total_systems=len(systems),
+        total_documents=total_documents,
+        risk_breakdown=risk_breakdown,
+        compliant_systems=compliant_systems,
+    )
