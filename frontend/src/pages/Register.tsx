@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import axios from 'axios'
 import { authApi } from '../services/api'
 import { Shield } from 'lucide-react'
 
@@ -22,8 +23,12 @@ export default function Register() {
     try {
       await authApi.register(formData)
       navigate('/login')
-    } catch {
-      setError('Registration failed. Email may already be in use.')
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.data?.detail) {
+        setError(err.response.data.detail)
+      } else {
+        setError('Registration failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -85,6 +90,7 @@ export default function Register() {
             <input
               id="full_name"
               type="text"
+              required
               value={formData.full_name}
               onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
@@ -98,6 +104,7 @@ export default function Register() {
             <input
               id="company_name"
               type="text"
+              required
               value={formData.company_name}
               onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
               className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"

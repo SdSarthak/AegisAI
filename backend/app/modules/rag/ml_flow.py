@@ -57,3 +57,9 @@ def log_query(
     except Exception as exc:
         # MLflow tracking is non-critical — log and continue
         logger.warning("MLflow logging failed: %s", exc)
+
+def log_query(question: str, answer: str, sources: list):
+    with mlflow.start_run():
+        mlflow.log_param("question", question)
+        mlflow.log_metric("source_count", len(sources))
+        mlflow.log_text(answer, "answer.txt")

@@ -30,11 +30,13 @@ class Settings(BaseSettings):
     # LLM provider — OpenAI-compatible (works with OpenAI, Ollama, Groq, Together AI, vLLM …)
     # Ollama (free, local): LLM_API_KEY=ollama  LLM_BASE_URL=http://localhost:11434/v1
     LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = ""           # Leave empty for OpenAI default; set for any compatible endpoint
+    LLM_BASE_URL: str = (
+        ""  # Leave empty for OpenAI default; set for any compatible endpoint
+    )
     LLM_MODEL: str = "gpt-4o-mini"  # Model name understood by your chosen provider
 
     # Module 2: LLM Guard
-    GUARD_SANITIZATION_LEVEL: str = "medium"   # low | medium | high
+    GUARD_SANITIZATION_LEVEL: str = "medium"  # low | medium | high
     GUARD_MAX_PROMPT_LENGTH: int = 2000
 
     # Module 3: RAG Intelligence

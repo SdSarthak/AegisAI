@@ -97,6 +97,14 @@ Then `docker compose up -d`. See [Getting Started](docs/getting-started.md) for 
 
 ---
 
+## 📓 Colab Notebooks
+
+If you want to train the machine learning models yourself, you can run our official Google Colab notebooks on a free T4 GPU:
+
+- [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/gist/amritanshu2611/7a533926b3df02d2ea0df5bd51641361/finetune_regulatory_model.ipynb) **Fine-tune Regulatory Q&A Model (Llama-3.2-3B QLoRA)**
+
+---
+
 ## Project Structure
 
 ```
@@ -112,6 +120,15 @@ AegisAI/
 │   │   ├── schemas/         # Pydantic request/response schemas
 │   │   └── modules/
 │   │       ├── guard/       # LLM Guard — regex + DeBERTa classifier + sanitizer
+│   │       │   ├── training/ # Standard ML training pipeline
+│   │       │   │   ├── configs/     # YAML training configuration
+│   │       │   │   ├── data/        # Dataset loading, preprocessing, splitting
+│   │       │   │   ├── evaluation/  # Metrics and evaluator
+│   │       │   │   ├── pipelines/   # Train and evaluate pipeline entry points
+│   │       │   │   ├── trainer/     # IntentClassifier trainer wrapper
+│   │       │   │   ├── utils/       # Logging, seed, checkpoints, MLflow helpers
+│   │       │   │   └── artifacts/   # Checkpoints, metrics, reports
+│   │       │   └── models/classifier/ # Fine-tuned guard classifier output
 │   │       ├── rag/         # RAG — FAISS vector store + LangChain chain + feedback
 │   │       ├── llm/         # OpenAI-compatible LLM client
 │   │       └── badge/       # SVG compliance badge generator
