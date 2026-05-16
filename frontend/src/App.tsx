@@ -10,6 +10,7 @@ import Documents from './pages/Documents'
 import Notifications from './pages/Notifications'
 import Analytics from './pages/Analytics'
 import { Toaster } from 'react-hot-toast'
+import NotFound from './pages/NotFound';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -57,6 +58,9 @@ function App() {
           <Route path="documents" element={<Documents />} />
           <Route path="notifications" element={<Notifications />} />
         </Route>
+        
+        
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </>
   )
