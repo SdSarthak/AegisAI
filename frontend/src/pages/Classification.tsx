@@ -347,94 +347,159 @@ export default function Classification() {
         </div>
 
         {/* Results */}
-        <div>
+        <div className="relative">
           {result ? (
-            <div className={`rounded-xl border p-6 ${getRiskColor(result.risk_level)}`}>
-              <div className="flex items-center gap-4 mb-6">
-                {getRiskIcon(result.risk_level)}
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900 capitalize">
-                    {result.risk_level} Risk
-                  </h2>
-                  <p className="text-sm text-gray-600">
-                    Confidence: {Math.round(result.confidence * 100)}%
-                  </p>
-                </div>
-              </div>
-
-              {/* Reasons */}
-              <div className="mb-6">
-                <h3 className="font-medium text-gray-900 mb-2">Classification Reasons</h3>
-                <ul className="space-y-2">
-                  {result.reasons.map((reason, i) => (
-                    <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
-                      <span className="text-gray-400">•</span>
-                      {reason}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Requirements */}
-              <div className="mb-6">
-                <h3 className="font-medium text-gray-900 mb-2">Compliance Requirements</h3>
-                <ul className="space-y-2">
-                  {result.requirements.map((req, i) => (
-                    <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
-                      <CheckCircle className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                      {req}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Next Steps */}
-
-              <div>
-                <h3 className="font-medium text-gray-900 mb-2">Next Steps</h3>
-                <ol className="space-y-2">
-                  {result.next_steps.map((step, i) => (
-                    <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
-                      <span className="w-5 h-5 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs flex-shrink-0">
-                        {i + 1}
+            <div className={`rounded-2xl border-0 p-8 glass animate-in overflow-hidden relative group`}>
+              {/* Background Accent Gradient */}
+              <div className={`absolute -right-20 -top-20 w-64 h-64 rounded-full blur-3xl opacity-20 transition-colors duration-500 ${
+                result.risk_level === 'unacceptable' ? 'bg-red-500' :
+                result.risk_level === 'high' ? 'bg-orange-500' :
+                result.risk_level === 'limited' ? 'bg-yellow-500' : 'bg-green-500'
+              }`} />
+              
+              <div className="relative z-10">
+                <div className="flex items-center gap-5 mb-8">
+                  <div className={`p-4 rounded-2xl shadow-inner ${
+                    result.risk_level === 'unacceptable' ? 'bg-red-100' :
+                    result.risk_level === 'high' ? 'bg-orange-100' :
+                    result.risk_level === 'limited' ? 'bg-yellow-100' : 'bg-green-100'
+                  }`}>
+                    {getRiskIcon(result.risk_level)}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-2xl font-black text-gray-900 capitalize tracking-tight">
+                        {result.risk_level} Risk
+                      </h2>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                        result.risk_level === 'unacceptable' ? 'bg-red-200 text-red-800' :
+                        result.risk_level === 'high' ? 'bg-orange-200 text-orange-800' :
+                        result.risk_level === 'limited' ? 'bg-yellow-200 text-yellow-800' : 'bg-green-200 text-green-800'
+                      }`}>
+                        AI Act Classified
                       </span>
-                      {step}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-
-              {/* Compliance Checklist */}
-              {result.risk_level !== 'unacceptable' && (
-                <div className="mt-6">
-                  <h3 className="font-medium text-gray-900 mb-3">
-                    Compliance Checklist
-                  </h3>
-
-                  <ComplianceChecklist
-                    systemId={Number(systemId || 0)}
-                    riskLevel={
-                      result.risk_level as
-                      | 'minimal'
-                      | 'limited'
-                      | 'high'
-                      | 'unacceptable'
-                    }
-                    items={CHECKLIST_ITEMS[result.risk_level] || []}
-                  />
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                            result.confidence > 0.8 ? 'bg-green-500' : 'bg-yellow-500'
+                          }`}
+                          style={{ width: `${result.confidence * 100}%` }}
+                        />
+                      </div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase">
+                        {Math.round(result.confidence * 100)}% Confidence
+                      </p>
+                    </div>
+                  </div>
                 </div>
-              )}
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {/* Left Column: Reasons & Requirements */}
+                  <div className="space-y-8">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <span className="w-1.5 h-4 bg-primary-500 rounded-full"></span>
+                        Why this classification?
+                      </h3>
+                      <ul className="space-y-3">
+                        {result.reasons.map((reason, i) => (
+                          <li key={i} className="text-sm text-gray-600 flex items-start gap-3 group/item">
+                            <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary-400 group-hover/item:scale-125 transition-transform" />
+                            <span className="leading-relaxed">{reason}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <span className="w-1.5 h-4 bg-primary-500 rounded-full"></span>
+                        Legal Requirements
+                      </h3>
+                      <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
+                        <ul className="space-y-3">
+                          {result.requirements.map((req, i) => (
+                            <li key={i} className="text-sm text-gray-700 flex items-start gap-3">
+                              <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                              <span className="font-medium">{req}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Next Steps & Checklist */}
+                  <div className="space-y-8">
+                    <div>
+                      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                        <span className="w-1.5 h-4 bg-primary-500 rounded-full"></span>
+                        Action Plan
+                      </h3>
+                      <div className="space-y-4">
+                        {result.next_steps.map((step, i) => (
+                          <div key={i} className="flex gap-4 group/step">
+                            <div className="flex flex-col items-center">
+                              <div className="w-8 h-8 rounded-full bg-white border-2 border-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold shadow-sm group-hover/step:border-primary-500 group-hover/step:bg-primary-500 group-hover/step:text-white transition-all">
+                                {i + 1}
+                              </div>
+                              {i < result.next_steps.length - 1 && (
+                                <div className="w-0.5 h-full bg-primary-50 my-1" />
+                              )}
+                            </div>
+                            <p className="text-sm text-gray-600 pt-1.5 leading-relaxed">{step}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Compliance Checklist Footer */}
+                {result.risk_level !== 'unacceptable' && (
+                  <div className="mt-10 pt-8 border-t border-gray-100">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-bold text-gray-900">
+                        Interactive Compliance Checklist
+                      </h3>
+                      <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded">
+                        {CHECKLIST_ITEMS[result.risk_level]?.length || 0} ITEMS REQUIRED
+                      </span>
+                    </div>
+
+                    <ComplianceChecklist
+                      systemId={Number(systemId || 0)}
+                      riskLevel={
+                        result.risk_level as
+                        | 'minimal'
+                        | 'limited'
+                        | 'high'
+                        | 'unacceptable'
+                      }
+                      items={CHECKLIST_ITEMS[result.risk_level] || []}
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
-            <div className="bg-gray-50 rounded-xl border border-gray-200 p-8 text-center">
-              <AlertTriangle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900">
-                Complete the Questionnaire
+            <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">
+              <div className="w-20 h-20 bg-gray-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <AlertTriangle className="w-10 h-10 text-gray-300" />
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                Ready for Classification
               </h3>
-              <p className="text-gray-500 mt-2">
-                Answer the questions to determine your AI system's risk classification
-                under the EU AI Act.
+              <p className="text-gray-500 max-w-sm mx-auto leading-relaxed">
+                Complete the questionnaire to generate your AI Act risk profile and compliance roadmap.
               </p>
+              <div className="mt-8 flex justify-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-primary-200 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 rounded-full bg-primary-200 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 rounded-full bg-primary-200 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
             </div>
           )}
         </div>

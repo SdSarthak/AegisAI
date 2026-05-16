@@ -18,6 +18,7 @@ pydantic==2.5.3
 pydantic-settings==2.1.0
 email-validator==2.1.0
 python-dotenv==1.0.0
+PyYAML==6.0.1
 
 # ── Payments (Stripe) ─────────────────────────────────────────────────────────
 stripe==7.12.0
@@ -50,6 +51,7 @@ httpx==0.26.0
 
 # ── PDF Utilities ────────────────────────────────────────────────────────────────
 pdfplumber==0.10.3
+pypdf>=3.0.0            # required by LangChain's PyPDFLoader
 
 # ── Testing ───────────────────────────────────────────────────────────────────
 pytest==7.4.4

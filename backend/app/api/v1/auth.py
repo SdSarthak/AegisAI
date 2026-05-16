@@ -1,3 +1,17 @@
+"""
+Authentication API — JWT-based user registration, login, and token management.
+
+This module populates two FastAPI routers:
+  - ``router``       — mounted at /api/v1/auth  (register, login, me, change-password)
+  - ``users_router`` — mounted at /api/v1/users (PATCH /me for profile updates)
+
+Dependencies:
+  - python-jose  : JWT creation and verification
+  - bcrypt        : password hashing via passlib
+  - SQLAlchemy    : ORM session for User persistence
+  - pydantic      : request/response schema validation
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 import re

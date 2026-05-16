@@ -120,6 +120,15 @@ AegisAI/
 │   │   ├── schemas/         # Pydantic request/response schemas
 │   │   └── modules/
 │   │       ├── guard/       # LLM Guard — regex + DeBERTa classifier + sanitizer
+│   │       │   ├── training/ # Standard ML training pipeline
+│   │       │   │   ├── configs/     # YAML training configuration
+│   │       │   │   ├── data/        # Dataset loading, preprocessing, splitting
+│   │       │   │   ├── evaluation/  # Metrics and evaluator
+│   │       │   │   ├── pipelines/   # Train and evaluate pipeline entry points
+│   │       │   │   ├── trainer/     # IntentClassifier trainer wrapper
+│   │       │   │   ├── utils/       # Logging, seed, checkpoints, MLflow helpers
+│   │       │   │   └── artifacts/   # Checkpoints, metrics, reports
+│   │       │   └── models/classifier/ # Fine-tuned guard classifier output
 │   │       ├── rag/         # RAG — FAISS vector store + LangChain chain + feedback
 │   │       ├── llm/         # OpenAI-compatible LLM client
 │   │       └── badge/       # SVG compliance badge generator
