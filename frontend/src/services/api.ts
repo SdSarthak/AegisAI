@@ -125,4 +125,18 @@ export const notificationsApi = {
     api.post('/notifications/read', { ids }),
 }
 
+
+// Health API — uses root URL, not /api/v1
+export interface HealthResponse {
+  status: "healthy" | "degraded";
+  database: "connected" | "disconnected";
+  version: string;
+  service: string;
+}
+
+export const checkHealth = async (): Promise<HealthResponse> => {
+  const response = await axios.get<HealthResponse>("/health"); // plain axios, not `api`
+  return response.data;
+};
+
 export default api
