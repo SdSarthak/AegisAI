@@ -25,6 +25,7 @@ export default function Documents() {
   const [selectedSystem, setSelectedSystem] = useState<number | null>(null)
   const [selectedType, setSelectedType] = useState('technical_documentation')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
+  const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
 
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ['documents'],
@@ -33,7 +34,7 @@ export default function Documents() {
 
   const { data: systems = [] } = useQuery({
     queryKey: ['ai-systems'],
-    queryFn: aiSystemsApi.list,
+    queryFn: () => aiSystemsApi.list(),
   })
 
   const generateMutation = useMutation({
@@ -48,6 +49,7 @@ export default function Documents() {
     mutationFn: documentsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
+      setDocumentToDelete(null)
     },
   })
 
@@ -192,7 +194,7 @@ export default function Documents() {
                     <Download className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => deleteMutation.mutate(doc.id)}
+                    onClick={() => setDocumentToDelete(doc)}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
                   >
                     <Trash2 className="w-5 h-5" />
@@ -210,6 +212,38 @@ export default function Documents() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+
+      {/* Delete Confirmation Modal */}
+      {documentToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+              Delete Document
+            </h2>
+            <p className="text-gray-600">
+              Are you sure you want to delete {documentToDelete.title}? This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3 pt-6">
+              <button
+                type="button"
+                onClick={() => setDocumentToDelete(null)}
+                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteMutation.mutate(documentToDelete.id)}
+                disabled={deleteMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

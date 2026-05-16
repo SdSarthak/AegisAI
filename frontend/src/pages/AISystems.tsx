@@ -28,11 +28,13 @@ export default function AISystems() {
   const [complianceFilter, setComplianceFilter] = useState('')
   const [sortBy, setSortBy] = useState('created_at')
   const [order, setOrder] = useState('desc')
+  const [systemToDelete, setSystemToDelete] = useState<AISystem | null>(null)
 
-  const { data: systems = [], isLoading } = useQuery({
+  const { data: systemsData, isLoading } = useQuery({
     queryKey: ['ai-systems', sortBy, order],
     queryFn: () => aiSystemsApi.list({ sort_by: sortBy, order }),
   })
+  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 
   const createMutation = useMutation({
     mutationFn: aiSystemsApi.create,
@@ -47,6 +49,7 @@ export default function AISystems() {
     mutationFn: aiSystemsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-systems'] })
+      setSystemToDelete(null)
     },
   })
 
@@ -283,7 +286,7 @@ export default function AISystems() {
                     <Edit className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => deleteMutation.mutate(system.id)}
+                    onClick={() => setSystemToDelete(system)}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
                   >
                     <Trash2 className="w-5 h-5" />
@@ -312,6 +315,38 @@ export default function AISystems() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+
+      {/* Delete Confirmation Modal */}
+      {systemToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+              Delete AI System
+            </h2>
+            <p className="text-gray-600">
+              Are you sure you want to delete {systemToDelete.name}? This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3 pt-6">
+              <button
+                type="button"
+                onClick={() => setSystemToDelete(null)}
+                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteMutation.mutate(systemToDelete.id)}
+                disabled={deleteMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
