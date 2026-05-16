@@ -7,6 +7,12 @@ import Dashboard from './pages/Dashboard'
 import AISystems from './pages/AISystems'
 import Classification from './pages/Classification'
 import Documents from './pages/Documents'
+import Notifications from './pages/Notifications'
+import Analytics from './pages/Analytics'
+import NotFound from './pages/NotFound'
+import { Toaster } from 'react-hot-toast'
+import RagChat from './pages/RagChat'
+
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -15,23 +21,51 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 
 function App() {
   return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/register" element={<Register />} />
-      <Route
-        path="/"
-        element={
-          <PrivateRoute>
-            <Layout />
-          </PrivateRoute>
-        }
-      >
-        <Route index element={<Dashboard />} />
-        <Route path="ai-systems" element={<AISystems />} />
-        <Route path="classification/:systemId?" element={<Classification />} />
-        <Route path="documents" element={<Documents />} />
-      </Route>
-    </Routes>
+    <>
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          success: {
+            style: {
+              background: '#f0fdf4',
+              color: '#166534',
+              border: '1px solid #bbf7d0',
+            },
+          },
+          error: {
+            style: {
+              background: '#fef2f2',
+              color: '#991b1b',
+              border: '1px solid #fecaca',
+            },
+          },
+        }}
+      />
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route
+          path="/"
+          element={
+            <PrivateRoute>
+              <Layout />
+            </PrivateRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="analytics" element={<Analytics />} />
+          <Route path="ai-systems" element={<AISystems />} />
+          <Route path="classification/:systemId?" element={<Classification />} />
+          <Route path="documents" element={<Documents />} />
+          <Route path="rag-chat" element={<RagChat />} />
+          <Route path="notifications" element={<Notifications />} />
+          <Route path="rag-chat" element={<RagChat />} />
+
+        </Route>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </>
   )
 }
 
