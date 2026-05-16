@@ -27,16 +27,18 @@ export default function Documents() {
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
 
-  const { data: documents = [], isLoading } = useQuery({
+  const { data: documentsData, isLoading } = useQuery({
     queryKey: ['documents'],
     queryFn: documentsApi.list,
   })
+  const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
 
-  const { data: systems = [] } = useQuery({
+  const { data: systemsData } = useQuery({
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
-
+  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
+  
   const generateMutation = useMutation({
     mutationFn: documentsApi.generate,
     onSuccess: () => {
