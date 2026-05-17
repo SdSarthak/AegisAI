@@ -1,13 +1,28 @@
 """
-RAG Intelligence API — regulatory knowledge base query endpoint.
+RAG (Retrieval-Augmented Generation) Module
+
+This module implements a RAG pipeline for querying regulatory knowledge bases
+using FAISS vector storage, LangChain retrieval workflows, and OpenAI-compatible embeddings.
+
+Main Functionality:
+- Retrieves relevant document chunks using FAISS vector similarity search
+- Generates responses grounded in retrieved context using retrieval chains
+
+RAG Pipeline:
+- Converts user queries into embeddings
+- Searches for relevant document chunks
+- Uses retrieved context to generate answers
+
+Feedback Loop:
+- Stores user feedback (thumbs up/down) in the RAGFeedback model
+- Helps track and improve response quality over time
+
+Admin Features:
+- Provides an endpoint to identify low-quality chunks based on feedback
+- Supports maintenance and improvement of the knowledge base
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-Contributor note:
-  - POST /rag/ingest implemented: multipart PDF upload → document_loader → FAISS rebuild
-  - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - TODO: Integrate MLflow tracking from modules/rag/ml_flow.py
-  - TODO: Add streaming responses via SSE for long answers
 """
 
 import os
