@@ -668,6 +668,7 @@ def update_guard_config(
     }
 
 
+
 @router.post("/scan/batch", response_model=BulkScanResponse)
 def bulk_scan_prompts(
     request: BulkScanRequest,
