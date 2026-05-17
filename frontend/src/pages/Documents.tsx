@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus, Edit } from 'lucide-react'
+import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 
 interface Document {
@@ -26,6 +26,7 @@ export default function Documents() {
   const [selectedType, setSelectedType] = useState('technical_documentation')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
+  const [copiedId, setCopiedId] = useState<number | null>(null)
 
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ['documents'],
@@ -89,6 +90,20 @@ export default function Documents() {
       console.error('Save failed:', error)
     }
   }
+  const handleCopy = async (doc: Document) => {
+  if (!doc.content) return
+
+  try {
+    await navigator.clipboard.writeText(doc.content)
+    setCopiedId(doc.id)
+
+    setTimeout(() => {
+      setCopiedId(null)
+    }, 2000)
+  } catch (error) {
+    console.error('Copy failed:', error)
+  }
+}
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -120,6 +135,7 @@ export default function Documents() {
           <Plus className="w-5 h-5" />
           Generate Document
         </button>
+        
       </div>
 
       {systems.length === 0 && (
@@ -177,6 +193,17 @@ export default function Documents() {
                   >
                     <Edit className="w-5 h-5" />
                   </button>
+                  <button
+                  onClick={() => handleCopy(doc)}
+                  className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
+                  title="Copy"
+                >
+                  {copiedId === doc.id ? (
+                    <Check className="w-5 h-5" />
+                  ) : (
+                    <Copy className="w-5 h-5" />
+                  )}
+                </button>
                   <button
                     onClick={() => {
                       // Download as text file
