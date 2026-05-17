@@ -20,7 +20,7 @@ export default function Login() {
 
     try {
       const tokenData = await authApi.login(email, password)
-      setAuth(tokenData.access_token, null)  
+      setAuth(tokenData.access_token,null)  
       const user = await authApi.getMe()     
       setAuth(tokenData.access_token, user)  
       navigate('/')
