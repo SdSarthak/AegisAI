@@ -70,6 +70,7 @@ export const aiSystemsApi = {
     description?: string
     use_case?: string
     sector?: string
+    image_url?: string
   }) => {
     const { data } = await api.post('/ai-systems/', system)
     return data

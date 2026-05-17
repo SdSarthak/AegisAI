@@ -10,6 +10,7 @@ class AISystemCreate(BaseModel):
     version: Optional[str] = None
     use_case: Optional[str] = None
     sector: Optional[str] = None
+    image_url: Optional[str] = None
 
 
 class AISystemUpdate(BaseModel):
@@ -18,6 +19,7 @@ class AISystemUpdate(BaseModel):
     version: Optional[str] = None
     use_case: Optional[str] = None
     sector: Optional[str] = None
+    image_url: Optional[str] = None
     questionnaire_responses: Optional[Dict[str, Any]] = None
 
 
@@ -28,6 +30,7 @@ class AISystemResponse(BaseModel):
     version: Optional[str]
     use_case: Optional[str]
     sector: Optional[str]
+    image_url: Optional[str] = None
     risk_level: Optional[RiskLevel]
     compliance_status: ComplianceStatus
     compliance_score: Optional[float] = None

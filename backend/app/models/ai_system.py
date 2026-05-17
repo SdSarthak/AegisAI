@@ -30,6 +30,7 @@ class AISystem(Base):
     name = Column(String(255), nullable=False)
     description = Column(Text)
     version = Column(String(50))
+    image_url = Column(Text, nullable=True)
 
     # Classification
     use_case = Column(String(255))  # e.g., "CV Screening", "Candidate Ranking"
