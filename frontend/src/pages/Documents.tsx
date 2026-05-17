@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus, Edit } from 'lucide-react'
+import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 
 interface Document {
@@ -26,6 +26,21 @@ export default function Documents() {
   const [selectedType, setSelectedType] = useState('technical_documentation')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
+  const [copiedDocId, setCopiedDocId] = useState<number | null>(null)
+
+  const handleCopy = async (docId: number, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content)
+
+      setCopiedDocId(docId)
+
+      setTimeout(() => {
+        setCopiedDocId(null)
+      }, 2000)
+    } catch (error) {
+      console.error('Failed to copy content:', error)
+    }
+  }
 
   const { data: documentsData, isLoading } = useQuery({
     queryKey: ['documents'],
@@ -179,6 +194,19 @@ export default function Documents() {
                   >
                     <Edit className="w-5 h-5" />
                   </button>
+
+                  <button
+                    onClick={() => handleCopy(doc.id, doc.content || '')}
+                    className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
+                    title={copiedDocId === doc.id ? 'Copied!' : 'Copy Markdown'}
+                  >
+                    {copiedDocId === doc.id ? (
+                      <Check className="w-5 h-5" />
+                    ) : (
+                      <Copy className="w-5 h-5" />
+                    )}
+                  </button>
+
                   <button
                     onClick={() => {
                       // Download as text file
@@ -195,6 +223,7 @@ export default function Documents() {
                   >
                     <Download className="w-5 h-5" />
                   </button>
+
                   <button
                     onClick={() => setDocumentToDelete(doc)}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
