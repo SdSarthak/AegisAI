@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus, Edit } from 'lucide-react'
+import { FileText, Download, Trash2, Plus, Edit, Search } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 
 interface Document {
@@ -26,6 +26,11 @@ export default function Documents() {
   const [selectedType, setSelectedType] = useState('technical_documentation')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
+
+  // NEW: search and filter state
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterType, setFilterType] = useState('')
+  const [filterStatus, setFilterStatus] = useState('')
 
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ['documents'],
@@ -62,6 +67,24 @@ export default function Documents() {
     { value: 'human_oversight_plan', label: 'Human Oversight Plan' },
   ]
 
+  const statusOptions = [
+    { value: 'generated', label: 'Generated' },
+    { value: 'reviewed', label: 'Reviewed' },
+    { value: 'approved', label: 'Approved' },
+  ]
+
+  // NEW: filtered documents based on search and filters
+  const filteredDocuments = useMemo(() => {
+    return documents.filter((doc: Document) => {
+      const matchesSearch = doc.title
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase())
+      const matchesType = filterType ? doc.document_type === filterType : true
+      const matchesStatus = filterStatus ? doc.status === filterStatus : true
+      return matchesSearch && matchesType && matchesStatus
+    })
+  }, [documents, searchQuery, filterType, filterStatus])
+
   const handleGenerate = () => {
     if (!selectedSystem) return
     generateMutation.mutate({
@@ -72,16 +95,12 @@ export default function Documents() {
 
   const handleSaveDocument = async (content: string) => {
     if (!editingDoc) return
-
     try {
       const response = await fetch(`/api/v1/documents/${editingDoc.id}`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content }),
       })
-
       if (response.ok) {
         queryClient.invalidateQueries({ queryKey: ['documents'] })
       }
@@ -92,14 +111,10 @@ export default function Documents() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'approved':
-        return 'bg-green-100 text-green-700'
-      case 'reviewed':
-        return 'bg-blue-100 text-blue-700'
-      case 'generated':
-        return 'bg-yellow-100 text-yellow-700'
-      default:
-        return 'bg-gray-100 text-gray-700'
+      case 'approved': return 'bg-green-100 text-green-700'
+      case 'reviewed': return 'bg-blue-100 text-blue-700'
+      case 'generated': return 'bg-yellow-100 text-yellow-700'
+      default: return 'bg-gray-100 text-gray-700'
     }
   }
 
@@ -128,19 +143,57 @@ export default function Documents() {
         </div>
       )}
 
+      {/* NEW: Search and Filter Bar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex items-center gap-2 flex-1 bg-white border border-gray-200 rounded-lg px-3 py-2">
+          <Search className="w-4 h-4 text-gray-400 shrink-0" />
+          <input
+            type="text"
+            placeholder="Search documents..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 outline-none text-sm text-gray-900 placeholder:text-gray-400"
+          />
+        </div>
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 bg-white"
+        >
+          <option value="">All Types</option>
+          {documentTypes.map((type) => (
+            <option key={type.value} value={type.value}>
+              {type.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 bg-white"
+        >
+          <option value="">All Statuses</option>
+          {statusOptions.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
       {isLoading ? (
         <div className="text-center py-12 text-gray-500">Loading...</div>
-      ) : documents.length === 0 ? (
+      ) : filteredDocuments.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-medium text-gray-900">No documents yet</h3>
+          <h3 className="text-lg font-medium text-gray-900">No documents found</h3>
           <p className="text-gray-500 mt-1">
-            Generate your first compliance document
+            Try adjusting your search or filters
           </p>
         </div>
       ) : (
         <div className="grid gap-4">
-          {documents.map((doc: Document) => (
+          {filteredDocuments.map((doc: Document) => (
             <div
               key={doc.id}
               className="bg-white rounded-xl border border-gray-200 p-6"
@@ -156,11 +209,7 @@ export default function Documents() {
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
                         {doc.document_type.replace(/_/g, ' ')}
                       </span>
-                      <span
-                        className={`text-xs px-2 py-1 rounded ${getStatusColor(
-                          doc.status
-                        )}`}
-                      >
+                      <span className={`text-xs px-2 py-1 rounded ${getStatusColor(doc.status)}`}>
                         {doc.status}
                       </span>
                       <span className="text-xs text-gray-500">
@@ -179,10 +228,7 @@ export default function Documents() {
                   </button>
                   <button
                     onClick={() => {
-                      // Download as text file
-                      const blob = new Blob([doc.content || ''], {
-                        type: 'text/markdown',
-                      })
+                      const blob = new Blob([doc.content || ''], { type: 'text/markdown' })
                       const url = URL.createObjectURL(blob)
                       const a = document.createElement('a')
                       a.href = url
@@ -201,8 +247,6 @@ export default function Documents() {
                   </button>
                 </div>
               </div>
-
-              {/* Preview */}
               {doc.content && (
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <pre className="text-xs text-gray-600 bg-gray-50 p-3 rounded-lg overflow-auto max-h-32">
@@ -215,14 +259,11 @@ export default function Documents() {
         </div>
       )}
 
-
       {/* Delete Confirmation Modal */}
       {documentToDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
-              Delete Document
-            </h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Delete Document</h2>
             <p className="text-gray-600">
               Are you sure you want to delete {documentToDelete.title}? This cannot be undone.
             </p>
@@ -251,14 +292,10 @@ export default function Documents() {
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Generate Document
-            </h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Generate Document</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  AI System
-                </label>
+                <label className="block text-sm font-medium text-gray-700">AI System</label>
                 <select
                   value={selectedSystem || ''}
                   onChange={(e) => setSelectedSystem(parseInt(e.target.value))}
@@ -266,25 +303,19 @@ export default function Documents() {
                 >
                   <option value="">Select AI system...</option>
                   {systems.map((system: AISystem) => (
-                    <option key={system.id} value={system.id}>
-                      {system.name}
-                    </option>
+                    <option key={system.id} value={system.id}>{system.name}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Document Type
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Document Type</label>
                 <select
                   value={selectedType}
                   onChange={(e) => setSelectedType(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
                   {documentTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
+                    <option key={type.value} value={type.value}>{type.label}</option>
                   ))}
                 </select>
               </div>
