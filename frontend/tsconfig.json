@@ -13,6 +13,8 @@
     "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
+     // Ignore TypeScript baseUrl deprecation warnings for compatibility
+    "ignoreDeprecations": "5.0",
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
