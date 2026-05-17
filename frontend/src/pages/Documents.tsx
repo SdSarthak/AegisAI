@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { FileText, Download, Trash2, Plus, Edit } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
+import CopyButton from '../components/CopyButton'
 
 interface Document {
   id: number
@@ -172,6 +173,15 @@ export default function Documents() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  {doc.content && (
+                    <CopyButton
+                      text={doc.content}
+                      label="Copy"
+                      copiedLabel="Copied!"
+                      successMessage="Document copied!"
+                      iconOnly
+                    />
+                  )}
                   <button
                     onClick={() => setEditingDoc(doc)}
                     className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"

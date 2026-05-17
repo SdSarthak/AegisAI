@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { AlertCircle, Bot, FileText, Loader2, Send, Sparkles, User } from 'lucide-react'
+import CopyButton from '../components/CopyButton'
 
 interface RagSource {
   title: string
@@ -9,6 +10,18 @@ interface RagSource {
 interface RagAnswer {
   answer: string
   sources: RagSource[]
+}
+
+function buildAnswerExport(answer: RagAnswer): string {
+  return [
+    'AI Response',
+    answer.answer,
+    '',
+    'Source citations',
+    ...answer.sources.map(
+      (source, index) => `${index + 1}. ${source.title}\n${source.excerpt}`
+    ),
+  ].join('\n')
 }
 
 export default function RagChat() {
@@ -179,6 +192,16 @@ export default function RagChat() {
                         <Bot className="w-5 h-5 text-primary-600" />
                       </div>
                       <div className="space-y-5 min-w-0">
+                        <div className="flex items-center justify-between gap-3">
+                          <h3 className="text-sm font-semibold text-gray-900">
+                            Generated answer
+                          </h3>
+                          <CopyButton
+                            text={buildAnswerExport(answer)}
+                            label="Copy Answer"
+                            successMessage="Answer copied!"
+                          />
+                        </div>
                         <p className="text-gray-700 leading-7">{answer.answer}</p>
                         <div className="border-t border-gray-100 pt-5">
                           <h3 className="text-sm font-semibold text-gray-900 mb-3">
