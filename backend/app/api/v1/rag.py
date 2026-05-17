@@ -3,6 +3,14 @@ RAG Intelligence API — regulatory knowledge base query endpoint.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 
+TODO for contributors (high difficulty):
+  - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
+  - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
+  - Add streaming responses via SSE for long answers
+"""
+
+import time
+from fastapi import APIRouter, Depends, HTTPException, status
 Contributor note:
   - POST /rag/ingest implemented: multipart PDF upload → document_loader → FAISS rebuild
   - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
@@ -26,6 +34,8 @@ from app.models.rag_feedback import RAGFeedback
 from app.models.user import SubscriptionTier, User
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.vector_store import create_vector_store
+from app.models.rag_query import RagQuery
+from typing import Optional
 
 router = APIRouter()
 
@@ -154,28 +164,51 @@ def query_knowledge_base(
         from app.core.database import Base
 
         qa_chain = get_qa_chain()
+
+        t_start = time.monotonic()
         result = qa_chain({"query": request.question})
+        latency_ms = (time.monotonic() - t_start) * 1000
+
         source_docs = result.get("source_documents", [])
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
+        answer = str(result.get("result", ""))
 
         # Ensure tables exist on this DB bind (useful for test DB overrides)
         try:
             Base.metadata.create_all(bind=db.get_bind())
         except Exception:
-            # best-effort: ignore if bind not available
             pass
 
-        # Persist an initial RAGFeedback row to capture the answer and contributing chunks
+        # Persist feedback row
         feedback = RAGFeedback(
             question=request.question,
-            answer=str(result.get("result", "")),
+            answer=answer,
             source_chunks=sources,
         )
         db.add(feedback)
+        rag_query = RagQuery(
+            user_id=current_user.id,
+            question=request.question,
+            answer_summary=str(result.get("result", ""))[:200],
+            source_count=len(sources),
+        )
+        db.add(rag_query)
         db.commit()
         db.refresh(feedback)
-        answer_id = feedback.id
 
+        # Log to MLflow (non-blocking — failures are swallowed inside log_query)
+        try:
+            from app.modules.rag.ml_flow import log_query
+            log_query(
+                question=request.question,
+                answer=answer,
+                sources=sources,
+                latency_ms=latency_ms,
+            )
+        except Exception:
+            pass
+
+        return RAGQueryResponse(answer=answer, sources=sources, answer_id=feedback.id)
         return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
     except FileNotFoundError as e:
         raise HTTPException(
@@ -274,3 +307,36 @@ def get_low_quality_chunks(
             low_quality.append({"chunk": chunk, "thumbs_down": c["thumbs_down"], "total": c["total"], "ratio": ratio})
 
     return {"threshold": threshold, "low_quality_chunks": low_quality}
+
+
+@router.get("/history")
+def get_rag_history(
+    page: int = 1,
+    page_size: int = 10,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return paginated list of the current user's past RAG queries."""
+    offset = (page - 1) * page_size
+    queries = (
+        db.query(RagQuery)
+        .filter(RagQuery.user_id == current_user.id)
+        .order_by(RagQuery.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+    return {
+        "page": page,
+        "page_size": page_size,
+        "results": [
+            {
+                "id": q.id,
+                "question": q.question,
+                "answer_summary": q.answer_summary,
+                "source_count": q.source_count,
+                "created_at": q.created_at,
+            }
+            for q in queries
+        ],
+    }
