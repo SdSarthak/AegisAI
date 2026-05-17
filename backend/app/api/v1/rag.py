@@ -1,13 +1,142 @@
 """
-RAG Intelligence API — regulatory knowledge base query endpoint.
+RAG Intelligence API — ``backend/app/api/v1/rag.py``
+=====================================================
+
+FastAPI router exposing AegisAI's Retrieval-Augmented Generation (RAG)
+pipeline under the ``/api/v1/rag`` prefix.
+
+Users can upload regulatory PDFs, query them in natural language, and receive
+answers grounded in indexed source documents — not solely in LLM training data.
+The module also tracks per-answer feedback to surface low-quality chunks for
+re-ingestion.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 
-Contributor note:
-  - POST /rag/ingest implemented: multipart PDF upload → document_loader → FAISS rebuild
-  - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - TODO: Integrate MLflow tracking from modules/rag/ml_flow.py
-  - TODO: Add streaming responses via SSE for long answers
+Endpoints
+---------
++--------+---------------------------+------------+----------------------------------------------+
+| Method | Path                      | Auth       | Description                                  |
++========+===========================+============+==============================================+
+| POST   | /rag/ingest               | Required   | Upload PDFs → chunk → rebuild FAISS index    |
++--------+---------------------------+------------+----------------------------------------------+
+| POST   | /rag/query                | Required   | Ask a regulatory question; returns answer    |
+|        |                           |            | grounded in indexed source documents         |
++--------+---------------------------+------------+----------------------------------------------+
+| GET    | /rag/health               | None       | Returns FAISS index availability status      |
++--------+---------------------------+------------+----------------------------------------------+
+| POST   | /rag/feedback             | Required   | Thumbs-up / thumbs-down on a returned answer |
++--------+---------------------------+------------+----------------------------------------------+
+| GET    | /rag/low-quality-chunks   | SCALE only | Chunks where thumbs_down ratio > threshold   |
++--------+---------------------------+------------+----------------------------------------------+
+
+RAG Query Pipeline  (POST /rag/query)
+--------------------------------------
+::
+
+    User question (string)
+        │
+        ▼
+    retrieval_chain.get_qa_chain()
+        │  LangChain RetrievalQA chain backed by:
+        │    • FAISS vector store  (from settings.FAISS_INDEX_PATH)
+        │    • OpenAI-compatible embeddings
+        │    • Configured LLM
+        ▼
+    Top-K retrieved document chunks  (semantic nearest-neighbour)
+        │
+        ▼
+    LLM  (generates answer grounded in retrieved chunks)
+        │
+        ▼
+    RAGQueryResponse
+        ├── answer     — LLM-generated regulatory answer
+        ├── sources    — list of source document paths
+        └── answer_id  — UUID of the persisted RAGFeedback row
+
+Document Ingestion Pipeline  (POST /rag/ingest)
+------------------------------------------------
+::
+
+    Uploaded PDF files  (multipart/form-data)
+        │
+        ▼
+    Saved to a temp directory  (cleaned up automatically via try/finally)
+        │
+        ▼
+    document_loader.load_documents_from_paths()
+        │  Chunks PDFs into overlapping text segments
+        ▼
+    vector_store.create_vector_store()
+        │  Embeds chunks → persists FAISS index to settings.FAISS_INDEX_PATH
+        ▼
+    RAGIngestResponse
+        ├── files_processed  — PDFs successfully chunked
+        ├── chunks_created   — total text chunks embedded
+        └── index_size_bytes — on-disk size of index.faiss + index.pkl
+
+Feedback & Quality Loop
+-----------------------
+Every ``POST /rag/query`` call persists a ``RAGFeedback`` row capturing the
+question, generated answer, and contributing source chunks.
+
+Users vote via ``POST /rag/feedback`` (``"up"`` or ``"down"``).
+
+Admins (``SubscriptionTier.SCALE``) query ``GET /rag/low-quality-chunks`` to
+surface chunks where ``thumbs_down / total_feedback > threshold`` — indicating
+the chunk is misleading or outdated and should be re-ingested.
+
+HTTP Error Codes
+----------------
+- ``400`` — No valid PDFs uploaded, or PDFs contain no extractable text
+- ``403`` — ``/low-quality-chunks`` accessed by a non-SCALE user
+- ``404`` — ``answer_id`` not found in ``POST /rag/feedback``
+- ``503`` — FAISS index not yet built (``/query``), or index build failed (``/ingest``)
+
+Configuration  (``backend/.env`` → ``app.core.config.Settings``)
+-----------------------------------------------------------------
+::
+
+    FAISS_INDEX_PATH=./data/faiss_index    # dir containing index.faiss + index.pkl
+    LLM_API_KEY=your-key                   # or "ollama" for local inference
+    LLM_BASE_URL=https://api.openai.com/v1 # OpenAI-compatible endpoint
+    LLM_MODEL=gpt-4o-mini                  # model identifier
+
+Usage Examples
+--------------
+::
+
+    # Ingest the EU AI Act PDF
+    curl -X POST http://localhost:8000/api/v1/rag/ingest \
+         -H "Authorization: Bearer <token>" \
+         -F "files=@eu_ai_act.pdf"
+
+    # Ask a regulatory question
+    curl -X POST http://localhost:8000/api/v1/rag/query \
+         -H "Authorization: Bearer <token>" \
+         -H "Content-Type: application/json" \
+         -d '{"question": "Does my CV-screening tool qualify as high-risk under the EU AI Act?"}'
+
+    # Vote on an answer
+    curl -X POST http://localhost:8000/api/v1/rag/feedback \
+         -H "Authorization: Bearer <token>" \
+         -H "Content-Type: application/json" \
+         -d '{"answer_id": "<uuid>", "vote": "up"}'
+
+Open TODOs
+----------
+- Pre-load EU AI Act, GDPR, ISO 42001, and NIST AI RMF as built-in source documents
+- Integrate MLflow experiment tracking via ``app.modules.rag.ml_flow``
+- Add streaming responses via Server-Sent Events (SSE) for long answers
+
+See Also
+--------
+- ``app.modules.rag.retrieval_chain`` — get_qa_chain() LangChain assembly
+- ``app.modules.rag.document_loader`` — PDF chunking logic
+- ``app.modules.rag.vector_store``    — FAISS index build and health check
+- ``app.modules.rag.ml_flow``         — MLflow tracking helpers
+- ``app.models.rag_feedback``         — RAGFeedback SQLAlchemy ORM model
+- ``app.core.config``                 — Settings and FAISS_INDEX_PATH
 """
 
 import os
