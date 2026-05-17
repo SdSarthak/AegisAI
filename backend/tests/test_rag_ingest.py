@@ -40,6 +40,16 @@ PATCH_LOAD_DOCS = "app.api.v1.rag.load_documents_from_paths"
 PATCH_CREATE_VS = "app.api.v1.rag.create_vector_store"
 
 
+@pytest.fixture(autouse=True)
+def override_security_auth():
+    from app.core.security import get_current_user
+    from app.main import app
+    
+    app.dependency_overrides[get_current_user] = _mock_current_user
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
+
+
 # ---------------------------------------------------------------------------
 # Test class
 # ---------------------------------------------------------------------------

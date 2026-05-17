@@ -62,34 +62,41 @@ def test_query_feedback_and_low_quality_flow(client):
         return lambda payload: fake_result
 
     mod.get_qa_chain = _fake_get_qa_chain
+    orig_mod = sys.modules.get("app.modules.rag.retrieval_chain")
     sys.modules["app.modules.rag.retrieval_chain"] = mod
 
-    # Call query endpoint
-    resp = client.post("/api/v1/rag/query", json={"question": "What is X?"})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "answer" in data and data["answer"] == "Test answer"
-    assert "answer_id" in data
-    answer_id = data["answer_id"]
+    try:
+        # Call query endpoint
+        resp = client.post("/api/v1/rag/query", json={"question": "What is X?"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "answer" in data and data["answer"] == "Test answer"
+        assert "answer_id" in data
+        answer_id = data["answer_id"]
 
-    # Submit a thumbs-down for that answer
-    resp2 = client.post("/api/v1/rag/feedback", json={"answer_id": answer_id, "vote": "down"})
-    assert resp2.status_code == 200
+        # Submit a thumbs-down for that answer
+        resp2 = client.post("/api/v1/rag/feedback", json={"answer_id": answer_id, "vote": "down"})
+        assert resp2.status_code == 200
 
-    # Now query low-quality-chunks as admin: override current_user to be admin
-    def _admin_user():
-        u = User()
-        u.id = 2
-        u.email = "admin@example.com"
-        u.subscription_tier = SubscriptionTier.SCALE
-        return u
+        # Now query low-quality-chunks as admin: override current_user to be admin
+        def _admin_user():
+            u = User()
+            u.id = 2
+            u.email = "admin@example.com"
+            u.subscription_tier = SubscriptionTier.SCALE
+            return u
 
-    app.dependency_overrides[get_current_user] = _admin_user
+        app.dependency_overrides[get_current_user] = _admin_user
 
-    resp3 = client.get("/api/v1/rag/low-quality-chunks?threshold=0.0")
-    assert resp3.status_code == 200
-    out = resp3.json()
-    assert "low_quality_chunks" in out
-    # Should contain our two chunks (since total feedback for the answer was 1 down)
-    chunks = {c["chunk"] for c in out["low_quality_chunks"]}
-    assert "doc1.pdf#chunk1" in chunks or "doc2.pdf#chunk2" in chunks
+        resp3 = client.get("/api/v1/rag/low-quality-chunks?threshold=0.0")
+        assert resp3.status_code == 200
+        out = resp3.json()
+        assert "low_quality_chunks" in out
+        # Should contain our two chunks (since total feedback for the answer was 1 down)
+        chunks = {c["chunk"] for c in out["low_quality_chunks"]}
+        assert "doc1.pdf#chunk1" in chunks or "doc2.pdf#chunk2" in chunks
+    finally:
+        if orig_mod is not None:
+            sys.modules["app.modules.rag.retrieval_chain"] = orig_mod
+        else:
+            sys.modules.pop("app.modules.rag.retrieval_chain", None)

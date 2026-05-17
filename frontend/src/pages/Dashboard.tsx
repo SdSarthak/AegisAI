@@ -145,6 +145,7 @@ export default function Dashboard() {
               name: string
               risk_level: string | null
               compliance_status: string
+              image_url?: string | null
             }) => (
               <div
                 key={system.id}
@@ -152,8 +153,8 @@ export default function Dashboard() {
               >
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-lg bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0 border border-gray-100">
-                    {(system as any).image_url ? (
-                      <img src={(system as any).image_url} alt={system.name} className="w-full h-full object-cover" />
+                    {system.image_url ? (
+                      <img src={system.image_url} alt={system.name} className="w-full h-full object-cover" />
                     ) : (
                       <Bot className="w-5 h-5 text-gray-400" />
                     )}
@@ -178,6 +179,7 @@ export default function Dashboard() {
                       <Clock className="w-3 h-3" />
                       {system.compliance_status.replace('_', ' ')}
                     </span>
+                  </div>
                   </div>
                 </div>
                 <Link

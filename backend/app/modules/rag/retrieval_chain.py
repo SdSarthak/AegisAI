@@ -1,6 +1,6 @@
 """LangChain retrieval-augmented generation chain for regulatory queries."""
 
-from langchain.chains import RetrievalQA
+from langchain_classic.chains import RetrievalQA
 from langchain_openai import ChatOpenAI
 from app.core.config import settings
 from .vector_store import load_vector_store

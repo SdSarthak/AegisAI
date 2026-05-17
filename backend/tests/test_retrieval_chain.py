@@ -45,7 +45,7 @@ class TestRetrievalChain:
 
     @patch("app.modules.rag.retrieval_chain.load_vector_store")
     @patch("app.modules.rag.retrieval_chain.ChatOpenAI")
-    @patch("langchain.chains.RetrievalQA.from_chain_type")
+    @patch("langchain_classic.chains.RetrievalQA.from_chain_type")
     def test_get_qa_chain_returns_chain(self, mock_from_chain_type, mock_llm, mock_load_vs):
         """3. get_qa_chain() should return a chain when the index exists."""
         # Setup: Mock vector store and its retriever
@@ -95,7 +95,7 @@ class TestRetrievalChain:
         mock_chain.return_value = expected_response
         
         # We patch RetrievalQA.from_chain_type locally to return our mock_chain
-        with patch("langchain.chains.RetrievalQA.from_chain_type", return_value=mock_chain):
+        with patch("langchain_classic.chains.RetrievalQA.from_chain_type", return_value=mock_chain):
             chain = get_qa_chain()
             
             # Simulate asking a question
