@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X } from 'lucide-react'
+import { formatDistanceToNow } from 'date-fns'
 
 interface AISystem {
   id: number
@@ -12,6 +13,7 @@ interface AISystem {
   risk_level: string | null
   compliance_status: string
   compliance_score: number
+  updated_at: string
 }
 
 export default function AISystems() {
@@ -257,6 +259,15 @@ export default function AISystems() {
                     {system.description && (
                       <p className="text-gray-600 text-sm mt-1">{system.description}</p>
                     )}
+
+                    {system.updated_at && (
+                      <p className="text-xs text-gray-400 mt-2">
+                        Updated{' '}
+                        {formatDistanceToNow(new Date(system.updated_at), {
+                          addSuffix: true,
+                        })}
+                      </p>
+                    )}    
                     <div className="flex items-center gap-3 mt-2">
                       {system.sector && (
                         <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
