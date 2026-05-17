@@ -220,7 +220,29 @@ export default function AISystems() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-500">Loading...</div>
+        <div className="grid gap-4">
+          {[...Array(4)].map((_, index) => (
+            <div
+              key={index}
+              className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse"
+            >
+              <div className="flex justify-between items-start">
+                <div className="space-y-3 flex-1">
+                  <div className="h-5 bg-gray-200 rounded w-1/3"></div>
+
+                  <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+
+                  <div className="flex gap-2">
+                    <div className="h-5 w-20 bg-gray-200 rounded"></div>
+                    <div className="h-5 w-24 bg-gray-200 rounded"></div>
+                  </div>
+                </div>
+
+                <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : filteredSystems.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />
