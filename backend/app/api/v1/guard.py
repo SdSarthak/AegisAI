@@ -79,9 +79,22 @@ def scan_prompt(
     db: Session = Depends(get_db),
 ):
     """
-    Scan a prompt for injection risks.
-    Returns a decision: allow, sanitize, or block.
-    """
+Scan a prompt for potential prompt injection risks.
+
+Args:
+    request (ScanRequest): Request payload containing
+        the prompt to analyze.
+    current_user (User): Currently authenticated user.
+    db (Session): Database session dependency used for
+        storing scan logs.
+
+Returns:
+    ScanResponse: Scan decision, confidence score,
+        reasoning, and matched pattern information.
+
+Raises:
+    HTTPException: Raised when prompt scanning fails.
+"""
     limited, retry_after = _check_rate_limit(current_user.id)
     if limited:
         return JSONResponse(
@@ -137,7 +150,13 @@ def scan_prompt(
 
 @router.get("/health", tags=["LLM Guard"])
 def guard_health():
-    """Check if the Guard module is available."""
+    """
+Check the availability status of the LLM Guard module.
+
+Returns:
+    dict: Status information indicating whether
+        the guard service is available.
+"""
     return {"module": "llm_guard", "status": "available"}
 
 
@@ -154,7 +173,20 @@ def get_guard_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the current user's Guard scan history, newest first."""
+    """
+Retrieve the authenticated user's prompt scan history.
+
+Args:
+    page (int): Page number for paginated results.
+    limit (int): Maximum number of scan logs per page.
+    db (Session): Database session dependency.
+    current_user (User): Currently authenticated user.
+
+Returns:
+    PaginatedResponse[GuardScanLogResponse]:
+        Paginated scan history records ordered
+        by newest first.
+"""
     base_query = (
         db.query(GuardScanLog)
         .filter(GuardScanLog.user_id == current_user.id)
@@ -179,8 +211,15 @@ VALID_SANITIZATION_LEVELS = {"low", "medium", "high"}
 @router.get("/config", tags=["LLM Guard"])
 def get_guard_config(current_user: User = Depends(get_current_user)):
     """
-    Get per-user guard configuration.
-    """
+Retrieve the guard configuration for the authenticated user.
+
+Args:
+    current_user (User): Currently authenticated user.
+
+Returns:
+    dict: Guard configuration including sanitization
+        level and threshold settings.
+"""
 
     default_config = {
         "sanitization_level": "medium",
@@ -197,8 +236,20 @@ def update_guard_config(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Update per-user guard configuration.
-    """
+Update the guard configuration for the authenticated user.
+
+Args:
+    config (GuardConfigRequest): Request payload containing
+        updated guard configuration values.
+    current_user (User): Currently authenticated user.
+
+Returns:
+    dict: Success message and updated configuration details.
+
+Raises:
+    HTTPException: Raised when configuration values
+        are invalid.
+"""
 
     if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
         raise HTTPException(
@@ -251,10 +302,21 @@ def bulk_scan_prompts(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Scan a batch of prompts (max 50) for injection risks.
-    Processes sequentially to respect memory constraints.
-    Returns a decision for each prompt.
-    """
+Scan multiple prompts for potential prompt injection risks.
+
+Args:
+    request (BulkScanRequest): Request payload containing
+        multiple prompts for batch scanning.
+    current_user (User): Currently authenticated user.
+
+Returns:
+    BulkScanResponse: Batch scan results including
+        decisions, confidence scores, and processing summary.
+
+Raises:
+    HTTPException: Raised when the request exceeds
+        batch size limits or scanning fails.
+"""
     if len(request.prompts) > 50:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

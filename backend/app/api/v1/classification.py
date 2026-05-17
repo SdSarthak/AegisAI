@@ -266,9 +266,18 @@ def classify_ai_system(
     data: RiskClassificationRequest, current_user: User = Depends(get_current_user)
 ):
     """
-    Classify an AI system's risk level based on EU AI Act criteria.
-    This is a preliminary classification - full assessment requires more details.
-    """
+Classify the risk level of an AI system based on EU AI Act criteria.
+
+Args:
+    data (RiskClassificationRequest): Questionnaire responses and
+        AI system details used for risk evaluation.
+    current_user (User): Currently authenticated user.
+
+Returns:
+    RiskClassificationResponse: Risk classification result including
+        risk level, confidence score, compliance requirements,
+        and recommended next steps.
+"""
     return classify_risk(data)
 
 
@@ -280,8 +289,23 @@ def classify_and_save(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Classify an AI system and save the result to the database.
-    """
+Classify an AI system and store the assessment results.
+
+Args:
+    system_id (int): Unique identifier of the AI system.
+    data (RiskClassificationRequest): Questionnaire responses
+        used for risk classification.
+    db (Session): Database session dependency.
+    current_user (User): Currently authenticated user.
+
+Returns:
+    RiskClassificationResponse: Calculated risk classification
+        result for the AI system.
+
+Raises:
+    HTTPException: Raised when the requested AI system
+        does not exist.
+"""
     # Get the AI system
     system = (
         db.query(AISystem)
@@ -327,12 +351,16 @@ def get_questionnaire_risk_factors(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Return the static questionnaire metadata used by the risk classification flow.
+Retrieve questionnaire risk factors used in the classification flow.
 
-    This does not query the database because these factors describe the
-    classification rules themselves, not a user's saved questionnaire answers.
-    Keep this list aligned with RiskClassificationRequest and classify_risk().
-    """
+Args:
+    current_user (User): Currently authenticated user.
+
+Returns:
+    List[QuestionnaireRiskFactor]: List of predefined
+        questionnaire risk factors and metadata used for
+        AI risk classification.
+"""
     return QUESTIONNAIRE_RISK_FACTORS
 
 @router.post("/bulk", response_model=BulkClassificationResponse)
@@ -342,9 +370,19 @@ def bulk_classify_systems(
     current_user: User = Depends(get_current_user)
 ):
     """
-    Classify multiple AI systems in one request.
-    Returns per-system classification results and partial failure details.
-    """
+Classify multiple AI systems in a single request.
+
+Args:
+    request (BulkClassificationRequest): Request payload
+        containing AI system identifiers.
+    db (Session): Database session dependency.
+    current_user (User): Currently authenticated user.
+
+Returns:
+    BulkClassificationResponse: Classification results for
+        each requested AI system, including partial failures
+        and validation errors where applicable.
+"""
     results: List[BulkClassificationItem] = []
 
     for system_id in request.system_ids:
@@ -413,10 +451,14 @@ def get_questionnaire_risk_factors(
     current_user: User = Depends(get_current_user),
 ):
     """
-    Return the static questionnaire metadata used by the risk classification flow.
+Retrieve questionnaire risk factors used in the classification flow.
 
-    This does not query the database because these factors describe the
-    classification rules themselves, not a user's saved questionnaire answers.
-    Keep this list aligned with RiskClassificationRequest and classify_risk().
-    """
+Args:
+    current_user (User): Currently authenticated user.
+
+Returns:
+    List[QuestionnaireRiskFactor]: List of predefined
+        questionnaire risk factors and metadata used for
+        AI risk classification.
+"""
     return QUESTIONNAIRE_RISK_FACTORS

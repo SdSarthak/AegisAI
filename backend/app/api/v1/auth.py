@@ -12,6 +12,8 @@ Dependencies:
   - pydantic      : request/response schema validation
 """
 
+import profile
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 import re
@@ -61,7 +63,19 @@ users_router = APIRouter()
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user."""
+    """Register a new user
+    Args:
+        user_data (UserCreate): User registration data including
+            email, password, full name, and company name.
+        db (Session): Database session dependency used for
+            user persistence operations.
+
+    Returns:
+        UserResponse: The newly created user information.
+
+    Raises:
+        HTTPException: Raised when the email is already registered.
+    """
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
@@ -85,7 +99,21 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
-    """Login and get access token."""
+    """
+    Authenticate a user and generate an access token.
+
+    Args:
+        form_data (OAuth2PasswordRequestForm): OAuth2 form containing
+            the user's email and password credentials.
+        db (Session): Database session dependency used to query user data.
+
+    Returns:
+        dict: A dictionary containing the JWT access token and token type.
+
+    Raises:
+        HTTPException: Raised when the credentials are invalid or
+            the user account is inactive.
+    """
     user = db.query(User).filter(User.email == form_data.username).first()
 
     if not user or not verify_password(form_data.password, user.hashed_password):
@@ -110,7 +138,16 @@ def login(
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Get current user information."""
+    """
+    Retrieve information about the authenticated user.
+
+    Args:
+        current_user (User): Currently authenticated user obtained
+            through dependency injection.
+
+    Returns:
+        UserResponse: Details of the authenticated user.
+    """
     return current_user
 
 
@@ -120,7 +157,21 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Change the authenticated user's password."""
+    """Change the authenticated user's password.
+
+    Args:
+        payload (ChangePasswordRequest): Request payload containing
+            the current password and new password.
+        current_user (User): Currently authenticated user.
+        db (Session): Database session dependency used to
+            update user credentials.
+
+    Returns:
+        dict: Success message confirming password update.
+
+    Raises:
+        HTTPException: Raised when the current password is incorrect.
+    """
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -139,7 +190,16 @@ def update_current_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update the authenticated user's profile details."""
+    """Update the authenticated user's profile details.
+    Args:
+        user_data (UserUpdateSchema): Updated user profile fields.
+        current_user (User): Currently authenticated user.
+        db (Session): Database session dependency used for
+            updating user information.
+
+    Returns:
+        UserResponse: Updated user profile information.
+    """
     if user_data.full_name is not None:
         current_user.full_name = user_data.full_name
     if user_data.company_name is not None:
@@ -156,7 +216,18 @@ def get_current_user_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get stats summary for the authenticated user."""
+    """
+    Retrieve usage and compliance statistics for the authenticated user.
+
+    Args:
+        current_user (User): Currently authenticated user.
+        db (Session): Database session dependency used to
+            retrieve user statistics.
+
+    Returns:
+        UserStatsResponse: Summary of systems, documents,
+            compliance status, and risk breakdown.
+    """
     systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
 
     risk_breakdown: dict = {}

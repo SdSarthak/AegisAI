@@ -165,7 +165,18 @@ def create_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new document."""
+    """
+Create a new compliance document.
+
+Args:
+    doc_data (DocumentCreate): Request payload containing
+        document details and associated AI system information.
+    db (Session): Database session dependency.
+    current_user (User): Currently authenticated user.
+
+Returns:
+    DocumentResponse: Newly created document information.
+"""
     document = Document(
         owner_id=current_user.id,
         title=doc_data.title,
@@ -186,7 +197,19 @@ def list_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List all documents for the current user with pagination."""
+    """
+Retrieve paginated documents belonging to the authenticated user.
+
+Args:
+    page (int): Page number for paginated results.
+    limit (int): Maximum number of documents per page.
+    db (Session): Database session dependency.
+    current_user (User): Currently authenticated user.
+
+Returns:
+    PaginatedResponse[DocumentResponse]: Paginated list
+        of user documents.
+"""
     base_query = db.query(Document).filter(Document.owner_id == current_user.id)
     total = base_query.count()
     offset = (page - 1) * limit
@@ -201,7 +224,20 @@ def get_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get a specific document."""
+    """
+Retrieve a specific document by its identifier.
+
+Args:
+    document_id (int): Unique identifier of the document.
+    db (Session): Database session dependency.
+    current_user (User): Currently authenticated user.
+
+Returns:
+    DocumentResponse: Details of the requested document.
+
+Raises:
+    HTTPException: Raised when the document does not exist.
+"""
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -221,7 +257,22 @@ def update_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update document content."""
+    """
+Update the content of an existing document.
+
+Args:
+    document_id (int): Unique identifier of the document.
+    body (DocumentUpdateRequest): Request payload containing
+        updated document content.
+    db (Session): Database session dependency.
+    current_user (User): Currently authenticated user.
+
+Returns:
+    DocumentResponse: Updated document information.
+
+Raises:
+    HTTPException: Raised when the document does not exist.
+"""
     # Fetch document
     document = db.query(Document).filter(
         Document.id == document_id,
@@ -247,7 +298,22 @@ def generate_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate a compliance document for an AI system."""
+    """
+Generate a compliance document for an AI system.
+
+Args:
+    request (DocumentGenerateRequest): Request payload
+        containing AI system and document generation details.
+    db (Session): Database session dependency.
+    current_user (User): Currently authenticated user.
+
+Returns:
+    DocumentResponse: Generated compliance document.
+
+Raises:
+    HTTPException: Raised when the AI system or document
+        template is not found.
+"""
     # Get the AI system
     ai_system = (
         db.query(AISystem)
@@ -327,7 +393,20 @@ def delete_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a document."""
+    """
+Delete a document belonging to the authenticated user.
+
+Args:
+    document_id (int): Unique identifier of the document.
+    db (Session): Database session dependency.
+    current_user (User): Currently authenticated user.
+
+Returns:
+    None: Endpoint returns no response body on successful deletion.
+
+Raises:
+    HTTPException: Raised when the document does not exist.
+"""
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -349,14 +428,21 @@ def export_document_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Export a document as a PDF file.
-    
-    Returns:
-        - Response status 200 with PDF bytes
-        - Content-Type: application/pdf
-        - File starts with %PDF- magic bytes
-        - File size > 1KB
     """
+Export a document as a PDF file.
+
+Args:
+    document_id (int): Unique identifier of the document.
+    db (Session): Database session dependency.
+    current_user (User): Currently authenticated user.
+
+Returns:
+    StreamingResponse: Generated PDF document as a downloadable file.
+
+Raises:
+    HTTPException: Raised when the document does not exist,
+        contains no content, or PDF generation fails.
+"""
     # Retrieve the document
     document = db.query(Document).filter(
         Document.id == document_id,
