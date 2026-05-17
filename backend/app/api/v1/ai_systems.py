@@ -21,6 +21,7 @@ from app.schemas.ai_system import (
     ComplianceStatusUpdateSchema,
 )
 from app.core.config import settings
+from app.schemas.audit_log import AISystemAuditLogResponse
 from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
@@ -287,6 +288,56 @@ def export_ai_systems(
         headers={"Content-Disposition": "attachment; filename=\"ai_systems.csv\""},
     )
 
+@router.get(
+    "/{system_id}/history",
+    response_model=PaginatedResponse[AISystemAuditLogResponse],
+)
+def get_ai_system_history(
+    system_id: int,
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get audit history for a specific AI system."""
+
+    system = (
+        db.query(AISystem)
+        .filter(
+            AISystem.id == system_id,
+            AISystem.owner_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found",
+        )
+
+    base_query = (
+        db.query(AISystemAuditLog)
+        .filter(AISystemAuditLog.ai_system_id == system_id)
+    )
+
+    total = base_query.count()
+
+    logs = (
+        base_query
+        .order_by(AISystemAuditLog.changed_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+
+    return PaginatedResponse(
+        items=logs,
+        total=total,
+        page=page,
+        limit=limit,
+    )
+
 
 @router.get("/{system_id}", response_model=AISystemResponse)
 def get_ai_system(
@@ -330,7 +381,8 @@ def update_ai_system(
     update_data = system_data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(system, field, value)
-
+    
+    system._changed_by_id = current_user.id
     db.commit()
     db.refresh(system)
     return system
@@ -378,46 +430,8 @@ def update_ai_system_status(
         )
 
     system.compliance_status = payload.compliance_status
+    system._changed_by_id = current_user.id
     db.commit()
     db.refresh(system)
     return system
 
-
-
-@router.get("/{system_id}/history")
-def get_ai_system_history(
-    system_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Get audit history for a specific AI system."""
-
-    system = db.query(AISystem).filter(
-        AISystem.id == system_id,
-        AISystem.owner_id == current_user.id,
-    ).first()
-
-    if not system:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="AI system not found",
-        )
-
-    history = (
-        db.query(AISystemAuditLog)
-        .filter(AISystemAuditLog.ai_system_id == system_id)
-        .order_by(desc(AISystemAuditLog.changed_at))
-        .all()
-    )
-
-    return [
-        {
-            "id": log.id,
-            "ai_system_id": log.ai_system_id,
-            "changed_by_id": log.changed_by_id,
-            "old_values": log.old_values,
-            "new_values": log.new_values,
-            "changed_at": log.changed_at,
-        }
-        for log in history
-    ]
