@@ -49,7 +49,14 @@ def client(db_engine):
     def override_get_db():
         yield session
     
+    from app.api.v1.auth import get_current_user
+    from app.models.user import User
+
+    def override_get_current_user():
+        return User(id=1, email="test@example.com", is_active=True, hashed_password="fake")
+
     app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_get_current_user
     
     client = TestClient(app)
     yield client
