@@ -30,10 +30,9 @@ def _scan_prompt_file(client: httpx.Client, base_url: str, headers: dict[str, st
 
 
 def main() -> int:
-    base_url = os.environ["AEGISAI_GUARD_URL"].rstrip("/")
-    token = os.environ["AEGISAI_API_TOKEN"]
+    base_url = os.environ.get("AEGISAI_GUARD_URL", "").rstrip("/")
+    token = os.environ.get("AEGISAI_API_TOKEN", "")
     report_path = os.environ.get("AEGISAI_GUARD_SCAN_REPORT", "guard-scan-report.json")
-    headers = {"Authorization": f"Bearer {token}"}
 
     prompt_files = _load_prompt_files()
     if not prompt_files:
@@ -41,6 +40,14 @@ def main() -> int:
         with open(report_path, "w", encoding="utf-8") as report_file:
             json.dump({"status": "skipped", "prompt_files": []}, report_file)
         return 0
+
+    if not base_url or not token:
+        print("Guard scan skipped: Missing AEGISAI_GUARD_URL or AEGISAI_API_TOKEN secrets.")
+        with open(report_path, "w", encoding="utf-8") as report_file:
+            json.dump({"status": "skipped", "prompt_files": prompt_files, "error": "Missing credentials"}, report_file)
+        return 0
+
+    headers = {"Authorization": f"Bearer {token}"}
 
     blocked: list[dict] = []
     results: list[dict] = []

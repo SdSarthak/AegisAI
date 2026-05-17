@@ -66,3 +66,20 @@ def test_scan_prompts_passes_clean_prompt(tmp_path, monkeypatch):
 
     assert exit_code == 0
     assert (tmp_path / "report.json").exists()
+
+
+def test_scan_prompts_skips_when_credentials_missing(tmp_path, monkeypatch):
+    module = _load_scan_module()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("AEGISAI_GUARD_URL", raising=False)
+    monkeypatch.delenv("AEGISAI_API_TOKEN", raising=False)
+    monkeypatch.setenv("AEGISAI_GUARD_SCAN_REPORT", str(tmp_path / "report.json"))
+
+    prompts_dir = tmp_path / ".prompts"
+    prompts_dir.mkdir()
+    (prompts_dir / "safe.txt").write_text("Summarize the policy in three bullets.", encoding="utf-8")
+
+    exit_code = module.main()
+
+    assert exit_code == 0
+    assert (tmp_path / "report.json").exists()
