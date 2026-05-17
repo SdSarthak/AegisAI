@@ -51,14 +51,14 @@ export default function Dashboard() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Overview of your EU AI Act compliance status</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+          <p className="text-gray-600 dark:text-gray-400">Overview of your EU AI Act compliance status</p>
         </div>
         <BackendStatus />
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" aria-busy={isLoading} role="region" aria-label="Dashboard statistics">
         {stats.map((stat) => (
           <div
             key={stat.name}
@@ -71,9 +71,12 @@ export default function Dashboard() {
               <div>
                 <p className="text-sm text-gray-600">{stat.name}</p>
                 {isLoading ? (
-                  <Skeleton className="h-8 w-12 mt-1" />
+                  <>
+                    <Skeleton className="h-8 w-12 mt-1" aria-hidden="true" />
+                    <span className="sr-only">Loading {stat.name} count</span>
+                  </>
                 ) : (
-                  <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
                 )}
               </div>
             </div>
@@ -113,9 +116,10 @@ export default function Dashboard() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Your AI Systems</h2>
         {isLoading ? (
-          <div className="space-y-3">
+          <div className="space-y-3" role="status" aria-label="Loading AI systems">
+            <span className="sr-only">Loading AI systems list…</span>
             {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center justify-between p-4 rounded-lg border border-gray-200">
+              <div key={i} className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700" aria-hidden="true">
                 <div className="space-y-2 flex-1">
                   <Skeleton className="h-5 w-1/3" />
                   <div className="flex gap-2">

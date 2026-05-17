@@ -130,9 +130,10 @@ export default function Documents() {
       )}
 
       {isLoading ? (
-        <div className="grid gap-4">
+        <div className="grid gap-4" role="status" aria-label="Loading documents">
+          <span className="sr-only">Loading documents list…</span>
           {[1, 2, 3].map((i) => (
-            <div key={i} className="bg-white rounded-xl border border-gray-200 p-6">
+            <div key={i} className="bg-white rounded-xl border border-gray-200 p-6" aria-hidden="true">
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4 flex-1">
                   <Skeleton className="w-12 h-12 rounded-lg" />
