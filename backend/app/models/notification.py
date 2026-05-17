@@ -23,6 +23,7 @@ class NotificationType(str, enum.Enum):
     GUARD_BLOCK = "guard_block"
     COMPLIANCE_DRIFT = "compliance_drift"
     REASSESSMENT_DUE = "reassessment_due"
+    IMPORT_COMPLETED = "import_completed"
 
 
 class Notification(Base):

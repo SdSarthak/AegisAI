@@ -1,15 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import csv
 import io
+import logging
+import json
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem
 from app.models.audit_log import AISystemAuditLog
+from app.models.notification import Notification, NotificationType
 from app.schemas.ai_system import (
     AISystemCreate,
     AISystemUpdate,
@@ -17,6 +20,7 @@ from app.schemas.ai_system import (
     BulkImportResponse,
     ComplianceStatusUpdateSchema,
 )
+from app.core.config import settings
 from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
@@ -89,16 +93,105 @@ def list_ai_systems(
     return PaginatedResponse(items=systems, total=total, page=page, limit=limit)
 
 
+def _process_import_task(
+    content: bytes,
+    user_id: int
+):
+    """Background task to process AI system imports."""
+    from app.core.database import SessionLocal
+    db_session = SessionLocal()
+    created_count = 0
+    errors = []
+    
+    try:
+        decoded_content = content.decode("utf-8")
+        csv_reader = csv.DictReader(io.StringIO(decoded_content))
+        
+        for row_num, row in enumerate(csv_reader, start=2):
+            if row_num - 2 >= settings.MAX_IMPORT_ROWS:
+                logger.warning(f"Import truncated for user {user_id}: exceeded {settings.MAX_IMPORT_ROWS} rows")
+                errors.append({"row": row_num, "error": f"Import truncated: exceeded {settings.MAX_IMPORT_ROWS} rows"})
+                break
+                
+            if not any(row.values()):
+                continue
+
+            name = row.get("name", "").strip()
+            if not name:
+                errors.append({"row": row_num, "error": "name is required"})
+                continue
+            
+            # Check for existing using local session
+            existing = db_session.query(AISystem).filter(
+                AISystem.owner_id == user_id,
+                AISystem.name == name
+            ).first()
+            
+            if existing:
+                errors.append({"row": row_num, "error": f"duplicate name '{name}'"})
+                continue
+
+            try:
+                system = AISystem(
+                    owner_id=user_id,
+                    name=name,
+                    description=row.get("description", "").strip() or None,
+                    version=row.get("version", "").strip() or None,
+                    use_case=row.get("use_case", "").strip() or None,
+                    sector=row.get("sector", "").strip() or None
+                )
+                db_session.add(system)
+                created_count += 1
+            except Exception as e:
+                logger.error(f"Error creating system in import: {str(e)}")
+                errors.append({"row": row_num, "error": str(e)})
+            
+        db_session.commit()
+        
+        # Create a notification for the user
+        status_msg = f"Import completed: {created_count} systems created."
+        if errors:
+            status_msg += f" {len(errors)} errors found."
+            
+        notification = Notification(
+            user_id=user_id,
+            notification_type=NotificationType.IMPORT_COMPLETED,
+            title="Bulk Import Result",
+            message=json.dumps({
+                "summary": status_msg,
+                "created": created_count,
+                "errors": errors[:50]  # Limit to first 50 errors
+            })
+        )
+        db_session.add(notification)
+        db_session.commit()
+
+    except Exception as e:
+        logger.error(f"Error in bulk import background task: {str(e)}")
+        db_session.rollback()
+        notification = Notification(
+            user_id=user_id,
+            notification_type=NotificationType.IMPORT_COMPLETED,
+            title="Bulk Import Failed",
+            message=json.dumps({"error": f"Internal process error: {str(e)}"})
+        )
+        db_session.add(notification)
+        db_session.commit()
+    finally:
+        db_session.close()
+
+
 @router.post("/import", response_model=BulkImportResponse)
 def bulk_import_systems(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Import AI systems from a CSV file."""
-    errors = []
-    created_count = 0
-
+    """
+    Import AI systems from a CSV file.
+    Processing is handled in the background to prevent DoS.
+    """
     if not file.filename or not file.filename.lower().endswith('.csv'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -107,69 +200,44 @@ def bulk_import_systems(
 
     try:
         content = file.file.read()
-        decoded_content = content.decode("utf-8")
 
-        if not decoded_content.strip():
-            return BulkImportResponse(created=0, errors=[])
-
-        f = io.StringIO(decoded_content)
-        csv_reader = csv.DictReader(f)
-
-        if not csv_reader.fieldnames:
+        if len(content) > settings.MAX_IMPORT_FILE_SIZE:
             raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid CSV format: No headers found"
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File too large. Maximum size is {settings.MAX_IMPORT_FILE_SIZE // (1024 * 1024)}MB"
             )
 
-        for row_num, row in enumerate(csv_reader, start=2):
-            if not any(row.values()):
-                continue
-
-            name = row.get("name", "").strip()
-            if not name:
-                errors.append({"row": row_num, "error": "name is required"})
-                continue
-
-            existing = db.query(AISystem).filter(
-                AISystem.owner_id == current_user.id,
-                AISystem.name == name
-            ).first()
-
-            if existing:
-                errors.append({"row": row_num, "error": f"duplicate name '{name}'"})
-                continue
-
-            try:
-                ai_system = AISystem(
-                    owner_id=current_user.id,
-                    name=name,
-                    description=row.get("description", "").strip() or None,
-                    version=row.get("version", "").strip() or None,
-                    use_case=row.get("use_case", "").strip() or None,
-                    sector=row.get("sector", "").strip() or None
+        # Basic check for headers early
+        try:
+            sample = content[:1024].decode("utf-8")
+            if "name" not in sample.lower():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid CSV format: 'name' column is required"
                 )
-                db.add(ai_system)
-                created_count += 1
-            except Exception as e:
-                errors.append({"row": row_num, "error": str(e)})
+        except UnicodeDecodeError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File must be UTF-8 encoded CSV"
+            )
 
-        db.commit()
-
-    except UnicodeDecodeError:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="File must be UTF-8 encoded CSV"
+        # Offload to Background Task
+        background_tasks.add_task(_process_import_task, content, current_user.id)
+        
+        return BulkImportResponse(
+            message="Bulk import started in the background. Systems will appear in your dashboard shortly.",
+            created=0, 
+            errors=[]
         )
+
     except HTTPException:
         raise
     except Exception as e:
-        db.rollback()
+        logger.error(f"Error initiating import: {str(e)}")
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Error processing CSV: {str(e)}"
+            detail="Failed to initiate bulk import. Please check your file format."
         )
-
-    return BulkImportResponse(created=created_count, errors=errors)
 
 
 @router.get("/export")
