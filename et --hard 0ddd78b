@@ -1,0 +1,81 @@
+[33m8662e40[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32madd-guard-docstring[m[33m, [m[1;31morigin/add-guard-docstring[m[33m)[m docs: improve module-level docstring for rag.py
+[33m0ddd78b[m docs: add module-level docstring to guard.py
+[33m4828f41[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m feat(frontend): enhance AI classification results UI with animations
+[33m3d33c06[m feat: add standardized ML training pipeline for Guard safety classifier
+[33mb7114c4[m feat: add DocumentVersion model for document revision tracking
+[33me364439[m ci: add PyPI publish workflow for guard-sdk
+[33ma272b4e[m feat: add delete confirmation dialogs for AI Systems and Documents
+[33m602dd57[m feat: add backend status indicator to Dashboard
+[33m156398b[m feat: add GET /classification/risk-factors and AI system audit history endpoints
+[33m1294de2[m feat(rag): add POST /rag/ingest multipart PDF upload endpoint
+[33m8d92e63[m fix(frontend): handle paginated API response in AISystems and Dashboard pages
+[33m566075b[m feat(guard): add per-user guard config GET/PATCH endpoints
+[33md7d55a0[m feat: add compliance checklist UI integration
+[33m74f01ff[m feat(frontend): add 404 Not Found page for unknown routes
+[33mc5b7466[m fix(frontend): show dynamic API error messages on login and registration
+[33m0212fc2[m feat(guard): add GuardScanLog SQLAlchemy model and Pydantic schema
+[33m9206afc[m refactor(security): harden JWT payload validation and standardize auth exceptions
+[33mdf56cca[m fix(frontend): replace Vite favicon with AegisAI shield icon
+[33m0942323[m docs: add regulatory governance reference documents to README
+[33m64dbc0a[m fix(frontend): use BACKEND_URL env var for Vite proxy target
+[33m8f0d2b0[m docs(auth): add module-level docstring to auth.py
+[33m6ee0a37[m fix(postman): enable token auto-save after login (#267)
+[33mf6537f7[m fix(rag): improve error handling for missing FAISS index (#266)
+[33m6e7b83f[m feat(infra): add docker-compose.override.yml for Ollama local LLM support (#265)
+[33m312a1c6[m test(guard): add unit tests for all regex rule categories (#253)
+[33m079b824[m feat(compliance): add GET /ai-systems/{id}/history audit log endpoint (#252)
+[33m0065c6a[m feat(frontend): add static analytics dashboard with Recharts charts (#249)
+[33maa03972[m Workflow
+[33m1753913[m feat(frontend): add risk level badge helper with unacceptable tier support
+[33m9ac54e7[m refactor: migrate startup lifecycle to FastAPI lifespan handlers (#247)
+[33mdb004d8[m fix: add required validation for registration fields (#243)
+[33m07564c9[m Added Windows setup note to getting-started docs (#242)
+[33m1b5706e[m Feat/guard sdk standalone (#241)
+[33m2188b33[m test: add full status lifecycle integration test (#214) (#235)
+[33m98b73d4[m feat: add password strength validation to POST /auth/change-password (#213) (#234)
+[33m97a2dda[m Feature/badge generator (#180)
+[33ma8510b0[m feat(frontend): add sort controls to AISystems page
+[33m32875fb[m feat(frontend): add NotificationBell dropdown with animated panel and compliance-relevant content
+[33m1aa86fe[m feat(backend): add SQLAlchemy event listener to log AISystem field changes in audit log
+[33m69a9076[m feat(frontend): wire NotificationBell to live notifications API with polling and mark-as-read
+[33m87a3c8a[m feat(backend): add PaginatedResponse schema and paginate AI systems and documents list endpoints
+[33m62a81c9[m feat(frontend): implement dark mode toggle with localStorage persistence and Tailwind class strategy
+[33me578e5d[m chore: export ComplianceStatusUpdateSchema from schemas package
+[33ma2bb302[m docs: add Colab notebook link to README for Llama regulatory Q&A fine-tuning
+[33m868b77b[m feat(auth): add POST /auth/change-password endpoint (#210)
+[33md1816ff[m feat(compliance): add PATCH /ai-systems/{id}/status endpoint (#209)
+[33m93cba6a[m feat(compliance): add sort_by and order query params to GET /ai-systems (#208)
+[33m94e10ff[m feat(compliance): add GET /ai-systems/export — download registry as CSV (#207)
+[33m762367d[m docs: add regulatory_docs README with EU AI Act source and usage notes
+[33mc2c7195[m feat(guard): add bulk scan endpoint POST /api/v1/guard/scan/batch
+[33m3839fa5[m refactor: use FastAPI lifespan handler for startup and improve /health endpoint
+[33m78ee689[m feat(frontend): integrate ComplianceChecklist into Classification results panel
+[33m139d9f7[m feat(mcp): implement MCP server with scan_prompt, classify, and query_regulations tools
+[33m1ae22dc[m test(guard): add decision engine unit tests covering all 5 branches
+[33meee167d[m feat(docs): implement DocumentEditor with CodeMirror, markdown preview, and auto-save
+[33m096211b[m fix: rename GeminiClient to LLMClient, improve CSV import, expand sanitizer patterns
+[33m026fc92[m docs: update README and all docs to reflect current codebase state
+[33m6914fab[m test(rag): add retrieval chain unit tests with mocked FAISS and LLM
+[33mb367306[m feat(models): change compliance_score to nullable Float in AISystem
+[33mef1a666[m feat(frontend): add global toast notification system with react-hot-toast
+[33mbe8d10f[m feat(frontend): add search and risk/compliance filter to AI Systems page
+[33m5688971[m test(guard): add LLMClient unit tests — retry, backoff, streaming
+[33m56d6f5f[m feat(infra): implement guard-scan GitHub Action for .prompts/ files
+[33me0c8a77[m feat(users): add PATCH /api/v1/users/me update profile endpoint
+[33me4be5f0[m test(guard): add PromptSanitizer unit tests
+[33m2e08bfa[m feat(rag): add feedback endpoint and low-quality chunk flagging
+[33m568866e[m docs: add regulatory comparison — EU AI Act, UK AI Bill, India DPDP
+[33mf14ee81[m feat(ai-systems): add bulk CSV import endpoint POST /ai-systems/import (#149, closes #134)
+[33m56e7c34[m feat(documents): add PDF export endpoint GET /documents/{id}/pdf (#146, closes #55)
+[33m8ed9bbc[m feat(data): add 75-row regulatory QA dataset covering EU AI Act, GDPR, ISO 42001 (#152, closes #43)
+[33mfd4d4a3[m feat(badge): implement SVG compliance badge generator (#151, closes #122)
+[33m3345273[m feat(guard): add per-user rate limiting on POST /guard/scan (#150)
+[33ma1d47c9[m test(guard): verify config path resolution and trained model fallback (#145)
+[33md66e0b6[m feat: add contributor scaffolds for new feature areas
+[33m5db4c17[m Merge pull request #110 from Trinathswain45/feature/sidebar-toggle
+[33mb097fb8[m fix: resolve backend CI failure and suppress Node.js 20 deprecation warnings
+[33mba34886[m test: rewrite guard tests as proper pytest suite
+[33mec2806b[m fix: add ESLint config and remove unused query in Classification
+[33m93868f8[m Build changes
+[33m3b66a10[m docs: comprehensive documentation overhaul
+[33m254a2f7[m chore: initial open-source release of AegisAI v0.1.0
