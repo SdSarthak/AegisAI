@@ -24,6 +24,9 @@ export default function Documents() {
   const [showModal, setShowModal] = useState(false)
   const [selectedSystem, setSelectedSystem] = useState<number | null>(null)
   const [selectedType, setSelectedType] = useState('technical_documentation')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterType, setFilterType] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('all')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
 
@@ -32,6 +35,19 @@ export default function Documents() {
     queryFn: documentsApi.list,
   })
   const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
+  const filteredDocuments = documents.filter((doc: Document) => {
+  const matchesSearch =
+    doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (doc.content || '').toLowerCase().includes(searchQuery.toLowerCase())
+
+  const matchesType =
+    filterType === 'all' || doc.document_type === filterType
+
+  const matchesStatus =
+    filterStatus === 'all' || doc.status === filterStatus
+
+  return matchesSearch && matchesType && matchesStatus
+})
 
   const { data: systemsData } = useQuery({
     queryKey: ['ai-systems'],
@@ -124,6 +140,44 @@ export default function Documents() {
         </button>
       </div>
 
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          <input
+            type="text"
+            placeholder="Search documents..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg"
+          >
+            <option value="all">All Types</option>
+
+            {documentTypes.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg"
+          >
+            <option value="all">All Statuses</option>
+            <option value="generated">Generated</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="approved">Approved</option>
+          </select>
+        </div>
+      </div>
+
+
       {systems.length === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-800 text-sm">
           You need to add an AI system first before generating documents.
@@ -141,8 +195,18 @@ export default function Documents() {
           </p>
         </div>
       ) : (
+        filteredDocuments.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <h3 className="text-lg font-medium text-gray-900">
+            No matching documents
+          </h3>
+          <p className="text-gray-500 mt-1">
+            Try adjusting your search or filters
+          </p>
+        </div>
+      ) : (
         <div className="grid gap-4">
-          {documents.map((doc: Document) => (
+          {filteredDocuments.map((doc: Document) => (
             <div
               key={doc.id}
               className="bg-white rounded-xl border border-gray-200 p-6"
@@ -215,7 +279,7 @@ export default function Documents() {
             </div>
           ))}
         </div>
-      )}
+      ))}
 
 
       {/* Delete Confirmation Modal */}
