@@ -49,7 +49,34 @@ export default function NotificationBell() {
 
   // Live data via useQuery
   const queryClient = useQueryClient()
-  const { data: notifications = [] } = useQuery({
+  const DUMMY_PREVIEWS: NotificationPreview[] = [
+  {
+    id: 1,
+    title: 'Risk Assessment Complete',
+    message: 'Your AI system risk assessment has been completed successfully.',
+    is_read: false,
+    created_at: new Date(Date.now() - 2 * 60 * 1000).toISOString(),
+    type: 'alert',
+  },
+  {
+    id: 2,
+    title: 'Document Generated',
+    message: 'Technical documentation for GPT-4 system has been generated.',
+    is_read: false,
+    created_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+    type: 'update',
+  },
+  {
+    id: 3,
+    title: 'Compliance Update',
+    message: 'EU AI Act compliance guidelines have been updated.',
+    is_read: true,
+    created_at: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+    type: 'news',
+  },
+]
+
+const { data: notifications = DUMMY_PREVIEWS } = useQuery({
     queryKey: ['notifications', 'unread'],
     queryFn: () => notificationsApi.list(true),
     refetchInterval: 60_000,
