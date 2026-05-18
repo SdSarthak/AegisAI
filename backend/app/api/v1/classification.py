@@ -2,7 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 
+
 from pydantic import BaseModel
+
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -10,7 +12,9 @@ from app.models.user import User
 from app.models.ai_system import AISystem, RiskLevel, RiskAssessment, ComplianceStatus
 from app.schemas.ai_system import RiskClassificationRequest, RiskClassificationResponse
 
+
 router = APIRouter()
+
 
 
 class BulkClassificationItem(BaseModel):
@@ -19,17 +23,26 @@ class BulkClassificationItem(BaseModel):
     error: Optional[str] = None
 
 
+
 class BulkClassificationRequest(BaseModel):
     system_ids: List[int]
+
 
 
 class BulkClassificationResponse(BaseModel):
     results: List[BulkClassificationItem]
 
 
+
 def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse:
-    """
-    Classify the risk level of an AI system based on EU AI Act criteria.
+    """Classify an AI system's risk level under the EU AI Act.
+
+    Args:
+        data: The questionnaire responses describing the AI system and its use case.
+
+    Returns:
+        A classification response containing the risk level, confidence, reasons,
+        requirements, and next steps.
     """
     reasons = []
     requirements = []
@@ -150,15 +163,22 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
     )
 
 
+
 @router.post("/classify", response_model=RiskClassificationResponse)
 def classify_ai_system(
     data: RiskClassificationRequest, current_user: User = Depends(get_current_user)
 ):
-    """
-    Classify an AI system's risk level based on EU AI Act criteria.
-    This is a preliminary classification - full assessment requires more details.
+    """Classify an AI system without saving the result.
+
+    Args:
+        data: The questionnaire responses used to determine the system's risk level.
+        current_user: The authenticated user requesting the classification.
+
+    Returns:
+        A risk classification response containing the computed risk level and guidance.
     """
     return classify_risk(data)
+
 
 
 @router.post("/classify/{system_id}", response_model=RiskClassificationResponse)
@@ -168,8 +188,19 @@ def classify_and_save(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Classify an AI system and save the result to the database.
+    """Classify an AI system and persist the result to the database.
+
+    Args:
+        system_id: The ID of the AI system to classify.
+        data: The questionnaire responses used for classification.
+        db: Database session dependency.
+        current_user: The authenticated user performing the classification.
+
+    Returns:
+        The risk classification response for the AI system.
+
+    Raises:
+        HTTPException: If the AI system does not exist or is not owned by the user.
     """
     # Get the AI system
     system = (
@@ -210,15 +241,22 @@ def classify_and_save(
     return result
 
 
+
 @router.post("/bulk", response_model=BulkClassificationResponse)
 def bulk_classify_systems(
     request: BulkClassificationRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Classify multiple AI systems in one request.
-    Returns per-system classification results and partial failure details.
+    """Classify multiple AI systems using stored questionnaire responses.
+
+    Args:
+        request: A list of AI system IDs to classify.
+        db: Database session dependency.
+        current_user: The authenticated user performing the bulk operation.
+
+    Returns:
+        A bulk classification response containing per-system results and errors.
     """
     results: List[BulkClassificationItem] = []
 

@@ -3,12 +3,14 @@ RAG Intelligence API — regulatory knowledge base query endpoint.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 
+
 TODO for contributors (high difficulty):
   - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
   - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
   - Integrate MLflow tracking from modules/rag/ml_flow.py
   - Add streaming responses via SSE for long answers
 """
+
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
@@ -20,11 +22,14 @@ from app.models.rag_feedback import RAGFeedback
 from app.models.user import SubscriptionTier
 from typing import Optional
 
+
 router = APIRouter()
+
 
 
 class RAGQueryRequest(BaseModel):
     question: str
+
 
 
 class RAGQueryResponse(BaseModel):
@@ -33,18 +38,25 @@ class RAGQueryResponse(BaseModel):
     answer_id: Optional[str] = None
 
 
+
 @router.post("/query", response_model=RAGQueryResponse)
 def query_knowledge_base(
     request: RAGQueryRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Ask a regulatory question and get an answer grounded in source documents.
+    """Answer a regulatory question using the RAG knowledge base.
 
-    Example questions:
-    - "Does my CV-screening tool qualify as high-risk under the EU AI Act?"
-    - "What are the transparency requirements for chatbots?"
+    Args:
+        request: The user question to answer.
+        current_user: The authenticated user asking the question.
+        db: Database session dependency.
+
+    Returns:
+        A response containing the answer, cited sources, and stored answer ID.
+
+    Raises:
+        HTTPException: If the RAG chain fails or the knowledge base is unavailable.
     """
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
@@ -88,7 +100,11 @@ def query_knowledge_base(
 
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health():
-    """Check if the RAG module is available."""
+    """Check whether the RAG module and index are available.
+
+    Returns:
+        A status payload indicating whether the RAG index is loaded.
+    """
     from app.modules.rag.vector_store import check_index_exists
     
     index_loaded = check_index_exists()
@@ -108,9 +124,11 @@ def rag_health():
     }
 
 
+
 class RAGFeedbackRequest(BaseModel):
     answer_id: str
     vote: str  # "up" or "down"
+
 
 
 @router.post("/feedback")
@@ -119,7 +137,19 @@ def rag_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Record a thumbs-up or thumbs-down for a previously returned answer."""
+    """Record feedback for a previously returned RAG answer.
+
+    Args:
+        payload: The answer ID and vote direction.
+        current_user: The authenticated user submitting feedback.
+        db: Database session dependency.
+
+    Returns:
+        A confirmation payload containing the stored answer ID.
+
+    Raises:
+        HTTPException: If the referenced answer cannot be found.
+    """
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
@@ -133,15 +163,25 @@ def rag_feedback(
     return {"status": "ok", "answer_id": fb.id}
 
 
+
 @router.get("/low-quality-chunks")
 def get_low_quality_chunks(
     threshold: float = 0.3,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Admin endpoint: aggregate feedback by source chunk and return low-quality candidates.
+    """Return source chunks whose downvote ratio exceeds a threshold.
 
-    A chunk is considered low-quality when thumbs_down / total_feedback > threshold.
+    Args:
+        threshold: The minimum thumbs-down ratio for a chunk to be considered low quality.
+        current_user: The authenticated user requesting the report.
+        db: Database session dependency.
+
+    Returns:
+        A report containing the threshold and the list of low-quality chunks.
+
+    Raises:
+        HTTPException: If the current user is not authorized to access the report.
     """
     # Admin-only access: restrict to system owners / scale tier
     try:

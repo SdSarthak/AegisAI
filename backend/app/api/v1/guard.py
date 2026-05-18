@@ -3,15 +3,18 @@ LLM Guard API — exposes prompt injection scanning as a REST endpoint.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 
+
 TODO for contributors (medium difficulty):
   - Add per-user rate limiting on POST /guard/scan
   - Persist scan results to the database for audit logs
   - Add a GET /guard/stats endpoint returning block/allow/sanitize counts
 """
 
+
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
+
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -19,7 +22,9 @@ from pydantic import BaseModel
 from app.core.security import get_current_user
 from app.models.user import User
 
+
 router = APIRouter()
+
 
 
 _RATE_LIMIT_REQUESTS = 60
@@ -28,8 +33,10 @@ _scan_attempts_by_user: dict[int, deque[datetime]] = defaultdict(deque)
 _rate_limit_lock = Lock()
 
 
+
 class ScanRequest(BaseModel):
     prompt: str
+
 
 
 class ScanResponse(BaseModel):
@@ -41,7 +48,15 @@ class ScanResponse(BaseModel):
 
 
 def _check_rate_limit(user_id: int) -> tuple[bool, int]:
-    """Return whether the user is limited and the seconds to retry after."""
+    """Check whether the user has exceeded the scan rate limit.
+
+    Args:
+        user_id: The authenticated user's unique identifier.
+
+    Returns:
+        A tuple containing a boolean indicating whether the user is rate limited
+        and the number of seconds to wait before retrying.
+    """
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(seconds=_RATE_LIMIT_WINDOW_SECONDS)
 
@@ -69,9 +84,17 @@ def scan_prompt(
     request: ScanRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Scan a prompt for injection risks.
-    Returns a decision: allow, sanitize, or block.
+    """Scan a single prompt for prompt-injection risks.
+
+    Args:
+        request: The prompt text to analyze.
+        current_user: The authenticated user requesting the scan.
+
+    Returns:
+        A scan response containing the decision, confidence, reasoning, and matched patterns.
+
+    Raises:
+        HTTPException: If the underlying guard service fails.
     """
     limited, retry_after = _check_rate_limit(current_user.id)
     if limited:
@@ -116,30 +139,53 @@ def scan_prompt(
 
 @router.get("/health", tags=["LLM Guard"])
 def guard_health():
-    """Check if the Guard module is available."""
+    """Check whether the LLM Guard module is available.
+
+    Returns:
+        A small status payload indicating the guard module is available.
+    """
     return {"module": "llm_guard", "status": "available"}
+
+
 class BulkScanRequest(BaseModel):
     prompts: list[str]
 
     def validate_prompts(self):
+        """Validate that the batch request does not exceed the maximum size.
+
+        Returns:
+            The validated batch request object.
+
+        Raises:
+            ValueError: If more than 50 prompts are provided.
+        """
         if len(self.prompts) > 50:
             raise ValueError("Maximum 50 prompts allowed per batch request.")
         return self
+
 
 class BulkScanResponse(BaseModel):
     results: list[ScanResponse]
     total: int
     processed: int
 
+
 @router.post("/scan/batch", response_model=BulkScanResponse)
 def bulk_scan_prompts(
     request: BulkScanRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Scan a batch of prompts (max 50) for injection risks.
-    Processes sequentially to respect memory constraints.
-    Returns a decision for each prompt.
+    """Scan multiple prompts for prompt-injection risks in a single request.
+
+    Args:
+        request: A batch of prompts to analyze, limited to 50 items.
+        current_user: The authenticated user requesting the batch scan.
+
+    Returns:
+        A bulk scan response containing one result per prompt, plus totals.
+
+    Raises:
+        HTTPException: If the batch size exceeds the allowed limit or the guard service fails.
     """
     if len(request.prompts) > 50:
         raise HTTPException(

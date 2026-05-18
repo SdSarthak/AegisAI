@@ -5,6 +5,7 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
+
 from app.core.database import get_db
 from app.core.security import (
     verify_password,
@@ -17,9 +18,11 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token
 
 
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
+
 
     @field_validator("new_password")
     @classmethod
@@ -37,15 +40,28 @@ class ChangePasswordRequest(BaseModel):
             raise ValueError("Password must contain: " + ", ".join(errors))
         return v
 
+
 router = APIRouter()
 users_router = APIRouter()
+
 
 
 @router.post(
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user."""
+    """Register a new user account.
+
+    Args:
+        user_data: The user registration details, including email, password, and optional profile fields.
+        db: Database session dependency.
+
+    Returns:
+        The newly created user record.
+
+    Raises:
+        HTTPException: If the email is already registered.
+    """
     # Check if email already exists
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
@@ -67,11 +83,23 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     return user
 
 
+
 @router.post("/login", response_model=Token)
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
-    """Login and get access token."""
+    """Authenticate a user and return a bearer access token.
+
+    Args:
+        form_data: OAuth2 password form data containing the username and password.
+        db: Database session dependency.
+
+    Returns:
+        A token payload containing the access token and token type.
+
+    Raises:
+        HTTPException: If the credentials are invalid or the user account is inactive.
+    """
     user = db.query(User).filter(User.email == form_data.username).first()
 
     if not user or not verify_password(form_data.password, user.hashed_password):
@@ -94,10 +122,19 @@ def login(
     return {"access_token": access_token, "token_type": "bearer"}
 
 
+
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Get current user information."""
+    """Return the authenticated user's profile information.
+
+    Args:
+        current_user: The authenticated user resolved from the request token.
+
+    Returns:
+        The current authenticated user's profile record.
+    """
     return current_user
+
 
 
 @router.post("/change-password", status_code=status.HTTP_200_OK)
@@ -106,7 +143,19 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Change the authenticated user's password."""
+    """Change the authenticated user's password.
+
+    Args:
+        payload: The current and new passwords provided by the user.
+        current_user: The authenticated user changing their password.
+        db: Database session dependency.
+
+    Returns:
+        A success message confirming the password update.
+
+    Raises:
+        HTTPException: If the current password is incorrect.
+    """
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -119,13 +168,23 @@ def change_password(
     return {"message": "Password updated successfully"}
 
 
+
 @users_router.patch("/me", response_model=UserResponse)
 def update_current_user_info(
     user_data: UserUpdateSchema,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update the authenticated user's profile details."""
+    """Update the authenticated user's profile details.
+
+    Args:
+        user_data: The profile fields to update.
+        current_user: The authenticated user whose profile is being updated.
+        db: Database session dependency.
+
+    Returns:
+        The updated user record.
+    """
     if user_data.full_name is not None:
         current_user.full_name = user_data.full_name
     if user_data.company_name is not None:
