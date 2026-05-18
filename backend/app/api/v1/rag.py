@@ -3,14 +3,6 @@ RAG Intelligence API — regulatory knowledge base query endpoint.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 
-TODO for contributors (high difficulty):
-  - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
-  - Add streaming responses via SSE for long answers
-"""
-
-import time
-from fastapi import APIRouter, Depends, HTTPException, status
 Contributor note:
   - POST /rag/ingest implemented: multipart PDF upload → document_loader → FAISS rebuild
   - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
@@ -164,25 +156,21 @@ def query_knowledge_base(
         from app.core.database import Base
 
         qa_chain = get_qa_chain()
-
-        t_start = time.monotonic()
         result = qa_chain({"query": request.question})
-        latency_ms = (time.monotonic() - t_start) * 1000
-
         source_docs = result.get("source_documents", [])
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
-        answer = str(result.get("result", ""))
 
         # Ensure tables exist on this DB bind (useful for test DB overrides)
         try:
             Base.metadata.create_all(bind=db.get_bind())
         except Exception:
+            # best-effort: ignore if bind not available
             pass
 
-        # Persist feedback row
+        # Persist an initial RAGFeedback row to capture the answer and contributing chunks
         feedback = RAGFeedback(
             question=request.question,
-            answer=answer,
+            answer=str(result.get("result", "")),
             source_chunks=sources,
         )
         db.add(feedback)
@@ -195,20 +183,8 @@ def query_knowledge_base(
         db.add(rag_query)
         db.commit()
         db.refresh(feedback)
+        answer_id = feedback.id
 
-        # Log to MLflow (non-blocking — failures are swallowed inside log_query)
-        try:
-            from app.modules.rag.ml_flow import log_query
-            log_query(
-                question=request.question,
-                answer=answer,
-                sources=sources,
-                latency_ms=latency_ms,
-            )
-        except Exception:
-            pass
-
-        return RAGQueryResponse(answer=answer, sources=sources, answer_id=feedback.id)
         return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
     except FileNotFoundError as e:
         raise HTTPException(

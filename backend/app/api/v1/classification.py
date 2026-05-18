@@ -124,20 +124,6 @@ class BulkClassificationResponse(BaseModel):
     results: List[BulkClassificationItem]
 
 
-class BulkClassificationItem(BaseModel):
-    system_id: int
-    classification: Optional[RiskClassificationResponse] = None
-    error: Optional[str] = None
-
-
-class BulkClassificationRequest(BaseModel):
-    system_ids: List[int]
-
-
-class BulkClassificationResponse(BaseModel):
-    results: List[BulkClassificationItem]
-
-
 def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse:
     """
     Classify the risk level of an AI system based on EU AI Act criteria.
