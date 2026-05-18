@@ -38,7 +38,8 @@ const DUMMY_NOTIFICATIONS: Notification[] = [
     id: 1,
     notification_type: 'system_classified',
     title: 'AI system classified',
-    message: 'CV Screening AI was classified as High Risk under the EU AI Act.',
+    message:
+      'CV Screening AI was classified as High Risk under the EU AI Act.',
     is_read: false,
     created_at: new Date().toISOString(),
   },
@@ -46,16 +47,16 @@ const DUMMY_NOTIFICATIONS: Notification[] = [
     id: 2,
     notification_type: 'document_generated',
     title: 'Document generated',
-    message: 'Technical Documentation for CV Screening AI is ready to review.',
+    message:
+      'Technical Documentation for CV Screening AI is ready to review.',
     is_read: true,
     created_at: new Date().toISOString(),
   },
 ]
 
 export default function Notifications() {
- 
-
   // TODO (help wanted): replace dummy data with real query
+
   // const { data: notifications = [] } = useQuery({ queryKey: ['notifications'], queryFn: notificationsApi.list })
   const notifications = DUMMY_NOTIFICATIONS
 
@@ -64,9 +65,15 @@ export default function Notifications() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
-          <p className="text-gray-600">Your recent compliance and system events</p>
+          <h1 className="text-2xl font-bold text-gray-900">
+            Notifications
+          </h1>
+
+          <p className="text-gray-600">
+            Your recent compliance and system events
+          </p>
         </div>
+
         {/* TODO (help wanted): wire to POST /notifications/read with all unread IDs */}
         <button className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg border border-gray-200">
           <Check className="w-4 h-4" />
@@ -78,8 +85,14 @@ export default function Notifications() {
       {notifications.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Bell className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-medium text-gray-900">No notifications</h3>
-          <p className="text-gray-500 mt-1">You're all caught up.</p>
+
+          <h3 className="text-lg font-medium text-gray-900">
+            No notifications
+          </h3>
+
+          <p className="text-gray-500 mt-1">
+            You're all caught up.
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -87,7 +100,9 @@ export default function Notifications() {
             <div
               key={n.id}
               className={`bg-white rounded-xl border p-4 flex items-start gap-4 ${
-                n.is_read ? 'border-gray-200' : 'border-primary-200 bg-primary-50'
+                n.is_read
+                  ? 'border-gray-200'
+                  : 'border-primary-200 bg-primary-50'
               }`}
             >
               <div
@@ -95,13 +110,21 @@ export default function Notifications() {
                   n.is_read ? 'bg-gray-300' : 'bg-primary-600'
                 }`}
               />
+
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 text-sm">{n.title}</p>
-                <p className="text-gray-600 text-sm mt-0.5">{n.message}</p>
+                <p className="font-medium text-gray-900 text-sm">
+                  {n.title}
+                </p>
+
+                <p className="text-gray-600 text-sm mt-0.5">
+                  {n.message}
+                </p>
+
                 <p className="text-gray-400 text-xs mt-1">
                   {new Date(n.created_at).toLocaleString()}
                 </p>
               </div>
+
               {/* TODO (help wanted): wire to DELETE /notifications/{id} */}
               <button className="p-1 text-gray-400 hover:text-red-500 rounded">
                 <Trash2 className="w-4 h-4" />

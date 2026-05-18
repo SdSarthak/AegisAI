@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
-import { Bot, Plus, Trash2, Edit, Search, Filter, X } from 'lucide-react'
+import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X } from 'lucide-react'
 
 interface AISystem {
   id: number
@@ -26,11 +26,15 @@ export default function AISystems() {
   const [searchTerm, setSearchTerm] = useState('')
   const [riskFilter, setRiskFilter] = useState('')
   const [complianceFilter, setComplianceFilter] = useState('')
+  const [sortBy, setSortBy] = useState('created_at')
+  const [order, setOrder] = useState('desc')
+  const [systemToDelete, setSystemToDelete] = useState<AISystem | null>(null)
 
-  const { data: systems = [], isLoading } = useQuery({
-    queryKey: ['ai-systems'],
-    queryFn: aiSystemsApi.list,
+  const { data: systemsData, isLoading } = useQuery({
+    queryKey: ['ai-systems', sortBy, order],
+    queryFn: () => aiSystemsApi.list({ sort_by: sortBy, order }),
   })
+  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 
   const createMutation = useMutation({
     mutationFn: aiSystemsApi.create,
@@ -45,6 +49,7 @@ export default function AISystems() {
     mutationFn: aiSystemsApi.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-systems'] })
+      setSystemToDelete(null)
     },
   })
 
@@ -84,6 +89,36 @@ export default function AISystems() {
     'Content Generation',
     'Other',
   ]
+
+  const getRiskBadge = (riskLevel: string | null) => {
+    switch (riskLevel) {
+      case 'unacceptable':
+        return {
+          label: 'Unacceptable',
+          className: 'bg-red-100 text-red-700',
+        }
+      case 'high':
+        return {
+          label: 'High',
+          className: 'bg-orange-100 text-orange-700',
+        }
+      case 'limited':
+        return {
+          label: 'Limited',
+          className: 'bg-yellow-100 text-yellow-700',
+        }
+      case 'minimal':
+        return {
+          label: 'Minimal',
+          className: 'bg-green-100 text-green-700',
+        }
+      default:
+        return {
+          label: 'Unknown',
+          className: 'bg-gray-100 text-gray-700',
+        }
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -141,6 +176,31 @@ export default function AISystems() {
               <option value="under_review">Under Review</option>
               <option value="compliant">Compliant</option>
               <option value="non_compliant">Non Compliant</option>
+            </select>
+          </div>
+          <div className="relative">
+            <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <select
+              id="sort-by-select"
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
+            >
+              <option value="created_at">Sort by Date</option>
+              <option value="name">Sort by Name</option>
+              <option value="risk_level">Sort by Risk Level</option>
+              <option value="compliance_score">Sort by Score</option>
+            </select>
+          </div>
+          <div className="relative">
+            <select
+              id="sort-order-select"
+              value={order}
+              onChange={(e) => setOrder(e.target.value)}
+              className="px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
+            >
+              <option value="desc">Descending</option>
+              <option value="asc">Ascending</option>
             </select>
           </div>
           {(searchTerm || riskFilter || complianceFilter) && (
@@ -213,15 +273,9 @@ export default function AISystems() {
                       )}
                       {system.risk_level && (
                         <span
-                          className={`text-xs px-2 py-1 rounded ${
-                            system.risk_level === 'high'
-                              ? 'bg-red-100 text-red-700'
-                              : system.risk_level === 'limited'
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : 'bg-green-100 text-green-700'
-                          }`}
+                          className={`text-xs px-2 py-1 rounded ${getRiskBadge(system.risk_level).className}`}
                         >
-                          {system.risk_level} risk
+                          {getRiskBadge(system.risk_level).label}
                         </span>
                       )}
                     </div>
@@ -232,7 +286,7 @@ export default function AISystems() {
                     <Edit className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => deleteMutation.mutate(system.id)}
+                    onClick={() => setSystemToDelete(system)}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
                   >
                     <Trash2 className="w-5 h-5" />
@@ -261,6 +315,38 @@ export default function AISystems() {
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+
+      {/* Delete Confirmation Modal */}
+      {systemToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+              Delete AI System
+            </h2>
+            <p className="text-gray-600">
+              Are you sure you want to delete {systemToDelete.name}? This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3 pt-6">
+              <button
+                type="button"
+                onClick={() => setSystemToDelete(null)}
+                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteMutation.mutate(systemToDelete.id)}
+                disabled={deleteMutation.isPending}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

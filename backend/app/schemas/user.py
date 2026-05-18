@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Dict
 from datetime import datetime
 from app.models.user import SubscriptionTier
 
@@ -42,3 +42,10 @@ class Token(BaseModel):
 
 class TokenData(BaseModel):
     user_id: Optional[int] = None
+
+
+class UserStatsResponse(BaseModel):
+    total_systems: int
+    total_documents: int
+    risk_breakdown: Dict[str, int]
+    compliant_systems: int
