@@ -6,18 +6,35 @@ SPDX-License-Identifier: AGPL-3.0-only
 TODO for contributors (high difficulty):
   - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
   - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
-  - Integrate MLflow tracking from modules/rag/ml_flow.py
   - Add streaming responses via SSE for long answers
 """
 
+import time
 from fastapi import APIRouter, Depends, HTTPException, status
+Contributor note:
+  - POST /rag/ingest implemented: multipart PDF upload → document_loader → FAISS rebuild
+  - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
+  - TODO: Integrate MLflow tracking from modules/rag/ml_flow.py
+  - TODO: Add streaming responses via SSE for long answers
+"""
+
+import os
+import shutil
+import tempfile
+from typing import List, Optional
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
-from app.core.security import get_current_user
-from app.models.user import User
-from app.core.database import get_db
 from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.core.database import get_db
+from app.core.security import get_current_user
 from app.models.rag_feedback import RAGFeedback
-from app.models.user import SubscriptionTier
+from app.models.user import SubscriptionTier, User
+from app.modules.rag.document_loader import load_documents_from_paths
+from app.modules.rag.vector_store import create_vector_store
+from app.models.rag_query import RagQuery
 from typing import Optional
 
 router = APIRouter()
@@ -31,6 +48,102 @@ class RAGQueryResponse(BaseModel):
     answer: str
     sources: list[str] = []
     answer_id: Optional[str] = None
+
+
+class RAGIngestResponse(BaseModel):
+    """Response returned after a successful document ingestion."""
+
+    files_processed: int
+    chunks_created: int
+    index_size_bytes: int
+
+
+# ---------------------------------------------------------------------------
+# POST /rag/ingest
+# ---------------------------------------------------------------------------
+@router.post(
+    "/ingest",
+    response_model=RAGIngestResponse,
+    summary="Upload & index regulatory PDFs",
+    tags=["RAG Intelligence"],
+)
+def ingest_documents(
+    files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Accept one or more PDF uploads, process them through the document loader,
+    build (or rebuild) the FAISS vector index, and persist it to
+    ``settings.FAISS_INDEX_PATH``.
+
+    **Returns**
+    - ``files_processed`` – number of PDFs successfully saved and chunked
+    - ``chunks_created``  – total text chunks fed into the vector store
+    - ``index_size_bytes`` – on-disk size of the persisted FAISS index
+
+    **Errors**
+    - ``400`` if no valid PDF files are supplied
+    - ``503`` if the embedding model or FAISS build step fails
+    """
+
+    # ── 1. Validate: at least one PDF ─────────────────────────────────────
+    pdf_files = [
+        f for f in files
+        if f.filename and f.filename.lower().endswith(".pdf")
+        and f.content_type in ("application/pdf", "binary/octet-stream", None)
+    ]
+    if not pdf_files:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid PDF files supplied. Please upload files with a .pdf extension.",
+        )
+
+    # ── 2. Save uploads to a temporary directory ──────────────────────────
+    tmp_dir = tempfile.mkdtemp(prefix="aegis_ingest_")
+    saved_paths: list[str] = []
+
+    try:
+        for upload in pdf_files:
+            dest = os.path.join(tmp_dir, os.path.basename(upload.filename))
+            with open(dest, "wb") as buf:
+                shutil.copyfileobj(upload.file, buf)
+            saved_paths.append(dest)
+
+        # ── 3. Chunk documents (gives us the accurate chunk count) ────────
+        chunks = load_documents_from_paths(saved_paths)
+        if not chunks:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Could not extract any text from the supplied PDFs. "
+                       "Ensure the files are not scanned images or password-protected.",
+            )
+
+        # ── 4. Build / rebuild FAISS index and persist to disk ────────────
+        try:
+            create_vector_store(saved_paths)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Failed to build FAISS index: {exc}",
+            )
+
+        # ── 5. Calculate on-disk index size ───────────────────────────────
+        index_path = settings.FAISS_INDEX_PATH
+        index_size_bytes = 0
+        for fname in ("index.faiss", "index.pkl"):
+            fpath = os.path.join(index_path, fname)
+            if os.path.exists(fpath):
+                index_size_bytes += os.path.getsize(fpath)
+
+        return RAGIngestResponse(
+            files_processed=len(saved_paths),
+            chunks_created=len(chunks),
+            index_size_bytes=index_size_bytes,
+        )
+
+    finally:
+        # ── 6. Always clean up the temp directory ─────────────────────────
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 @router.post("/query", response_model=RAGQueryResponse)
@@ -48,31 +161,54 @@ def query_knowledge_base(
     """
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
+        from app.core.database import Base
 
         qa_chain = get_qa_chain()
+
+        t_start = time.monotonic()
         result = qa_chain({"query": request.question})
+        latency_ms = (time.monotonic() - t_start) * 1000
+
         source_docs = result.get("source_documents", [])
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
+        answer = str(result.get("result", ""))
 
         # Ensure tables exist on this DB bind (useful for test DB overrides)
-        from app.core.database import Base
         try:
             Base.metadata.create_all(bind=db.get_bind())
         except Exception:
-            # best-effort: ignore if bind not available
             pass
 
-        # Persist an initial RAGFeedback row to capture the answer and contributing chunks
+        # Persist feedback row
         feedback = RAGFeedback(
             question=request.question,
-            answer=str(result.get("result", "")),
+            answer=answer,
             source_chunks=sources,
         )
         db.add(feedback)
+        rag_query = RagQuery(
+            user_id=current_user.id,
+            question=request.question,
+            answer_summary=str(result.get("result", ""))[:200],
+            source_count=len(sources),
+        )
+        db.add(rag_query)
         db.commit()
         db.refresh(feedback)
-        answer_id = feedback.id
 
+        # Log to MLflow (non-blocking — failures are swallowed inside log_query)
+        try:
+            from app.modules.rag.ml_flow import log_query
+            log_query(
+                question=request.question,
+                answer=answer,
+                sources=sources,
+                latency_ms=latency_ms,
+            )
+        except Exception:
+            pass
+
+        return RAGQueryResponse(answer=answer, sources=sources, answer_id=feedback.id)
         return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
     except FileNotFoundError as e:
         raise HTTPException(
@@ -171,3 +307,36 @@ def get_low_quality_chunks(
             low_quality.append({"chunk": chunk, "thumbs_down": c["thumbs_down"], "total": c["total"], "ratio": ratio})
 
     return {"threshold": threshold, "low_quality_chunks": low_quality}
+
+
+@router.get("/history")
+def get_rag_history(
+    page: int = 1,
+    page_size: int = 10,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return paginated list of the current user's past RAG queries."""
+    offset = (page - 1) * page_size
+    queries = (
+        db.query(RagQuery)
+        .filter(RagQuery.user_id == current_user.id)
+        .order_by(RagQuery.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+    return {
+        "page": page,
+        "page_size": page_size,
+        "results": [
+            {
+                "id": q.id,
+                "question": q.question,
+                "answer_summary": q.answer_summary,
+                "source_count": q.source_count,
+                "created_at": q.created_at,
+            }
+            for q in queries
+        ],
+    }

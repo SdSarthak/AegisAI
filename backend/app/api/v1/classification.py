@@ -8,9 +8,120 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem, RiskLevel, RiskAssessment, ComplianceStatus
-from app.schemas.ai_system import RiskClassificationRequest, RiskClassificationResponse
+from app.schemas.ai_system import (
+    RiskClassificationRequest,
+    RiskClassificationResponse,
+    QuestionnaireRiskFactor,
+)
 
 router = APIRouter()
+
+QUESTIONNAIRE_RISK_FACTORS: List[QuestionnaireRiskFactor] = [
+    QuestionnaireRiskFactor(
+        id="is_safety_component",
+        question="Is the AI system used as a safety component of a product or system?",
+        article="Article 6(1)",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="affects_fundamental_rights",
+        question="Can the AI system affect fundamental rights such as employment, education, essential services, or access to opportunities?",
+        article="Article 6(2)",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="uses_biometric_data",
+        question="Does the system use biometric data for identification, verification, or categorization?",
+        article="Annex III",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="makes_automated_decisions",
+        question="Does the system make automated decisions without meaningful human review?",
+        article="Article 6 / Annex III context",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="hr_recruitment_screening",
+        question="Is the system used for recruitment, CV screening, candidate filtering, or candidate ranking?",
+        article="Annex III point 4(a)",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="hr_promotion_termination",
+        question="Is the system used for promotion, termination, task allocation, performance evaluation, or employment-related decisions?",
+        article="Annex III point 4(b)",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="credit_worthiness",
+        question="Is the system used to evaluate creditworthiness or determine access to financial resources?",
+        article="Annex III point 5(b)",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="insurance_risk_assessment",
+        question="Is the system used for insurance risk assessment, pricing, or eligibility decisions?",
+        article="Annex III point 5(c)",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="law_enforcement",
+        question="Is the system used by or for law enforcement purposes?",
+        article="Annex III point 6",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="border_control",
+        question="Is the system used for migration, asylum, or border control management?",
+        article="Annex III point 7",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="justice_system",
+        question="Is the system used to assist judicial authorities or influence legal outcomes?",
+        article="Annex III point 8",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="interacts_with_humans",
+        question="Does the system directly interact with humans, such as a chatbot or virtual assistant?",
+        article="Article 52(1)",
+        triggers_level=RiskLevel.LIMITED,
+    ),
+    QuestionnaireRiskFactor(
+        id="generates_synthetic_content",
+        question="Does the system generate synthetic or manipulated audio, image, video, or text content?",
+        article="Article 52(3)",
+        triggers_level=RiskLevel.LIMITED,
+    ),
+    QuestionnaireRiskFactor(
+        id="emotion_recognition",
+        question="Does the system perform emotion recognition?",
+        article="Article 52(3)",
+        triggers_level=RiskLevel.LIMITED,
+    ),
+    QuestionnaireRiskFactor(
+        id="biometric_categorization",
+        question="Does the system perform biometric categorization?",
+        article="Article 52 / Annex III context",
+        triggers_level=RiskLevel.LIMITED,
+    ),
+]
+
+
+class BulkClassificationItem(BaseModel):
+    system_id: int
+    classification: Optional[RiskClassificationResponse] = None
+    error: Optional[str] = None
+
+
+class BulkClassificationRequest(BaseModel):
+    system_ids: List[int]
+
+
+class BulkClassificationResponse(BaseModel):
+    results: List[BulkClassificationItem]
 
 
 class BulkClassificationItem(BaseModel):
@@ -210,6 +321,20 @@ def classify_and_save(
     return result
 
 
+
+@router.get("/risk-factors", response_model=List[QuestionnaireRiskFactor])
+def get_questionnaire_risk_factors(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return the static questionnaire metadata used by the risk classification flow.
+
+    This does not query the database because these factors describe the
+    classification rules themselves, not a user's saved questionnaire answers.
+    Keep this list aligned with RiskClassificationRequest and classify_risk().
+    """
+    return QUESTIONNAIRE_RISK_FACTORS
+
 @router.post("/bulk", response_model=BulkClassificationResponse)
 def bulk_classify_systems(
     request: BulkClassificationRequest,
@@ -281,3 +406,17 @@ def bulk_classify_systems(
 
     db.commit()
     return BulkClassificationResponse(results=results)
+
+    
+@router.get("/risk-factors", response_model=List[QuestionnaireRiskFactor])
+def get_questionnaire_risk_factors(
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return the static questionnaire metadata used by the risk classification flow.
+
+    This does not query the database because these factors describe the
+    classification rules themselves, not a user's saved questionnaire answers.
+    Keep this list aligned with RiskClassificationRequest and classify_risk().
+    """
+    return QUESTIONNAIRE_RISK_FACTORS

@@ -104,3 +104,10 @@ class ComplianceStatusUpdateSchema(BaseModel):
 class BulkImportResponse(BaseModel):
     created: int
     errors: List[Dict[str, Any]]
+
+# Model for Questionnaire Risk Factor
+class QuestionnaireRiskFactor(BaseModel):
+    id: str
+    question: str
+    article: str
+    triggers_level: RiskLevel
