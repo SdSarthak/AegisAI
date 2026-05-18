@@ -54,9 +54,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ -f guard-scan-report.json ]; then
-            COMMENT_BODY=$(python - <<'PY'
-import json
+                       COMMENT_BODY=$(python - <<'PY'
+            import json
 
+            with open('guard-scan-report.json', 'r', encoding='utf-8') as report_file:
+                report = json.load(report_file)
+
+            blocked = report.get('blocked', [])
+
+            if not blocked:
+                print('Guard scan failed, but no blocked prompt details were captured.')
+            else:
+                lines = ['Guard Scan blocked the following prompt files:']
+
+                for item in blocked:
+                    lines.append(f"- `{item['file']}`: {item['patterns']}")
+
+                print('\n'.join(lines))
+            PY
+            )
 with open('guard-scan-report.json', 'r', encoding='utf-8') as report_file:
     report = json.load(report_file)
 
