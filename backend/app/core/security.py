@@ -29,7 +29,13 @@ def _get_credentials_exception() -> HTTPException:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a plain password against its hashed version."""
-    return pwd_context.verify(plain_password, hashed_password)
+    if len(plain_password.encode("utf-8")) > 72:
+        return False
+
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except ValueError:
+        return False
 
 
 def get_password_hash(password: str) -> str:
