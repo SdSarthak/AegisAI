@@ -1,153 +1,349 @@
-import { useState } from 'react'
-import { Outlet, Link, useLocation } from 'react-router-dom'
-import { useAuthStore } from '../stores/authStore'
-import ThemeToggle from './ThemeToggle'
-import NotificationBell from './NotificationBell'
+import { useEffect, useMemo, useState } from 'react'
+import axios from 'axios'
 
-import {
-  LayoutDashboard,
-  Bot,
-  FileCheck,
-  FileText,
-  MessageSquareText,
-  LogOut,
-  Shield,
-  ChevronLeft,
-  ChevronRight,
-  BarChart,
-} from 'lucide-react'
+interface RiskResult {
+  risk_level: string
+  confidence_score?: number
+  reasoning?: string
+}
 
-const navigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'Analytics', href: '/analytics', icon: BarChart },
-  { name: 'AI Systems', href: '/ai-systems', icon: Bot },
-  { name: 'Risk Classification', href: '/classification', icon: FileCheck },
-  { name: 'Documents', href: '/documents', icon: FileText },
-  { name: 'Chatbot', href: '/rag-chat', icon: MessageSquareText },
-]
+interface RiskFormData {
+  system_name: string
+  description: string
+  industry: string
+  uses_biometric_data: boolean
+  uses_ai_decision_making: boolean
+  processes_sensitive_data: boolean
+}
 
-export default function Layout() {
-  const location = useLocation()
-  const { user, logout } = useAuthStore()
+const initialFormState: RiskFormData = {
+  system_name: '',
+  description: '',
+  industry: '',
+  uses_biometric_data: false,
+  uses_ai_decision_making: false,
+  processes_sensitive_data: false,
+}
 
-  const displayName = user?.full_name || user?.email || 'Demo User'
-  const companyName = user?.company_name || 'Free Plan'
+export default function Classification() {
+  const [formData, setFormData] =
+    useState<RiskFormData>(initialFormState)
 
-  const [isCollapsed, setIsCollapsed] = useState(false)
+  const [result, setResult] =
+    useState<RiskResult | null>(null)
+
+  const [loading, setLoading] = useState(false)
+
+  const [error, setError] = useState('')
+
+  /**
+   * Derived risk badge styling
+   */
+  const riskStyles = useMemo(() => {
+    if (!result?.risk_level) {
+      return {
+        badge:
+          'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-200',
+      }
+    }
+
+    switch (result.risk_level.toLowerCase()) {
+      case 'high':
+        return {
+          badge:
+            'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300',
+        }
+
+      case 'medium':
+        return {
+          badge:
+            'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/40 dark:text-yellow-300',
+        }
+
+      case 'low':
+        return {
+          badge:
+            'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300',
+        }
+
+      default:
+        return {
+          badge:
+            'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300',
+        }
+    }
+  }, [result])
+
+  /**
+   * Handle text + checkbox updates
+   */
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
+    const { name, value, type } = e.target
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]:
+        type === 'checkbox'
+          ? (e.target as HTMLInputElement).checked
+          : value,
+    }))
+  }
+
+  /**
+   * Submit risk classification
+   */
+  const handleSubmit = async (
+    e: React.FormEvent<HTMLFormElement>
+  ) => {
+    e.preventDefault()
+
+    setLoading(true)
+    setError('')
+    setResult(null)
+
+    try {
+      const response = await axios.post(
+        '/api/v1/classification/classify',
+        formData
+      )
+
+      setResult(response.data)
+    } catch (err: unknown) {
+      if (axios.isAxiosError(err)) {
+        setError(
+          err.response?.data?.detail ||
+            'Classification failed.'
+        )
+      } else {
+        setError('Unexpected error occurred.')
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  /**
+   * Reset form
+   */
+  const handleReset = () => {
+    setFormData(initialFormState)
+    setResult(null)
+    setError('')
+  }
+
+  useEffect(() => {
+    document.title = 'Risk Classification • AegisAI'
+  }, [])
 
   return (
-    <div className="min-h-screen bg-gray-50 text-black transition-colors duration-200 dark:bg-gray-900 dark:text-white">
-      {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-40 border-r border-gray-200 bg-white transition-all duration-200 dark:border-gray-700 dark:bg-gray-800 ${
-          isCollapsed ? 'w-20' : 'w-64'
-        }`}
-      >
-        {/* Sidebar Header */}
-        <div className="flex items-center justify-between border-b border-gray-200 px-4 py-4 dark:border-gray-700">
-          <div className="flex items-center gap-3 overflow-hidden">
-            <Shield className="h-8 w-8 shrink-0 text-primary-600" />
+    <div className="mx-auto max-w-5xl space-y-8">
+      {/* Header */}
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          AI Risk Classification
+        </h1>
 
-            {!isCollapsed && (
-              <span className="whitespace-nowrap text-lg font-semibold text-gray-900 dark:text-white">
-                AegisAI
-              </span>
-            )}
+        <p className="mt-2 text-gray-600 dark:text-gray-400">
+          Assess your AI system under the EU AI Act
+          compliance framework.
+        </p>
+      </div>
+
+      {/* Form Card */}
+      <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm transition-colors dark:border-gray-700 dark:bg-gray-800">
+        <form
+          className="space-y-6"
+          onSubmit={handleSubmit}
+        >
+          {/* System Name */}
+          <div>
+            <label
+              htmlFor="system_name"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              System Name
+            </label>
+
+            <input
+              id="system_name"
+              name="system_name"
+              type="text"
+              required
+              value={formData.system_name}
+              onChange={handleChange}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 shadow-sm transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              placeholder="Enter AI system name"
+            />
           </div>
 
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
+          {/* Description */}
+          <div>
+            <label
+              htmlFor="description"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Description
+            </label>
+
+            <textarea
+              id="description"
+              name="description"
+              rows={5}
+              required
+              value={formData.description}
+              onChange={handleChange}
+              className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 shadow-sm transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+              placeholder="Describe your AI system..."
+            />
+          </div>
+
+          {/* Industry */}
+          <div>
+            <label
+              htmlFor="industry"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Industry
+            </label>
+
+            <select
+              id="industry"
+              name="industry"
+              value={formData.industry}
+              onChange={handleChange}
+              required
+              className="mt-1 w-full rounded-lg border border-gray-300 px-4 py-2 shadow-sm transition-colors focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+            >
+              <option value="">Select industry</option>
+              <option value="healthcare">Healthcare</option>
+              <option value="finance">Finance</option>
+              <option value="education">Education</option>
+              <option value="government">Government</option>
+              <option value="retail">Retail</option>
+              <option value="security">Security</option>
+            </select>
+          </div>
+
+          {/* Checkboxes */}
+          <div className="grid gap-4 md:grid-cols-3">
+            <label className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+              <input
+                type="checkbox"
+                name="uses_biometric_data"
+                checked={formData.uses_biometric_data}
+                onChange={handleChange}
+                className="h-4 w-4"
+              />
+
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                Uses biometric data
+              </span>
+            </label>
+
+            <label className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+              <input
+                type="checkbox"
+                name="uses_ai_decision_making"
+                checked={formData.uses_ai_decision_making}
+                onChange={handleChange}
+                className="h-4 w-4"
+              />
+
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                Automated AI decisions
+              </span>
+            </label>
+
+            <label className="flex items-center gap-3 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
+              <input
+                type="checkbox"
+                name="processes_sensitive_data"
+                checked={formData.processes_sensitive_data}
+                onChange={handleChange}
+                className="h-4 w-4"
+              />
+
+              <span className="text-sm text-gray-700 dark:text-gray-300">
+                Processes sensitive data
+              </span>
+            </label>
+          </div>
+
+          {/* Error */}
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-600 dark:border-red-800 dark:bg-red-900/30 dark:text-red-300">
+              {error}
+            </div>
+          )}
+
+          {/* Buttons */}
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={loading}
+              className="rounded-lg bg-primary-600 px-6 py-2 text-white transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading
+                ? 'Analyzing...'
+                : 'Classify Risk'}
+            </button>
 
             <button
               type="button"
-              onClick={() => setIsCollapsed((prev) => !prev)}
-              className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
-              aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              onClick={handleReset}
+              className="rounded-lg border border-gray-300 px-6 py-2 text-gray-700 transition-colors hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
             >
-              {isCollapsed ? (
-                <ChevronRight className="h-5 w-5" />
-              ) : (
-                <ChevronLeft className="h-5 w-5" />
-              )}
+              Reset
             </button>
           </div>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex flex-col gap-1 overflow-y-auto p-4">
-          {navigation.map((item) => {
-            const isActive = location.pathname === item.href
-
-            return (
-              <Link
-                key={item.name}
-                to={item.href}
-                title={item.name}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
-                  isActive
-                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-900 dark:text-white'
-                    : 'text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700'
-                } ${isCollapsed ? 'justify-center' : ''}`}
-              >
-                <item.icon className="h-5 w-5 shrink-0" />
-
-                {!isCollapsed && (
-                  <span className="truncate">{item.name}</span>
-                )}
-              </Link>
-            )
-          })}
-        </nav>
-
-        {/* User Section */}
-        <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 p-4 dark:border-gray-700">
-          <div
-            className={`flex items-center ${
-              isCollapsed ? 'justify-center' : 'justify-between'
-            }`}
-          >
-            {!isCollapsed && (
-              <div className="truncate">
-                <p className="truncate text-sm font-medium text-gray-900 dark:text-white">
-                  {displayName}
-                </p>
-
-                <p className="truncate text-xs text-gray-500 dark:text-gray-400">
-                  {companyName}
-                </p>
-              </div>
-            )}
-
-            <button
-              onClick={logout}
-              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
-              aria-label="Log out"
-              title="Log out"
-            >
-              <LogOut className="h-5 w-5" />
-            </button>
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <div
-        className={`transition-all duration-200 ${
-          isCollapsed ? 'pl-20' : 'pl-64'
-        }`}
-      >
-        {/* Top Header */}
-        <header className="sticky top-0 z-30 flex items-center justify-end gap-2 border-b border-gray-200 bg-white/80 px-8 py-3 backdrop-blur-md transition-colors dark:border-gray-700 dark:bg-gray-900/80">
-          <NotificationBell />
-          <ThemeToggle />
-        </header>
-
-        {/* Page Content */}
-        <main className="min-h-screen bg-gray-50 p-8 transition-colors duration-200 dark:bg-gray-900">
-          <Outlet />
-        </main>
+        </form>
       </div>
+
+      {/* Result */}
+      {result && (
+        <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-sm transition-colors dark:border-gray-700 dark:bg-gray-800">
+          <div className="flex flex-wrap items-center gap-4">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Classification Result
+            </h2>
+
+            <span
+              className={`rounded-full px-4 py-1 text-sm font-medium ${riskStyles.badge}`}
+            >
+              {result.risk_level.toUpperCase()} RISK
+            </span>
+          </div>
+
+          {typeof result.confidence_score ===
+            'number' && (
+            <p className="mt-4 text-gray-700 dark:text-gray-300">
+              Confidence Score:{' '}
+              <span className="font-semibold">
+                {Math.round(
+                  result.confidence_score * 100
+                )}
+                %
+              </span>
+            </p>
+          )}
+
+          {result.reasoning && (
+            <div className="mt-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Reasoning
+              </h3>
+
+              <p className="mt-2 leading-relaxed text-gray-700 dark:text-gray-300">
+                {result.reasoning}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
