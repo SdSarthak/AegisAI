@@ -11,11 +11,9 @@ from .sanitizer import SanitizationLevel
 from ..llm.llm_client import LLMClient
 from . import guard_config as config
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+# Logging is configured centrally in app.core.logging (configure_logging).
+# Importing this module must not call logging.basicConfig — doing so would
+# clobber the JSON root handler when the API imports the Guard pipeline.
 logger = logging.getLogger(__name__)
 
 
@@ -265,4 +263,7 @@ def main():
 
 
 if __name__ == "__main__":
+    from app.core.logging import configure_logging
+
+    configure_logging()
     main()
