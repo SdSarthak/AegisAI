@@ -21,6 +21,10 @@ class User(Base):
     full_name = Column(String(255))
     company_name = Column(String(255))
 
+    # SCIM Provisioning
+    scim_external_id = Column(String(255), unique=True, index=True, nullable=True)
+    scim_idp = Column(String(50), nullable=True)
+
     # Subscription
     subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.FREE)
     stripe_customer_id = Column(String(255), nullable=True)

@@ -17,6 +17,7 @@ from app.schemas.document import (
     DocumentUpdateRequest,
 )
 from app.schemas.pagination import PaginatedResponse
+from app.modules.llm.document_generator import generate_compliance_narrative
 
 # PDF generation
 from reportlab.lib.pagesizes import letter, A4
@@ -241,7 +242,7 @@ def update_document(
     
     return document
 
-@router.post("/generate", response_model=DocumentResponse)
+@router.post("/generate", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 def generate_document(
     request: DocumentGenerateRequest,
     db: Session = Depends(get_db),

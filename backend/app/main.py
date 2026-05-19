@@ -91,6 +91,9 @@ app.add_middleware(
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 app.include_router(badge.router, prefix="/badge")
 
+from app.api.scim.v2.router import scim_v2_router
+app.include_router(scim_v2_router, prefix="/scim/v2")
+
 # -------------------------------------------------------------------
 # Root & Health Endpoints
 # -------------------------------------------------------------------

@@ -28,12 +28,18 @@ def _mock_current_user():
     return user
 
 
-# ---------------------------------------------------------------------------
-# Shared patches applied to every test in this module
-# ---------------------------------------------------------------------------
+@pytest.fixture
+def mock_auth():
+    from app.core.security import get_current_user
+    from app.main import app
+    
+    def override_user():
+        return _mock_current_user()
+        
+    app.dependency_overrides[get_current_user] = override_user
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
 
-# Patch get_current_user so we never need a real JWT
-PATCH_AUTH = "app.core.security.get_current_user"
 
 # Patch the two RAG functions called inside the endpoint
 PATCH_LOAD_DOCS = "app.api.v1.rag.load_documents_from_paths"
@@ -53,7 +59,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_single_pdf_success(self, mock_load, mock_create, client):
+    def test_single_pdf_success(self, mock_load, mock_create, client, mock_auth):
         """
         1. Uploading a single valid PDF should return 200 with correct fields.
         """
@@ -63,7 +69,6 @@ class TestRagIngest:
         mock_create.return_value = MagicMock()
 
         with (
-            patch(PATCH_AUTH, return_value=_mock_current_user()),
             patch("os.path.exists", return_value=True),
             patch("os.path.getsize", return_value=512_000),
         ):
@@ -82,7 +87,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_multiple_pdfs_success(self, mock_load, mock_create, client):
+    def test_multiple_pdfs_success(self, mock_load, mock_create, client, mock_auth):
         """
         2. Uploading multiple PDFs should reflect all files in the response.
         """
@@ -91,7 +96,6 @@ class TestRagIngest:
         mock_create.return_value = MagicMock()
 
         with (
-            patch(PATCH_AUTH, return_value=_mock_current_user()),
             patch("os.path.exists", return_value=True),
             patch("os.path.getsize", return_value=100_000),
         ):
@@ -113,27 +117,24 @@ class TestRagIngest:
     # Validation errors
     # ------------------------------------------------------------------
 
-    def test_no_files_returns_422(self, client):
+    def test_no_files_returns_422(self, client, mock_auth):
         """
         3. Sending an empty request (no 'files' field) should return 422.
         FastAPI validates the required File(...) parameter before our code runs.
         """
-        with patch(PATCH_AUTH, return_value=_mock_current_user()):
-            response = client.post("/api/v1/rag/ingest")
-
+        response = client.post("/api/v1/rag/ingest")
         assert response.status_code == 422
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_non_pdf_file_returns_400(self, mock_load, mock_create, client):
+    def test_non_pdf_file_returns_400(self, mock_load, mock_create, client, mock_auth):
         """
         4. Uploading a non-PDF file should return 400 with a clear message.
         """
-        with patch(PATCH_AUTH, return_value=_mock_current_user()):
-            response = client.post(
-                "/api/v1/rag/ingest",
-                files={"files": ("report.docx", io.BytesIO(b"fake docx"), "application/vnd.openxmlformats-officedocument")},
-            )
+        response = client.post(
+            "/api/v1/rag/ingest",
+            files={"files": ("report.docx", io.BytesIO(b"fake docx"), "application/vnd.openxmlformats-officedocument")},
+        )
 
         assert response.status_code == 400
         assert "pdf" in response.json()["detail"].lower()
@@ -143,7 +144,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_empty_pdf_returns_400(self, mock_load, mock_create, client):
+    def test_empty_pdf_returns_400(self, mock_load, mock_create, client, mock_auth):
         """
         5. A valid-looking PDF that produces zero chunks should return 400.
         This covers scanned/image-only PDFs and password-protected files.
@@ -151,11 +152,10 @@ class TestRagIngest:
         mock_load.return_value = []   # loader returns nothing
         mock_create.return_value = MagicMock()
 
-        with patch(PATCH_AUTH, return_value=_mock_current_user()):
-            response = client.post(
-                "/api/v1/rag/ingest",
-                files={"files": _make_pdf_upload("blank.pdf")},
-            )
+        response = client.post(
+            "/api/v1/rag/ingest",
+            files={"files": _make_pdf_upload("blank.pdf")},
+        )
 
         assert response.status_code == 400
         assert "text" in response.json()["detail"].lower()
@@ -167,7 +167,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_faiss_build_failure_returns_503(self, mock_load, mock_create, client):
+    def test_faiss_build_failure_returns_503(self, mock_load, mock_create, client, mock_auth):
         """
         6. If the FAISS build step raises an exception, the endpoint should
         return 503 with the error forwarded in the detail field.
@@ -175,11 +175,10 @@ class TestRagIngest:
         mock_load.return_value = [MagicMock()]
         mock_create.side_effect = RuntimeError("Embedding model unavailable")
 
-        with patch(PATCH_AUTH, return_value=_mock_current_user()):
-            response = client.post(
-                "/api/v1/rag/ingest",
-                files={"files": _make_pdf_upload("eu_ai_act.pdf")},
-            )
+        response = client.post(
+            "/api/v1/rag/ingest",
+            files={"files": _make_pdf_upload("eu_ai_act.pdf")},
+        )
 
         assert response.status_code == 503
         assert "FAISS" in response.json()["detail"]
@@ -224,7 +223,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_response_has_all_required_fields(self, mock_load, mock_create, client):
+    def test_response_has_all_required_fields(self, mock_load, mock_create, client, mock_auth):
         """
         8. The JSON response must contain exactly the three fields required
         by the issue specification.
@@ -233,7 +232,6 @@ class TestRagIngest:
         mock_create.return_value = MagicMock()
 
         with (
-            patch(PATCH_AUTH, return_value=_mock_current_user()),
             patch("os.path.exists", return_value=True),
             patch("os.path.getsize", return_value=1024),
         ):

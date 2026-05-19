@@ -11,8 +11,10 @@ TODO for contributors (high difficulty):
 
 import time
 from fastapi import APIRouter, Depends, HTTPException, status
+
+"""
 Contributor note:
-  - POST /rag/ingest implemented: multipart PDF upload → document_loader → FAISS rebuild
+  - POST /rag/ingest implemented: multipart PDF upload -> document_loader -> FAISS rebuild
   - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
   - TODO: Integrate MLflow tracking from modules/rag/ml_flow.py
   - TODO: Add streaming responses via SSE for long answers
