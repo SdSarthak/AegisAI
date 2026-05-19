@@ -16,7 +16,7 @@ import {
   BarChart,
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
-import ThemeToggle from './ThemeToggle'
+
 
 
 
@@ -39,13 +39,13 @@ export default function Layout() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-black dark:text-white">
       {/* Sidebar */}
-      <div
-        className={`fixed inset-y-0 left-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-[width] duration-200 z-40 ${
-          isCollapsed ? 'w-20' : 'w-64'
-        }`}
-      >
+    <div
+     className={`fixed inset-y-0 left-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-r border-white/10 shadow-xl transition-all duration-300 ease-in-out z-40 ${
+     isCollapsed ? 'w-20' : 'w-72'
+    }`}
+>
         {/* Logo */}
-        <div className="flex items-center justify-between gap-2 px-4 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between gap-2 px-4 py-4 border-b border-white/10">
           <div className="flex items-center gap-2">
             <Shield className="w-8 h-8 text-primary-600" />
             <ThemeToggle />
@@ -86,8 +86,8 @@ export default function Layout() {
                 title={item.name}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                   isActive
-                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-900 dark:text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    ? 'bg-primary-100 text-primary-700 dark:bg-primary-900 dark:text-white shadow-[0_0_15px_rgba(59,130,246,0.3)]'
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-primary-100 dark:hover:bg-primary-800 hover:scale-[1.02] transition-all duration-300'
                 } ${isCollapsed ? 'justify-center' : ''}`}
               >
                 <item.icon className="w-5 h-5" />
@@ -103,7 +103,7 @@ export default function Layout() {
         {/* User section */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 dark:border-gray-700">
           <div
-            className={`flex items-center ${
+            className={`flex items-center rounded-xl bg-white/40 dark:bg-gray-800/40 backdrop-blur-md p-2 ${
               isCollapsed ? 'justify-center' : 'justify-between'
             }`}
           >
@@ -138,12 +138,12 @@ export default function Layout() {
         }`}
       >
 
-        <header className="sticky top-0 z-30 flex items-center justify-end gap-1 px-8 py-3 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
+        <header className="sticky top-0 z-30 flex items-center justify-end gap-2 px-4 md:px-8 py-3 bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-b border-white/10 shadow-sm">
           <NotificationBell />
           <ThemeToggle />
         </header>
 
-        <main className="p-8 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+        <main className="p-4 md:p-8 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
           <Outlet />
         </main>
       </div>
