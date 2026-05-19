@@ -384,7 +384,7 @@ Open `notebooks/train_guard_classifier.ipynb` in Google Colab. The notebook:
 3. Fine-tunes DeBERTa-v3-small for 3 epochs (~5 min on T4 GPU)
 4. Saves the model to Google Drive
 
-Copy the saved model to `backend/app/modules/guard/models/intent_classifier/` and restart the backend.
+Copy the saved model to `backend/app/modules/guard/models/classifier/` and restart the backend.
 
 ### Option 2 — Local training
 
@@ -393,7 +393,8 @@ cd backend
 python -m app.modules.guard.train --all --epochs 3
 ```
 
-Training takes ~30 min on CPU, ~5 min on GPU. Model is saved to `backend/app/modules/guard/models/intent_classifier/` and picked up automatically on restart.
+Training takes ~30 min on CPU, ~5 min on GPU. Model is saved to `backend/app/modules/guard/models/classifier/` and picked up automatically on restart.
+
 ## Ollama Setup (Free, No API Key Required)
 
 If you don't have an OpenAI API key, you can run AegisAI locally using Ollama.
@@ -414,3 +415,22 @@ If you don't have an OpenAI API key, you can run AegisAI locally using Ollama.
 ```
 
 3. The backend will automatically connect to Ollama at:
+
+Training takes ~30 minutes on CPU, ~5 minutes on GPU. The fine-tuned model is saved to `backend/app/modules/guard/models/intent_classifier/` and picked up automatically on the next backend restart.
+
+
+
+
+## Seed Demo Data
+
+After starting the backend and database:
+
+```bash
+cd backend
+python -m scripts.seed
+```
+
+Demo credentials:
+
+- Email: admin@aegisai.dev
+- Password: password123

@@ -9,18 +9,22 @@ TODO for contributors (medium difficulty):
   - Add a GET /guard/stats endpoint returning block/allow/sanitize counts
 """
 
+import hashlib
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.guard_scan_log import GuardScanLog
 from app.models.user import User
+from app.schemas.guard_scan_log import GuardScanLogResponse
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
 
@@ -57,7 +61,8 @@ def _check_rate_limit(user_id: int) -> tuple[bool, int]:
             retry_after = max(
                 1,
                 int(
-                    (_RATE_LIMIT_WINDOW_SECONDS - (now - attempts[0]).total_seconds())
+                    (_RATE_LIMIT_WINDOW_SECONDS -
+                     (now - attempts[0]).total_seconds())
                     + 0.999
                 ),
             )
@@ -71,6 +76,7 @@ def _check_rate_limit(user_id: int) -> tuple[bool, int]:
 def scan_prompt(
     request: ScanRequest,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Scan a prompt for injection risks.
@@ -102,6 +108,18 @@ def scan_prompt(
         guard = LLMGuard(sanitization_level=san_level)
         result = guard.guard(request.prompt)
 
+        log = GuardScanLog(
+            user_id=current_user.id,
+            prompt_hash=hashlib.sha256(request.prompt.encode()).hexdigest(),
+            decision=result["decision"],
+            confidence=result["metadata"]["decision_reasoning"]["confidence"],
+            matched_patterns=result["metadata"]["regex_analysis"].get(
+                "matched_patterns", []
+            ),
+        )
+        db.add(log)
+        db.commit()
+
         return ScanResponse(
             decision=result["decision"],
             confidence=result["metadata"]["decision_reasoning"]["confidence"],
@@ -123,80 +141,95 @@ def guard_health():
     return {"module": "llm_guard", "status": "available"}
 
 
-# ── Feedback endpoint ─────────────────────────────────────────────────────────
-
-class FeedbackRequest(BaseModel):
-    prompt: str
-    guard_decision: str   # "allow" | "sanitize" | "block"
-    correct_label: str    # "benign" | "malicious"
-    note: str | None = None
+class GuardConfigRequest(BaseModel):
+    sanitization_level: str
+    malicious_threshold: float
+    suspicious_threshold: float
 
 
-class FeedbackResponse(BaseModel):
-    id: int
-    feedback_type: str
-    message: str
-
-
-@router.post("/feedback", response_model=FeedbackResponse, status_code=status.HTTP_201_CREATED)
-def submit_feedback(
-    request: FeedbackRequest,
-    current_user: User = Depends(get_current_user),
+@router.get("/history", response_model=PaginatedResponse[GuardScanLogResponse])
+def get_guard_history(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the current user's Guard scan history, newest first."""
+    base_query = (
+        db.query(GuardScanLog)
+        .filter(GuardScanLog.user_id == current_user.id)
+    )
+    total = base_query.count()
+    logs = (
+        base_query
+        .order_by(GuardScanLog.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+    return PaginatedResponse(items=logs, total=total, page=page, limit=limit)
+
+
+# Temporary in-memory config store
+user_guard_configs = {}
+
+VALID_SANITIZATION_LEVELS = {"low", "medium", "high"}
+
+
+@router.get("/config", tags=["LLM Guard"])
+def get_guard_config(current_user: User = Depends(get_current_user)):
+    """
+    Get per-user guard configuration.
+    """
+
+    default_config = {
+        "sanitization_level": "medium",
+        "malicious_threshold": 0.8,
+        "suspicious_threshold": 0.5,
+    }
+
+    return user_guard_configs.get(current_user.id, default_config)
+
+
+@router.patch("/config", tags=["LLM Guard"])
+def update_guard_config(
+    config: GuardConfigRequest,
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Flag a Guard decision as wrong (false positive or false negative).
-
-    - false_positive : guard_decision=block, correct_label=benign
-    - false_negative : guard_decision=allow, correct_label=malicious
-    - correct        : user confirms the decision was right
-
-    Flagged prompts are queued for export via:
-        python backend/scripts/export_guard_feedback.py
+    Update per-user guard configuration.
     """
-    # Validate inputs
-    valid_decisions = {"allow", "sanitize", "block"}
-    valid_labels = {"benign", "malicious"}
 
-    if request.guard_decision not in valid_decisions:
+    if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"guard_decision must be one of {valid_decisions}",
-        )
-    if request.correct_label not in valid_labels:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=f"correct_label must be one of {valid_labels}",
+            status_code=400,
+            detail="Invalid sanitization level",
         )
 
-    # Derive feedback type
-    if request.guard_decision == "block" and request.correct_label == "benign":
-        feedback_type = "false_positive"
-    elif request.guard_decision in ("allow", "sanitize") and request.correct_label == "malicious":
-        feedback_type = "false_negative"
-    else:
-        feedback_type = "correct"
+    if not (0.0 <= config.malicious_threshold <= 1.0):
+        raise HTTPException(
+            status_code=400,
+            detail="malicious_threshold must be between 0 and 1",
+        )
 
-    from app.models.guard_feedback import GuardFeedback
+    if not (0.0 <= config.suspicious_threshold <= 1.0):
+        raise HTTPException(
+            status_code=400,
+            detail="suspicious_threshold must be between 0 and 1",
+        )
 
-    fb = GuardFeedback(
-        user_id=current_user.id,
-        prompt=request.prompt,
-        guard_decision=request.guard_decision,
-        correct_label=request.correct_label,
-        feedback_type=feedback_type,
-        note=request.note,
-        exported="false",
-    )
-    db.add(fb)
-    db.commit()
-    db.refresh(fb)
+    user_guard_configs[current_user.id] = {
+        "sanitization_level": config.sanitization_level,
+        "malicious_threshold": config.malicious_threshold,
+        "suspicious_threshold": config.suspicious_threshold,
+    }
 
-    return FeedbackResponse(
-        id=fb.id,
-        feedback_type=feedback_type,
-        message=f"Feedback recorded as '{feedback_type}'. Thank you for helping improve the Guard.",
-    )
+    return {
+        "message": "Guard configuration updated successfully",
+        "config": user_guard_configs[current_user.id],
+    }
+
+
 class BulkScanRequest(BaseModel):
     prompts: list[str]
 
@@ -205,10 +238,12 @@ class BulkScanRequest(BaseModel):
             raise ValueError("Maximum 50 prompts allowed per batch request.")
         return self
 
+
 class BulkScanResponse(BaseModel):
     results: list[ScanResponse]
     total: int
     processed: int
+
 
 @router.post("/scan/batch", response_model=BulkScanResponse)
 def bulk_scan_prompts(
@@ -244,7 +279,8 @@ def bulk_scan_prompts(
             "medium": SanitizationLevel.MEDIUM,
             "high": SanitizationLevel.HIGH,
         }
-        san_level = level_map.get(settings.GUARD_SANITIZATION_LEVEL, SanitizationLevel.MEDIUM)
+        san_level = level_map.get(
+            settings.GUARD_SANITIZATION_LEVEL, SanitizationLevel.MEDIUM)
         guard = LLMGuard(sanitization_level=san_level)
 
         results = []
@@ -255,7 +291,8 @@ def bulk_scan_prompts(
                 confidence=result["metadata"]["decision_reasoning"]["confidence"],
                 reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
                 sanitized_prompt=None,
-                matched_patterns=result["metadata"]["regex_analysis"].get("matched_patterns", []),
+                matched_patterns=result["metadata"]["regex_analysis"].get(
+                    "matched_patterns", []),
             ))
 
         return BulkScanResponse(

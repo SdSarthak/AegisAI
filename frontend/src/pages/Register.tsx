@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import axios from 'axios'
 import { authApi } from '../services/api'
 import { Shield } from 'lucide-react'
 
@@ -22,8 +23,12 @@ export default function Register() {
     try {
       await authApi.register(formData)
       navigate('/login')
-    } catch {
-      setError('Registration failed. Email may already be in use.')
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.data?.detail) {
+        setError(err.response.data.detail)
+      } else {
+        setError('Registration failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
