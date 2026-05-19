@@ -1,4 +1,4 @@
-"""LLM client module for Gemini API integration."""
+"""LLM client module for OpenAI-compatible API integration."""
 
 from .llm_client import LLMClient
 

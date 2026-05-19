@@ -9,15 +9,22 @@ TODO for contributors (medium difficulty):
   - Add a GET /guard/stats endpoint returning block/allow/sanitize counts
 """
 
+import hashlib
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+
+from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.guard_scan_log import GuardScanLog
 from app.models.user import User
+from app.schemas.guard_scan_log import GuardScanLogResponse
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
 
@@ -54,7 +61,8 @@ def _check_rate_limit(user_id: int) -> tuple[bool, int]:
             retry_after = max(
                 1,
                 int(
-                    (_RATE_LIMIT_WINDOW_SECONDS - (now - attempts[0]).total_seconds())
+                    (_RATE_LIMIT_WINDOW_SECONDS -
+                     (now - attempts[0]).total_seconds())
                     + 0.999
                 ),
             )
@@ -68,6 +76,7 @@ def _check_rate_limit(user_id: int) -> tuple[bool, int]:
 def scan_prompt(
     request: ScanRequest,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Scan a prompt for injection risks.
@@ -99,6 +108,18 @@ def scan_prompt(
         guard = LLMGuard(sanitization_level=san_level)
         result = guard.guard(request.prompt)
 
+        log = GuardScanLog(
+            user_id=current_user.id,
+            prompt_hash=hashlib.sha256(request.prompt.encode()).hexdigest(),
+            decision=result["decision"],
+            confidence=result["metadata"]["decision_reasoning"]["confidence"],
+            matched_patterns=result["metadata"]["regex_analysis"].get(
+                "matched_patterns", []
+            ),
+        )
+        db.add(log)
+        db.commit()
+
         return ScanResponse(
             decision=result["decision"],
             confidence=result["metadata"]["decision_reasoning"]["confidence"],
@@ -118,10 +139,35 @@ def scan_prompt(
 def guard_health():
     """Check if the Guard module is available."""
     return {"module": "llm_guard", "status": "available"}
+
+
 class GuardConfigRequest(BaseModel):
     sanitization_level: str
     malicious_threshold: float
     suspicious_threshold: float
+
+
+@router.get("/history", response_model=PaginatedResponse[GuardScanLogResponse])
+def get_guard_history(
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the current user's Guard scan history, newest first."""
+    base_query = (
+        db.query(GuardScanLog)
+        .filter(GuardScanLog.user_id == current_user.id)
+    )
+    total = base_query.count()
+    logs = (
+        base_query
+        .order_by(GuardScanLog.created_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+    return PaginatedResponse(items=logs, total=total, page=page, limit=limit)
 
 
 # Temporary in-memory config store
@@ -182,6 +228,8 @@ def update_guard_config(
         "message": "Guard configuration updated successfully",
         "config": user_guard_configs[current_user.id],
     }
+
+
 class BulkScanRequest(BaseModel):
     prompts: list[str]
 
@@ -190,10 +238,12 @@ class BulkScanRequest(BaseModel):
             raise ValueError("Maximum 50 prompts allowed per batch request.")
         return self
 
+
 class BulkScanResponse(BaseModel):
     results: list[ScanResponse]
     total: int
     processed: int
+
 
 @router.post("/scan/batch", response_model=BulkScanResponse)
 def bulk_scan_prompts(
@@ -229,7 +279,8 @@ def bulk_scan_prompts(
             "medium": SanitizationLevel.MEDIUM,
             "high": SanitizationLevel.HIGH,
         }
-        san_level = level_map.get(settings.GUARD_SANITIZATION_LEVEL, SanitizationLevel.MEDIUM)
+        san_level = level_map.get(
+            settings.GUARD_SANITIZATION_LEVEL, SanitizationLevel.MEDIUM)
         guard = LLMGuard(sanitization_level=san_level)
 
         results = []
@@ -240,7 +291,8 @@ def bulk_scan_prompts(
                 confidence=result["metadata"]["decision_reasoning"]["confidence"],
                 reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
                 sanitized_prompt=None,
-                matched_patterns=result["metadata"]["regex_analysis"].get("matched_patterns", []),
+                matched_patterns=result["metadata"]["regex_analysis"].get(
+                    "matched_patterns", []),
             ))
 
         return BulkScanResponse(
