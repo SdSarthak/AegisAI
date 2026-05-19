@@ -8,11 +8,9 @@ Uses an in-memory SQLite DB and patches all heavy external dependencies
 import pytest
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
  
 from app.main import app
-from app.core.database import Base, get_db
+from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User, SubscriptionTier
  
@@ -27,35 +25,19 @@ class DummyDoc:
         self.metadata = {"source": source}
  
  
-def _make_engine_and_session():
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-    )
-    Base.metadata.create_all(bind=engine)
-    return sessionmaker(autocommit=False, autoflush=False, bind=engine)
- 
- 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
  
 @pytest.fixture()
-def client():
+def rag_client(db_session):
     """
-    TestClient with:
-    - in-memory SQLite replacing the real DB
-    - a FREE-tier user as the default authenticated principal
-    - get_qa_chain and log_query patched so no FAISS / MLflow needed
+    TestClient that:
+    - reuses the conftest StaticPool DB session (so all requests share
+      the same in-memory SQLite connection and see each other's commits)
+    - authenticates as a FREE-tier user by default
+    - patches get_qa_chain and log_query so no FAISS / MLflow is needed
     """
-    TestingSession = _make_engine_and_session()
- 
-    def _override_get_db():
-        db = TestingSession()
-        try:
-            yield db
-        finally:
-            db.close()
  
     def _fake_user():
         u = User()
@@ -64,19 +46,12 @@ def client():
         u.subscription_tier = SubscriptionTier.FREE
         return u
  
+    def _override_get_db():
+        yield db_session
+ 
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = _fake_user
  
-    # ------------------------------------------------------------------
-    # Patch get_qa_chain via the name already imported into the rag module.
-    #
-    # The rag router does `from app.modules.rag.retrieval_chain import get_qa_chain`
-    # at module level, so `app.api.v1.rag.get_qa_chain` is the live reference
-    # FastAPI calls. Patching sys.modules after import has no effect on it.
-    # unittest.mock.patch replaces the bound name directly, which works.
-    #
-    # log_query is patched for the same reason and to keep tests hermetic.
-    # ------------------------------------------------------------------
     fake_result = {
         "result": "Test answer",
         "source_documents": [
@@ -90,7 +65,7 @@ def client():
  
     with (
         patch("app.api.v1.rag.get_qa_chain", fake_get_qa_chain),
-        patch("app.api.v1.rag.log_query"),          # silence MLflow
+        patch("app.api.v1.rag.log_query"),
     ):
         with TestClient(app) as c:
             yield c
@@ -102,7 +77,7 @@ def client():
 # Test
 # ---------------------------------------------------------------------------
  
-def test_query_feedback_and_low_quality_flow(client):
+def test_query_feedback_and_low_quality_flow(rag_client):
     """
     End-to-end flow:
       1. POST /rag/query       → 200, answer returned
@@ -113,7 +88,7 @@ def test_query_feedback_and_low_quality_flow(client):
     # ------------------------------------------------------------------
     # Step 1: query
     # ------------------------------------------------------------------
-    resp = client.post("/api/v1/rag/query", json={"question": "What is X?"})
+    resp = rag_client.post("/api/v1/rag/query", json={"question": "What is X?"})
     assert resp.status_code == 200, f"Query failed: {resp.text}"
  
     data = resp.json()
@@ -124,7 +99,7 @@ def test_query_feedback_and_low_quality_flow(client):
     # ------------------------------------------------------------------
     # Step 2: thumbs-down on that answer
     # ------------------------------------------------------------------
-    resp2 = client.post(
+    resp2 = rag_client.post(
         "/api/v1/rag/feedback",
         json={"answer_id": answer_id, "vote": "down"},
     )
@@ -142,7 +117,7 @@ def test_query_feedback_and_low_quality_flow(client):
  
     app.dependency_overrides[get_current_user] = _admin_user
  
-    resp3 = client.get("/api/v1/rag/low-quality-chunks?threshold=0.0")
+    resp3 = rag_client.get("/api/v1/rag/low-quality-chunks?threshold=0.0")
     assert resp3.status_code == 200, f"Low-quality-chunks failed: {resp3.text}"
  
     out = resp3.json()
