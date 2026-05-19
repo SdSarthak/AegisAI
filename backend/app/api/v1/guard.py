@@ -1,11 +1,52 @@
 """
-LLM Guard API — exposes prompt injection scanning as a REST endpoint.
+LLM Guard API — prompt injection detection and sanitization REST endpoint.
+
+This module provides a comprehensive guard system for LLM prompts, detecting
+injection attacks, jailbreak attempts, and other malicious patterns using
+pattern matching and heuristic analysis.
+
+Core Components:
+    - Scan Endpoint (POST /guard/scan): Single prompt analysis with decision
+      (allow/sanitize/block), confidence score, and reasoning
+    - Batch Scan (POST /guard/scan/batch): Process up to 50 prompts in one request
+    - Configuration (GET/PATCH /guard/config): Per-user settings for sanitization
+      level and detection thresholds
+    - History (GET /guard/history): Paginated scan history with audit trail
+
+Data Shapes:
+    ScanRequest:
+        - prompt: str (the user input to analyze)
+    
+    ScanResponse:
+        - decision: str ("allow" | "sanitize" | "block")
+        - confidence: float (0.0 to 1.0)
+        - reasoning: str (explanation of the decision)
+        - sanitized_prompt: str | None (cleaned version if sanitized)
+        - matched_patterns: list[str] (detected injection patterns)
+
+Rate Limiting:
+    - Strategy: Sliding window algorithm
+    - Limit: 60 requests per minute per user
+    - Implementation: In-memory store using deque with thread-safe Lock
+    - ⚠️ NOTE: Rate limit store resets on server restart (no persistence)
+
+Dependencies:
+    - LLMGuard: Core detection engine with regex patterns and heuristics
+    - PromptSanitizer: Cleans prompts based on sanitization level
+    - SQLAlchemy: Persists scan logs to GuardScanLog table
+    - FastAPI: Request routing and dependency injection
+
+Security:
+    - All endpoints require authentication (get_current_user)
+    - Rate limiting per user prevents abuse
+    - Prompts are hashed before storage (no plaintext retention)
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 
 TODO for contributors (medium difficulty):
-  - Add per-user rate limiting on POST /guard/scan
-  - Persist scan results to the database for audit logs
+  - Add per-user rate limiting on POST /guard/scan (✅ DONE - sliding window)
+  - Persist scan results to the database for audit logs (✅ DONE - GuardScanLog)
   - Add a GET /guard/stats endpoint returning block/allow/sanitize counts
 """
 
