@@ -22,6 +22,7 @@ from . import guard_config as config
 @dataclass
 class ClassificationResult:
     """Result of intent classification."""
+
     intent: str  # "benign", "suspicious", "malicious"
     confidence: float  # 0.0 to 1.0
     class_scores: Dict[str, float]  # Scores for each class
@@ -30,7 +31,9 @@ class ClassificationResult:
 class PromptDataset(Dataset):
     """PyTorch Dataset for prompt classification."""
 
-    def __init__(self, texts: List[str], labels: List[int], tokenizer, max_length: int = 128):
+    def __init__(
+        self, texts: List[str], labels: List[int], tokenizer, max_length: int = 128
+    ):
         self.texts = texts
         self.labels = labels
         self.tokenizer = tokenizer
@@ -64,9 +67,9 @@ class IntentClassifier:
     def __init__(self, model_path: Optional[str] = None, device: Optional[str] = None):
         """
         Initialize classifier with fine-tuned or pre-trained model.
-        
+
         Tries to load fine-tuned model first, falls back to pre-trained DeBERTa-v3-small.
-        
+
         Args:
             model_path: Path to trained model directory. If None, auto-detects using config.
             device: Device to use ('cpu' or 'cuda'). Auto-detects GPU if None.
@@ -76,45 +79,55 @@ class IntentClassifier:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device)
-        
+
         # Use intent classes from config
         self.intent_to_id = config.INTENT_TO_ID
         self.id_to_intent = config.ID_TO_INTENT
-        
+
         # Determine model path
         if model_path is None:
             model_path = config.get_trained_model_path()
-        
+
         # Load tokenizer from model directory
         tokenizer_path = model_path
-        
+
         # Load model
         model_exists = model_path and os.path.exists(model_path)
-        has_weights = model_exists and os.path.exists(os.path.join(model_path, "pytorch_model.bin"))
-        
+        has_weights = model_exists and os.path.exists(
+            os.path.join(model_path, "pytorch_model.bin")
+        )
+
         if model_exists and has_weights:
             print(f"✓ Loading fine-tuned model from {model_path}")
             try:
-                from transformers import AutoTokenizer, AutoModelForSequenceClassification
+                from transformers import (
+                    AutoTokenizer,
+                    AutoModelForSequenceClassification,
+                )
+
                 self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-                self.model = AutoModelForSequenceClassification.from_pretrained(model_path)
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    model_path
+                )
                 print(f"✓ Model and tokenizer loaded successfully")
             except Exception as e:
                 print(f"⚠ Failed to load model: {e}. Falling back to pre-trained.")
                 self._load_pretrained()
         else:
             print(f"⚠ Fine-tuned model not found at {model_path}")
-            print(f"  Using pre-trained DeBERTa (train with notebook for better results)")
+            print(
+                f"  Using pre-trained DeBERTa (train with notebook for better results)"
+            )
             self._load_pretrained()
-        
+
         self.model.to(self.device)
         self.model.eval()
-    
+
     def _load_pretrained(self):
         """Load pre-trained DeBERTa model."""
         print("Loading pre-trained DeBERTa v3 small...")
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
-        
+
         model_name = "microsoft/deberta-v3-small"
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(
@@ -124,10 +137,10 @@ class IntentClassifier:
     def classify(self, prompt: str) -> ClassificationResult:
         """
         Classify a prompt's intent.
-        
+
         Args:
             prompt: Prompt to classify
-            
+
         Returns:
             ClassificationResult with intent, confidence, and class scores
         """
@@ -153,7 +166,8 @@ class IntentClassifier:
 
         # Create class scores dict
         class_scores = {
-            self.id_to_intent[i]: float(probabilities[i]) for i in range(len(probabilities))
+            self.id_to_intent[i]: float(probabilities[i])
+            for i in range(len(probabilities))
         }
 
         return ClassificationResult(
@@ -163,10 +177,10 @@ class IntentClassifier:
     def batch_classify(self, prompts: List[str]) -> List[ClassificationResult]:
         """
         Classify multiple prompts at once.
-        
+
         Args:
             prompts: List of prompts to classify
-            
+
         Returns:
             List of ClassificationResult objects
         """
@@ -188,7 +202,7 @@ class IntentClassifier:
     ) -> Dict:
         """
         Fine-tune the model on labeled prompt data.
-        
+
         Args:
             train_texts: Training prompt texts
             train_labels: Training labels ("benign", "suspicious", "malicious")
@@ -198,7 +212,7 @@ class IntentClassifier:
             batch_size: Batch size for training
             learning_rate: Learning rate for optimizer
             output_dir: Directory to save fine-tuned model
-            
+
         Returns:
             Dictionary with training metrics
         """
@@ -260,7 +274,9 @@ class IntentClassifier:
                     attention_mask = batch["attention_mask"].to(self.device)
                     labels = batch["labels"].to(self.device)
 
-                    outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+                    outputs = self.model(
+                        input_ids=input_ids, attention_mask=attention_mask
+                    )
                     logits = outputs.logits
                     preds = torch.argmax(logits, dim=1)
 
