@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
-
 if TYPE_CHECKING:
     from app.models.user import User  # Prevent circular imports during runtime
 
@@ -91,3 +90,42 @@ async def get_current_user(
         raise _get_credentials_exception()
 
     return user
+async def get_current_user_optional(
+    token: Optional[str] = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+):
+    """
+    Optional authentication dependency.
+
+    Returns authenticated user if token valid.
+    Returns None if token missing/invalid.
+    """
+
+    from app.models.user import User
+
+    try:
+        if not token:
+            return None
+
+        payload = decode_token(token)
+
+        user_id_str = payload.get("sub")
+
+        if not user_id_str:
+            return None
+
+        try:
+            user_id = int(user_id_str)
+        except (ValueError, TypeError):
+            return None
+
+        user = (
+            db.query(User)
+            .filter(User.id == user_id)
+            .first()
+        )
+
+        return user
+
+    except Exception:
+        return None
