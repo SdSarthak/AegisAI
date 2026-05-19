@@ -1,3 +1,83 @@
+"""
+Risk Classification API — EU AI Act risk level assessment for AI systems.
+
+This module implements the risk classification logic based on the EU AI Act,
+categorizing AI systems into four risk levels with corresponding compliance
+requirements and next steps.
+
+EU AI Act References:
+    - Article 5: Prohibited AI practices (unacceptable risk - banned)
+    - Article 6: Classification rules for high-risk AI systems
+    - Article 52: Transparency obligations for limited-risk AI systems
+    - Annex III: List of high-risk AI systems (recruitment, credit, law enforcement, etc.)
+
+Risk Levels:
+    - UNACCEPTABLE: Prohibited AI practices (social scoring, real-time biometric
+      identification in public spaces) - banned under Article 5
+    - HIGH: Systems affecting safety, fundamental rights, employment, credit,
+      law enforcement, etc. - Articles 6-15, Annex III requirements
+    - LIMITED: Chatbots, emotion recognition, synthetic content generation -
+      transparency obligations under Article 52
+    - MINIMAL: No specific requirements, voluntary compliance encouraged
+
+Endpoints:
+    POST /classify
+        - Performs preliminary risk classification based on questionnaire responses
+        - Returns risk level, confidence, reasons, requirements, and next steps
+        - No database persistence
+
+    POST /classify/{system_id}
+        - Classifies an existing AI system and saves results to database
+        - Updates AISystem.risk_level and AISystem.compliance_status
+        - Creates RiskAssessment record with findings and recommendations
+
+    POST /classify/bulk
+        - Classifies multiple AI systems in one request (max batch processing)
+        - Returns per-system results with partial failure details
+        - Creates RiskAssessment records for each successfully classified system
+
+    GET /classify/risk-factors
+        - Returns static questionnaire metadata used in classification
+        - Includes questions mapped to specific EU AI Act articles
+        - Aligned with RiskClassificationRequest schema
+
+Data Flow:
+    Questionnaire Responses → RiskClassificationRequest → classify_risk()
+                                                              ↓
+                                              EU AI Act rules evaluation
+                                                              ↓
+                                            RiskClassificationResponse
+                                                              ↓
+                                    (Optionally) Persist to AISystem + RiskAssessment
+
+Classification Logic (classify_risk function):
+    - HIGH risk: Triggers from safety components, fundamental rights impact,
+      HR systems (recruitment/promotion), credit/insurance, law enforcement,
+      border control, or justice systems
+    - LIMITED risk: Human interaction (chatbots), emotion recognition,
+      synthetic content generation
+    - MINIMAL risk: No triggers, default classification
+    - Generates article-specific compliance requirements and next steps
+
+Database Relationships:
+    - AISystem: Stores risk_level and questionnaire_responses (JSON)
+    - RiskAssessment: Creates assessment record with findings and recommendations
+    - User: All endpoints require authentication, systems filtered by owner_id
+
+Dependencies:
+    - SQLAlchemy for database persistence (AISystem, RiskAssessment models)
+    - Pydantic for request/response validation (RiskClassificationRequest/Response)
+    - FastAPI for routing and dependency injection
+
+Security:
+    - All endpoints require authentication (get_current_user)
+    - System access restricted to owner_id
+    - Bulk classification validates ownership per system
+
+Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
+SPDX-License-Identifier: AGPL-3.0-only
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
@@ -108,20 +188,6 @@ QUESTIONNAIRE_RISK_FACTORS: List[QuestionnaireRiskFactor] = [
         triggers_level=RiskLevel.LIMITED,
     ),
 ]
-
-
-class BulkClassificationItem(BaseModel):
-    system_id: int
-    classification: Optional[RiskClassificationResponse] = None
-    error: Optional[str] = None
-
-
-class BulkClassificationRequest(BaseModel):
-    system_ids: List[int]
-
-
-class BulkClassificationResponse(BaseModel):
-    results: List[BulkClassificationItem]
 
 
 class BulkClassificationItem(BaseModel):
@@ -321,7 +387,6 @@ def classify_and_save(
     return result
 
 
-
 @router.get("/risk-factors", response_model=List[QuestionnaireRiskFactor])
 def get_questionnaire_risk_factors(
     current_user: User = Depends(get_current_user),
@@ -334,6 +399,7 @@ def get_questionnaire_risk_factors(
     Keep this list aligned with RiskClassificationRequest and classify_risk().
     """
     return QUESTIONNAIRE_RISK_FACTORS
+
 
 @router.post("/bulk", response_model=BulkClassificationResponse)
 def bulk_classify_systems(
@@ -406,17 +472,3 @@ def bulk_classify_systems(
 
     db.commit()
     return BulkClassificationResponse(results=results)
-
-    
-@router.get("/risk-factors", response_model=List[QuestionnaireRiskFactor])
-def get_questionnaire_risk_factors(
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Return the static questionnaire metadata used by the risk classification flow.
-
-    This does not query the database because these factors describe the
-    classification rules themselves, not a user's saved questionnaire answers.
-    Keep this list aligned with RiskClassificationRequest and classify_risk().
-    """
-    return QUESTIONNAIRE_RISK_FACTORS
