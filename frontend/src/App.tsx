@@ -16,7 +16,7 @@ import RagChat from './pages/RagChat'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
-  return isAuthenticated ? <>{children}</> : <>{children}</>
+  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />
 }
 
 function App() {
