@@ -48,9 +48,22 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "// TODO (good first issue): parse response and save token",
-                  "// var json = pm.response.json();",
-                  "// pm.collectionVariables.set('aegisai_token', json.access_token);"
+                  "// Save access token to collection variable for subsequent requests",
+                  "if (pm.response.code === 200) {",
+                  "  try {",
+                  "    var json = pm.response.json();",
+                  "    if (json && json.access_token) {",
+                  "      pm.collectionVariables.set('aegisai_token', json.access_token);",
+                  "      console.log('Saved aegisai_token');",
+                  "    } else {",
+                  "      console.warn('Login response missing access_token');",
+                  "    }",
+                  "  } catch (e) {",
+                  "    console.warn('Unable to parse login response as JSON');",
+                  "  }",
+                  "} else {",
+                  "  console.warn('Login failed with status', pm.response.code);",
+                  "}"
                 ]
               }
             }
@@ -82,15 +95,42 @@
               "mode": "raw",
               "raw": "{\n  \"name\": \"CV Screening AI\",\n  \"description\": \"Ranks candidates based on CV content\",\n  \"use_case\": \"CV Screening\",\n  \"sector\": \"HR Tech\"\n}"
             }
+          ,
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "// Save created AI system id to collection variable 'last_system_id'",
+                  "if (pm.response.code === 201 || pm.response.code === 200) {",
+                  "  try {",
+                  "    var json = pm.response.json();",
+                  "    if (json && (json.id || json.data && json.data.id)) {",
+                  "      var id = json.id || json.data.id;",
+                  "      pm.collectionVariables.set('last_system_id', id);",
+                  "      console.log('Saved last_system_id =', id);",
+                  "    } else {",
+                  "      console.warn('Create AI System response missing id');",
+                  "    }",
+                  "  } catch (e) {",
+                  "    console.warn('Unable to parse Create AI System response as JSON');",
+                  "  }",
+                  "} else {",
+                  "  console.warn('Create AI System returned status', pm.response.code);",
+                  "}"
+                ]
+              }
+            }
+          ]
           }
         },
         {
           "name": "Get AI System",
-          "request": { "method": "GET", "url": "{{base_url}}/api/v1/ai-systems/1" }
+          "request": { "method": "GET", "url": "{{base_url}}/api/v1/ai-systems/{{last_system_id}}" }
         },
         {
           "name": "Delete AI System",
-          "request": { "method": "DELETE", "url": "{{base_url}}/api/v1/ai-systems/1" }
+          "request": { "method": "DELETE", "url": "{{base_url}}/api/v1/ai-systems/{{last_system_id}}" }
         }
       ]
     },
