@@ -11,6 +11,7 @@ TODO for contributors (high difficulty):
 
 import time
 from fastapi import APIRouter, Depends, HTTPException, status
+"""
 Contributor note:
   - POST /rag/ingest implemented: multipart PDF upload → document_loader → FAISS rebuild
   - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
