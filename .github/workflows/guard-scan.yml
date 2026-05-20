@@ -1,8 +1,8 @@
-# Guard Scan — scan prompt files in the repo against the AegisAI Guard API on every PR.
+# Guard Scan - scan prompt files in the repo against the AegisAI Guard API on every PR.
 # Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# TODO (high priority — implement):
+# TODO (high priority - implement):
 #   - This workflow is a scaffold. Implement the `scan` step to:
 #       1. Find all files matching `.prompts/**/*.txt` in the repo.
 #       2. POST each file's content to $AEGISAI_GUARD_URL/api/v1/guard/scan
@@ -54,22 +54,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [ -f guard-scan-report.json ]; then
-            COMMENT_BODY=$(python - <<'PY'
-import json
-
-with open('guard-scan-report.json', 'r', encoding='utf-8') as report_file:
-    report = json.load(report_file)
-
-blocked = report.get('blocked', [])
-if not blocked:
-    print('Guard scan failed, but no blocked prompt details were captured.')
-else:
-    lines = ['Guard Scan blocked the following prompt files:']
-    for item in blocked:
-        lines.append(f"- `{item['file']}`: {item['patterns']}")
-    print('\n'.join(lines))
-PY
-            )
+            COMMENT_BODY=$(python3 scripts/print_scan_comment.py)
             gh pr comment ${{ github.event.pull_request.number }} --body "$COMMENT_BODY"
           else
             gh pr comment ${{ github.event.pull_request.number }} --body "Guard scan failed before a report could be written."
