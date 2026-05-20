@@ -12,7 +12,17 @@ from app.api.v1 import (
 
 api_router = APIRouter()
 
-api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
+api_router.include_router(
+    auth.router,
+    prefix="/auth",
+    tags=["Authentication"],
+)
+
+api_router.include_router(
+    auth.users_router,
+    prefix="/users",
+    tags=["Users"],
+)
 
 api_router.include_router(
     ai_systems.router,
