@@ -1,0 +1,10 @@
+{
+  "_comment": "Baseline metrics for the Guard CI evaluation. Regenerate by running `python -m scripts.evaluate_guard_ci --threshold 0.0 --output-json backend/data/guard_baseline.json` from the backend/ directory after a model improvement, then commit the new file. The script reads only the `metrics` block; everything else is informational.",
+  "metrics": {
+    "accuracy": 0.0,
+    "weighted_f1": 0.0,
+    "macro_f1": 0.0
+  },
+  "evaluated_at": "1970-01-01T00:00:00Z",
+  "model_path": "uninitialised"
+}
