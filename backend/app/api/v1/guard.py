@@ -23,6 +23,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.guard_scan_log import GuardScanLog
 from app.models.user import User
+from app.api.v1.notifications import create_notification
+from app.models.notification import NotificationType
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.pagination import PaginatedResponse
 
@@ -119,6 +121,19 @@ def scan_prompt(
         )
         db.add(log)
         db.commit()
+        db.refresh(log)
+
+        if result["decision"] == "block":
+            create_notification(
+                db=db,
+                user_id=current_user.id,
+                notification_type=NotificationType.GUARD_BLOCK.value,
+                title="Prompt blocked by LLM Guard",
+                message="A prompt was blocked because it matched high-risk guard rules.",
+                resource_type="guard_scan",
+                resource_id=log.id,
+            )
+
 
         return ScanResponse(
             decision=result["decision"],
