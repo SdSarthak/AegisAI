@@ -12,4 +12,4 @@ api_router.include_router(
 api_router.include_router(documents.router, prefix="/documents", tags=["Documents"])
 api_router.include_router(guard.router, prefix="/guard", tags=["LLM Guard"])
 api_router.include_router(rag.router, prefix="/rag", tags=["RAG Intelligence"])
-api_router.include_router(compliance.router, prefix="/compliance", tags=["Compliance"])
+api_router.include_router(compliance.router, prefix="/ai-systems", tags=["Compliance Requirements"])
