@@ -5,16 +5,19 @@ from typing import List
 class Settings(BaseSettings):
     # App
     APP_NAME: str = "AegisAI"
-    DEBUG: bool = False
+    DEBUG: bool = True
     API_V1_PREFIX: str = "/api/v1"
 
     # Database
-    DATABASE_URL: str
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/aegisai_db"
 
     # JWT
-    SECRET_KEY: str
+    SECRET_KEY: str = "change-this-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # SCIM Provisioning
+    SCIM_BEARER_TOKEN: str
 
     # Stripe (optional — leave blank to disable billing)
     STRIPE_SECRET_KEY: str = ""
@@ -33,7 +36,7 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = (
         ""  # Leave empty for OpenAI default; set for any compatible endpoint
     )
-    LLM_MODEL: str = "gpt-4o-mini"
+    LLM_MODEL: str = "gpt-4o-mini"  # Model name understood by your chosen provider
 
     # Module 2: LLM Guard
     GUARD_SANITIZATION_LEVEL: str = "medium"  # low | medium | high

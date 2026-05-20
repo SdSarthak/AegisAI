@@ -21,6 +21,10 @@ class User(Base):
     full_name = Column(String(255))
     company_name = Column(String(255))
 
+    # SCIM Provisioning
+    scim_external_id = Column(String(255), unique=True, index=True, nullable=True)
+    scim_idp = Column(String(50), nullable=True)
+
     # Subscription
     subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.FREE)
     stripe_customer_id = Column(String(255), nullable=True)
@@ -38,4 +42,4 @@ class User(Base):
     ai_systems = relationship("AISystem", back_populates="owner")
     documents = relationship("Document", back_populates="owner")
     webhook_configs = relationship("WebhookConfig", back_populates="user")
-    notifications    = relationship("Notification",    back_populates="user")
+    notifications = relationship("Notification", back_populates="user")
