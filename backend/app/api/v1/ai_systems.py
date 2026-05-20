@@ -278,19 +278,29 @@ def export_ai_systems(
         headers={"Content-Disposition": "attachment; filename=\"ai_systems.csv\""},
     )
 
+
 @router.get(
     "/{system_id}/history",
     response_model=PaginatedResponse[AISystemAuditLogResponse],
 )
 def get_ai_system_history(
     system_id: int,
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
+    order: Optional[str] = Query("desc", description="Sort direction for changed_at: asc, desc"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get audit history for a specific AI system."""
+    """Get paginated and sorted audit history for a specific AI system."""
+    
+    # 1. Validate sorting parameter
+    if order not in ("asc", "desc"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid order parameter. Use 'asc' or 'desc'.",
+        )
 
+    # 2. Verify AI system exists and belongs to the authenticated user
     system = (
         db.query(AISystem)
         .filter(
@@ -306,16 +316,22 @@ def get_ai_system_history(
             detail="AI system not found",
         )
 
+    # 3. Build the base audit log query
     base_query = (
         db.query(AISystemAuditLog)
         .filter(AISystemAuditLog.ai_system_id == system_id)
     )
 
+    # 4. Calculate total records for pagination
     total = base_query.count()
 
+    # 5. Apply dynamic sorting based on input
+    direction = asc(AISystemAuditLog.changed_at) if order == "asc" else desc(AISystemAuditLog.changed_at)
+
+    # 6. Apply pagination and execute
     logs = (
         base_query
-        .order_by(AISystemAuditLog.changed_at.desc())
+        .order_by(direction)
         .offset((page - 1) * limit)
         .limit(limit)
         .all()
@@ -557,4 +573,3 @@ def update_ai_system_status(
     db.commit()
     db.refresh(system)
     return system
-
