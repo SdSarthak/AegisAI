@@ -40,6 +40,18 @@ function buildAnswerExport(answer: RagAnswer): string {
   ].join('\n')
 }
 
+function buildAnswerExport(answer: RagAnswer): string {
+  return [
+    'AI Response',
+    answer.answer,
+    '',
+    'Source citations',
+    ...answer.sources.map(
+      (source, index) => `${index + 1}. ${source.title}\n${source.excerpt}`
+    ),
+  ].join('\n')
+}
+
 export default function RagChat() {
   const [question, setQuestion] = useState('')
   const [submittedQuestion, setSubmittedQuestion] = useState('')
