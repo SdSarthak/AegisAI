@@ -3,24 +3,66 @@ RAG Intelligence API — regulatory knowledge base query endpoint.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 
-TODO for contributors (high difficulty):
-  - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
-  - Add streaming responses via SSE for long answers
-"""
+Overview
+--------
+This module implements the ``/rag`` API Router, exposing a Retrieval-Augmented
+Generation (RAG) pipeline built on top of FAISS vector search, LangChain
+retrieval chains, and OpenAI-compatible text embeddings.  It allows users to
+ask natural-language questions about AI/data-privacy regulations and receive
+answers grounded in uploaded source documents.
 
-import time
-from fastapi import APIRouter, Depends, HTTPException, status
-Contributor note:
-  - POST /rag/ingest implemented: multipart PDF upload → document_loader → FAISS rebuild
-  - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - TODO: Integrate MLflow tracking from modules/rag/ml_flow.py
-  - TODO: Add streaming responses via SSE for long answers
+RAG Pipeline
+------------
+1. **Ingestion** (``POST /rag/ingest``) — accepts one or more regulatory PDFs,
+   chunks them via ``document_loader``, builds (or rebuilds) a FAISS vector
+   index, and persists it to ``settings.FAISS_INDEX_PATH``.
+2. **Query** (``POST /rag/query``) — embeds the user question, retrieves the
+   most relevant chunks from the FAISS index via LangChain's
+   ``RetrievalQA`` chain, and returns a grounded answer with source references.
+   Query latency is optionally tracked via MLflow (``modules/rag/ml_flow.py``).
+
+Feedback Loop
+-------------
+Every answer returned by ``/rag/query`` is persisted as a ``RAGFeedback`` row
+in the database.  Users can submit a thumbs-up or thumbs-down vote via
+``POST /rag/feedback``; votes increment the ``thumbs_up`` / ``thumbs_down``
+counters on the corresponding ``RAGFeedback`` record.
+
+Admin Endpoint
+--------------
+``GET /rag/low-quality-chunks`` (SCALE-tier only) - aggregates feedback counts
+per source chunk and surfaces candidates whose thumbs-down ratio exceeds a
+configurable threshold, enabling maintainers to identify and replace low-quality
+document segments in the knowledge base.
+
+Additional Endpoints
+--------------------
+- ``GET /rag/health``   — reports whether the FAISS index has been loaded.
+- ``GET /rag/history``  — returns a paginated log of the current user's past queries.
+
+Key Dependencies
+----------------
+- **FAISS** — approximate nearest-neighbour vector index
+- **LangChain** — ``RetrievalQA`` chain orchestration
+- **OpenAI-compatible embeddings** — configurable via ``app.core.config.settings``
+- **SQLAlchemy** — persistence layer for ``RAGFeedback`` and ``RagQuery`` models
+- **MLflow** — optional experiment tracking (non-blocking; failures are swallowed)
+
+TODOs
+-----
+- Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as default source documents.
+- Add streaming responses via SSE for long answers.
+- Integrate MLflow tracking from modules/rag/ml_flow.py.
+
+Contributor Notes
+-----------------
+- ``POST /rag/ingest`` implemented: multipart PDF upload → document_loader → FAISS rebuild.
 """
 
 import os
 import shutil
 import tempfile
+import time
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
