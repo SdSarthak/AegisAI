@@ -1,11 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Sun, Moon } from 'lucide-react'
 
-
-/** Theme toggle with localStorage persistence. */
-
 export default function ThemeToggle() {
-
 
   const [isDark, setIsDark] = useState(() => {
     try {
@@ -29,6 +25,8 @@ export default function ThemeToggle() {
       // ignore (e.g., disabled storage)
     }
   }, [isDark])
+    }
+
 
   return (
     <button
@@ -42,4 +40,3 @@ export default function ThemeToggle() {
     </button>
   )
 }
-

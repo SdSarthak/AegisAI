@@ -291,7 +291,7 @@ Open `notebooks/train_guard_classifier.ipynb`. Select **Runtime → T4 GPU**. Th
 
 Copy the saved model folder to:
 ```
-backend/app/modules/guard/models/intent_classifier/
+backend/app/modules/guard/models/classifier/
 ```
 
 Restart the backend — it picks up the fine-tuned model automatically.
@@ -310,6 +310,9 @@ python -m app.modules.guard.train --download-only
 
 # Train only (if data already exists)
 python -m app.modules.guard.train --train-only --epochs 5
+
+# Run the standardized training pipeline directly
+python -m app.modules.guard.training.pipelines.train_pipeline --epochs 3
 ```
 
 ### Expected training metrics

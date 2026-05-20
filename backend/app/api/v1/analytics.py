@@ -38,7 +38,9 @@ def get_compliance_timeline(
     snapshotted_at >= now - days. Verify the system belongs to current_user.
     """
     # TODO: implement — replace with real DB query
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    )
 
 
 @router.get("/summary")
@@ -52,4 +54,6 @@ def get_analytics_summary(
     TODO (help wanted): aggregate counts and averages from ai_systems table.
     """
     # TODO: implement
-    raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet")
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    )

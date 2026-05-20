@@ -57,8 +57,8 @@ export const authApi = {
 
 // AI Systems API
 export const aiSystemsApi = {
-  list: async () => {
-    const { data } = await api.get('/ai-systems/')
+  list: async (params?: { sort_by?: string; order?: string }) => {
+    const { data } = await api.get('/ai-systems/', { params })
     return data
   },
   get: async (id: number) => {
@@ -116,5 +116,27 @@ export const documentsApi = {
     await api.delete(`/documents/${id}`)
   },
 }
+
+// Notifications API
+export const notificationsApi = {
+  list: (unreadOnly = false) =>
+    api.get(`/notifications?unread_only=${unreadOnly}`).then((r) => r.data),
+  markRead: (ids: number[]) =>
+    api.post('/notifications/read', { ids }),
+}
+
+
+// Health API — uses root URL, not /api/v1
+export interface HealthResponse {
+  status: "healthy" | "degraded";
+  database: "connected" | "disconnected";
+  version: string;
+  service: string;
+}
+
+export const checkHealth = async (): Promise<HealthResponse> => {
+  const response = await axios.get<HealthResponse>("/health"); // plain axios, not `api`
+  return response.data;
+};
 
 export default api

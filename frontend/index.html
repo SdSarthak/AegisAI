@@ -2,49 +2,49 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <link rel="icon" type="image/svg+xml" href="/aegis.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <title>EU AI Act Compliance Tool</title>
     <script>
-      (() => {
-        try {
-          const theme = localStorage.getItem('theme')
+<script>
+  (() => {
+    try {
+      const theme = localStorage.getItem('theme')
 
-          if (
-            theme === 'dark' ||
-            (!theme &&
-              window.matchMedia('(prefers-color-scheme: dark)').matches)
-          ) {
-            document.documentElement.classList.add('dark')
-          }
-        } catch (e) {
-          console.error('Theme initialization failed:', e)
-        }
-      })()
-    </script>
-    <style>
-      html {
-        background: #f9fafb;
-        color-scheme: light;
+      if (
+        theme === 'dark' ||
+        (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      ) {
+        document.documentElement.classList.add('dark')
       }
+    } catch (e) {
+      console.error('Theme initialization failed:', e)
+    }
+  })()
+</script>
+<style>
+  html {
+    background: #f9fafb;
+    color-scheme: light;
+  }
 
-      html.dark {
-        background: #111827;
-        color-scheme: dark;
-      }
+  html.dark {
+    background: #111827;
+    color-scheme: dark;
+  }
 
-      body {
-        margin: 0;
-        background: #f9fafb;
-        color: #111827;
-      }
+  body {
+    margin: 0;
+    background: #f9fafb;
+    color: #111827;
+  }
 
-      html.dark body {
-        background: #111827;
-        color: #f3f4f6;
-      }
-    </style>
+  html.dark body {
+    background: #111827;
+    color: #f3f4f6;
+  }
+</style>
   </head>
 
   <body>
