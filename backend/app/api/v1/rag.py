@@ -1,5 +1,5 @@
 """
-RAG Intelligence API — regulatory knowledge base query endpoint.
+RAG Intelligence API - regulatory knowledge base query endpoint.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 
