@@ -16,6 +16,10 @@ import {
   ChevronRight,
   BarChart,
 } from 'lucide-react'
+import NotificationBell from './NotificationBell'
+// ThemeToggle imported above
+
+
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -95,6 +99,14 @@ export default function Layout() {
                 <item.icon className="h-5 w-5 shrink-0" />
 
                 {!isCollapsed && <span>{item.name}</span>}
+                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                } ${isCollapsed ? 'justify-center' : ''}`}
+              >
+                <item.icon className="w-5 h-5" />
+
+                <span className={isCollapsed ? 'sr-only' : ''}>
+                  {item.name}
+                </span>
               </Link>
             )
           })}
@@ -127,6 +139,26 @@ export default function Layout() {
             >
               <LogOut className="h-5 w-5" />
             </button>
+            <div className={isCollapsed ? 'sr-only' : 'truncate'}>
+              <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                {displayName}
+              </p>
+              <p className="text-xs text-gray-500 truncate dark:text-gray-400">
+  {companyName}
+</p>
+</div>
+
+<div className="flex items-center gap-1">
+  <button
+    onClick={logout}
+    className="p-2 text-gray-400 dark:text-gray-300 hover:text-gray-600 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+    aria-label="Log out"
+    title="Log out"
+  >
+    <LogOut className="w-5 h-5" />
+  </button>
+</div>
+
           </div>
         </div>
       </aside>
@@ -143,8 +175,19 @@ export default function Layout() {
           <ThemeToggle />
         </header>
 
-        {/* Page Content */}
-        <main className="min-h-screen bg-gray-50 p-8 transition-colors duration-200 dark:bg-gray-900 dark:text-white">
+      {/* Main content area (right of sidebar) */}
+      <div
+        className={`transition-[padding] duration-200 ${
+          isCollapsed ? 'pl-20' : 'pl-64'
+        }`}
+      >
+
+        <header className="sticky top-0 z-30 flex items-center justify-end gap-1 px-8 py-3 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
+          <NotificationBell />
+          <ThemeToggle />
+        </header>
+
+        <main className="p-8 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
           <Outlet />
         </main>
       </div>
