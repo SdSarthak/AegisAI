@@ -10,6 +10,7 @@ TODO for contributors (medium difficulty):
 """
 
 import hashlib
+import torch
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
@@ -139,6 +140,22 @@ def scan_prompt(
 def guard_health():
     """Check if the Guard module is available."""
     return {"module": "llm_guard", "status": "available"}
+
+@router.get("/info", tags=["LLM Guard"])
+def guard_info():
+    """
+    Return Guard module diagnostic information.
+    """
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    return {
+        "module": "llm_guard",
+        "status": "available",
+        "model_name": "DeBERTa-v3",
+        "device": device,
+        "sanitization_level": "medium"
+    }
 
 
 class GuardConfigRequest(BaseModel):
