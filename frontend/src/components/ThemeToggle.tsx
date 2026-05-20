@@ -25,8 +25,6 @@ export default function ThemeToggle() {
       // ignore (e.g., disabled storage)
     }
   }, [isDark])
-    }
-
 
   return (
     <button
