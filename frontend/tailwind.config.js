@@ -1,14 +1,21 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+ 
+  // 'class' — Tailwind's dark: variants activate only when <html> carries
+  // the `dark` class. ThemeToggle owns that class via
+  // document.documentElement.classList.
+  darkMode: 'class',
+ 
   theme: {
     extend: {
       colors: {
         primary: {
-          50: '#eff6ff',
+          50:  '#eff6ff',
           100: '#dbeafe',
           200: '#bfdbfe',
           300: '#93c5fd',
@@ -22,5 +29,7 @@ export default {
       },
     },
   },
+ 
   plugins: [],
 }
+ 
