@@ -1,0 +1,51 @@
+#aegisai-secret-warning {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  width: 320px;
+
+  background: #fff3cd;
+  color: #856404;
+
+  border: 2px solid #ffeeba;
+
+  padding: 15px;
+  border-radius: 10px;
+
+  z-index: 999999;
+
+  font-family: Arial, sans-serif;
+
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+#aegisai-secret-warning ul {
+  margin-top: 8px;
+  padding-left: 20px;
+}
+
+.popup-container {
+  width: 280px;
+  padding: 15px;
+  font-family: Arial, sans-serif;
+}
+
+.popup-container h2 {
+  color: #2563eb;
+  margin-bottom: 10px;
+}
+
+.popup-container ul {
+  padding-left: 20px;
+}
+
+.status {
+  margin-top: 15px;
+  padding: 10px;
+
+  background: #d1fae5;
+  color: #065f46;
+
+  border-radius: 8px;
+  font-weight: bold;
+}
