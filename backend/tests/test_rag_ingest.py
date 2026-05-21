@@ -32,7 +32,8 @@ def _mock_current_user():
 # Shared patches applied to every test in this module
 # ---------------------------------------------------------------------------
 
-# Patch get_current_user so we never need a real JWT
+ # Patch get_current_user so we never need a real JWT
+ # Always patch PATCH_AUTH before TestClient is used to ensure authentication
 PATCH_AUTH = "app.core.security.get_current_user"
 
 # Patch the two RAG functions called inside the endpoint
@@ -53,7 +54,9 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_single_pdf_success(self, mock_load, mock_create, client):
+    @patch(PATCH_AUTH)
+    def test_single_pdf_success(self, mock_auth, mock_load, mock_create, client):
+        mock_auth.return_value = _mock_current_user()
         """
         1. Uploading a single valid PDF should return 200 with correct fields.
         """
@@ -82,7 +85,9 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_multiple_pdfs_success(self, mock_load, mock_create, client):
+    @patch(PATCH_AUTH)
+    def test_multiple_pdfs_success(self, mock_auth, mock_load, mock_create, client):
+        mock_auth.return_value = _mock_current_user()
         """
         2. Uploading multiple PDFs should reflect all files in the response.
         """
@@ -113,7 +118,9 @@ class TestRagIngest:
     # Validation errors
     # ------------------------------------------------------------------
 
-    def test_no_files_returns_422(self, client):
+    @patch(PATCH_AUTH)
+    def test_no_files_returns_422(self, mock_auth, client):
+        mock_auth.return_value = _mock_current_user()
         """
         3. Sending an empty request (no 'files' field) should return 422.
         FastAPI validates the required File(...) parameter before our code runs.
@@ -125,7 +132,9 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_non_pdf_file_returns_400(self, mock_load, mock_create, client):
+    @patch(PATCH_AUTH)
+    def test_non_pdf_file_returns_400(self, mock_auth, mock_load, mock_create, client):
+        mock_auth.return_value = _mock_current_user()
         """
         4. Uploading a non-PDF file should return 400 with a clear message.
         """
@@ -143,7 +152,9 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_empty_pdf_returns_400(self, mock_load, mock_create, client):
+    @patch(PATCH_AUTH)
+    def test_empty_pdf_returns_400(self, mock_auth, mock_load, mock_create, client):
+        mock_auth.return_value = _mock_current_user()
         """
         5. A valid-looking PDF that produces zero chunks should return 400.
         This covers scanned/image-only PDFs and password-protected files.
@@ -167,7 +178,9 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_faiss_build_failure_returns_503(self, mock_load, mock_create, client):
+    @patch(PATCH_AUTH)
+    def test_faiss_build_failure_returns_503(self, mock_auth, mock_load, mock_create, client):
+        mock_auth.return_value = _mock_current_user()
         """
         6. If the FAISS build step raises an exception, the endpoint should
         return 503 with the error forwarded in the detail field.
@@ -224,7 +237,9 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_response_has_all_required_fields(self, mock_load, mock_create, client):
+    @patch(PATCH_AUTH)
+    def test_response_has_all_required_fields(self, mock_auth, mock_load, mock_create, client):
+        mock_auth.return_value = _mock_current_user()
         """
         8. The JSON response must contain exactly the three fields required
         by the issue specification.
