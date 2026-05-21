@@ -3,7 +3,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-def test_full_status_lifecycle(client: TestClient):
+def test_full_status_lifecycle(client: TestClient, unauth_client: TestClient):
     """
     Integration test covering the complete status lifecycle:
     1. Register user
@@ -94,8 +94,9 @@ def test_full_status_lifecycle(client: TestClient):
     assert get_resp_4.json()["compliance_status"] == "compliant"
 
     # 8. Verifies that a second user cannot PATCH the first user's system (expect 404)
-    # Register second user
-    client.post(
+    # We need to use unauth_client to avoid the auth override in client fixture
+    # First, register and login the hacker using unauth_client
+    register_resp = unauth_client.post(
         "/api/v1/auth/register",
         json={
             "email": "hacker@example.com",
@@ -103,19 +104,22 @@ def test_full_status_lifecycle(client: TestClient):
             "full_name": "Hacker Tester"
         }
     )
+    assert register_resp.status_code == 201
+    
     # Login second user
-    hacker_login_resp = client.post(
+    hacker_login_resp = unauth_client.post(
         "/api/v1/auth/login",
         data={
             "username": "hacker@example.com",
             "password": "Password1!"
         }
     )
+    assert hacker_login_resp.status_code == 200
     hacker_token = hacker_login_resp.json()["access_token"]
     hacker_headers = {"Authorization": f"Bearer {hacker_token}"}
     
-    # Try to patch first user's system
-    patch_resp_hacker = client.patch(
+    # Try to patch first user's system using unauth_client (real auth)
+    patch_resp_hacker = unauth_client.patch(
         f"/api/v1/ai-systems/{system_id}/status",
         headers=hacker_headers,
         json={"compliance_status": "not_started"}

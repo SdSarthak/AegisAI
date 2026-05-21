@@ -40,6 +40,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_password_hash(password: str) -> str:
     """Securely hash a password using bcrypt."""
+    # bcrypt has a hard limit of 72 bytes for passwords
+    # Truncate to prevent ValueError
+    if len(password.encode("utf-8")) > 72:
+        password = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
     return pwd_context.hash(password)
 
 

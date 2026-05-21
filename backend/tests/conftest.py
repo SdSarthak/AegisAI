@@ -2,6 +2,7 @@
 
 import os
 import pytest
+from datetime import datetime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from fastapi.testclient import TestClient
@@ -11,6 +12,7 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from app.core.database import Base, SessionLocal
 from app.main import app
+from app.models.user import User, SubscriptionTier
 
 
 @pytest.fixture(scope="session")
@@ -51,37 +53,55 @@ def client(db_engine):
     
     app.dependency_overrides[get_db] = override_get_db
 
-    # Default auth override: most tests expect authenticated requests.
-    from app.core.security import get_current_user
-    from unittest.mock import MagicMock
-
+    # Mock authenticated user
     from app.core.security import get_current_user
     from unittest.mock import MagicMock
 
     def override_get_current_user():
-        user = MagicMock()
-        user.id = "test-user-id"
+        user = MagicMock(spec=User)
+        user.id = 1  # Integer, not string
         user.email = "test@example.com"
-        return user
-
-    @pytest.fixture
-    def client():
-        app.dependency_overrides[get_current_user] = _mock_current_user
-        yield TestClient(app)
-        app.dependency_overrides.clear()
-        user = MagicMock()
-        user.id = "test-user-id"
-        user.email = "test@example.com"
+        user.full_name = "Test User"
         user.company_name = "Test Company"
-        user.subscription_tier = None
+        user.subscription_tier = SubscriptionTier.FREE
+        user.is_active = True
+        user.is_verified = False
+        user.created_at = datetime.utcnow()
         return user
 
     app.dependency_overrides[get_current_user] = override_get_current_user
-    # Ensure all tests use an authenticated user by default
-    client = TestClient(app)
-    yield client
+    
+    yield TestClient(app)
+    
+    # Cleanup
     session.close()
     transaction.rollback()
     connection.close()
     app.dependency_overrides.clear()
 
+
+@pytest.fixture
+def unauth_client(db_engine):
+    """Create test client without auth overrides - for testing auth failures."""
+    from app.core.database import get_db
+    from app.core.security import get_current_user
+    
+    # Clear ALL existing overrides first to ensure clean state
+    app.dependency_overrides.clear()
+    
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+    
+    def override_get_db():
+        yield session
+    
+    app.dependency_overrides[get_db] = override_get_db
+    # Explicitly do NOT override get_current_user - let it use the real implementation
+    
+    yield TestClient(app)
+    
+    session.close()
+    transaction.rollback()
+    connection.close()
+    app.dependency_overrides.clear()

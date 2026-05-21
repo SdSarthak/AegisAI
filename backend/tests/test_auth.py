@@ -77,8 +77,8 @@ def test_login_wrong_password(client):
 
     assert response.status_code == 401
     
-def test_invalid_token_returns_401(client):
-    response = client.get(
+def test_invalid_token_returns_401(unauth_client):
+    response = unauth_client.get(
         "/api/v1/auth/me",
         headers={
             "Authorization": "Bearer invalidtoken"
@@ -87,13 +87,13 @@ def test_invalid_token_returns_401(client):
 
     assert response.status_code == 401
     
-def test_expired_token_returns_401(client):
+def test_expired_token_returns_401(unauth_client):
     expired_token = create_access_token(
         data={"sub": "expired@example.com"},
         expires_delta=timedelta(minutes=-1)
     )
 
-    response = client.get(
+    response = unauth_client.get(
         "/api/v1/auth/me",
         headers={
             "Authorization": f"Bearer {expired_token}"

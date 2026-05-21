@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from backend.app.core.config import settings
+from app.core.config import settings
 
 # LangChain has moved many integrations to `langchain_community`.
 # Use community imports when available, and fall back to legacy paths.
