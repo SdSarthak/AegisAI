@@ -57,9 +57,14 @@ export const authApi = {
 
 // AI Systems API
 export const aiSystemsApi = {
-  list: async (params?: { sort_by?: string; order?: string }) => {
-    const { data } = await api.get('/ai-systems/', { params })
-    return data
+  list: async (params?: {
+  sort_by?: string
+  order?: string
+  skip?: number
+  limit?: number
+  }) => {
+  const { data } = await api.get('/ai-systems/', { params })
+  return data
   },
   get: async (id: number) => {
     const { data } = await api.get(`/ai-systems/${id}`)
