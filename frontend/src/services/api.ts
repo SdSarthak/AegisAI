@@ -125,7 +125,6 @@ export const notificationsApi = {
     api.post('/notifications/read', { ids }),
 }
 
-
 // Health API — uses root URL, not /api/v1
 export interface HealthResponse {
   status: "healthy" | "degraded";
@@ -135,8 +134,22 @@ export interface HealthResponse {
 }
 
 export const checkHealth = async (): Promise<HealthResponse> => {
-  const response = await axios.get<HealthResponse>("/health"); // plain axios, not `api`
-  return response.data;
-};
+  const response = await axios.get<HealthResponse>("/health")
+  return response.data
+}
+
+/* ============================
+   ✅ RAG API (ADD THIS ONLY)
+   ============================ */
+
+export const ragApi = {
+  query: async (question: string) => {
+    const { data } = await api.post('/rag/query', {
+      question,
+    })
+
+    return data
+  },
+}
 
 export default api
