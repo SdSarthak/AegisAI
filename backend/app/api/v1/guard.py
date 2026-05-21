@@ -13,6 +13,7 @@ import hashlib
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
@@ -29,7 +30,7 @@ from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
-
+logger = logging.getLogger(__name__)
 
 _RATE_LIMIT_REQUESTS = 60
 _RATE_LIMIT_WINDOW_SECONDS = 60
@@ -145,8 +146,11 @@ def scan_prompt(
             ),
         )
     except Exception as e:
+        logger.exception("Guard scan failed")
+
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e)
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An internal error occurred while processing the Guard scan."
         )
 
 
@@ -360,9 +364,10 @@ def bulk_scan_prompts(
             processed=len(results),
         )
     except Exception as e:
-        db.rollback()                                     
+        db.rollback()
+        logger.exception("Bulk guard scan failed")                                     
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
+            detail="An internal error occurred while processing the batch Guard scan."
         )
     
