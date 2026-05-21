@@ -50,11 +50,38 @@ def client(db_engine):
         yield session
     
     app.dependency_overrides[get_db] = override_get_db
-    
+
+    # Default auth override: most tests expect authenticated requests.
+    from app.core.security import get_current_user
+    from unittest.mock import MagicMock
+
+    from app.core.security import get_current_user
+    from unittest.mock import MagicMock
+
+    def override_get_current_user():
+        user = MagicMock()
+        user.id = "test-user-id"
+        user.email = "test@example.com"
+        return user
+
+    @pytest.fixture
+    def client():
+        app.dependency_overrides[get_current_user] = _mock_current_user
+        yield TestClient(app)
+        app.dependency_overrides.clear()
+        user = MagicMock()
+        user.id = "test-user-id"
+        user.email = "test@example.com"
+        user.company_name = "Test Company"
+        user.subscription_tier = None
+        return user
+
+    app.dependency_overrides[get_current_user] = override_get_current_user
+    # Ensure all tests use an authenticated user by default
     client = TestClient(app)
     yield client
-    
     session.close()
     transaction.rollback()
     connection.close()
     app.dependency_overrides.clear()
+
