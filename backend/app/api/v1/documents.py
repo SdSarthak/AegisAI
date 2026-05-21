@@ -3,6 +3,9 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
 from io import BytesIO
+from datetime import datetime, timedelta
+from jose import JWTError, jwt
+from app.core.config import settings
 import re
 
 from app.core.database import get_db
@@ -27,6 +30,7 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
 router = APIRouter()
 
+SHARE_TOKEN_EXPIRE_DAYS = 7
 
 # Document templates for generation
 DOCUMENT_TEMPLATES = {
@@ -195,6 +199,117 @@ def list_documents(
     return PaginatedResponse(items=documents, total=total, page=page, limit=limit)
 
 
+@router.post("/generate", response_model=DocumentResponse)
+def generate_document(
+    request: DocumentGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a compliance document for an AI system."""
+    ai_system = (
+        db.query(AISystem)
+        .filter(
+            AISystem.id == request.ai_system_id, AISystem.owner_id == current_user.id
+        )
+        .first()
+    )
+
+    if not ai_system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
+        )
+
+    template = DOCUMENT_TEMPLATES.get(request.document_type)
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No template available for {request.document_type}",
+        )
+
+    from app.models.ai_system import RiskAssessment
+
+    assessment = db.query(RiskAssessment).filter(
+        RiskAssessment.ai_system_id == ai_system.id
+    ).order_by(RiskAssessment.assessed_at.desc()).first()
+
+    try:
+        content = generate_compliance_narrative(
+            document_type=request.document_type,
+            ai_system=ai_system,
+            risk_assessment=assessment,
+            company_name=current_user.company_name
+        )
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"LLM generation failed, falling back to template: {str(e)}")
+
+        content = template.format(
+            system_name=ai_system.name,
+            version=ai_system.version or "1.0",
+            use_case=ai_system.use_case or "Not specified",
+            sector=ai_system.sector or "Not specified",
+            description=ai_system.description or "No description provided",
+            risk_level=ai_system.risk_level.value if ai_system.risk_level else "Not assessed",
+            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            company_name=current_user.company_name or "Not specified",
+            classification_reasons="See risk assessment details",
+            recommendations="Based on risk assessment",
+            requirements="See applicable requirements above",
+            next_steps="Complete all checklist items"
+        )
+
+    document = Document(
+        owner_id=current_user.id,
+        ai_system_id=ai_system.id,
+        title=f"{request.document_type.value.replace('_', ' ').title()} - {ai_system.name}",
+        document_type=request.document_type,
+        status=DocumentStatus.GENERATED,
+        content=content,
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    return document
+
+
+@router.get("/share/{token}", response_model=DocumentResponse)
+def get_shared_document(
+    token: str,
+    db: Session = Depends(get_db),
+):
+    """Access a shared document via token — no authentication required."""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+
+        if payload.get("type") != "document_share":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token type"
+            )
+
+        document_id: int = payload.get("document_id")
+        if document_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid token"
+            )
+
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired share link",
+        )
+
+    document = db.query(Document).filter(Document.id == document_id).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
+
+    return document
+
+
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(
     document_id: int,
@@ -214,6 +329,7 @@ def get_document(
         )
     return document
 
+
 @router.put("/{document_id}", response_model=DocumentResponse)
 def update_document(
     document_id: int,
@@ -222,99 +338,18 @@ def update_document(
     current_user: User = Depends(get_current_user)
 ):
     """Update document content."""
-    # Fetch document
     document = db.query(Document).filter(
         Document.id == document_id,
         Document.owner_id == current_user.id
     ).first()
-    
+
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
-    
-    # Update content
+
     document.content = body.content
-    db.commit()
-    db.refresh(document)
-    
-    return document
-
-@router.post("/generate", response_model=DocumentResponse)
-def generate_document(
-    request: DocumentGenerateRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Generate a compliance document for an AI system."""
-    # Get the AI system
-    ai_system = (
-        db.query(AISystem)
-        .filter(
-            AISystem.id == request.ai_system_id, AISystem.owner_id == current_user.id
-        )
-        .first()
-    )
-
-    if not ai_system:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
-        )
-
-    # Get template
-    template = DOCUMENT_TEMPLATES.get(request.document_type)
-    if not template:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"No template available for {request.document_type}",
-        )
-
-    # Get latest risk assessment if available
-    from app.models.ai_system import RiskAssessment
-
-    assessment = db.query(RiskAssessment).filter(
-        RiskAssessment.ai_system_id == ai_system.id
-    ).order_by(RiskAssessment.assessed_at.desc()).first()
-    
-    try:
-        content = generate_compliance_narrative(
-            document_type=request.document_type,
-            ai_system=ai_system,
-            risk_assessment=assessment,
-            company_name=current_user.company_name
-        )
-    except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"LLM generation failed, falling back to template: {str(e)}")
-        
-        from datetime import datetime
-        content = template.format(
-            system_name=ai_system.name,
-            version=ai_system.version or "1.0",
-            use_case=ai_system.use_case or "Not specified",
-            sector=ai_system.sector or "Not specified",
-            description=ai_system.description or "No description provided",
-            risk_level=ai_system.risk_level.value if ai_system.risk_level else "Not assessed",
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
-            company_name=current_user.company_name or "Not specified",
-            classification_reasons="See risk assessment details",
-            recommendations="Based on risk assessment",
-            requirements="See applicable requirements above",
-            next_steps="Complete all checklist items"
-        )
-
-    # Create document
-    document = Document(
-        owner_id=current_user.id,
-        ai_system_id=ai_system.id,
-        title=f"{request.document_type.value.replace('_', ' ').title()} - {ai_system.name}",
-        document_type=request.document_type,
-        status=DocumentStatus.GENERATED,
-        content=content,
-    )
-    db.add(document)
     db.commit()
     db.refresh(document)
 
@@ -349,36 +384,26 @@ def export_document_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Export a document as a PDF file.
-    
-    Returns:
-        - Response status 200 with PDF bytes
-        - Content-Type: application/pdf
-        - File starts with %PDF- magic bytes
-        - File size > 1KB
-    """
-    # Retrieve the document
+    """Export a document as a PDF file."""
     document = db.query(Document).filter(
         Document.id == document_id,
         Document.owner_id == current_user.id
     ).first()
-    
+
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
-    
+
     if not document.content:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Document has no content to export"
         )
-    
-    # Generate PDF
+
     pdf_buffer = BytesIO()
-    
-    # Create PDF document
+
     doc = SimpleDocTemplate(
         pdf_buffer,
         pagesize=A4,
@@ -387,11 +412,8 @@ def export_document_pdf(
         topMargin=0.75*inch,
         bottomMargin=0.75*inch,
     )
-    
-    # Container for PDF elements
+
     story = []
-    
-    # Get styles
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         'CustomTitle',
@@ -401,7 +423,7 @@ def export_document_pdf(
         spaceAfter=12,
         alignment=TA_CENTER,
     )
-    
+
     body_style = ParagraphStyle(
         'CustomBody',
         parent=styles['BodyText'],
@@ -409,12 +431,10 @@ def export_document_pdf(
         alignment=TA_LEFT,
         spaceAfter=12,
     )
-    
-    # Add title
+
     story.append(Paragraph(document.title, title_style))
     story.append(Spacer(1, 0.2*inch))
-    
-    # Add metadata
+
     metadata_style = ParagraphStyle(
         'Metadata',
         parent=styles['Normal'],
@@ -426,14 +446,12 @@ def export_document_pdf(
     story.append(Paragraph(f"<b>Status:</b> {document.status.value}", metadata_style))
     story.append(Paragraph(f"<b>Created:</b> {document.created_at.strftime('%Y-%m-%d %H:%M:%S')}", metadata_style))
     story.append(Spacer(1, 0.3*inch))
-    
-    # Process content - split by lines and handle markdown-like formatting
+
     content_lines = document.content.split('\n')
     for line in content_lines:
         if not line.strip():
             story.append(Spacer(1, 0.1*inch))
         elif line.startswith('# '):
-            # Heading 1
             heading_style = ParagraphStyle(
                 'CustomHeading1',
                 parent=styles['Heading1'],
@@ -444,7 +462,6 @@ def export_document_pdf(
             )
             story.append(Paragraph(line.replace('# ', ''), heading_style))
         elif line.startswith('## '):
-            # Heading 2
             heading_style = ParagraphStyle(
                 'CustomHeading2',
                 parent=styles['Heading2'],
@@ -455,7 +472,6 @@ def export_document_pdf(
             )
             story.append(Paragraph(line.replace('## ', ''), heading_style))
         elif line.startswith('### '):
-            # Heading 3
             heading_style = ParagraphStyle(
                 'CustomHeading3',
                 parent=styles['Heading3'],
@@ -466,36 +482,61 @@ def export_document_pdf(
             )
             story.append(Paragraph(line.replace('### ', ''), heading_style))
         elif line.startswith('- '):
-            # Bullet point
             story.append(Paragraph('• ' + line.replace('- ', ''), body_style))
         else:
-            # Handle inline bold with regex
             processed_line = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', line.strip())
             story.append(Paragraph(processed_line, body_style))
-    
-    # Build PDF
+
     doc.build(story)
-    
-    # Get PDF bytes
     pdf_bytes = pdf_buffer.getvalue()
-    
-    # Verify PDF is valid (starts with %PDF- magic bytes)
+
     if not pdf_bytes.startswith(b'%PDF-'):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="PDF generation failed - invalid PDF format"
         )
-    
-    # Verify PDF is larger than 1KB
+
     if len(pdf_bytes) < 1024:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="PDF generation failed - PDF too small"
         )
-    
-    # Return PDF response
+
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{document.title}.pdf"'}
     )
+
+
+@router.post("/{document_id}/share")
+def create_share_link(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a time-limited shareable link for a document."""
+    document = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.owner_id == current_user.id)
+        .first()
+    )
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
+
+    expire = datetime.utcnow() + timedelta(days=SHARE_TOKEN_EXPIRE_DAYS)
+    token_data = {
+        "document_id": document_id,
+        "exp": expire,
+        "type": "document_share",
+    }
+    token = jwt.encode(token_data, settings.SECRET_KEY, algorithm="HS256")
+
+    return {
+        "share_token": token,
+        "expires_at": expire.isoformat(),
+        "share_url": f"/api/v1/documents/share/{token}",
+    }
