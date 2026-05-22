@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta
+from jose import jwt, JWTError
+from app.core.config import settings
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
@@ -612,3 +615,52 @@ def export_document_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{document.title}.pdf"'}
     )
+
+
+from datetime import datetime, timedelta
+from jose import jwt, JWTError
+
+@router.post("/{document_id}/share")
+def create_share_link(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    expires_at = datetime.utcnow() + timedelta(days=7)
+    token = jwt.encode(
+        {"document_id": document_id, "exp": expires_at, "type": "document_share"},
+        settings.SECRET_KEY,
+        algorithm="HS256"
+    )
+    return {
+        "share_token": token,
+        "expires_at": expires_at.isoformat(),
+        "share_url": f"/api/v1/documents/share/{token}"
+    }
+
+
+@router.get("/share/{token}", response_model=DocumentResponse)
+def access_shared_document(token: str, db: Session = Depends(get_db)):
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+    except JWTError as e:
+        if "expired" in str(e).lower():
+            raise HTTPException(status_code=401, detail="Token expired")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    if payload.get("type") != "document_share":
+        raise HTTPException(status_code=400, detail="Wrong token type")
+
+    document = db.query(Document).filter(Document.id == payload["document_id"]).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document
+
+
