@@ -13,6 +13,7 @@ import {
 import ComplianceChecklist, {
   ChecklistItem,
 } from '../components/ComplianceChecklist'
+import CopyButton from '../components/CopyButton'
 
 interface ClassificationResult {
   risk_level: string
@@ -20,6 +21,22 @@ interface ClassificationResult {
   reasons: string[]
   requirements: string[]
   next_steps: string[]
+}
+
+function buildClassificationReport(result: ClassificationResult): string {
+  return [
+    `Risk Level: ${result.risk_level}`,
+    `Confidence: ${Math.round(result.confidence * 100)}%`,
+    '',
+    'Why this classification?',
+    ...result.reasons.map((reason, index) => `${index + 1}. ${reason}`),
+    '',
+    'Legal Requirements',
+    ...result.requirements.map((req, index) => `${index + 1}. ${req}`),
+    '',
+    'Action Plan',
+    ...result.next_steps.map((step, index) => `${index + 1}. ${step}`),
+  ].join('\n')
 }
 
 const CHECKLIST_ITEMS: Record<
@@ -152,28 +169,13 @@ export default function Classification() {
   const getRiskColor = (level: string) => {
     switch (level) {
       case 'unacceptable':
-        return `
-          bg-red-50 dark:bg-red-900/20
-          border-red-200 dark:border-red-700
-        `
-
+        return 'bg-red-50 border-red-200'
       case 'high':
-        return `
-          bg-orange-50 dark:bg-orange-900/20
-          border-orange-200 dark:border-orange-700
-        `
-
+        return 'bg-orange-50 border-orange-200'
       case 'limited':
-        return `
-          bg-yellow-50 dark:bg-yellow-900/20
-          border-yellow-200 dark:border-yellow-700
-        `
-
+        return 'bg-yellow-50 border-yellow-200'
       default:
-        return `
-          bg-green-50 dark:bg-green-900/20
-          border-green-200 dark:border-green-700
-        `
+        return 'bg-green-50 border-green-200'
     }
   }
 
@@ -358,134 +360,99 @@ export default function Classification() {
         </div>
 
         {/* Results */}
-        <div>
+        <div className="relative">
           {result ? (
-            <div
-              className={`
-                rounded-xl
-                border
-                p-6
-                ${getRiskColor(
-                  result.risk_level
-                )}
-              `}
-            >
+            <div className={`rounded-xl border p-6 ${getRiskColor(result.risk_level)}`}>
               <div className="flex items-center gap-4 mb-6">
-                {getRiskIcon(
-                  result.risk_level
-                )}
-
+                {getRiskIcon(result.risk_level)}
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white capitalize">
+                  <h2 className="text-xl font-bold text-gray-900 capitalize">
                     {result.risk_level} Risk
                   </h2>
-
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
-                    Confidence:{' '}
-                    {Math.round(
-                      result.confidence * 100
-                    )}
-                    %
+                  <p className="text-sm text-gray-600">
+                    Confidence: {Math.round(result.confidence * 100)}%
                   </p>
                 </div>
               </div>
 
               {/* Reasons */}
               <div className="mb-6">
-                <h3 className="font-medium text-gray-900 dark:text-white mb-2">
-                  Classification Reasons
-                </h3>
-
+                <h3 className="font-medium text-gray-900 mb-2">Classification Reasons</h3>
                 <ul className="space-y-2">
-                  {result.reasons.map(
-                    (reason, i) => (
-                      <li
-                        key={i}
-                        className="text-sm text-gray-600 dark:text-gray-300 flex items-start gap-2"
-                      >
-                        <span className="text-gray-400">
-                          •
-                        </span>
-
-                        {reason}
-                      </li>
-                    )
-                  )}
+                  {result.reasons.map((reason, i) => (
+                    <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+                      <span className="text-gray-400">•</span>
+                      {reason}
+                    </li>
+                  ))}
                 </ul>
               </div>
 
               {/* Requirements */}
               <div className="mb-6">
-                <h3 className="font-medium text-gray-900 dark:text-white mb-2">
-                  Compliance Requirements
-                </h3>
-
+                <h3 className="font-medium text-gray-900 mb-2">Compliance Requirements</h3>
                 <ul className="space-y-2">
-                  {result.requirements.map(
-                    (req, i) => (
-                      <li
-                        key={i}
-                        className="text-sm text-gray-600 dark:text-gray-300 flex items-start gap-2"
-                      >
-                        <CheckCircle className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-
-                        {req}
-                      </li>
-                    )
-                  )}
+                  {result.requirements.map((req, i) => (
+                    <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+                      <CheckCircle className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                      {req}
+                    </li>
+                  ))}
                 </ul>
               </div>
 
-              {/* Checklist */}
-              {result.risk_level !==
-                'unacceptable' && (
+              {/* Next Steps */}
+
+              <div>
+                <h3 className="font-medium text-gray-900 mb-2">Next Steps</h3>
+                <ol className="space-y-2">
+                  {result.next_steps.map((step, i) => (
+                    <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
+                      <span className="w-5 h-5 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs flex-shrink-0">
+                        {i + 1}
+                      </span>
+                      {step}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+
+              {/* Compliance Checklist */}
+              {result.risk_level !== 'unacceptable' && (
                 <div className="mt-6">
-                  <h3 className="font-medium text-gray-900 dark:text-white mb-3">
+                  <h3 className="font-medium text-gray-900 mb-3">
                     Compliance Checklist
                   </h3>
 
                   <ComplianceChecklist
-                    systemId={Number(
-                      systemId || 0
-                    )}
+                    systemId={Number(systemId || 0)}
                     riskLevel={
                       result.risk_level as
-                        | 'minimal'
-                        | 'limited'
-                        | 'high'
-                        | 'unacceptable'
+                      | 'minimal'
+                      | 'limited'
+                      | 'high'
+                      | 'unacceptable'
                     }
-                    items={
-                      CHECKLIST_ITEMS[
-                        result.risk_level
-                      ] || []
-                    }
+                    items={CHECKLIST_ITEMS[result.risk_level] || []}
                   />
                 </div>
               )}
             </div>
           ) : (
-            <div
-              className="
-                bg-gray-50 dark:bg-gray-800
-                rounded-xl
-                border border-gray-200 dark:border-gray-700
-                p-8
-                text-center
-              "
-            >
-              <AlertTriangle className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
-
-              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+            <div className="bg-gray-50 rounded-xl border border-gray-200 p-8 text-center">
+              <AlertTriangle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900">
                 Complete the Questionnaire
               </h3>
-
-              <p className="text-gray-500 dark:text-gray-400 mt-2">
-                Answer the questions to
-                determine your AI system's
-                risk classification under
-                the EU AI Act.
+              <p className="text-gray-500 mt-2">
+                Answer the questions to determine your AI system's risk classification
+                under the EU AI Act.
               </p>
+              <div className="mt-8 flex justify-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-primary-200 animate-bounce" style={{ animationDelay: '0ms' }} />
+                <div className="w-2 h-2 rounded-full bg-primary-200 animate-bounce" style={{ animationDelay: '150ms' }} />
+                <div className="w-2 h-2 rounded-full bg-primary-200 animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
             </div>
           )}
         </div>

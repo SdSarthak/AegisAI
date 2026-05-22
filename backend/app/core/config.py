@@ -5,14 +5,14 @@ from typing import List
 class Settings(BaseSettings):
     # App
     APP_NAME: str = "AegisAI"
-    DEBUG: bool = True
+    DEBUG: bool = False
     API_V1_PREFIX: str = "/api/v1"
 
     # Database
-    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/aegisai_db"
+    DATABASE_URL: str
 
     # JWT
-    SECRET_KEY: str = "change-this-in-production"
+    SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = (
         ""  # Leave empty for OpenAI default; set for any compatible endpoint
     )
-    LLM_MODEL: str = "gpt-4o-mini"  # Model name understood by your chosen provider
+    LLM_MODEL: str = "gpt-4o-mini"
 
     # Module 2: LLM Guard
     GUARD_SANITIZATION_LEVEL: str = "medium"  # low | medium | high

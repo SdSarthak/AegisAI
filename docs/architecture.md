@@ -104,7 +104,9 @@ A four-layer defence pipeline that inspects every prompt before it reaches an LL
 | `modules/guard/sanitizer.py` | Layer 4: removes meta-instructions from SANITIZE-level prompts |
 | `modules/guard/llm_guard.py` | Orchestrator — runs all 4 layers |
 | `modules/guard/guard_config.py` | Paths, thresholds, intent class mappings |
-| `modules/guard/train.py` | Training script for fine-tuning the classifier |
+| `modules/guard/train.py` | Backward-compatible CLI wrapper for classifier training |
+| `modules/guard/training/` | Standard ML training pipeline: config, data, training, evaluation, artifacts |
+| `modules/guard/models/classifier/` | Standard output location for the fine-tuned classifier |
 | `api/v1/guard.py` | REST endpoint with per-user rate limiting |
 | `guard-sdk/` | Standalone package (`pip install aegisai-guard`) |
 | `scripts/scan_prompts.py` | CLI to scan `.prompts/` files against the Guard API |
@@ -350,7 +352,9 @@ AegisAI/
 │   │   │   ├── document.py
 │   │   │   └── analytics.py
 │   │   ├── modules/
-│   │   │   ├── guard/               ← 4-layer pipeline + train script
+│   │   │   ├── guard/               ← 4-layer pipeline + standardized training
+│   │   │   │   ├── training/        ← config, data, trainer, evaluation, artifacts
+│   │   │   │   └── models/classifier/ ← fine-tuned classifier output
 │   │   │   ├── rag/                 ← FAISS + LangChain + feedback aggregation
 │   │   │   ├── llm/llm_client.py    ← OpenAI-compatible LLM wrapper
 │   │   │   └── badge/badge_generator.py  ← SVG renderer

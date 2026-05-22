@@ -1,6 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { aiSystemsApi, documentsApi } from '../services/api'
+
+import {
+  aiSystemsApi,
+  documentsApi,
+} from '../services/api'
 
 import {
   Bot,
@@ -15,24 +19,41 @@ interface AISystem {
   name: string
   risk_level: string | null
   compliance_status: string
-  compliance_score: number
 }
 
 interface Document {
   id: number
-  title: string
 }
 
 export default function Dashboard() {
-  const { data: systems = [] } = useQuery<AISystem[]>({
+  const {
+    data: systemsData = [],
+    isLoading: systemsLoading,
+  } = useQuery({
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
 
-  const { data: documents = [] } = useQuery<Document[]>({
+  const {
+    data: documentsData = [],
+    isLoading: documentsLoading,
+  } = useQuery({
     queryKey: ['documents'],
     queryFn: () => documentsApi.list(),
   })
+
+  const systems: AISystem[] =
+    Array.isArray(systemsData)
+      ? systemsData
+      : systemsData?.items ?? []
+
+  const documents: Document[] =
+    Array.isArray(documentsData)
+      ? documentsData
+      : documentsData?.items ?? []
+
+  const isLoading =
+    systemsLoading || documentsLoading
 
   const stats = [
     {
@@ -41,12 +62,14 @@ export default function Dashboard() {
       icon: Bot,
       color: 'bg-blue-500',
     },
+
     {
       name: 'Documents',
       value: documents.length,
       icon: FileText,
       color: 'bg-green-500',
     },
+
     {
       name: 'High Risk',
       value: systems.filter(
@@ -55,16 +78,26 @@ export default function Dashboard() {
       icon: AlertTriangle,
       color: 'bg-red-500',
     },
+
     {
       name: 'Compliant',
       value: systems.filter(
         (s) =>
-          s.compliance_status === 'compliant'
+          s.compliance_status ===
+          'compliant'
       ).length,
       icon: CheckCircle,
       color: 'bg-emerald-500',
     },
   ]
+
+  if (isLoading) {
+    return (
+      <div className="text-center py-12 text-gray-500 dark:text-gray-400">
+        Loading dashboard...
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -75,7 +108,8 @@ export default function Dashboard() {
         </h1>
 
         <p className="text-gray-600 dark:text-gray-400">
-          Overview of your EU AI Act compliance status
+          Overview of your EU AI Act
+          compliance status
         </p>
       </div>
 
@@ -94,7 +128,9 @@ export default function Dashboard() {
             "
           >
             <div className="flex items-center gap-4">
-              <div className={`p-3 rounded-lg ${stat.color}`}>
+              <div
+                className={`p-3 rounded-lg ${stat.color}`}
+              >
                 <stat.icon className="w-6 h-6 text-white" />
               </div>
 
@@ -187,7 +223,7 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Recent AI Systems */}
+      {/* AI Systems */}
       <div
         className="
           bg-white dark:bg-gray-800
@@ -217,13 +253,9 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {systems.slice(0, 5).map(
-              (system: {
-                id: number
-                name: string
-                risk_level: string | null
-                compliance_status: string
-              }) => (
+            {systems
+              .slice(0, 5)
+              .map((system) => (
                 <div
                   key={system.id}
                   className="
@@ -243,9 +275,11 @@ export default function Dashboard() {
                       {system.risk_level && (
                         <span
                           className={`text-xs px-2 py-0.5 rounded-full ${
-                            system.risk_level === 'high'
+                            system.risk_level ===
+                            'high'
                               ? 'bg-red-100 text-red-700'
-                              : system.risk_level === 'limited'
+                              : system.risk_level ===
+                                'limited'
                               ? 'bg-yellow-100 text-yellow-700'
                               : 'bg-green-100 text-green-700'
                           }`}
@@ -257,7 +291,10 @@ export default function Dashboard() {
                       <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                         <Clock className="w-3 h-3" />
 
-                        {system.compliance_status.replace('_', ' ')}
+                        {system.compliance_status.replace(
+                          '_',
+                          ' '
+                        )}
                       </span>
                     </div>
                   </div>
@@ -269,8 +306,7 @@ export default function Dashboard() {
                     View →
                   </Link>
                 </div>
-              )
-            )}
+              ))}
           </div>
         )}
       </div>

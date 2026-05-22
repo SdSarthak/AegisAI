@@ -6,8 +6,10 @@ from app.schemas.ai_system import (
     ComplianceStatusUpdateSchema,
     RiskClassificationRequest,
     RiskClassificationResponse,
+    QuestionnaireRiskFactor
 )
 from app.schemas.document import DocumentCreate, DocumentResponse
+from app.schemas.audit_log import AISystemAuditLogResponse
 from app.schemas.pagination import PaginatedResponse
 
 __all__ = [
@@ -15,6 +17,8 @@ __all__ = [
     "AISystemCreate", "AISystemUpdate", "AISystemResponse",
     "ComplianceStatusUpdateSchema",
     "RiskClassificationRequest", "RiskClassificationResponse",
+    "QuestionnaireRiskFactor",
     "DocumentCreate", "DocumentResponse",
+    "AISystemAuditLogResponse",
     "PaginatedResponse",
 ]

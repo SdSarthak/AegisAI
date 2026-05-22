@@ -1,7 +1,10 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { Toaster } from 'react-hot-toast'
+
 import { useAuthStore } from './stores/authStore'
 
 import Layout from './components/Layout'
+
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
@@ -9,8 +12,8 @@ import AISystems from './pages/AISystems'
 import Classification from './pages/Classification'
 import Documents from './pages/Documents'
 import Notifications from './pages/Notifications'
-
-import { Toaster } from 'react-hot-toast'
+import RagChat from './pages/RagChat'
+import NotFound from './pages/NotFound'
 
 function PrivateRoute({
   children,
@@ -22,7 +25,7 @@ function PrivateRoute({
   return isAuthenticated ? (
     <>{children}</>
   ) : (
-    <Navigate to="/login" />
+    <Navigate to="/login" replace />
   )
 }
 
@@ -53,6 +56,7 @@ function App() {
       />
 
       <Routes>
+        {/* Public Routes */}
         <Route
           path="/login"
           element={<Login />}
@@ -63,6 +67,7 @@ function App() {
           element={<Register />}
         />
 
+        {/* Protected Routes */}
         <Route
           path="/"
           element={
@@ -95,7 +100,18 @@ function App() {
             path="notifications"
             element={<Notifications />}
           />
+
+          <Route
+            path="rag-chat"
+            element={<RagChat />}
+          />
         </Route>
+
+        {/* 404 Page */}
+        <Route
+          path="*"
+          element={<NotFound />}
+        />
       </Routes>
     </>
   )

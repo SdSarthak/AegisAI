@@ -1,0 +1,14 @@
+name: Changelog Check
+on: [pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: Check CHANGELOG updated
+        run: |
+          git diff --name-only origin/${{ github.base_ref }} | grep CHANGELOG.md \
+          || echo "::warning::Please update CHANGELOG.md in your PR"
