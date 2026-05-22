@@ -49,14 +49,19 @@ def run_migrations_offline() -> None:
     with context.begin_transaction():
         context.run_migrations()
 
-
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode.
 
     In this scenario we need to create an Engine
     and associate a connection with the context.
-
     """
+    # 1. Dynamically load the settings module to grab the .env DATABASE_URL
+    from app.core.config import settings
+    
+    # 2. Inject your local environment URL right into the Alembic context before engine creation
+    if hasattr(settings, "DATABASE_URL") and settings.DATABASE_URL:
+        config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
@@ -70,8 +75,6 @@ def run_migrations_online() -> None:
 
         with context.begin_transaction():
             context.run_migrations()
-
-
 if context.is_offline_mode():
     run_migrations_offline()
 else:
