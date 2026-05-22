@@ -6,6 +6,7 @@ import { AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react'
 import ComplianceChecklist, {
   ChecklistItem,
 } from '../components/ComplianceChecklist'
+import CopyButton from '../components/CopyButton'
 
 interface ClassificationResult {
   risk_level: string
@@ -13,6 +14,22 @@ interface ClassificationResult {
   reasons: string[]
   requirements: string[]
   next_steps: string[]
+}
+
+function buildClassificationReport(result: ClassificationResult): string {
+  return [
+    `Risk Level: ${result.risk_level}`,
+    `Confidence: ${Math.round(result.confidence * 100)}%`,
+    '',
+    'Why this classification?',
+    ...result.reasons.map((reason, index) => `${index + 1}. ${reason}`),
+    '',
+    'Legal Requirements',
+    ...result.requirements.map((req, index) => `${index + 1}. ${req}`),
+    '',
+    'Action Plan',
+    ...result.next_steps.map((step, index) => `${index + 1}. ${step}`),
+  ].join('\n')
 }
 
 const CHECKLIST_ITEMS: Record<string, ChecklistItem[]> = {
@@ -116,18 +133,6 @@ export default function Classification() {
     }
   }
 
-  const getRiskColor = (level: string) => {
-    switch (level) {
-      case 'unacceptable':
-        return 'bg-red-50 border-red-200'
-      case 'high':
-        return 'bg-orange-50 border-orange-200'
-      case 'limited':
-        return 'bg-yellow-50 border-yellow-200'
-      default:
-        return 'bg-green-50 border-green-200'
-    }
-  }
 
   return (
     <div className="space-y-8">
@@ -358,41 +363,50 @@ export default function Classification() {
               }`} />
               
               <div className="relative z-10">
-                <div className="flex items-center gap-5 mb-8">
-                  <div className={`p-4 rounded-2xl shadow-inner ${
-                    result.risk_level === 'unacceptable' ? 'bg-red-100' :
-                    result.risk_level === 'high' ? 'bg-orange-100' :
-                    result.risk_level === 'limited' ? 'bg-yellow-100' : 'bg-green-100'
-                  }`}>
-                    {getRiskIcon(result.risk_level)}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-2xl font-black text-gray-900 capitalize tracking-tight">
-                        {result.risk_level} Risk
-                      </h2>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        result.risk_level === 'unacceptable' ? 'bg-red-200 text-red-800' :
-                        result.risk_level === 'high' ? 'bg-orange-200 text-orange-800' :
-                        result.risk_level === 'limited' ? 'bg-yellow-200 text-yellow-800' : 'bg-green-200 text-green-800'
-                      }`}>
-                        AI Act Classified
-                      </span>
+                <div className="flex items-start justify-between gap-4 mb-8">
+                  <div className="flex items-center gap-5">
+                    <div className={`p-4 rounded-2xl shadow-inner ${
+                      result.risk_level === 'unacceptable' ? 'bg-red-100' :
+                      result.risk_level === 'high' ? 'bg-orange-100' :
+                      result.risk_level === 'limited' ? 'bg-yellow-100' : 'bg-green-100'
+                    }`}>
+                      {getRiskIcon(result.risk_level)}
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-1000 ease-out ${
-                            result.confidence > 0.8 ? 'bg-green-500' : 'bg-yellow-500'
-                          }`}
-                          style={{ width: `${result.confidence * 100}%` }}
-                        />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-2xl font-black text-gray-900 capitalize tracking-tight">
+                          {result.risk_level} Risk
+                        </h2>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          result.risk_level === 'unacceptable' ? 'bg-red-200 text-red-800' :
+                          result.risk_level === 'high' ? 'bg-orange-200 text-orange-800' :
+                          result.risk_level === 'limited' ? 'bg-yellow-200 text-yellow-800' : 'bg-green-200 text-green-800'
+                        }`}>
+                          AI Act Classified
+                        </span>
                       </div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase">
-                        {Math.round(result.confidence * 100)}% Confidence
-                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                              result.confidence > 0.8 ? 'bg-green-500' : 'bg-yellow-500'
+                            }`}
+                            style={{ width: `${result.confidence * 100}%` }}
+                          />
+                        </div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase">
+                          {Math.round(result.confidence * 100)}% Confidence
+                        </p>
+                      </div>
                     </div>
                   </div>
+
+                  <CopyButton
+                    text={buildClassificationReport(result)}
+                    label="Copy Report"
+                    successMessage="Classification report copied!"
+                    className="shrink-0"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
