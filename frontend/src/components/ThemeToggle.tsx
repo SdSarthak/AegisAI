@@ -33,15 +33,26 @@ export default function ThemeToggle() {
     }
   }, [isDark])
 
-  return (
-    <button
-      type="button"
-      onClick={() => setIsDark((d) => !d)}
-      className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-    >
-      {isDark ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-    </button>
-  )
+return (
+  <button
+    type="button"
+    onClick={() => setIsDark((d) => !d)}
+    className="
+      p-2
+      text-gray-400 dark:text-gray-300
+      hover:text-gray-600 dark:hover:text-white
+      rounded-lg
+      hover:bg-gray-100 dark:hover:bg-gray-800
+      transition-colors duration-200
+    "
+    aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+    title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+  >
+    {isDark ? (
+      <Sun className="w-5 h-5" />
+    ) : (
+      <Moon className="w-5 h-5" />
+    )}
+  </button>
+)
 }

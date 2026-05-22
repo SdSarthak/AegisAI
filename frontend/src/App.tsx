@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
+
 import Layout from './components/Layout'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -8,11 +9,21 @@ import AISystems from './pages/AISystems'
 import Classification from './pages/Classification'
 import Documents from './pages/Documents'
 import Notifications from './pages/Notifications'
+
 import { Toaster } from 'react-hot-toast'
 
-function PrivateRoute({ children }: { children: React.ReactNode }) {
+function PrivateRoute({
+  children,
+}: {
+  children: React.ReactNode
+}) {
   const { isAuthenticated } = useAuthStore()
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" />
+
+  return isAuthenticated ? (
+    <>{children}</>
+  ) : (
+    <Navigate to="/login" />
+  )
 }
 
 function App() {
@@ -22,6 +33,7 @@ function App() {
         position="top-right"
         toastOptions={{
           duration: 4000,
+
           success: {
             style: {
               background: '#f0fdf4',
@@ -29,6 +41,7 @@ function App() {
               border: '1px solid #bbf7d0',
             },
           },
+
           error: {
             style: {
               background: '#fef2f2',
@@ -38,9 +51,18 @@ function App() {
           },
         }}
       />
+
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
+        <Route
+          path="/login"
+          element={<Login />}
+        />
+
+        <Route
+          path="/register"
+          element={<Register />}
+        />
+
         <Route
           path="/"
           element={
@@ -49,11 +71,30 @@ function App() {
             </PrivateRoute>
           }
         >
-          <Route index element={<Dashboard />} />
-          <Route path="ai-systems" element={<AISystems />} />
-          <Route path="classification/:systemId?" element={<Classification />} />
-          <Route path="documents" element={<Documents />} />
-          <Route path="notifications" element={<Notifications />} />
+          <Route
+            index
+            element={<Dashboard />}
+          />
+
+          <Route
+            path="ai-systems"
+            element={<AISystems />}
+          />
+
+          <Route
+            path="classification/:systemId?"
+            element={<Classification />}
+          />
+
+          <Route
+            path="documents"
+            element={<Documents />}
+          />
+
+          <Route
+            path="notifications"
+            element={<Notifications />}
+          />
         </Route>
       </Routes>
     </>

@@ -2,7 +2,14 @@ import { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { classificationApi } from '../services/api'
-import { AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react'
+
+import {
+  AlertTriangle,
+  CheckCircle,
+  Info,
+  XCircle,
+} from 'lucide-react'
+
 import ComplianceChecklist, {
   ChecklistItem,
 } from '../components/ComplianceChecklist'
@@ -15,7 +22,10 @@ interface ClassificationResult {
   next_steps: string[]
 }
 
-const CHECKLIST_ITEMS: Record<string, ChecklistItem[]> = {
+const CHECKLIST_ITEMS: Record<
+  string,
+  ChecklistItem[]
+> = {
   high: [
     {
       id: 'tech-doc',
@@ -71,7 +81,12 @@ const CHECKLIST_ITEMS: Record<string, ChecklistItem[]> = {
 
 export default function Classification() {
   const { systemId } = useParams()
-  const [result, setResult] = useState<ClassificationResult | null>(null)
+
+  const [result, setResult] =
+    useState<ClassificationResult | null>(
+      null
+    )
+
   const [formData, setFormData] = useState({
     use_case_category: 'hr_recruitment',
     is_safety_component: false,
@@ -94,10 +109,17 @@ export default function Classification() {
   const classifyMutation = useMutation({
     mutationFn: () => {
       if (systemId) {
-        return classificationApi.classifyAndSave(parseInt(systemId), formData)
+        return classificationApi.classifyAndSave(
+          parseInt(systemId),
+          formData
+        )
       }
-      return classificationApi.classify(formData)
+
+      return classificationApi.classify(
+        formData
+      )
     },
+
     onSuccess: (data) => {
       setResult(data)
     },
@@ -106,242 +128,231 @@ export default function Classification() {
   const getRiskIcon = (level: string) => {
     switch (level) {
       case 'unacceptable':
-        return <XCircle className="w-8 h-8 text-red-600" />
+        return (
+          <XCircle className="w-8 h-8 text-red-600" />
+        )
+
       case 'high':
-        return <AlertTriangle className="w-8 h-8 text-orange-600" />
+        return (
+          <AlertTriangle className="w-8 h-8 text-orange-600" />
+        )
+
       case 'limited':
-        return <Info className="w-8 h-8 text-yellow-600" />
+        return (
+          <Info className="w-8 h-8 text-yellow-600" />
+        )
+
       default:
-        return <CheckCircle className="w-8 h-8 text-green-600" />
+        return (
+          <CheckCircle className="w-8 h-8 text-green-600" />
+        )
     }
   }
 
   const getRiskColor = (level: string) => {
     switch (level) {
       case 'unacceptable':
-        return 'bg-red-50 border-red-200'
+        return `
+          bg-red-50 dark:bg-red-900/20
+          border-red-200 dark:border-red-700
+        `
+
       case 'high':
-        return 'bg-orange-50 border-orange-200'
+        return `
+          bg-orange-50 dark:bg-orange-900/20
+          border-orange-200 dark:border-orange-700
+        `
+
       case 'limited':
-        return 'bg-yellow-50 border-yellow-200'
+        return `
+          bg-yellow-50 dark:bg-yellow-900/20
+          border-yellow-200 dark:border-yellow-700
+        `
+
       default:
-        return 'bg-green-50 border-green-200'
+        return `
+          bg-green-50 dark:bg-green-900/20
+          border-green-200 dark:border-green-700
+        `
     }
   }
 
   return (
     <div className="space-y-8">
+      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Risk Classification</h1>
-        <p className="text-gray-600">
-          Determine your AI system's risk level under EU AI Act
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+          Risk Classification
+        </h1>
+
+        <p className="text-gray-600 dark:text-gray-400">
+          Determine your AI system's risk
+          level under EU AI Act
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Questionnaire */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <div
+          className="
+            bg-white dark:bg-gray-800
+            rounded-xl
+            border border-gray-200 dark:border-gray-700
+            p-6
+            transition-colors duration-200
+          "
+        >
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Classification Questionnaire
           </h2>
 
           <form className="space-y-6">
-            {/* Use Case Category */}
+            {/* Use Case */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Primary Use Case
               </label>
+
               <select
                 value={formData.use_case_category}
                 onChange={(e) =>
-                  setFormData({ ...formData, use_case_category: e.target.value })
+                  setFormData({
+                    ...formData,
+                    use_case_category:
+                      e.target.value,
+                  })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="
+                  w-full
+                  px-3 py-2
+                  border border-gray-300 dark:border-gray-700
+                  bg-white dark:bg-gray-900
+                  text-gray-900 dark:text-white
+                  rounded-lg
+                "
               >
-                <option value="hr_recruitment">HR / Recruitment</option>
-                <option value="credit_scoring">Credit Scoring</option>
-                <option value="healthcare">Healthcare</option>
-                <option value="education">Education</option>
-                <option value="customer_service">Customer Service</option>
-                <option value="other">Other</option>
+                <option value="hr_recruitment">
+                  HR / Recruitment
+                </option>
+
+                <option value="credit_scoring">
+                  Credit Scoring
+                </option>
+
+                <option value="healthcare">
+                  Healthcare
+                </option>
+
+                <option value="education">
+                  Education
+                </option>
+
+                <option value="customer_service">
+                  Customer Service
+                </option>
+
+                <option value="other">
+                  Other
+                </option>
               </select>
             </div>
 
-            {/* High-Risk Indicators */}
+            {/* High Risk */}
             <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-3">
-                High-Risk Indicators (Annex III)
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
+                High-Risk Indicators
+                (Annex III)
               </h3>
+
               <div className="space-y-3">
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.hr_recruitment_screening}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        hr_recruitment_screening: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>CV Screening / Candidate Ranking</strong>
-                    <br />
-                    AI filters CVs or ranks candidates for recruitment
-                  </span>
-                </label>
+                {[
+                  {
+                    key: 'hr_recruitment_screening',
+                    title:
+                      'CV Screening / Candidate Ranking',
+                    desc: 'AI filters CVs or ranks candidates for recruitment',
+                  },
+                  {
+                    key: 'hr_promotion_termination',
+                    title:
+                      'Promotion/Termination Decisions',
+                    desc: 'AI influences employment status decisions',
+                  },
+                  {
+                    key: 'credit_worthiness',
+                    title:
+                      'Credit Worthiness Assessment',
+                    desc: 'AI evaluates creditworthiness or credit scoring',
+                  },
+                  {
+                    key: 'affects_fundamental_rights',
+                    title:
+                      'Affects Fundamental Rights',
+                    desc: 'Impacts employment, education, or essential services',
+                  },
+                  {
+                    key: 'makes_automated_decisions',
+                    title:
+                      'Automated Decision Making',
+                    desc: 'Makes decisions without meaningful human review',
+                  },
+                ].map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex items-start gap-3"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={
+                        formData[
+                          item.key as keyof typeof formData
+                        ] as boolean
+                      }
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          [item.key]:
+                            e.target.checked,
+                        })
+                      }
+                      className="mt-1"
+                    />
 
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.hr_promotion_termination}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        hr_promotion_termination: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Promotion/Termination Decisions</strong>
-                    <br />
-                    AI influences employment status decisions
-                  </span>
-                </label>
+                    <span className="text-sm text-gray-600 dark:text-gray-300">
+                      <strong>
+                        {item.title}
+                      </strong>
 
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.credit_worthiness}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        credit_worthiness: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Credit Worthiness Assessment</strong>
-                    <br />
-                    AI evaluates creditworthiness or credit scoring
-                  </span>
-                </label>
+                      <br />
 
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.affects_fundamental_rights}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        affects_fundamental_rights: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Affects Fundamental Rights</strong>
-                    <br />
-                    Impacts employment, education, or essential services
-                  </span>
-                </label>
-
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.makes_automated_decisions}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        makes_automated_decisions: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Automated Decision Making</strong>
-                    <br />
-                    Makes decisions without meaningful human review
-                  </span>
-                </label>
+                      {item.desc}
+                    </span>
+                  </label>
+                ))}
               </div>
             </div>
 
-            {/* Transparency Requirements */}
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-3">
-                Transparency Indicators (Article 52)
-              </h3>
-              <div className="space-y-3">
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.interacts_with_humans}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        interacts_with_humans: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Direct Human Interaction</strong>
-                    <br />
-                    System interacts directly with users (chatbot, assistant)
-                  </span>
-                </label>
-
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.emotion_recognition}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        emotion_recognition: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Emotion Recognition</strong>
-                    <br />
-                    System detects or analyzes emotions
-                  </span>
-                </label>
-
-                <label className="flex items-start gap-3">
-                  <input
-                    type="checkbox"
-                    checked={formData.generates_synthetic_content}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        generates_synthetic_content: e.target.checked,
-                      })
-                    }
-                    className="mt-1"
-                  />
-                  <span className="text-sm text-gray-600">
-                    <strong>Synthetic Content Generation</strong>
-                    <br />
-                    Generates deepfakes, AI images, or synthetic media
-                  </span>
-                </label>
-              </div>
-            </div>
-
+            {/* Button */}
             <button
               type="button"
-              onClick={() => classifyMutation.mutate()}
-              disabled={classifyMutation.isPending}
-              className="w-full py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+              onClick={() =>
+                classifyMutation.mutate()
+              }
+              disabled={
+                classifyMutation.isPending
+              }
+              className="
+                w-full py-3
+                bg-primary-600
+                text-white
+                rounded-lg
+                hover:bg-primary-700
+                disabled:opacity-50
+              "
             >
-              {classifyMutation.isPending ? 'Classifying...' : 'Classify Risk Level'}
+              {classifyMutation.isPending
+                ? 'Classifying...'
+                : 'Classify Risk Level'}
             </button>
           </form>
         </div>
@@ -349,91 +360,131 @@ export default function Classification() {
         {/* Results */}
         <div>
           {result ? (
-            <div className={`rounded-xl border p-6 ${getRiskColor(result.risk_level)}`}>
+            <div
+              className={`
+                rounded-xl
+                border
+                p-6
+                ${getRiskColor(
+                  result.risk_level
+                )}
+              `}
+            >
               <div className="flex items-center gap-4 mb-6">
-                {getRiskIcon(result.risk_level)}
+                {getRiskIcon(
+                  result.risk_level
+                )}
+
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900 capitalize">
+                  <h2 className="text-xl font-bold text-gray-900 dark:text-white capitalize">
                     {result.risk_level} Risk
                   </h2>
-                  <p className="text-sm text-gray-600">
-                    Confidence: {Math.round(result.confidence * 100)}%
+
+                  <p className="text-sm text-gray-600 dark:text-gray-300">
+                    Confidence:{' '}
+                    {Math.round(
+                      result.confidence * 100
+                    )}
+                    %
                   </p>
                 </div>
               </div>
 
               {/* Reasons */}
               <div className="mb-6">
-                <h3 className="font-medium text-gray-900 mb-2">Classification Reasons</h3>
+                <h3 className="font-medium text-gray-900 dark:text-white mb-2">
+                  Classification Reasons
+                </h3>
+
                 <ul className="space-y-2">
-                  {result.reasons.map((reason, i) => (
-                    <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
-                      <span className="text-gray-400">•</span>
-                      {reason}
-                    </li>
-                  ))}
+                  {result.reasons.map(
+                    (reason, i) => (
+                      <li
+                        key={i}
+                        className="text-sm text-gray-600 dark:text-gray-300 flex items-start gap-2"
+                      >
+                        <span className="text-gray-400">
+                          •
+                        </span>
+
+                        {reason}
+                      </li>
+                    )
+                  )}
                 </ul>
               </div>
 
               {/* Requirements */}
               <div className="mb-6">
-                <h3 className="font-medium text-gray-900 mb-2">Compliance Requirements</h3>
+                <h3 className="font-medium text-gray-900 dark:text-white mb-2">
+                  Compliance Requirements
+                </h3>
+
                 <ul className="space-y-2">
-                  {result.requirements.map((req, i) => (
-                    <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
-                      <CheckCircle className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
-                      {req}
-                    </li>
-                  ))}
+                  {result.requirements.map(
+                    (req, i) => (
+                      <li
+                        key={i}
+                        className="text-sm text-gray-600 dark:text-gray-300 flex items-start gap-2"
+                      >
+                        <CheckCircle className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+
+                        {req}
+                      </li>
+                    )
+                  )}
                 </ul>
               </div>
 
-              {/* Next Steps */}
-
-              <div>
-                <h3 className="font-medium text-gray-900 mb-2">Next Steps</h3>
-                <ol className="space-y-2">
-                  {result.next_steps.map((step, i) => (
-                    <li key={i} className="text-sm text-gray-600 flex items-start gap-2">
-                      <span className="w-5 h-5 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-xs flex-shrink-0">
-                        {i + 1}
-                      </span>
-                      {step}
-                    </li>
-                  ))}
-                </ol>
-              </div>
-
-              {/* Compliance Checklist */}
-              {result.risk_level !== 'unacceptable' && (
+              {/* Checklist */}
+              {result.risk_level !==
+                'unacceptable' && (
                 <div className="mt-6">
-                  <h3 className="font-medium text-gray-900 mb-3">
+                  <h3 className="font-medium text-gray-900 dark:text-white mb-3">
                     Compliance Checklist
                   </h3>
 
                   <ComplianceChecklist
-                    systemId={Number(systemId || 0)}
+                    systemId={Number(
+                      systemId || 0
+                    )}
                     riskLevel={
                       result.risk_level as
-                      | 'minimal'
-                      | 'limited'
-                      | 'high'
-                      | 'unacceptable'
+                        | 'minimal'
+                        | 'limited'
+                        | 'high'
+                        | 'unacceptable'
                     }
-                    items={CHECKLIST_ITEMS[result.risk_level] || []}
+                    items={
+                      CHECKLIST_ITEMS[
+                        result.risk_level
+                      ] || []
+                    }
                   />
                 </div>
               )}
             </div>
           ) : (
-            <div className="bg-gray-50 rounded-xl border border-gray-200 p-8 text-center">
-              <AlertTriangle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900">
+            <div
+              className="
+                bg-gray-50 dark:bg-gray-800
+                rounded-xl
+                border border-gray-200 dark:border-gray-700
+                p-8
+                text-center
+              "
+            >
+              <AlertTriangle className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-4" />
+
+              <h3 className="text-lg font-medium text-gray-900 dark:text-white">
                 Complete the Questionnaire
               </h3>
-              <p className="text-gray-500 mt-2">
-                Answer the questions to determine your AI system's risk classification
-                under the EU AI Act.
+
+              <p className="text-gray-500 dark:text-gray-400 mt-2">
+                Answer the questions to
+                determine your AI system's
+                risk classification under
+                the EU AI Act.
               </p>
             </div>
           )}
