@@ -17,6 +17,7 @@
     "axios": "^1.6.7",
     "clsx": "^2.1.0",
     "date-fns": "^4.1.0",
+    "dompurify": "^3.4.5",
     "lucide-react": "^0.314.0",
     "marked": "^18.0.3",
     "react": "^18.2.0",
