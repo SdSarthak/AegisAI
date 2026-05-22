@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import ThemeToggle from './ThemeToggle'
+import { Flag } from 'lucide-react'
 import {
   LayoutDashboard,
   Bot,
@@ -26,6 +27,7 @@ const navigation = [
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
   { name: 'Chatbot', href: '/rag-chat', icon: MessageSquareText },
+  { name: 'Civic Issues', href: '/civic-issues', icon: Flag },
 ]
 
 export default function Layout() {
