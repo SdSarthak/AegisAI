@@ -157,4 +157,19 @@ export const ragApi = {
   },
 }
 
+export interface GuardScanResponse {
+  decision: 'allow' | 'sanitize' | 'block' | string
+  confidence: number
+  reasoning: string
+  sanitized_prompt?: string | null
+  matched_patterns?: string[]
+}
+
+export const guardApi = {
+  scan: async (prompt: string): Promise<GuardScanResponse> => {
+    const { data } = await api.post('/guard/scan', { prompt })
+    return data
+  },
+}
+
 export default api

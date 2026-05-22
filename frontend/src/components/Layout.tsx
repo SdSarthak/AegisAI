@@ -10,6 +10,7 @@ import {
   MessageSquareText,
   LogOut,
   Shield,
+  ShieldCheck,
   ChevronLeft,
   ChevronRight,
   BarChart,
@@ -25,6 +26,7 @@ const navigation = [
   { name: 'AI Systems', href: '/ai-systems', icon: Bot },
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
+  { name: 'LLM Guard', href: '/guard', icon: ShieldCheck },
   { name: 'Chatbot', href: '/rag-chat', icon: MessageSquareText },
 ]
 
