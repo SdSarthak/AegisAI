@@ -1,3 +1,50 @@
+"""
+documents.py — Compliance Document Generation & Export API
+
+Manages the full lifecycle of EU AI Act compliance documents — generation,
+storage, updating, and PDF export — scoped to registered AI systems and
+authenticated users.
+
+Document Generation Flow
+------------------------
+- Triggered via POST /generate with an ``ai_system_id`` and ``doc_type``
+- Fetches the latest ``RiskAssessment`` for the system if one exists and
+  passes it to ``generate_compliance_narrative()`` for LLM-based generation
+- Falls back to static Markdown templates on LLM failure, populated using
+  ``AISystem`` fields: ``name``, ``version``, ``description``, ``risk_level``,
+  ``sector``, ``use_case``, and ``classification_reasoning``
+- Three templates supported:
+    - ``technical_documentation`` — architecture, training data, I/O specs (Annex IV, Art. 11)
+    - ``risk_assessment``         — risk classification, risks, mitigations (Art. 9)
+    - ``conformity_declaration``  — EU Declaration of Conformity checklist (Art. 47)
+- Persists the final document to the ``documents`` table with status ``GENERATED``
+
+PDF Export
+----------
+- Triggered via GET /{document_id}/pdf
+- Parses stored Markdown line by line, mapping headings and bullet syntax
+  to ReportLab ``Paragraph`` elements on A4 pages
+- Validates output for ``%PDF-`` magic bytes and a minimum size of 1 KB
+- Streams result back as ``application/pdf`` with a download header
+- WeasyPrint is noted as an alternative for HTML/CSS layouts but
+  ReportLab is what's currently used
+
+Database Relationships
+-----------------------
+- Each ``Document`` links to its parent via ``Document.ai_system_id → AISystem.id`` (FK, NOT NULL)
+- One AI system can have multiple versioned documents of different types
+- All queries filter on ``owner_id`` to enforce strict user-level data isolation
+
+Endpoints
+---------
+    POST   /documents/generate          — generate document via LLM or template fallback
+    POST   /documents/                  — create a document manually
+    GET    /documents/                  — list all documents (paginated)
+    GET    /documents/{id}              — retrieve a single document
+    PUT    /documents/{id}              — update document content
+    DELETE /documents/{id}              — delete a document
+    GET    /documents/{id}/pdf          — export as PDF
+"""
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
