@@ -1,3 +1,13 @@
+"""
+Defines database models and enums for compliance documents.
+
+This module contains:
+- SQLAlchemy models for generated compliance documents
+- Document type and status enumerations
+- Metadata and lifecycle tracking fields
+- Relationships between documents and AI system records
+"""
+
 from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
