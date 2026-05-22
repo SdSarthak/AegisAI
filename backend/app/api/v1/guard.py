@@ -29,6 +29,8 @@ from app.core.security import get_current_user
 from app.models.guard_scan_log import GuardScanLog
 from app.models.notification import NotificationType
 from app.models.user import User
+from app.api.v1.notifications import create_notification
+from app.models.notification import NotificationType
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.pagination import PaginatedResponse
