@@ -15,7 +15,9 @@ from app.schemas.notification import (
     NotificationResponse,
     NotificationMarkRead,
 )
+from app.schemas.notification import NotificationResponse, NotificationMarkRead
 from app.schemas.pagination import PaginatedResponse
+
 
 router = APIRouter()
 
@@ -24,6 +26,7 @@ def create_notification(
     db: Session,
     user_id: int,
     type: str,
+    notification_type: str,
     title: str,
     message: str,
     resource_type: str | None = None,
@@ -36,6 +39,10 @@ def create_notification(
     notification = Notification(
         user_id=user_id,
         notification_type=type,
+) -> Notification:
+    notification = Notification(
+        user_id=user_id,
+        notification_type=notification_type,
         title=title,
         message=message,
         resource_type=resource_type,
@@ -47,6 +54,10 @@ def create_notification(
     db.commit()
     db.refresh(notification)
 
+    )
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
     return notification
 
 
@@ -68,6 +79,11 @@ def list_notifications(
 
     if unread_only:
         query = query.filter(Notification.is_read == False)
+    """Return notifications for the current user."""
+    query = db.query(Notification).filter(Notification.user_id == current_user.id)
+
+    if unread_only:
+        query = query.filter(Notification.is_read.is_(False))
 
     total = query.count()
 
@@ -96,11 +112,13 @@ def mark_notifications_read(
     Mark a list of notification IDs as read.
     """
 
+    """Mark a list of notification IDs as read."""
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.id.in_(body.ids),
     ).update(
         {"is_read": True},
+        {Notification.is_read: True},
         synchronize_session=False,
     )
 
@@ -125,6 +143,17 @@ def delete_notification(
     ).first()
 
     if not notification:
+    """Delete a single notification owned by the current user."""
+    notification = (
+        db.query(Notification)
+        .filter(
+            Notification.id == notification_id,
+            Notification.user_id == current_user.id,
+        )
+        .first()
+    )
+
+    if notification is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Notification not found",
@@ -133,4 +162,5 @@ def delete_notification(
     db.delete(notification)
     db.commit()
 
+    return None
     return None

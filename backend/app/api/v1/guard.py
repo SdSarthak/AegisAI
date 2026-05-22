@@ -23,6 +23,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.guard_scan_log import GuardScanLog
 from app.models.user import User
+from app.api.v1.notifications import create_notification
+from app.models.notification import NotificationType
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.pagination import PaginatedResponse
 
@@ -119,6 +121,19 @@ def scan_prompt(
         )
         db.add(log)
         db.commit()
+        db.refresh(log)
+
+        if result["decision"] == "block":
+            create_notification(
+                db=db,
+                user_id=current_user.id,
+                notification_type=NotificationType.GUARD_BLOCK.value,
+                title="Prompt blocked by LLM Guard",
+                message="A prompt was blocked because it matched high-risk guard rules.",
+                resource_type="guard_scan",
+                resource_id=log.id,
+            )
+
 
         return ScanResponse(
             decision=result["decision"],
@@ -171,7 +186,7 @@ def get_guard_history(
 
 
 # Temporary in-memory config store
-user_guard_configs = {}
+user_guard_configs: dict[int, dict[str, float | str]] = {}
 
 VALID_SANITIZATION_LEVELS = {"low", "medium", "high"}
 
@@ -233,11 +248,12 @@ def update_guard_config(
 class BulkScanRequest(BaseModel):
     prompts: list[str]
 
-    def validate_prompts(self):
+    def validate_prompts(self) -> None:
         if len(self.prompts) > 50:
-            raise ValueError("Maximum 50 prompts allowed per batch request.")
-        return self
-
+            raise ValueError(
+                "Maximum 50 prompts allowed per batch request."
+            )
+    
 
 class BulkScanResponse(BaseModel):
     results: list[ScanResponse]
@@ -249,25 +265,55 @@ class BulkScanResponse(BaseModel):
 def bulk_scan_prompts(
     request: BulkScanRequest,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),                        
 ):
     """
     Scan a batch of prompts (max 50) for injection risks.
     Processes sequentially to respect memory constraints.
     Returns a decision for each prompt.
+
+    Each prompt counts as one rate-limit unit and produces
+    one GuardScanLog row, consistent with POST /scan.
     """
-    if len(request.prompts) > 50:
+
+    try:
+        # Schema validation instead of manual check
+        request.validate_prompts()
+    except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Maximum 50 prompts allowed per batch request."
+            detail=str(e),
         )
 
-    limited, retry_after = _check_rate_limit(current_user.id)
-    if limited:
-        return JSONResponse(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            content={"detail": "Rate limit exceeded. Please try again later."},
-            headers={"Retry-After": str(retry_after)},
-        )
+    # CHECK RATE LIMIT FOR THE WHOLE BATCH UPFRONT        
+    # Each prompt counts as 1 unit — check if adding all
+    # of them would exceed the limit before processing.
+    now = datetime.now(timezone.utc)
+    window_start = now - timedelta(seconds=_RATE_LIMIT_WINDOW_SECONDS)
+    batch_size = len(request.prompts)
+
+    with _rate_limit_lock:
+        attempts = _scan_attempts_by_user[current_user.id]
+        while attempts and attempts[0] <= window_start:
+            attempts.popleft()
+
+        if len(attempts) + batch_size > _RATE_LIMIT_REQUESTS:
+            retry_after = max(
+                1,
+                int(
+                    (_RATE_LIMIT_WINDOW_SECONDS -
+                     (now - attempts[0]).total_seconds())
+                    + 0.999
+                ) if attempts else _RATE_LIMIT_WINDOW_SECONDS,
+            )
+            return JSONResponse(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                content={"detail": "Rate limit exceeded. Please try again later."},
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        for _ in range(batch_size):                       
+            attempts.append(now)
 
     try:
         from app.modules.guard.llm_guard import LLMGuard
@@ -286,6 +332,17 @@ def bulk_scan_prompts(
         results = []
         for prompt in request.prompts:
             result = guard.guard(prompt)
+
+            log = GuardScanLog(                           
+                user_id=current_user.id,
+                prompt_hash=hashlib.sha256(prompt.encode()).hexdigest(),
+                decision=result["decision"],
+                confidence=result["metadata"]["decision_reasoning"]["confidence"],
+                matched_patterns=result["metadata"]["regex_analysis"].get(
+                    "matched_patterns", []),
+            )
+            db.add(log)                                   
+
             results.append(ScanResponse(
                 decision=result["decision"],
                 confidence=result["metadata"]["decision_reasoning"]["confidence"],
@@ -295,13 +352,17 @@ def bulk_scan_prompts(
                     "matched_patterns", []),
             ))
 
+        db.commit()                                       
+
         return BulkScanResponse(
             results=results,
             total=len(request.prompts),
             processed=len(results),
         )
     except Exception as e:
+        db.rollback()                                     
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+    
