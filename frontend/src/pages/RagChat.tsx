@@ -58,7 +58,7 @@ export default function RagChat() {
         answer: data.answer,
         sources: data.sources || [],
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       // ✅ ERROR HANDLING
       if (err.response?.status === 503) {
         setError('Index not ready. Please try again later.')
