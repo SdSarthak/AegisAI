@@ -1,3 +1,72 @@
+"""
+documents.py — Compliance Document Generation API
+==================================================
+
+This module provides the REST API endpoints for generating, retrieving,
+and exporting EU AI Act compliance documents tied to registered AI systems.
+
+Document Generation Flow
+------------------------
+1. **Template Selection**: When a client calls POST /ai-systems/{system_id}/documents,
+   the endpoint selects a document template based on the requested ``doc_type``:
+
+   - ``technical_documentation`` — Annex IV Technical Documentation (EU AI Act Art. 11)
+   - ``risk_assessment``         — Risk Management System report (EU AI Act Art. 9)
+   - ``conformity_declaration``  — EU Declaration of Conformity (EU AI Act Art. 47)
+
+2. **Population from AISystem Metadata**: Each template is populated using fields
+   from the ``AISystem`` ORM model retrieved from the database:
+   - ``name``, ``version``, ``description``
+   - ``risk_level`` (Minimal / Limited / High / Unacceptable)
+   - ``sector``, ``use_case``, ``intended_purpose``
+   - ``owner_id`` (linked user / organisation)
+   - ``compliance_score``, ``classification_reasoning``
+
+3. **Persistence**: The generated document content and metadata are saved to the
+   ``documents`` table (see ``app/models/document.py``) with a foreign-key
+   reference back to the parent ``ai_systems`` row.
+
+PDF Export
+----------
+Completed documents can be exported as PDF via GET /documents/{doc_id}/export.
+The export layer renders the populated template to PDF using one of:
+
+- **WeasyPrint** — converts an HTML/CSS template to a print-quality PDF.
+  Preferred when full CSS styling and EU-branded layouts are required.
+- **ReportLab** — used as a fallback or for programmatic/table-heavy layouts
+  when WeasyPrint is not available in the deployment environment.
+
+The resulting PDF is streamed back to the client as an inline ``application/pdf``
+response so the browser can open or download it directly.
+
+Database Relationships
+----------------------
+Each ``Document`` record has a many-to-one relationship with ``AISystem``:
+
+    Document.ai_system_id  →  AISystem.id   (FK, NOT NULL)
+
+One AI system can have multiple versioned documents of different types.
+All documents are scoped to the authenticated user's tenant via the
+``AISystem.owner_id`` field — users can only generate or view documents
+for AI systems they own.
+
+Endpoints Summary
+-----------------
+- POST   /ai-systems/{system_id}/documents        — generate a new document
+- GET    /ai-systems/{system_id}/documents        — list all docs for a system
+- GET    /documents/{doc_id}                      — retrieve a single document
+- DELETE /documents/{doc_id}                      — delete a document
+- GET    /documents/{doc_id}/export               — export document as PDF
+
+Dependencies
+------------
+- ``app.models.ai_system.AISystem``   — source of all metadata used in templates
+- ``app.models.document.Document``    — ORM model for persisted documents
+- ``app.core.db.get_db``              — SQLAlchemy session dependency
+- ``app.core.security.get_current_user`` — JWT authentication dependency
+"""
+
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
