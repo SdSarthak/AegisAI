@@ -788,6 +788,8 @@ def bulk_scan_prompts(
 
         db.commit()
 
+        db.commit()                                       
+
         return BulkScanResponse(
             results=results,
             total=len(request.prompts),
