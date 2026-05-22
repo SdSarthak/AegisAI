@@ -204,7 +204,7 @@ def query_knowledge_base(
             pass
 
         return RAGQueryResponse(answer=answer, sources=sources, answer_id=feedback.id)
-        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
+        
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
