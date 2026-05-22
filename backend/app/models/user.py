@@ -38,3 +38,4 @@ class User(Base):
     ai_systems = relationship("AISystem", back_populates="owner")
     documents = relationship("Document", back_populates="owner")
     webhook_configs = relationship("WebhookConfig", back_populates="user")
+    notifications    = relationship("Notification",    back_populates="user")

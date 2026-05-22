@@ -11,6 +11,8 @@ TODO for contributors (high difficulty):
 
 import time
 from fastapi import APIRouter, Depends, HTTPException, status
+
+
 import os
 import shutil
 import tempfile
@@ -69,9 +71,9 @@ def ingest_documents(
     ``settings.FAISS_INDEX_PATH``.
 
     **Returns**
-    - ``files_processed`` – number of PDFs successfully saved and chunked
-    - ``chunks_created``  – total text chunks fed into the vector store
-    - ``index_size_bytes`` – on-disk size of the persisted FAISS index
+    - ``files_processed`` - number of PDFs successfully saved and chunked
+    - ``chunks_created``  - total text chunks fed into the vector store
+    - ``index_size_bytes`` - on-disk size of the persisted FAISS index
 
     **Errors**
     - ``400`` if no valid PDF files are supplied

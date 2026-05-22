@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import ThemeToggle from './ThemeToggle'
-
 import {
   LayoutDashboard,
   Bot,
@@ -16,7 +15,7 @@ import {
   BarChart,
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
-import ThemeToggle from './ThemeToggle'
+// ThemeToggle imported above
 
 
 
