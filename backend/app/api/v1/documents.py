@@ -273,32 +273,37 @@ def generate_document(
     # Get latest risk assessment if available
     from app.models.ai_system import RiskAssessment
 
-    assessment = (
-        db.query(RiskAssessment)
-        .filter(RiskAssessment.ai_system_id == ai_system.id)
-        .order_by(RiskAssessment.assessed_at.desc())
-        .first()
-    )
-
-    # Fill template
-    from datetime import datetime
-
-    content = template.format(
-        system_name=ai_system.name,
-        version=ai_system.version or "1.0",
-        use_case=ai_system.use_case or "Not specified",
-        sector=ai_system.sector or "Not specified",
-        description=ai_system.description or "No description provided",
-        risk_level=(
-            ai_system.risk_level.value if ai_system.risk_level else "Not assessed"
-        ),
-        date=datetime.utcnow().strftime("%Y-%m-%d"),
-        company_name=current_user.company_name or "Not specified",
-        classification_reasons="See risk assessment details",
-        recommendations="Based on risk assessment",
-        requirements="See applicable requirements above",
-        next_steps="Complete all checklist items",
-    )
+    assessment = db.query(RiskAssessment).filter(
+        RiskAssessment.ai_system_id == ai_system.id
+    ).order_by(RiskAssessment.assessed_at.desc()).first()
+    
+    try:
+        content = generate_compliance_narrative(
+            document_type=request.document_type,
+            ai_system=ai_system,
+            risk_assessment=assessment,
+            company_name=current_user.company_name
+        )
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"LLM generation failed, falling back to template: {str(e)}")
+        
+        from datetime import datetime
+        content = template.format(
+            system_name=ai_system.name,
+            version=ai_system.version or "1.0",
+            use_case=ai_system.use_case or "Not specified",
+            sector=ai_system.sector or "Not specified",
+            description=ai_system.description or "No description provided",
+            risk_level=ai_system.risk_level.value if ai_system.risk_level else "Not assessed",
+            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            company_name=current_user.company_name or "Not specified",
+            classification_reasons="See risk assessment details",
+            recommendations="Based on risk assessment",
+            requirements="See applicable requirements above",
+            next_steps="Complete all checklist items"
+        )
 
     # Create document
     document = Document(

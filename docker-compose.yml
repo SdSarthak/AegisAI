@@ -1,5 +1,4 @@
 services:
-
   db:
     image: postgres:15
     restart: unless-stopped
@@ -22,6 +21,8 @@ services:
       - ./backend/.env
     ports:
       - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/aegisai_db
     depends_on:
       db:
         condition: service_healthy
@@ -31,15 +32,24 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    volumes:
+      - ./backend:/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
     build: ./frontend
     restart: unless-stopped
     ports:
       - "5173:5173"
+    environment:
+      - BACKEND_URL=http://backend:8000
     depends_on:
       backend:
         condition: service_healthy
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host
 
 volumes:
   postgres_data:
