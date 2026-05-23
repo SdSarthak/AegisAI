@@ -22,7 +22,7 @@ def _get_credentials_exception() -> HTTPException:
     """Helper to return a standardized 401 Unauthorized exception."""
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail="Token has expired. Please log in again.",
         headers={"WWW-Authenticate": "Bearer"},
     )
 
