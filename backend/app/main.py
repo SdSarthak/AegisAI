@@ -6,6 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Dict, Any
 
 from fastapi import FastAPI
@@ -16,6 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.v1 import api_router, badge
+from app.plugins.regulation_loader import init_registry
 import app.models  # ensure all ORM models are imported so tables are created
 
 # -------------------------------------------------------------------
@@ -36,6 +38,8 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown events for the FastAPI application.
     """
     logger.info("Starting AegisAI backend...")
+    init_registry(Path("regulations"), Path("regulations/custom"))
+    # TODO: Hot-reload is a future extension — re-call init_registry() on SIGHUP or a watchdog file-change event.
     
     try:
         # Initialize database tables during application startup
