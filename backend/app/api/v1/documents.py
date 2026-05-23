@@ -1,3 +1,29 @@
+"""
+Documents API — compliance document generation and PDF export.
+Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
+SPDX-License-Identifier: AGPL-3.0-only
+
+This module handles all document-related operations for the AegisAI platform:
+
+Document Generation Flow:
+  - Selects a template based on DocumentType (Technical Documentation,
+    Risk Assessment, or Conformity Declaration)
+  - Populates the template with AISystem metadata (name, version,
+    use_case, sector, risk_level, etc.)
+  - Persists the generated document to the database
+
+PDF Export:
+  - Converts stored document content to PDF using reportlab
+  - Handles markdown-like formatting (headings, bullet points, bold)
+  - Returns a StreamingResponse with Content-Type: application/pdf
+
+Database Relationships:
+  - Each Document belongs to one AISystem via ai_system_id
+  - Each Document belongs to one User via owner_id
+  - Documents track status (GENERATED) and type (DocumentType enum)
+"""
+
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
