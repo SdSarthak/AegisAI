@@ -241,7 +241,8 @@ def update_document(
     
     return document
 
-@router.post("/generate", response_model=DocumentResponse)
+# ✅ After
+@router.post("/generate", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 def generate_document(
     request: DocumentGenerateRequest,
     db: Session = Depends(get_db),
