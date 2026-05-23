@@ -44,13 +44,32 @@ const STEPS = [
 export default function Onboarding() {
   const navigate = useNavigate()
   const [currentStep, setCurrentStep] = useState(0)
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    sector: '',
+    use_case: '',
+    documentType: '',
+  })
 
-  // TODO (help wanted): replace with real form state per step
   const isLastStep = currentStep === STEPS.length - 1
+
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement |
+      HTMLTextAreaElement |
+      HTMLSelectElement
+    >
+  ) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    })
+  }
 
   const handleNext = () => {
     if (isLastStep) {
-      // TODO (help wanted): mark onboarding complete via API before navigating
+      console.log('Onboarding Data:', formData)
       navigate('/')
     } else {
       setCurrentStep((s) => s + 1)
@@ -106,10 +125,75 @@ export default function Onboarding() {
           </div>
           <p className="text-gray-600 text-sm">{STEPS[currentStep].description}</p>
 
-          {/* TODO (good first issue): add step-specific form fields here */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center text-sm text-gray-400">
-            Step {currentStep + 1} form fields — implement me
-          </div>
+          {/* Step 1 */}
+          {currentStep === 0 && (
+            <div className="mt-6 space-y-4">
+              <input
+                type="text"
+                name="name"
+                placeholder="System Name"
+                value={formData.name}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+              />
+              <textarea
+                name="description"
+                placeholder="Description"
+                value={formData.description}
+                onChange={handleChange}
+                rows={4}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+              />
+              <input
+                type="text"
+                name="sector"
+                placeholder="Sector"
+                value={formData.sector}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+              />
+              <input
+                type="text"
+                name="use_case"
+                placeholder="Use Case"
+                value={formData.use_case}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+              />
+            </div>
+          )}
+          {/* Step 2 */}
+          {currentStep === 1 && (
+            <div className="mt-6 p-4 rounded-lg border border-primary-200 bg-primary-50">
+              <p className="text-sm text-gray-700">
+                Classification will run automatically.
+              </p>
+            </div>
+          )}
+          {/* Step 3 */}
+          {currentStep === 2 && (
+            <div className="mt-6">
+              <select
+                name="documentType"
+                value={formData.documentType}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2"
+              >
+                <option value="">
+                  Select document type
+                </option>
+                <option value="risk_assessment">
+                  Risk Assessment
+                </option>
+                <option value="compliance_report">
+                  Compliance Report
+                </option>
+                <option value="audit_document">
+                  Audit Documentation
+                </option>
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Navigation */}

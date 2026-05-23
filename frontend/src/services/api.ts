@@ -53,6 +53,10 @@ export const authApi = {
     const { data } = await api.get('/auth/me')
     return data
   },
+  updateMe: async (userData: Record<string, unknown>) => {
+    const { data } = await api.patch('/auth/me', userData)
+    return data
+  },
 }
 
 // AI Systems API

@@ -12,6 +12,7 @@ import Analytics from './pages/Analytics'
 import NotFound from './pages/NotFound'
 import { Toaster } from 'react-hot-toast'
 import RagChat from './pages/RagChat'
+import Onboarding from './pages/Onboarding'
 
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -45,6 +46,7 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/onboarding" element={<Onboarding />} />
         <Route
           path="/"
           element={
