@@ -1,3 +1,29 @@
+"""
+Classification API — EU AI Act risk classification engine.
+
+This module provides FastAPI routes and business logic for classifying
+AI systems according to the EU AI Act risk framework.
+
+Routers:
+  - ``router`` — mounted at /api/v1/classification
+
+Key Endpoints:
+  - POST /classify          : Classify an AI system's risk level
+  - POST /classify/{id}     : Classify and save result to database
+  - POST /bulk              : Bulk classify multiple AI systems
+  - GET  /risk-factors      : Return questionnaire risk factor metadata
+
+Risk Levels (EU AI Act):
+  - UNACCEPTABLE : Prohibited practices (Article 5)
+  - HIGH         : Requires full compliance (Article 6 + Annex III)
+  - LIMITED      : Transparency obligations (Article 52)
+  - MINIMAL      : No mandatory requirements
+
+Dependencies:
+  - FastAPI      : API routing and dependency injection
+  - SQLAlchemy   : ORM session for database persistence
+  - Pydantic     : Request/response schema validation
+"""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
