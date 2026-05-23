@@ -1,22 +1,25 @@
 """Transformer-based intent classifier for detecting prompt injection attempts."""
 
 import os
-import json
-from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
-import numpy as np
+from typing import Dict, List, Optional
 
+import numpy as np
 import torch
+from sklearn.metrics import f1_score
 from torch.utils.data import DataLoader, Dataset
 from transformers import (
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
     AdamW,
+    AutoModelForSequenceClassification,
+    AutoTokenizer,
     get_linear_schedule_with_warmup,
 )
-from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
 from . import guard_config as config
+from .regex_rules import RegexFilter
+
+
+MODEL_WEIGHT_FILENAMES = ("pytorch_model.bin", "model.safetensors")
 
 
 @dataclass
@@ -64,74 +67,116 @@ class PromptDataset(Dataset):
 class IntentClassifier:
     """Fine-tuned DeBERTa classifier for prompt injection intent detection."""
 
-    def __init__(self, model_path: Optional[str] = None, device: Optional[str] = None):
+    def __init__(
+        self,
+        model_path: Optional[str] = None,
+        device: Optional[str] = None,
+        allow_untrained_fallback: bool = False,
+    ):
         """
-        Initialize classifier with fine-tuned or pre-trained model.
+        Initialize classifier with a fine-tuned model for inference.
 
-        Tries to load fine-tuned model first, falls back to pre-trained DeBERTa-v3-small.
+        In inference mode this never falls back to a fresh DeBERTa classification
+        head, because that head is randomly initialized and produces unreliable
+        decisions. Training code can set ``allow_untrained_fallback=True`` to
+        intentionally bootstrap from the base model before fine-tuning.
 
         Args:
             model_path: Path to trained model directory. If None, auto-detects using config.
             device: Device to use ('cpu' or 'cuda'). Auto-detects GPU if None.
+            allow_untrained_fallback: Permit loading the base model with a new
+                classification head. Use only for training, never inference.
         """
-        # Auto-detect device
         if device is None:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device)
 
-        # Use intent classes from config
         self.intent_to_id = config.INTENT_TO_ID
         self.id_to_intent = config.ID_TO_INTENT
 
-        # Determine model path
         if model_path is None:
             model_path = config.get_trained_model_path()
 
-        # Load tokenizer from model directory
-        tokenizer_path = model_path
+        self.model_path = model_path
+        self.allow_untrained_fallback = allow_untrained_fallback
+        self.model_source = "unknown"
+        self._heuristic_filter = RegexFilter()
 
-        # Load model
-        model_exists = model_path and os.path.exists(model_path)
-        has_weights = model_exists and os.path.exists(
-            os.path.join(model_path, "pytorch_model.bin")
-        )
-
-        if model_exists and has_weights:
-            print(f"✓ Loading fine-tuned model from {model_path}")
+        if self._has_model_weights(model_path):
+            print(f"[OK] Loading fine-tuned model from {model_path}")
             try:
-                from transformers import (
-                    AutoTokenizer,
-                    AutoModelForSequenceClassification,
-                )
-
-                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
                 self.model = AutoModelForSequenceClassification.from_pretrained(
                     model_path
                 )
-                print(f"✓ Model and tokenizer loaded successfully")
-            except Exception as e:
-                print(f"⚠ Failed to load model: {e}. Falling back to pre-trained.")
-                self._load_pretrained()
+                self.model_source = "fine_tuned"
+                print("[OK] Model and tokenizer loaded successfully")
+            except Exception as exc:
+                print(f"[WARNING] Failed to load fine-tuned model: {exc}")
+                if allow_untrained_fallback:
+                    self._load_pretrained()
+                else:
+                    self._load_heuristic_fallback()
         else:
-            print(f"⚠ Fine-tuned model not found at {model_path}")
-            print(
-                f"  Using pre-trained DeBERTa (train with notebook for better results)"
-            )
-            self._load_pretrained()
+            print(f"[WARNING] Fine-tuned model weights not found at {model_path}")
+            if allow_untrained_fallback:
+                self._load_pretrained()
+            else:
+                self._load_heuristic_fallback()
 
-        self.model.to(self.device)
-        self.model.eval()
+        if self.model is not None:
+            self.model.to(self.device)
+            self.model.eval()
+
+    @staticmethod
+    def _has_model_weights(model_path: Optional[str]) -> bool:
+        """Return True when a local model directory contains trained weights."""
+        if not model_path or not os.path.isdir(model_path):
+            return False
+        return any(
+            os.path.exists(os.path.join(model_path, filename))
+            for filename in MODEL_WEIGHT_FILENAMES
+        )
 
     def _load_pretrained(self):
-        """Load pre-trained DeBERTa model."""
-        print("Loading pre-trained DeBERTa v3 small...")
-        from transformers import AutoTokenizer, AutoModelForSequenceClassification
-
+        """Load base DeBERTa with a fresh head for training only."""
+        print("[WARNING] Loading base DeBERTa v3 small with an untrained classifier head")
         model_name = "microsoft/deberta-v3-small"
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(
             model_name, num_labels=3
+        )
+        self.model_source = "untrained_base"
+
+    def _load_heuristic_fallback(self):
+        """Use deterministic rules when trained weights are unavailable."""
+        self.tokenizer = None
+        self.model = None
+        self.model_source = "heuristic_fallback"
+        print("[WARNING] Using deterministic heuristic classifier fallback")
+
+    def _classify_with_heuristics(self, prompt: str) -> ClassificationResult:
+        """Classify using the regex risk signal instead of random ML weights."""
+        regex_result = self._heuristic_filter.check(prompt)
+
+        if regex_result.score >= 0.8:
+            class_scores = {"benign": 0.05, "suspicious": 0.10, "malicious": 0.85}
+            intent = "malicious"
+        elif regex_result.score >= 0.5:
+            class_scores = {"benign": 0.10, "suspicious": 0.75, "malicious": 0.15}
+            intent = "suspicious"
+        elif regex_result.flag:
+            class_scores = {"benign": 0.35, "suspicious": 0.55, "malicious": 0.10}
+            intent = "suspicious"
+        else:
+            class_scores = {"benign": 0.90, "suspicious": 0.08, "malicious": 0.02}
+            intent = "benign"
+
+        return ClassificationResult(
+            intent=intent,
+            confidence=class_scores[intent],
+            class_scores=class_scores,
         )
 
     def classify(self, prompt: str) -> ClassificationResult:
@@ -144,6 +189,9 @@ class IntentClassifier:
         Returns:
             ClassificationResult with intent, confidence, and class scores
         """
+        if self.model is None:
+            return self._classify_with_heuristics(prompt)
+
         inputs = self.tokenizer(
             prompt,
             max_length=128,
@@ -159,12 +207,10 @@ class IntentClassifier:
             logits = outputs.logits
             probabilities = torch.softmax(logits, dim=1)[0].cpu().numpy()
 
-        # Get top prediction
         predicted_id = np.argmax(probabilities)
         predicted_intent = self.id_to_intent[predicted_id]
         confidence = float(probabilities[predicted_id])
 
-        # Create class scores dict
         class_scores = {
             self.id_to_intent[i]: float(probabilities[i])
             for i in range(len(probabilities))
@@ -216,32 +262,33 @@ class IntentClassifier:
         Returns:
             Dictionary with training metrics
         """
-        # Convert labels to ids
+        if self.model is None or self.tokenizer is None:
+            raise RuntimeError(
+                "Training requires a transformer model. Initialize with "
+                "allow_untrained_fallback=True to bootstrap from DeBERTa."
+            )
+
         train_label_ids = [self.intent_to_id[label] for label in train_labels]
         val_label_ids = [self.intent_to_id[label] for label in val_labels]
 
-        # Create datasets and dataloaders
         train_dataset = PromptDataset(train_texts, train_label_ids, self.tokenizer)
         val_dataset = PromptDataset(val_texts, val_label_ids, self.tokenizer)
 
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size)
 
-        # Setup optimizer and scheduler
         optimizer = AdamW(self.model.parameters(), lr=learning_rate)
         total_steps = len(train_loader) * epochs
         scheduler = get_linear_schedule_with_warmup(
             optimizer, num_warmup_steps=0, num_training_steps=total_steps
         )
 
-        # Training loop
         self.model.train()
         metrics = {"train_loss": [], "val_accuracy": [], "val_f1": []}
 
         for epoch in range(epochs):
             print(f"\nEpoch {epoch + 1}/{epochs}")
 
-            # Training
             total_loss = 0
             for batch in train_loader:
                 input_ids = batch["input_ids"].to(self.device)
@@ -263,7 +310,6 @@ class IntentClassifier:
             metrics["train_loss"].append(avg_loss)
             print(f"Training loss: {avg_loss:.4f}")
 
-            # Validation
             self.model.eval()
             val_preds = []
             val_true = []
@@ -293,7 +339,6 @@ class IntentClassifier:
 
             self.model.train()
 
-        # Save model if output dir specified
         if output_dir:
             os.makedirs(output_dir, exist_ok=True)
             self.model.save_pretrained(output_dir)

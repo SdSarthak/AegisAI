@@ -116,6 +116,7 @@ class LLMGuard:
             "intent": intent_result.intent,
             "confidence": intent_result.confidence,
             "class_scores": intent_result.class_scores,
+            "model_source": getattr(self.classifier, "model_source", "unknown"),
         }
         logger.info(f"Intent: {intent_result.intent}, Confidence: {intent_result.confidence}")
 

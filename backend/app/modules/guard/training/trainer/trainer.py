@@ -32,7 +32,10 @@ class SafetyClassifierTrainer:
         batch_size: int = 16,
         learning_rate: float = 2e-5,
     ) -> TrainingResult:
-        classifier = IntentClassifier(device=self.device)
+        classifier = IntentClassifier(
+            device=self.device,
+            allow_untrained_fallback=True,
+        )
         metrics = classifier.train(
             train_texts=train_df["prompt"].tolist(),
             train_labels=train_df["label"].tolist(),

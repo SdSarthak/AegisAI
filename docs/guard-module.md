@@ -76,7 +76,7 @@ User prompt
  (original) (cleaned)  (no LLM)
 ```
 
-The pipeline is **fail-safe**: if DeBERTa fails to load, it falls back to the pre-trained base model and logs a warning. The regex layer always runs.
+The pipeline is **fail-safe**: if fine-tuned classifier weights are missing or fail to load, inference falls back to a deterministic heuristic classifier instead of a random DeBERTa classification head. The regex layer always runs.
 
 ---
 
@@ -118,7 +118,7 @@ A fine-tuned `microsoft/deberta-v3-small` transformer classifying the *semantic 
 
 This layer catches attacks that regex misses: obfuscated phrasings, foreign-language injections, Base64-encoded instructions, and creative reformulations of known attacks.
 
-**By default** the module uses the pre-trained DeBERTa-v3-small base model with random classification head weights. **Fine-tuning is strongly recommended** — see [Training your own classifier](#training-your-own-classifier).
+**By default** the module loads fine-tuned weights from `backend/app/modules/guard/models/classifier/`. If those weights are unavailable, inference uses a deterministic heuristic fallback and reports `model_source: "heuristic_fallback"` in metadata. The pre-trained DeBERTa-v3-small base model with a new classification head is used only when training explicitly opts in to bootstrap a fine-tuned model.
 
 **Output fields:**
 - `intent: str` — `"benign"` | `"suspicious"` | `"malicious"`
