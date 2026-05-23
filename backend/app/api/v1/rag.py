@@ -1,12 +1,22 @@
 """
-RAG Intelligence API — regulatory knowledge base query endpoint.
-Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
-SPDX-License-Identifier: AGPL-3.0-only
+RAG Intelligence API for regulatory knowledge retrieval and document ingestion.
 
-TODO for contributors (high difficulty):
-  - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
-  - Add streaming responses via SSE for long answers
+This module provides Retrieval-Augmented Generation (RAG) endpoints for:
+  - Querying regulatory knowledge bases
+  - Uploading and indexing PDF documents
+  - Collecting answer feedback
+  - Monitoring RAG system health
+  - Accessing user query history
+
+The module populates the FastAPI router responsible for RAG intelligence
+operations and document-based AI compliance assistance.
+
+Dependencies:
+  - FastAPI      : API routing and request handling
+  - SQLAlchemy   : Database session management and persistence
+  - FAISS        : Vector similarity search and indexing
+  - Pydantic     : Request and response schema validation
+  - LangChain    : Retrieval and question-answering pipeline
 """
 
 import time
