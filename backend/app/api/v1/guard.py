@@ -265,7 +265,8 @@ class BulkScanResponse(BaseModel):
 def bulk_scan_prompts(
     request: BulkScanRequest,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),                        
+    db: Session = Depends(get_db),
+    user_configs: dict[str, float | str] | None = None,
 ):
     """
     Scan a batch of prompts (max 50) for injection risks.
@@ -325,8 +326,11 @@ def bulk_scan_prompts(
             "medium": SanitizationLevel.MEDIUM,
             "high": SanitizationLevel.HIGH,
         }
+        effective_config = user_guard_configs.get(current_user.id, {})
         san_level = level_map.get(
-            settings.GUARD_SANITIZATION_LEVEL, SanitizationLevel.MEDIUM)
+            effective_config.get("sanitization_level", settings.GUARD_SANITIZATION_LEVEL),
+            SanitizationLevel.MEDIUM,
+        )
         guard = LLMGuard(sanitization_level=san_level)
 
         results = []
