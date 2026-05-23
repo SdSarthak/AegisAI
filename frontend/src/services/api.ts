@@ -124,10 +124,15 @@ export const documentsApi = {
 
 // Notifications API
 export const notificationsApi = {
-  list: (unreadOnly = false) =>
-    api.get(`/notifications?unread_only=${unreadOnly}`).then((r) => r.data),
+  list: async (unreadOnly = false) => {
+    const { data } = await api.get(`/notifications?unread_only=${unreadOnly}`)
+    // Backend returns paginated response; extract items array
+    return data.items || []
+  },
   markRead: (ids: number[]) =>
     api.post('/notifications/read', { ids }),
+  delete: (id: number) =>
+    api.delete(`/notifications/${id}`),
 }
 
 // Health API — uses root URL, not /api/v1

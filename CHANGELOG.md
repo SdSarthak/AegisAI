@@ -5,6 +5,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- NotificationBell component now fetches real unread notifications from API with 60-second polling
+- Notifications page wired to real API backend with mark-all-read and delete functionality
+- Error states with retry buttons for notification loading failures
+- Loading states with spinner animations for better UX
+- Exponential backoff retry logic for resilient API calls
+
+### Fixed
+- Notification API response handling now correctly extracts items from paginated response
+- Notification type mapping corrected to display proper colors for backend enum values
+- Response field mismatch resolved (notification_type instead of type)
+
 ## [0.1.0] — 2026-04-05
 
 ### Added

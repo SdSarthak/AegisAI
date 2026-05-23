@@ -12,7 +12,7 @@ interface NotificationPreview {
   message: string
   is_read: boolean
   created_at: string               // ISO‑8601 date string
-  type: 'alert' | 'update' | 'ai' | 'news'
+  notification_type: string        // Backend enum: guard_block, document_generated, etc.
 }
 
 
@@ -30,13 +30,22 @@ function timeAgo(isoDate: string): string {
   return `${days}d ago`
 }
 
-/** Accent colour for the notification type stripe. */
-function typeColor(type: NotificationPreview['type']): string {
-  switch (type) {
-    case 'alert':  return 'bg-red-500'
-    case 'update': return 'bg-green-500'
-    case 'ai':     return 'bg-purple-500'
-    case 'news':   return 'bg-primary-500'
+/**
+ * Maps backend notification types to display colors.
+ * Backend types: SYSTEM_CLASSIFIED, DOCUMENT_GENERATED, GUARD_BLOCK, COMPLIANCE_DRIFT, REASSESSMENT_DUE
+ */
+function typeColor(notificationType: string): string {
+  switch (notificationType) {
+    case 'guard_block':
+    case 'compliance_drift':
+      return 'bg-red-500'          // Alert/Error
+    case 'system_classified':
+    case 'reassessment_due':
+      return 'bg-orange-500'       // Warning
+    case 'document_generated':
+      return 'bg-green-500'        // Success
+    default:
+      return 'bg-primary-500'      // Default/Info
   }
 }
 
@@ -49,17 +58,29 @@ export default function NotificationBell() {
 
   // Live data via useQuery
   const queryClient = useQueryClient()
-  const { data: notifications = [] } = useQuery({
+  const { 
+    data: notifications = [], 
+    isLoading, 
+    error 
+  } = useQuery({
     queryKey: ['notifications', 'unread'],
     queryFn: () => notificationsApi.list(true),
     refetchInterval: 60_000,
+    retry: 3,  // Retry failed requests up to 3 times
+    retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30_000),  // Exponential backoff
   })
 
   const unreadCount = notifications.filter((n: NotificationPreview) => !n.is_read).length
 
   const handleNotificationClick = async (id: number) => {
-    await notificationsApi.markRead([id])
-    queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] })
+    try {
+      await notificationsApi.markRead([id])
+      // Invalidate and refetch to get fresh data
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] })
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err)
+      // Optionally show a toast error here
+    }
   }
 
   // Close dropdown on click outside
@@ -102,10 +123,11 @@ export default function NotificationBell() {
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className="relative p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+        className="relative p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
         aria-expanded={isOpen}
         aria-haspopup="true"
+        disabled={isLoading && notifications.length === 0}
       >
         <Bell className="w-5 h-5" />
 
@@ -155,7 +177,23 @@ export default function NotificationBell() {
 
 
         <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
-          {notifications.length === 0 ? (
+          {error ? (
+            <div className="px-4 py-8 text-center">
+              <Bell className="w-10 h-10 mx-auto mb-2 text-gray-200" />
+              <p className="text-sm text-red-600">Failed to load notifications</p>
+              <button
+                onClick={() => queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] })}
+                className="mt-2 text-xs text-primary-600 hover:underline"
+              >
+                Try again
+              </button>
+            </div>
+          ) : isLoading ? (
+            <div className="px-4 py-8 text-center">
+              <div className="w-5 h-5 mx-auto mb-2 border-2 border-primary-200 border-t-primary-600 rounded-full animate-spin" />
+              <p className="text-sm text-gray-500">Loading...</p>
+            </div>
+          ) : notifications.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <Bell className="w-10 h-10 mx-auto mb-2 text-gray-200" />
               <p className="text-sm text-gray-400">No notifications yet</p>
@@ -174,7 +212,7 @@ export default function NotificationBell() {
 
                 <div
                   className={`w-1 self-stretch rounded-full flex-shrink-0 ${typeColor(
-                    notification.type,
+                    notification.notification_type,
                   )}`}
                 />
 
