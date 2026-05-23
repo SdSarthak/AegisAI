@@ -1,12 +1,41 @@
 """
-LLM Guard API — exposes prompt injection scanning as a REST endpoint.
-Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
-SPDX-License-Identifier: AGPL-3.0-only
+LLM Guard API for prompt injection detection and threat scanning.
 
-TODO for contributors (medium difficulty):
-  - Add per-user rate limiting on POST /guard/scan
-  - Persist scan results to the database for audit logs
-  - Add a GET /guard/stats endpoint returning block/allow/sanitize counts
+This module exposes FastAPI endpoints for:
+  - Scanning prompts for injection or malicious content
+  - Returning threat analysis decisions (allow, sanitize, block)
+  - Batch prompt scanning
+  - Guard configuration management
+  - Scan history retrieval
+  - Health monitoring
+
+Rate Limiting:
+  - Uses an in-memory sliding window rate limiting strategy
+  - Limits users to 60 requests per minute
+  - Rate limit tracking is stored in memory and resets whenever
+    the server restarts
+
+Request/Response Models:
+  - ScanRequest:
+      {
+          "prompt": str
+      }
+
+  - ScanResponse:
+      {
+          "decision": "allow" | "sanitize" | "block",
+          "confidence": float,
+          "reasoning": str,
+          "sanitized_prompt": str | None,
+          "matched_patterns": list[str]
+      }
+
+Dependencies:
+  - FastAPI      : API routing and request handling
+  - SQLAlchemy   : Database persistence and scan logging
+  - Pydantic     : Request and response validation
+  - threading    : Thread-safe rate limit locking
+  - collections  : Sliding window request tracking
 """
 
 import hashlib
