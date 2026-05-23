@@ -57,3 +57,4 @@ pypdf>=3.0.0            # required by LangChain's PyPDFLoader
 pytest==7.4.4
 pytest-asyncio==0.23.3
 pytest-cov==4.1.0
+respx==0.20.2
