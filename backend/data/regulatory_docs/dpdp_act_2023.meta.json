@@ -1,0 +1,21 @@
+{
+    "title": "The Digital Personal Data Protection Act, 2023",
+    "short_name": "DPDP Act 2023",
+    "regulation": "DPDP",
+    "jurisdiction": "IN",
+    "authority": "Ministry of Electronics and Information Technology, Government of India",
+    "enacted": "2023-08-11",
+    "version": "No. 22 of 2023",
+    "source_url": "https://www.meity.gov.in/static/uploads/2024/06/2bf1f0e9f04e6fb4f8fef35e82c42aa5.pdf",
+    "tags": [
+        "consent",
+        "data-principal",
+        "data-fiduciary",
+        "breach-notification",
+        "penalties",
+        "childrens-data",
+        "cross-border-transfer",
+        "significant-data-fiduciary",
+        "data-protection-board"
+    ]
+}

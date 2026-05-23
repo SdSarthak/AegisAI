@@ -31,3 +31,21 @@ def load_documents_from_paths(file_paths: list[str]):
         chunk_overlap=settings.RAG_CHUNK_OVERLAP,
     )
     return splitter.split_documents(documents)
+
+def load_documents_from_qa_csv(csv_path: str):
+    """Load regulatory QA pairs from CSV file as searchable documents."""
+    
+    import csv
+    from langchain.schema import Document
+
+    documents = []
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            content = f"Q: {row['question']}\nA: {row['answer']}"
+            doc = Document(
+                page_content=content,
+                metadata={"source": row["source_article"]},
+            )
+            documents.append(doc)
+    return documents

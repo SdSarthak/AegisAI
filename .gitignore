@@ -102,3 +102,8 @@ ehthumbs.db
 
 # Local dev tooling
 .claude/
+
+# Allow DPDP regulatory docs (scripts and metadata only, not PDFs)
+!backend/data/regulatory_docs/
+!backend/data/regulatory_docs/download_dpdp.py
+!backend/data/regulatory_docs/dpdp_act_2023.meta.json
