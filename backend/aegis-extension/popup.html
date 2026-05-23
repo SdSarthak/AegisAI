@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>AEGIS Guard</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="aegis-popup">
+    <header class="aegis-popup-header">
+      <span class="aegis-popup-shield">🛡</span>
+      <span class="aegis-popup-title">AEGIS Guard</span>
+      <span id="aegis-live-badge" class="aegis-live-badge aegis-live-offline">● Offline</span>
+    </header>
+
+    <div class="aegis-stats-row">
+      <div class="aegis-stat-box">
+        <span id="aegis-stat-checked" class="aegis-stat-value">0</span>
+        <span class="aegis-stat-label">Checked</span>
+      </div>
+      <div class="aegis-stat-box">
+        <span id="aegis-stat-blocked" class="aegis-stat-value">0</span>
+        <span class="aegis-stat-label">Blocked</span>
+      </div>
+      <div class="aegis-stat-box">
+        <span id="aegis-stat-redacted" class="aegis-stat-value">0</span>
+        <span class="aegis-stat-label">Redacted</span>
+      </div>
+      <div class="aegis-stat-box aegis-stat-risk">
+        <span id="aegis-stat-risk" class="aegis-stat-value">0.00</span>
+        <span class="aegis-stat-label">Avg Risk</span>
+      </div>
+    </div>
+
+    <div id="aegis-violation-breakdown" class="aegis-violation-breakdown"></div>
+
+    <div class="aegis-site-card">
+      <div class="aegis-site-row">
+        <span class="aegis-site-label">Site:</span>
+        <span id="aegis-current-site" class="aegis-site-name">—</span>
+      </div>
+      <div class="aegis-site-row">
+        <span class="aegis-site-label">Status:</span>
+        <span id="aegis-site-status" class="aegis-status-badge aegis-status-inactive">—</span>
+      </div>
+      <div class="aegis-site-row">
+        <span class="aegis-site-label">Backend:</span>
+        <span id="aegis-backend-status" class="aegis-status-badge aegis-status-offline">OFFLINE</span>
+      </div>
+    </div>
+
+    <div class="aegis-log-section">
+      <div class="aegis-log-header">
+        <h3 class="aegis-log-title">Last 5 checks</h3>
+        <button id="aegis-export-btn" class="aegis-export-btn" title="Export session log">📥 Export</button>
+      </div>
+      <table class="aegis-log-table">
+        <thead><tr><th>Time</th><th>Site</th><th>Decision</th><th>Risk</th></tr></thead>
+        <tbody id="aegis-log-body"></tbody>
+      </table>
+      <p id="aegis-log-empty" class="aegis-log-empty">No checks yet.</p>
+    </div>
+
+    <div class="aegis-settings">
+      <div class="aegis-setting-row">
+        <label class="aegis-setting-label">Backend URL</label>
+        <input type="text" id="aegis-api-input" class="aegis-api-input" placeholder="http://localhost:8000">
+      </div>
+      <label class="aegis-toggle-row aegis-setting-toggle">
+        <input type="checkbox" id="aegis-notify-toggle">
+        <span class="aegis-toggle-label">Notify on block</span>
+      </label>
+    </div>
+
+    <div class="aegis-toggle">
+      <label class="aegis-toggle-row">
+        <input type="checkbox" id="aegis-pause-toggle">
+        <span class="aegis-toggle-icon">⏸</span>
+        <span class="aegis-toggle-label">Pause Protection</span>
+      </label>
+    </div>
+
+    <footer class="aegis-popup-footer">AEGIS Guard · Neo · TechSynapse 2026</footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
