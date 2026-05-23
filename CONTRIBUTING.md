@@ -120,14 +120,10 @@ pytest tests/ -v --cov=app
 
 ---
 
-## Updating the Changelog
 
-When submitting a PR, add a line to `CHANGELOG.md` under the `[Unreleased]` section using this format:
+## [Unreleased]
 
-- **Added** `<new features>`
-- **Fixed** `<bug fixes>`
-- **Changed** `<changes to existing functionality>`
-- **Removed** `<removed features>`
+- **Added** dark mode toggle with localStorage persistence for frontend layout, sidebar, login, and register pages.
 
 ---
 
