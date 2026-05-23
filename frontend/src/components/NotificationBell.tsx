@@ -55,8 +55,7 @@ export default function NotificationBell() {
     refetchInterval: 60_000,
   })
 
-  const unreadCount = notifications.filter((n: NotificationPreview) => !n.is_read).length
-
+  const unreadCount = (Array.isArray(notifications) ? notifications : []).filter((n: NotificationPreview) => !n.is_read).length
   const handleNotificationClick = async (id: number) => {
     await notificationsApi.markRead([id])
     queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] })
@@ -161,7 +160,9 @@ export default function NotificationBell() {
               <p className="text-sm text-gray-400">No notifications yet</p>
             </div>
           ) : (
-            notifications.slice(0, 5).map((notification: NotificationPreview) => (
+            (Array.isArray(notifications) ? notifications : [])
+  .slice(0, 5)
+  .map((notification: NotificationPreview) => (
               <button
                 key={notification.id}
                 type="button"
