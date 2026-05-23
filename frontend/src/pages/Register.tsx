@@ -6,12 +6,14 @@ import { Shield } from 'lucide-react'
 
 export default function Register() {
   const navigate = useNavigate()
+
   const [formData, setFormData] = useState({
     email: '',
     password: '',
     full_name: '',
     company_name: '',
   })
+
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -35,79 +37,125 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+        
         <div className="text-center">
           <div className="flex justify-center">
             <Shield className="w-12 h-12 text-primary-600" />
           </div>
-          <h2 className="mt-4 text-3xl font-bold text-gray-900">
+
+          <h2 className="mt-4 text-3xl font-bold text-gray-900 dark:text-white">
             Create Account
           </h2>
-          <p className="mt-2 text-gray-600">Start your compliance journey</p>
+
+          <p className="mt-2 text-gray-600 dark:text-gray-300">
+            Start your compliance journey
+          </p>
         </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
+          
           {error && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-lg">
+            <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-lg">
               {error}
             </div>
           )}
 
+          {/* Email */}
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="email"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               Email
             </label>
+
             <input
               id="email"
               type="email"
               required
               value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  email: e.target.value,
+                })
+              }
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
 
+          {/* Password */}
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="password"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               Password
             </label>
+
             <input
               id="password"
               type="password"
               required
               minLength={8}
               value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  password: e.target.value,
+                })
+              }
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
 
+          {/* Full Name */}
           <div>
-            <label htmlFor="full_name" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="full_name"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               Full Name
             </label>
+
             <input
               id="full_name"
               type="text"
               required
               value={formData.full_name}
-              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  full_name: e.target.value,
+                })
+              }
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
 
+          {/* Company Name */}
           <div>
-            <label htmlFor="company_name" className="block text-sm font-medium text-gray-700">
+            <label
+              htmlFor="company_name"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               Company Name
             </label>
+
             <input
               id="company_name"
               type="text"
               required
               value={formData.company_name}
-              onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              onChange={(e) =>
+                setFormData({
+                  ...formData,
+                  company_name: e.target.value,
+                })
+              }
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
             />
           </div>
 
@@ -120,9 +168,12 @@ export default function Register() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-600">
+        <p className="text-center text-sm text-gray-600 dark:text-gray-300">
           Already have an account?{' '}
-          <Link to="/login" className="text-primary-600 hover:text-primary-500">
+          <Link
+            to="/login"
+            className="text-primary-600 hover:text-primary-500"
+          >
             Sign in
           </Link>
         </p>
