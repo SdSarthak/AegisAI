@@ -1,7 +1,37 @@
 """
-LLM Guard API — exposes prompt injection scanning as a REST endpoint.
+Guard API — LLM Prompt Injection Detection & Threat Scanning
+=============================================================
+
+This module exposes the Guard API, which provides a single endpoint for
+scanning LLM prompts for prompt injection attempts, jailbreaks, and other
+adversarial inputs before they reach the underlying model.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
+
+Endpoint
+--------
+POST /guard/scan
+    Accepts a ScanRequest payload and returns a ScanResponse with a threat
+    decision, confidence score, and human-readable reasoning.
+
+Rate Limiting
+-------------
+The API enforces a sliding-window rate limit of 60 requests per minute per
+user. Rate limit counters are stored in-memory and reset on server restart.
+For persistence across restarts, an external store (e.g. Redis) is required.
+
+Request Shape (ScanRequest)
+---------------------------
+    prompt : str — The user prompt to be scanned.
+
+Response Shape (ScanResponse)
+------------------------------
+    decision         : str        — One of "allow", "block", or "sanitize".
+    confidence       : float      — Confidence score (0.0 – 1.0).
+    reasoning        : str        — Explanation of the decision.
+    sanitized_prompt : str | None — Cleaned prompt if decision is "sanitize".
+    matched_patterns : list[str]  — Regex patterns that triggered detection.
 
 TODO for contributors (medium difficulty):
   - Add per-user rate limiting on POST /guard/scan
@@ -10,99 +40,4 @@ TODO for contributors (medium difficulty):
 """
 
 from collections import defaultdict, deque
-from datetime import datetime, timedelta, timezone
-from threading import Lock
-
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
-from app.core.security import get_current_user
-from app.models.user import User
-
-router = APIRouter()
-
-
-_RATE_LIMIT_REQUESTS = 60
-_RATE_LIMIT_WINDOW_SECONDS = 60
-_scan_attempts_by_user: dict[int, deque[datetime]] = defaultdict(deque)
-_rate_limit_lock = Lock()
-
-
-class ScanRequest(BaseModel):
-    prompt: str
-
-
-class ScanResponse(BaseModel):
-    decision: str          # "allow" | "sanitize" | "block"
-    confidence: float
-    reasoning: str
-    sanitized_prompt: str | None = None
-    matched_patterns: list[str] = []
-
-
-def _check_rate_limit(user_id: int) -> tuple[bool, int]:
-    """Return whether the user is limited and the seconds to retry after."""
-    now = datetime.now(timezone.utc)
-    window_start = now - timedelta(seconds=_RATE_LIMIT_WINDOW_SECONDS)
-
-    with _rate_limit_lock:
-        attempts = _scan_attempts_by_user[user_id]
-        while attempts and attempts[0] <= window_start:
-            attempts.popleft()
-
-        if len(attempts) >= _RATE_LIMIT_REQUESTS:
-            retry_after = max(1, int((_RATE_LIMIT_WINDOW_SECONDS - (now - attempts[0]).total_seconds()) + 0.999))
-            return True, retry_after
-
-        attempts.append(now)
-        return False, 0
-
-
-@router.post("/scan", response_model=ScanResponse)
-def scan_prompt(
-    request: ScanRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Scan a prompt for injection risks.
-    Returns a decision: allow, sanitize, or block.
-    """
-    limited, retry_after = _check_rate_limit(current_user.id)
-    if limited:
-        return JSONResponse(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            content={
-                "detail": "Rate limit exceeded: 60 requests per minute per user. Please try again later.",
-            },
-            headers={"Retry-After": str(retry_after)},
-        )
-
-    try:
-        from app.modules.guard.llm_guard import LLMGuard
-        from app.modules.guard.sanitizer import SanitizationLevel
-        from app.core.config import settings
-
-        level_map = {
-            "low": SanitizationLevel.LOW,
-            "medium": SanitizationLevel.MEDIUM,
-            "high": SanitizationLevel.HIGH,
-        }
-        san_level = level_map.get(settings.GUARD_SANITIZATION_LEVEL, SanitizationLevel.MEDIUM)
-        guard = LLMGuard(sanitization_level=san_level)
-        result = guard.guard(request.prompt)
-
-        return ScanResponse(
-            decision=result["decision"],
-            confidence=result["metadata"]["decision_reasoning"]["confidence"],
-            reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
-            sanitized_prompt=None,
-            matched_patterns=result["metadata"]["regex_analysis"].get("matched_patterns", []),
-        )
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
-
-
-@router.get("/health", tags=["LLM Guard"])
-def guard_health():
-    """Check if the Guard module is available."""
-    return {"module": "llm_guard", "status": "available"}
+...
