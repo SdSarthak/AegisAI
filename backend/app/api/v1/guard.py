@@ -1,14 +1,22 @@
 """
-LLM Guard API — exposes prompt injection scanning as a REST endpoint.
-Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
-SPDX-License-Identifier: AGPL-3.0-only
+Guard API module.
 
-TODO for contributors (medium difficulty):
-  - Add per-user rate limiting on POST /guard/scan
-  - Persist scan results to the database for audit logs
-  - Add a GET /guard/stats endpoint returning block/allow/sanitize counts
+This module provides API endpoints and utilities for AI guardrail
+and threat-detection functionality within the application. It exposes
+endpoints used for scanning prompts, analyzing content safety,
+and detecting potentially unsafe or malicious inputs.
+
+Features included in this module:
+- Guard API endpoints for prompt and threat scanning
+- Rate limiting using an in-memory sliding window strategy
+  with a limit of 60 requests per minute
+- Request and response schemas including ScanRequest
+  and ScanResponse
+- In-memory rate limit storage that resets on server restart
+
+The module is designed to support lightweight and efficient
+AI safety enforcement while protecting endpoints from abuse.
 """
-
 import hashlib
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
