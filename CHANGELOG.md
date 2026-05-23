@@ -12,6 +12,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+### Added
+- DPDP Act 2023 (India) support in RAG knowledge base with QA pairs, metadata and CSV document loader
+
+---
+
+
 ## [0.1.0] — 2026-04-05
 
 ### Added
