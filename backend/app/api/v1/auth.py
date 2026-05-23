@@ -1,3 +1,43 @@
+"""
+Auth API — JWT-Based Authentication & User Management
+======================================================
+
+This module populates the FastAPI authentication router with endpoints
+for user registration, login, and retrieving the current user profile.
+It forms the core of the AegisAI identity and access management layer.
+
+Router
+------
+All routes are registered under the /auth prefix via FastAPI's APIRouter.
+
+Endpoints
+---------
+POST /auth/register
+    Accepts user credentials (email, password, full name, company name)
+    and creates a new account. Passwords are hashed using bcrypt before
+    being persisted to the database via SQLAlchemy.
+
+POST /auth/login
+    Validates credentials against the database and issues a signed JWT
+    access token using python-jose. Accepts OAuth2PasswordRequestForm.
+
+GET /auth/me
+    Returns the profile of the currently authenticated user, resolved
+    via the Bearer token in the Authorization header.
+
+Dependencies
+------------
+- python-jose  : JWT creation, signing, and validation (via create_access_token)
+- bcrypt       : Secure password hashing and verification
+- SQLAlchemy   : ORM-based database access for user persistence
+- FastAPI      : Routing, dependency injection, and request handling
+
+Notes
+-----
+- Token expiry and secret settings are sourced from app.core.config.
+- No functional code changes — documentation only.
+"""
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
