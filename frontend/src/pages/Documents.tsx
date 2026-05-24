@@ -4,6 +4,7 @@ import { aiSystemsApi, documentsApi } from '../services/api'
 import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
+import { toast } from 'react-hot-toast'
 
 interface Document {
   id: number
@@ -42,7 +43,7 @@ export default function Documents() {
         setCopiedDocId(null)
       }, 2000)
     } catch (error) {
-      console.error('Failed to copy content:', error)
+      toast.error(`Failed to copy content: ${String(error)}`)
     }
   }
 
@@ -120,7 +121,7 @@ export default function Documents() {
         queryClient.invalidateQueries({ queryKey: ['documents'] })
       }
     } catch (error) {
-      console.error('Save failed:', error)
+      toast.error(`Save failed: ${String(error)}`)
     }
   }
 

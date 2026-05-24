@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Clock, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { notificationsApi } from '../services/api'
+import { toast } from 'react-hot-toast'
 
 interface NotificationPreview {
   id: number
@@ -84,7 +85,7 @@ export default function NotificationBell() {
         queryKey: ['notifications', 'unread'],
       })
     } catch (error) {
-      console.error(error)
+      toast.error(`Failed to mark notification as read: ${String(error)}`)
     }
   }
 

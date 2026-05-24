@@ -4,6 +4,7 @@ import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { marked } from 'marked'
 import api from '../services/api'
+import toast from 'react-hot-toast'
 
 interface DocumentEditorProps {
   documentId: number
@@ -29,7 +30,7 @@ export default function DocumentEditor({
       await api.put(`/documents/${documentId}`, { content })
       onSave?.(content)
     } catch (error) {
-      console.error('Save failed:', error)
+      toast.error(`Save failed: ${String(error)}`)
     }
     setIsSaving(false)
   }, [content, documentId, onSave])
