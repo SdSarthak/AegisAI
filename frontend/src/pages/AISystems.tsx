@@ -34,17 +34,16 @@ export default function AISystems() {
   const [currentPage, setCurrentPage] = useState(1)
 
   const limit = 10
-  const skip = (currentPage - 1) * limit
 
   const { data: systemsData, isLoading } = useQuery({
     queryKey: ['ai-systems', sortBy, order, currentPage],
     queryFn: () =>
       aiSystemsApi.list({
-      sort_by: sortBy,
-      order,
-      skip,
-      limit,
-    }),
+        sort_by: sortBy,
+        order,
+        page: currentPage,
+        limit,
+      }),
   })
   const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 

@@ -32,6 +32,7 @@ from app.models.user import User
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.pagination import PaginatedResponse
+from app.modules.guard import guard_config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -245,6 +246,33 @@ def guard_health():
     """Check if the Guard module is available."""
     return {"module": "llm_guard", "status": "available"}
 
+
+class GuardConfigRequest(BaseModel):
+    sanitization_level: str
+    malicious_threshold: float
+    suspicious_threshold: float
+
+@router.get("/info", tags=["LLM Guard"])
+def guard_info():
+    """Return diagnostic information about the Guard module."""
+
+    try:
+        import torch
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    except ImportError:
+        device = "cpu"
+
+    from pathlib import Path
+
+    model_path = Path(guard_config.get_trained_model_path()).name
+
+    return {
+        "module": "llm_guard",
+        "status": "available",
+        "device": device,
+        "model_name": model_path or "pretrained-fallback",
+        "sanitization_level": guard_config.SANITIZATION_LEVEL,
+    }
 
 @router.get("/history", response_model=PaginatedResponse[GuardScanLogResponse])
 def get_guard_history(
