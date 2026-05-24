@@ -69,8 +69,8 @@ export default function Analytics() {
     queryKey: ['guard-logs'],
     queryFn: async () => {
       try {
-        const { data } = await api.get('/guard/logs')
-        return data
+        const { data } = await api.get('/guard/history')
+        return data.items ?? []
       } catch {
         return []
       }
@@ -169,11 +169,10 @@ export default function Analytics() {
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`text-xs px-3 py-1 rounded-full font-medium capitalize transition-colors ${
-                  filter === f
+                className={`text-xs px-3 py-1 rounded-full font-medium capitalize transition-colors ${filter === f
                     ? 'bg-primary-600 text-white'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
+                  }`}
               >
                 {f}
               </button>
