@@ -13,8 +13,9 @@ import hashlib
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
-from typing import Optional
+from typing import Optional, TypedDict
 import logging
+
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
@@ -76,7 +77,16 @@ class BulkScanResponse(BaseModel):
 
 
 VALID_SANITIZATION_LEVELS = {"low", "medium", "high"}
-user_guard_configs: dict[int, dict[str, float | str]] = {}
+
+
+class UserGuardConfig(TypedDict):
+    sanitization_level: str
+    malicious_threshold: float
+    suspicious_threshold: float
+
+
+# Temporary in-memory config store
+user_guard_configs: dict[int, UserGuardConfig] = {}
 
 
 def _check_rate_limit(user_id: int) -> tuple[bool, int]:
@@ -247,10 +257,6 @@ def guard_health():
     return {"module": "llm_guard", "status": "available"}
 
 
-class GuardConfigRequest(BaseModel):
-    sanitization_level: str
-    malicious_threshold: float
-    suspicious_threshold: float
 
 @router.get("/info", tags=["LLM Guard"])
 def guard_info():
@@ -403,22 +409,16 @@ def get_guard_stats(
         .all()
     )
 
-    daily_buckets: dict[str, dict[str, int | str]] = {}
+    daily_buckets: dict[str, int] = {}
 
     for day, decision, count in daily_rows:
         date_key = str(day)
-        if date_key not in daily_buckets:
-            daily_buckets[date_key] = {
-                "date": date_key,
-                "allow": 0,
-                "sanitize": 0,
-                "block": 0,
-            }
+        daily_buckets[date_key] = daily_buckets.get(date_key, 0) + count
 
-        if decision in {"allow", "sanitize", "block"}:
-            daily_buckets[date_key][decision] = count
-
-    scans_per_day = list(daily_buckets.values())
+    scans_per_day = [
+        {"date": date_key, "count": count}
+        for date_key, count in daily_buckets.items()
+    ]
 
     return {
         "window": window,
