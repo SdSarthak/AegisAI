@@ -152,7 +152,13 @@ export const ragApi = {
     const { data } = await api.post('/rag/query', {
       question,
     })
-
+    return data
+  },
+  feedback: async (payload: { answer_id: string; vote: 'up' | 'down' }) => {
+    const { data } = await api.post('/rag/feedback', {
+      answer_id: payload.answer_id,
+      vote: payload.vote,
+    })
     return data
   },
 }
