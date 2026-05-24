@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import ThemeToggle from './ThemeToggle'
+import Breadcrumbs from './Breadcrumbs'
 import {
   LayoutDashboard,
   Bot,
@@ -137,9 +138,12 @@ export default function Layout() {
         }`}
       >
 
-        <header className="sticky top-0 z-30 flex items-center justify-end gap-1 px-8 py-3 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
-          <NotificationBell />
-          <ThemeToggle />
+        <header className="sticky top-0 z-30 flex items-center justify-between gap-4 px-8 py-3 bg-white/80 backdrop-blur-md border-b border-gray-200/60 dark:bg-gray-800/80 dark:border-gray-700/60 transition-colors duration-200">
+          <Breadcrumbs />
+          <div className="flex items-center gap-1.5">
+            <NotificationBell />
+            <ThemeToggle />
+          </div>
         </header>
 
         <main className="p-8 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
