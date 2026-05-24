@@ -1,7 +1,7 @@
 <div align="center">
 
 # AegisAI
-
+ 
 **Open-source AI Governance, Risk & Compliance (AI-GRC) Platform** 
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
