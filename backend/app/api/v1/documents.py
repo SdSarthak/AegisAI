@@ -15,7 +15,6 @@ from app.schemas.document import (
     DocumentResponse,
     DocumentGenerateRequest,
     DocumentUpdateRequest,
-    DocumentTemplateResponse,
 )
 from app.schemas.pagination import PaginatedResponse
 
@@ -166,16 +165,15 @@ def create_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new compliance document manually.
+    """Create a new document for the authenticated user.
 
     Args:
-        doc_data: Payload containing title, document_type, ai_system_id,
-            and optional content.
-        db: Database session dependency.
-        current_user: The authenticated user extracted from the JWT token.
+        doc_data: Document creation payload.
+        db: Database session used to persist the new document.
+        current_user: Authenticated user who will own the document.
 
     Returns:
-        DocumentResponse: The newly created document with HTTP 201.
+        The created document serialized as DocumentResponse.
     """
     document = Document(
         owner_id=current_user.id,
@@ -197,16 +195,16 @@ def list_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List all documents for the current user with pagination.
+    """List the current user's documents with pagination.
 
     Args:
-        page: Page number, 1-indexed (default: 1).
-        limit: Number of items per page, max 100 (default: 50).
-        db: Database session dependency.
-        current_user: The authenticated user extracted from the JWT token.
+        page: Page number to return, starting at 1.
+        limit: Maximum number of documents to return per page.
+        db: Database session used to query documents.
+        current_user: Authenticated user whose documents are being listed.
 
     Returns:
-        PaginatedResponse[DocumentResponse]: Paginated list of documents.
+        PaginatedResponse containing the user's documents.
     """
     base_query = db.query(Document).filter(Document.owner_id == current_user.id)
     total = base_query.count()
@@ -215,25 +213,6 @@ def list_documents(
     documents = base_query.offset(offset).limit(limit).all()
     return PaginatedResponse(items=documents, total=total, page=page, limit=limit)
 
-@router.get("/templates", response_model=List[DocumentTemplateResponse])
-def list_document_templates(
-    current_user: User = Depends(get_current_user),
-):
-    """List available document templates for generation."""
-    descriptions = {
-        DocumentType.TECHNICAL_DOCUMENTATION: "Generate technical documentation for an AI system.",
-        DocumentType.RISK_ASSESSMENT: "Generate a risk assessment report for an AI system.",
-        DocumentType.CONFORMITY_DECLARATION: "Generate an EU declaration of conformity for an AI system.",
-    }
-
-    return [
-        DocumentTemplateResponse(
-            type=document_type,
-            name=document_type.value.replace("_", " ").title(),
-            description=descriptions[document_type],
-        )
-        for document_type in DOCUMENT_TEMPLATES.keys()
-    ]
 
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(
@@ -241,18 +220,18 @@ def get_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Retrieve a specific document by ID.
+    """Return a single document owned by the current user.
 
     Args:
-        document_id: The unique identifier of the document.
-        db: Database session dependency.
-        current_user: The authenticated user extracted from the JWT token.
+        document_id: ID of the document to retrieve.
+        db: Database session used to query the document.
+        current_user: Authenticated user who must own the document.
 
     Returns:
-        DocumentResponse: The requested document's details.
+        The requested document serialized as DocumentResponse.
 
     Raises:
-        HTTPException: 404 if document not found or not owned by user.
+        HTTPException: If the document does not exist or belongs to another user.
     """
     document = (
         db.query(Document)
@@ -276,16 +255,16 @@ def update_document(
     """Update the content of an existing document.
 
     Args:
-        document_id: The unique identifier of the document to update.
-        body: Request body containing the new content.
-        db: Database session dependency.
-        current_user: The authenticated user extracted from the JWT token.
+        document_id: ID of the document to update.
+        body: Payload containing the replacement document content.
+        db: Database session used to load and persist the document.
+        current_user: Authenticated user who must own the document.
 
     Returns:
-        DocumentResponse: The updated document.
+        The updated document serialized as DocumentResponse.
 
     Raises:
-        HTTPException: 404 if document not found or not owned by user.
+        HTTPException: If the document does not exist or belongs to another user.
     """
     # Fetch document
     document = db.query(Document).filter(
@@ -306,33 +285,24 @@ def update_document(
     
     return document
 
-@router.post(
-    "/generate",
-    response_model=DocumentResponse,
-    status_code=status.HTTP_201_CREATED,
-)
+@router.post("/generate", response_model=DocumentResponse)
 def generate_document(
     request: DocumentGenerateRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate a compliance document for an AI system using a template.
-
-    Attempts LLM-based narrative generation first, falling back to a
-    static template if generation fails. Creates and persists the document
-    with GENERATED status.
+    """Generate a compliance document for a user's AI system.
 
     Args:
-        request: Payload containing ai_system_id and document_type.
-        db: Database session dependency.
-        current_user: The authenticated user extracted from the JWT token.
+        request: Payload specifying the AI system and document type.
+        db: Database session used to look up the AI system and save the result.
+        current_user: Authenticated user who must own the AI system.
 
     Returns:
-        DocumentResponse: The newly generated compliance document.
+        The generated document serialized as DocumentResponse.
 
     Raises:
-        HTTPException: 404 if AI system not found or not owned by user.
-        HTTPException: 400 if no template exists for the document type.
+        HTTPException: If the AI system or template is missing.
     """
     # Get the AI system
     ai_system = (
@@ -413,18 +383,18 @@ def delete_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a document permanently.
+    """Delete a document owned by the current user.
 
     Args:
-        document_id: The unique identifier of the document to delete.
-        db: Database session dependency.
-        current_user: The authenticated user extracted from the JWT token.
+        document_id: ID of the document to delete.
+        db: Database session used to locate and delete the document.
+        current_user: Authenticated user who must own the document.
 
     Returns:
-        None: HTTP 204 No Content on success.
+        None. The endpoint responds with HTTP 204 No Content.
 
     Raises:
-        HTTPException: 404 if document not found or not owned by user.
+        HTTPException: If the document does not exist or belongs to another user.
     """
     document = (
         db.query(Document)
@@ -447,24 +417,18 @@ def export_document_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Export a compliance document as a downloadable PDF file.
-
-    Converts the document's markdown-like content into a styled PDF
-    using ReportLab, including title, metadata, and formatted body text.
+    """Export a document as a PDF attachment.
 
     Args:
-        document_id: The unique identifier of the document to export.
-        db: Database session dependency.
-        current_user: The authenticated user extracted from the JWT token.
+        document_id: ID of the document to export.
+        db: Database session used to load the document.
+        current_user: Authenticated user who must own the document.
 
     Returns:
-        StreamingResponse: A downloadable PDF file with Content-Type
-            application/pdf.
+        StreamingResponse containing the generated PDF bytes.
 
     Raises:
-        HTTPException: 404 if document not found or not owned by user.
-        HTTPException: 400 if document has no content.
-        HTTPException: 500 if PDF generation fails.
+        HTTPException: If the document is missing, has no content, or PDF generation fails.
     """
     # Retrieve the document
     document = db.query(Document).filter(

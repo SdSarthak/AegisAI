@@ -9,13 +9,16 @@ TODO for contributors (high difficulty):
   - Add streaming responses via SSE for long answers
 """
 
+import time
+from fastapi import APIRouter, Depends, HTTPException, status
+
+
 import os
 import shutil
 import tempfile
 from typing import List, Optional
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field
+from fastapi import UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -39,8 +42,6 @@ class RAGQueryResponse(BaseModel):
     answer: str
     sources: list[str] = []
     answer_id: Optional[str] = None
-    groundedness_score: float = Field(0.0, description="Cosine similarity score (0.0 to 1.0) measuring answer groundedness in retrieved chunks.")
-    low_confidence: bool = Field(False, description="True if groundedness score falls below the accepted threshold.")
 
 
 class RAGIngestResponse(BaseModel):
@@ -64,19 +65,17 @@ def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Accept one or more PDF uploads, process them through the document loader,
-    build (or rebuild) the FAISS vector index, and persist it to
-    ``settings.FAISS_INDEX_PATH``.
+    """Ingest one or more regulatory PDFs and rebuild the FAISS index.
 
-    **Returns**
-    - ``files_processed`` - number of PDFs successfully saved and chunked
-    - ``chunks_created``  - total text chunks fed into the vector store
-    - ``index_size_bytes`` - on-disk size of the persisted FAISS index
+    Args:
+        files: One or more PDF uploads to save, chunk, and index.
+        current_user: Authenticated user requesting the ingestion.
 
-    **Errors**
-    - ``400`` if no valid PDF files are supplied
-    - ``503`` if the embedding model or FAISS build step fails
+    Returns:
+        RAGIngestResponse with file, chunk, and index size counts.
+
+    Raises:
+        HTTPException: If no valid PDFs are supplied or indexing fails.
     """
 
     # ── 1. Validate: at least one PDF ─────────────────────────────────────
@@ -145,28 +144,21 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Query the regulatory knowledge base with a natural language question.
-
-    Runs the question through the RAG pipeline, retrieves relevant chunks
-    from the FAISS index, generates a grounded answer, persists feedback
-    and query records, and logs metrics to MLflow.
+    """Answer a regulatory question using the RAG knowledge base.
 
     Args:
-        request: Request body containing the question string.
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
+        request: Query payload containing the user's question.
+        current_user: Authenticated user asking the question.
+        db: Database session used to persist the query and feedback record.
 
     Returns:
-        RAGQueryResponse: Generated answer, source document references,
-            and a unique answer_id for feedback submission.
+        RAGQueryResponse containing the generated answer and source references.
 
     Raises:
-        HTTPException: 503 if the FAISS index is not found or the RAG
-            module encounters an error.
+        HTTPException: If the RAG subsystem cannot produce an answer.
     """
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
-        from app.modules.rag.groundedness import compute_groundedness
         from app.core.database import Base
 
         qa_chain = get_qa_chain()
@@ -178,11 +170,6 @@ def query_knowledge_base(
         source_docs = result.get("source_documents", [])
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
         answer = str(result.get("result", ""))
-
-        # Groundedness Check
-        chunk_texts = [str(doc.page_content) for doc in source_docs]
-        groundedness_score = compute_groundedness(answer, chunk_texts)
-        low_confidence = groundedness_score < 0.70
 
         # Ensure tables exist on this DB bind (useful for test DB overrides)
         try:
@@ -219,13 +206,7 @@ def query_knowledge_base(
         except Exception:
             pass
 
-        return RAGQueryResponse(
-            answer=answer, 
-            sources=sources, 
-            answer_id=feedback.id,
-            groundedness_score=groundedness_score,
-            low_confidence=low_confidence
-        )
+        return RAGQueryResponse(answer=answer, sources=sources, answer_id=feedback.id)
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -240,11 +221,10 @@ def query_knowledge_base(
 
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health():
-    """Check if the RAG module is available and the FAISS index is loaded.
+    """Check whether the RAG module has an available index.
 
     Returns:
-        dict: Module name, status (available/unavailable), index_loaded
-            flag, and an optional message if the index is missing.
+        A status payload describing whether the RAG index is available.
     """
     from app.modules.rag.vector_store import check_index_exists
     
@@ -276,18 +256,18 @@ def rag_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Record a thumbs-up or thumbs-down vote for a previously returned answer.
+    """Record feedback for a previously returned RAG answer.
 
     Args:
-        payload: Request body containing answer_id and vote (up or down).
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
+        payload: Answer ID and vote direction submitted by the user.
+        current_user: Authenticated user submitting the feedback.
+        db: Database session used to update the feedback row.
 
     Returns:
-        dict: Status confirmation and the answer_id that was voted on.
+        A confirmation payload containing the feedback status and answer ID.
 
     Raises:
-        HTTPException: 404 if the answer_id is not found.
+        HTTPException: If the referenced answer does not exist.
     """
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
@@ -308,23 +288,18 @@ def get_low_quality_chunks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return source chunks with high negative feedback ratios.
-
-    Aggregates thumbs_up and thumbs_down counts per source chunk across
-    all RAGFeedback records and returns chunks where the ratio of
-    thumbs_down to total feedback exceeds the threshold. Admin only.
+    """Return source chunks whose feedback ratio exceeds the threshold.
 
     Args:
-        threshold: Minimum thumbs_down ratio to flag a chunk (default: 0.3).
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
+        threshold: Minimum thumbs-down ratio required to flag a chunk.
+        current_user: Authenticated user; must have admin access.
+        db: Database session used to aggregate feedback.
 
     Returns:
-        dict: Threshold value and list of low-quality chunks with their
-            thumbs_down count, total feedback, and ratio.
+        A payload containing the threshold and low-quality chunk candidates.
 
     Raises:
-        HTTPException: 403 if user does not have Scale tier access.
+        HTTPException: If the caller is not allowed to access the admin report.
     """
     # Admin-only access: restrict to system owners / scale tier
     try:
@@ -363,17 +338,16 @@ def get_rag_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return paginated list of the current user's past RAG queries.
+    """Return the current user's paginated RAG query history.
 
     Args:
-        page: Page number, 1-indexed (default: 1).
-        page_size: Number of results per page (default: 10).
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
+        page: Page number to return, starting at 1.
+        page_size: Maximum number of queries to include per page.
+        current_user: Authenticated user whose query history is requested.
+        db: Database session used to query the history table.
 
     Returns:
-        dict: Page info and list of past queries with id, question,
-            answer_summary, source_count, and created_at.
+        A paginated history payload containing the user's past RAG queries.
     """
     offset = (page - 1) * page_size
     queries = (

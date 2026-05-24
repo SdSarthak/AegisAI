@@ -109,12 +109,6 @@ QUESTIONNAIRE_RISK_FACTORS: List[QuestionnaireRiskFactor] = [
         triggers_level=RiskLevel.HIGH,
     ),
     QuestionnaireRiskFactor(
-        id="education_vocational_training",
-        question="Is the system used to determine access to or assign natural persons to educational and vocational training institutions?",
-        article="Annex III point 3",
-        triggers_level=RiskLevel.HIGH,
-    ),
-    QuestionnaireRiskFactor(
         id="interacts_with_humans",
         question="Does the system directly interact with humans, such as a chatbot or virtual assistant?",
         article="Article 52(1)",
@@ -227,13 +221,6 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
             "AI for creditworthiness or insurance risk assessment is HIGH risk under Annex III"
         )
 
-    # Education and vocational training (Annex III, point 3)
-    if data.education_vocational_training:
-        high_risk_indicators.append("Education/vocational training AI")
-        reasons.append(
-            "AI used for determining access to education or vocational training is HIGH risk under Annex III"
-        )
-
     # Safety component
     if data.is_safety_component:
         high_risk_indicators.append("Safety component of a product")
@@ -340,20 +327,14 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
 def classify_ai_system(
     data: RiskClassificationRequest, current_user: User = Depends(get_current_user)
 ):
-    """Classify an AI system's risk level based on EU AI Act criteria.
-
-    Evaluates the questionnaire responses against Article 5 prohibited
-    practices, Article 6 high-risk categories, Annex III criteria, and
-    Article 52 transparency obligations.
+    """Classify an AI system's risk level from the questionnaire payload.
 
     Args:
-        data: Questionnaire responses containing boolean flags for each
-            EU AI Act risk factor.
-        current_user: The authenticated user extracted from the JWT token.
+        data: Risk classification questionnaire answers for the AI system.
+        current_user: Authenticated user requesting the classification.
 
     Returns:
-        RiskClassificationResponse: Risk level, confidence score, reasons,
-            compliance requirements, and recommended next steps.
+        RiskClassificationResponse containing the inferred risk level and guidance.
     """
     return classify_risk(data)
 
@@ -365,25 +346,19 @@ def classify_and_save(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Classify an AI system and persist the result to the database.
-
-    Performs risk classification based on questionnaire responses, updates
-    the AI system's risk_level and compliance_status, and creates a
-    RiskAssessment record for audit purposes.
+    """Classify an AI system and persist the result.
 
     Args:
-        system_id: The unique identifier of the AI system to classify.
-        data: Questionnaire responses containing boolean flags for each
-            EU AI Act risk factor.
-        db: Database session dependency.
-        current_user: The authenticated user extracted from the JWT token.
+        system_id: ID of the AI system to classify.
+        data: Risk classification questionnaire answers.
+        db: Database session used to load the system and save the assessment.
+        current_user: Authenticated user who must own the system.
 
     Returns:
-        RiskClassificationResponse: Risk level, confidence score, reasons,
-            compliance requirements, and recommended next steps.
+        RiskClassificationResponse for the submitted questionnaire.
 
     Raises:
-        HTTPException: 404 if AI system not found or not owned by user.
+        HTTPException: If the system does not exist or does not belong to the user.
     """
     # Get the AI system
     system = (
@@ -429,18 +404,13 @@ def classify_and_save(
 def get_questionnaire_risk_factors(
     current_user: User = Depends(get_current_user),
 ):
-    """Return the static questionnaire metadata for the risk classification flow.
-
-    Returns all risk factor definitions including their EU AI Act article
-    references and the risk level each factor triggers. Does not query the
-    database as these are static classification rules.
+    """Return the static questionnaire metadata used by the classifier.
 
     Args:
-        current_user: The authenticated user extracted from the JWT token.
+        current_user: Authenticated user requesting the questionnaire metadata.
 
     Returns:
-        List[QuestionnaireRiskFactor]: All risk factors with their IDs,
-            questions, article references, and triggered risk levels.
+        The list of questionnaire risk factors used by the classification flow.
     """
     return QUESTIONNAIRE_RISK_FACTORS
 
@@ -452,18 +422,13 @@ def bulk_classify_systems(
 ):
     """Classify multiple AI systems in a single request.
 
-    For each system, retrieves saved questionnaire responses and runs
-    risk classification. Systems without saved responses or that don't
-    belong to the current user are returned with error details.
-
     Args:
-        request: List of AI system IDs to classify.
-        db: Database session dependency.
-        current_user: The authenticated user extracted from the JWT token.
+        request: Payload containing the AI system IDs to classify.
+        db: Database session used to load systems and store assessments.
+        current_user: Authenticated user who must own every system.
 
     Returns:
-        BulkClassificationResponse: Per-system classification results
-            including partial failures with error details.
+        BulkClassificationResponse containing per-system results and errors.
     """
     results: List[BulkClassificationItem] = []
 
@@ -526,4 +491,5 @@ def bulk_classify_systems(
 
     db.commit()
     return BulkClassificationResponse(results=results)
+
 
