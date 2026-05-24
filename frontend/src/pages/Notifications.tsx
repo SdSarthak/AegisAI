@@ -1,21 +1,7 @@
-import { Bell, Check, Trash2 } from 'lucide-react'
-
-/**
- * Notifications page — full list of in-app events.
- *
- * TODO (good first issue — static layout):
- *   - Build the static page shell with a header and a list of placeholder
- *     notification cards (icon, title, message, timestamp, read/unread dot).
- *   - No API calls needed — use hardcoded dummy data.
- *   - Acceptance criteria: page renders a list of at least 3 dummy notifications.
- *
- * TODO (help wanted — API wiring):
- *   - Replace dummy data with useQuery to GET /api/v1/notifications.
- *   - Wire the "Mark all read" button to POST /api/v1/notifications/read.
- *   - Wire individual delete buttons to DELETE /api/v1/notifications/{id}.
- *   - Acceptance criteria: after marking as read, unread count in
- *     NotificationBell updates to 0.
- */
+import { useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Bell, Check, Trash2, Loader2 } from 'lucide-react'
+import { notificationsApi } from '../services/api'
 
 interface Notification {
   id: number
@@ -26,38 +12,104 @@ interface Notification {
   created_at: string
 }
 
-// TODO (help wanted): implement this API service object
-// const notificationsApi = {
-//   list: () => axios.get('/api/v1/notifications').then(r => r.data),
-//   markRead: (ids: number[]) => axios.post('/api/v1/notifications/read', { ids }),
-//   delete: (id: number) => axios.delete(`/api/v1/notifications/${id}`),
-// }
-
-const DUMMY_NOTIFICATIONS: Notification[] = [
-  {
-    id: 1,
-    notification_type: 'system_classified',
-    title: 'AI system classified',
-    message: 'CV Screening AI was classified as High Risk under the EU AI Act.',
-    is_read: false,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    notification_type: 'document_generated',
-    title: 'Document generated',
-    message: 'Technical Documentation for CV Screening AI is ready to review.',
-    is_read: true,
-    created_at: new Date().toISOString(),
-  },
-]
+/**
+ * Maps backend notification types to badge colors.
+ */
+function typeColor(notificationType: string): string {
+  switch (notificationType) {
+    case 'guard_block':
+    case 'compliance_drift':
+      return 'bg-red-50 border-red-200'
+    case 'system_classified':
+    case 'reassessment_due':
+      return 'bg-orange-50 border-orange-200'
+    case 'document_generated':
+      return 'bg-green-50 border-green-200'
+    default:
+      return 'bg-primary-50 border-primary-200'
+  }
+}
 
 export default function Notifications() {
+  const queryClient = useQueryClient()
+  const [isMarkingAllRead, setIsMarkingAllRead] = useState(false)
 
-  // TODO (help wanted): replace dummy data with real query
+  // Fetch all notifications (not just unread)
+  const { 
+    data: notifications = [], 
+    isLoading, 
+    error 
+  } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => notificationsApi.list(false),  // false = get all, not just unread
+    refetchInterval: 30_000,  // Refetch every 30 seconds on this page
+  })
 
-  // const { data: notifications = [] } = useQuery({ queryKey: ['notifications'], queryFn: notificationsApi.list })
-  const notifications = DUMMY_NOTIFICATIONS
+  const unreadIds = notifications
+    .filter((n: Notification) => !n.is_read)
+    .map((n: Notification) => n.id)
+
+  const handleMarkAllRead = async () => {
+    if (unreadIds.length === 0) return
+
+    setIsMarkingAllRead(true)
+    try {
+      await notificationsApi.markRead(unreadIds)
+      // Refetch to show updated state
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] })  // Also invalidate bell
+    } catch (err) {
+      console.error('Failed to mark all as read:', err)
+    } finally {
+      setIsMarkingAllRead(false)
+    }
+  }
+
+  const handleDelete = async (id: number) => {
+    try {
+      await notificationsApi.delete(id)
+      // Refetch to remove deleted notification
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] })  // Also invalidate bell
+    } catch (err) {
+      console.error('Failed to delete notification:', err)
+    }
+  }
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
+            <p className="text-gray-600">Your recent compliance and system events</p>
+          </div>
+        </div>
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <Loader2 className="w-8 h-8 mx-auto mb-4 text-primary-600 animate-spin" />
+          <p className="text-gray-500">Loading notifications...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
+            <p className="text-gray-600">Your recent compliance and system events</p>
+          </div>
+        </div>
+        <div className="text-center py-12 bg-white rounded-xl border border-red-200 bg-red-50">
+          <Bell className="w-16 h-16 mx-auto mb-4 text-red-300" />
+          <h3 className="text-lg font-medium text-red-900">Failed to load notifications</h3>
+          <p className="text-red-700 mt-1">Please try refreshing the page.</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -67,11 +119,25 @@ export default function Notifications() {
           <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
           <p className="text-gray-600">Your recent compliance and system events</p>
         </div>
-        {/* TODO (help wanted): wire to POST /notifications/read with all unread IDs */}
-        <button className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg border border-gray-200">
-          <Check className="w-4 h-4" />
-          Mark all read
-        </button>
+        {unreadIds.length > 0 && (
+          <button 
+            onClick={handleMarkAllRead}
+            disabled={isMarkingAllRead}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg border border-gray-200 transition-colors"
+          >
+            {isMarkingAllRead ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Marking...
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                Mark all read
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Notification list */}
@@ -83,11 +149,11 @@ export default function Notifications() {
         </div>
       ) : (
         <div className="space-y-2">
-          {notifications.map((n) => (
+          {notifications.map((n: Notification) => (
             <div
               key={n.id}
-              className={`bg-white rounded-xl border p-4 flex items-start gap-4 ${
-                n.is_read ? 'border-gray-200' : 'border-primary-200 bg-primary-50'
+              className={`bg-white rounded-xl border p-4 flex items-start gap-4 transition-colors ${
+                n.is_read ? 'border-gray-200' : `border-primary-200 ${typeColor(n.notification_type)}`
               }`}
             >
               <div
@@ -102,8 +168,12 @@ export default function Notifications() {
                   {new Date(n.created_at).toLocaleString()}
                 </p>
               </div>
-              {/* TODO (help wanted): wire to DELETE /notifications/{id} */}
-              <button className="p-1 text-gray-400 hover:text-red-500 rounded">
+              <button 
+                onClick={() => handleDelete(n.id)}
+                className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
+                aria-label="Delete notification"
+                title="Delete notification"
+              >
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>
