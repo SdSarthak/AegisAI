@@ -41,6 +41,12 @@ def create_webhook(
         **webhook_data,
         user_id=current_user.id,
     )
+    
+    db.add(db_webhook)
+    db.commit()
+    db.refresh(db_webhook)
+    
+    return db_webhook
 
     db.add(db_webhook)
     db.commit()
