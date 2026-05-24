@@ -92,6 +92,17 @@ uvicorn app.main:app --reload
 
 API docs: http://localhost:8000/docs
 
+## Database Migrations
+
+Create migration:
+alembic revision --autogenerate -m "message"
+
+Apply migrations:
+alembic upgrade head
+
+Rollback:
+alembic downgrade -1
+
 ### Frontend
 
 ```bash

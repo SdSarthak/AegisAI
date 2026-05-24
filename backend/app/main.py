@@ -14,9 +14,8 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
-from app.core.database import engine, Base
-from app.api.v1 import api_router, badge
-import app.models  # ensure all ORM models are imported so tables are created
+from app.core.database import engine
+from app.api.v1 import api_router, badge  # ensure all ORM models are imported so tables are created
 
 # -------------------------------------------------------------------
 # Logging Setup
@@ -39,8 +38,7 @@ async def lifespan(app: FastAPI):
     
     try:
         # Initialize database tables during application startup
-        Base.metadata.create_all(bind=engine)
-        logger.info("Database tables initialized.")
+        logger.info("Database migrations should be applied before startup.")
     except Exception:
         logger.exception("Failed to initialize database tables")
         raise 
