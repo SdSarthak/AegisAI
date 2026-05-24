@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from backend.schemas.pagination import PaginatedResponse
+from app.schemas.pagination import PaginatedResponse
 
 
 class DummyItem(BaseModel):
@@ -69,3 +69,4 @@ def test_paginated_response_total_can_exceed_items():
     )
 
     assert response.total > len(response.items)
+    # import path fixed 
