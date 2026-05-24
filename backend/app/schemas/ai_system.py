@@ -42,6 +42,16 @@ class AISystemResponse(BaseModel):
 class RiskClassificationRequest(BaseModel):
     """Questionnaire for EU AI Act risk classification."""
 
+    # Prohibited practices (Article 5) — checked first
+    social_scoring: bool = False
+    # AI used by public authorities to evaluate/classify people based on social behaviour
+    realtime_biometric_public: bool = False
+    # Real-time remote biometric identification in publicly accessible spaces
+    subliminal_manipulation: bool = False
+    # Techniques that manipulate behaviour subliminally causing harm
+    exploits_vulnerable_groups: bool = False
+    # Targets or exploits vulnerabilities of specific groups (age, disability, etc.)
+
     # Basic use case
     use_case_category: str  # "hr_recruitment", "credit_scoring", "healthcare", etc.
 
