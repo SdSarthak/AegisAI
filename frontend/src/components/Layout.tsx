@@ -9,9 +9,10 @@ import {
   FileText,
   LogOut,
   Shield,
+  ShieldCheck,
   ChevronLeft,
   ChevronRight,
-  MessageSquare,
+  MessageSquareText,
 } from 'lucide-react'
 
 import NotificationBell from './NotificationBell'
@@ -23,7 +24,7 @@ const navigation = [
   { name: 'AI Systems', href: '/ai-systems', icon: Bot },
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
-  { name: 'Chatbot', href: '/rag-chat', icon: MessageSquare },
+  { name: 'Chatbot', href: '/rag-chat', icon: MessageSquareText },
 ]
 
 export default function Layout() {

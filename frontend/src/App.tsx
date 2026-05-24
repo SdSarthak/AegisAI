@@ -3,8 +3,10 @@ import {
   Route,
   Navigate,
 } from 'react-router-dom'
-import { useAuthStore } from './stores/authStore'
+
 import { Toaster } from 'react-hot-toast'
+
+import { useAuthStore } from './stores/authStore'
 
 import Layout from './components/Layout'
 
@@ -40,27 +42,11 @@ function App() {
         position="top-right"
         toastOptions={{
           duration: 4000,
-
-          success: {
-            style: {
-              background: '#f0fdf4',
-              color: '#166534',
-              border: '1px solid #bbf7d0',
-            },
-          },
-
-          error: {
-            style: {
-              background: '#fef2f2',
-              color: '#991b1b',
-              border: '1px solid #fecaca',
-            },
-          },
         }}
       />
 
       <Routes>
-        {/* Public Routes */}
+        {/* Public */}
         <Route
           path="/login"
           element={<Login />}
@@ -71,7 +57,7 @@ function App() {
           element={<Register />}
         />
 
-        {/* Protected Routes */}
+        {/* Protected */}
         <Route
           path="/"
           element={
@@ -83,6 +69,11 @@ function App() {
           <Route
             index
             element={<Dashboard />}
+          />
+
+          <Route
+            path="analytics"
+            element={<Analytics />}
           />
 
           <Route
@@ -109,14 +100,9 @@ function App() {
             path="rag-chat"
             element={<RagChat />}
           />
-
-          <Route
-            path="analytics"
-            element={<Analytics />}
-          />
         </Route>
 
-        {/* 404 Page */}
+        {/* 404 */}
         <Route
           path="*"
           element={<NotFound />}

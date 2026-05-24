@@ -1,4 +1,12 @@
 import {
+  BarChart2,
+  TrendingUp,
+  AlertTriangle,
+  ShieldCheck,
+  Activity,
+} from 'lucide-react'
+
+import {
   LineChart,
   Line,
   BarChart,
@@ -8,14 +16,8 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Legend,
 } from 'recharts'
-
-import {
-  TrendingUp,
-  Shield,
-  AlertTriangle,
-  Activity,
-} from 'lucide-react'
 
 const complianceData = [
   { month: 'Jan', score: 65 },
@@ -34,38 +36,38 @@ const riskData = [
   { name: 'System E', risk: 20 },
 ]
 
-export default function Analytics() {
-  const stats = [
-    {
-      title: 'Total Systems',
-      value: '12',
-      icon: Activity,
-      color: 'text-blue-500',
-      bg: 'bg-blue-500/10',
-    },
-    {
-      title: 'Avg Score',
-      value: '84%',
-      icon: TrendingUp,
-      color: 'text-green-500',
-      bg: 'bg-green-500/10',
-    },
-    {
-      title: 'Compliant',
-      value: '10',
-      icon: Shield,
-      color: 'text-emerald-500',
-      bg: 'bg-emerald-500/10',
-    },
-    {
-      title: 'High Risk',
-      value: '2',
-      icon: AlertTriangle,
-      color: 'text-red-500',
-      bg: 'bg-red-500/10',
-    },
-  ]
+const summaryStats = [
+  {
+    label: 'Total Systems',
+    value: '12',
+    icon: Activity,
+    color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-50 dark:bg-blue-900/20',
+  },
+  {
+    label: 'Avg Score',
+    value: '84%',
+    icon: TrendingUp,
+    color: 'text-green-600 dark:text-green-400',
+    bg: 'bg-green-50 dark:bg-green-900/20',
+  },
+  {
+    label: 'Compliant',
+    value: '10',
+    icon: ShieldCheck,
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bg: 'bg-emerald-50 dark:bg-emerald-900/20',
+  },
+  {
+    label: 'High Risk',
+    value: '2',
+    icon: AlertTriangle,
+    color: 'text-red-600 dark:text-red-400',
+    bg: 'bg-red-50 dark:bg-red-900/20',
+  },
+]
 
+export default function Analytics() {
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -79,47 +81,44 @@ export default function Analytics() {
         </p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-        {stats.map((stat) => (
+      {/* Summary Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        {summaryStats.map((stat) => (
           <div
-            key={stat.title}
+            key={stat.label}
             className="
               bg-white dark:bg-gray-800
               rounded-xl
               border border-gray-200 dark:border-gray-700
               p-6
+              flex items-center gap-4
+              shadow-sm
               transition-colors duration-200
             "
           >
-            <div className="flex items-center gap-4">
-              <div
-                className={`
-                  p-4 rounded-xl
-                  ${stat.bg}
-                `}
-              >
-                <stat.icon
-                  className={`w-6 h-6 ${stat.color}`}
-                />
-              </div>
+            <div
+              className={`shrink-0 p-3 rounded-lg ${stat.bg}`}
+            >
+              <stat.icon
+                className={`w-6 h-6 ${stat.color}`}
+              />
+            </div>
 
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {stat.title}
-                </p>
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
+                {stat.label}
+              </p>
 
-                <p className="text-3xl font-bold text-gray-900 dark:text-white mt-1">
-                  {stat.value}
-                </p>
-              </div>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                {stat.value}
+              </p>
             </div>
           </div>
         ))}
       </div>
 
       {/* Charts */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Line Chart */}
         <div
           className="
@@ -138,42 +137,64 @@ export default function Analytics() {
             </h2>
           </div>
 
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={complianceData}>
+          <div className="h-72 w-full">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <LineChart
+                data={complianceData}
+                margin={{
+                  top: 5,
+                  right: 20,
+                  bottom: 5,
+                  left: 0,
+                }}
+              >
                 <CartesianGrid
                   strokeDasharray="3 3"
+                  vertical={false}
                   stroke="#374151"
                 />
 
                 <XAxis
                   dataKey="month"
-                  stroke="#9CA3AF"
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
                 />
 
-                <YAxis stroke="#9CA3AF" />
+                <YAxis
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
 
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1F2937',
+                    backgroundColor: '#1f2937',
+                    borderRadius: '8px',
                     border: '1px solid #374151',
-                    borderRadius: '12px',
                     color: '#fff',
+                  }}
+                />
+
+                <Legend
+                  iconType="circle"
+                  wrapperStyle={{
+                    fontSize: '12px',
                   }}
                 />
 
                 <Line
                   type="monotone"
                   dataKey="score"
+                  name="Avg Score"
                   stroke="#0ea5e9"
                   strokeWidth={3}
-                  dot={{
-                    r: 5,
-                    fill: '#0ea5e9',
-                  }}
-                  activeDot={{
-                    r: 7,
-                  }}
+                  activeDot={{ r: 6 }}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -191,45 +212,104 @@ export default function Analytics() {
           "
         >
           <div className="flex items-center gap-2 mb-6">
-            <Activity className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+            <BarChart2 className="w-5 h-5 text-primary-600 dark:text-primary-400" />
 
             <h2 className="font-semibold text-gray-900 dark:text-white">
               Risk Distribution by System
             </h2>
           </div>
 
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={riskData}>
+          <div className="h-72 w-full">
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <BarChart
+                data={riskData}
+                margin={{
+                  top: 5,
+                  right: 20,
+                  bottom: 5,
+                  left: 0,
+                }}
+              >
                 <CartesianGrid
                   strokeDasharray="3 3"
+                  vertical={false}
                   stroke="#374151"
                 />
 
                 <XAxis
                   dataKey="name"
-                  stroke="#9CA3AF"
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
                 />
 
-                <YAxis stroke="#9CA3AF" />
+                <YAxis
+                  stroke="#9ca3af"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
 
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: '#1F2937',
+                    backgroundColor: '#1f2937',
+                    borderRadius: '8px',
                     border: '1px solid #374151',
-                    borderRadius: '12px',
                     color: '#fff',
+                  }}
+                  cursor={{ fill: '#374151' }}
+                />
+
+                <Legend
+                  iconType="circle"
+                  wrapperStyle={{
+                    fontSize: '12px',
                   }}
                 />
 
                 <Bar
                   dataKey="risk"
+                  name="Risk Score"
                   fill="#f43f5e"
-                  radius={[8, 8, 0, 0]}
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={40}
                 />
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </div>
+      </div>
+
+      {/* Extra Risk Section */}
+      <div
+        className="
+          bg-white dark:bg-gray-900
+          rounded-xl
+          border border-gray-200 dark:border-gray-700
+          p-6
+        "
+      >
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          Compliance Risk Distribution
+        </h2>
+
+        <div
+          className="
+            h-64
+            flex items-center justify-center
+            bg-gray-50 dark:bg-gray-800
+            rounded-lg
+            border border-dashed
+            border-gray-300 dark:border-gray-600
+          "
+        >
+          <p className="text-gray-500 dark:text-gray-400">
+            Risk analytics chart
+          </p>
         </div>
       </div>
     </div>

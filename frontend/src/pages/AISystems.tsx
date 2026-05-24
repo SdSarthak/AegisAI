@@ -1,209 +1,57 @@
 import { useState } from 'react'
+
 import {
   useQuery,
-  useMutation,
-  useQueryClient,
 } from '@tanstack/react-query'
 
-import { aiSystemsApi } from '../services/api'
-
 import {
-  Bot,
-  Plus,
-  Trash2,
-  Edit,
   Search,
-  Filter,
-  ArrowUpDown,
-  X,
+  Plus,
+  Edit,
+  Trash2,
+  Bot,
 } from 'lucide-react'
+
+import { aiSystemsApi } from '../services/api'
 
 interface AISystem {
   id: number
   name: string
-  description: string | null
-  use_case: string | null
-  sector: string | null
-  risk_level: string | null
-  compliance_status: string
-  compliance_score: number
+  description?: string
+  risk_level?: string
+  compliance_status?: string
 }
 
 export default function AISystems() {
-  const queryClient = useQueryClient()
-
-  const [showModal, setShowModal] =
-    useState(false)
-
-  const [formData, setFormData] =
-    useState({
-      name: '',
-      description: '',
-      use_case: '',
-      sector: '',
-    })
-
-  const [searchTerm, setSearchTerm] =
+  const [searchQuery, setSearchQuery] =
     useState('')
 
-  const [riskFilter, setRiskFilter] =
-    useState('')
-
-  const [
-    complianceFilter,
-    setComplianceFilter,
-  ] = useState('')
-
-  const [sortBy, setSortBy] =
+  const [sortBy] =
     useState('created_at')
 
-  const [order, setOrder] =
-    useState('desc')
-
   const {
-    data: systems = [],
+    data: systemsData,
     isLoading,
   } = useQuery({
-    queryKey: ['ai-systems', sortBy, order],
+    queryKey: ['ai-systems', sortBy],
 
     queryFn: () =>
       aiSystemsApi.list({
         sort_by: sortBy,
-        order,
+        order: 'desc',
       }),
   })
 
-  const createMutation = useMutation({
-    mutationFn: aiSystemsApi.create,
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['ai-systems'],
-      })
-
-      setShowModal(false)
-
-      setFormData({
-        name: '',
-        description: '',
-        use_case: '',
-        sector: '',
-      })
-    },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: aiSystemsApi.delete,
-
-    onSuccess: () => {
-      queryClient.invalidateQueries({
-        queryKey: ['ai-systems'],
-      })
-    },
-  })
+  const systems = Array.isArray(systemsData)
+    ? systemsData
+    : systemsData?.items || []
 
   const filteredSystems = systems.filter(
-    (system: AISystem) => {
-      const matchesSearch =
-        system.name
-          .toLowerCase()
-          .includes(
-            searchTerm.toLowerCase()
-          ) ||
-        (
-          system.description
-            ?.toLowerCase()
-            .includes(
-              searchTerm.toLowerCase()
-            ) ?? false
-        )
-
-      const matchesRisk =
-        !riskFilter ||
-        system.risk_level === riskFilter
-
-      const matchesCompliance =
-        !complianceFilter ||
-        system.compliance_status ===
-          complianceFilter
-
-      return (
-        matchesSearch &&
-        matchesRisk &&
-        matchesCompliance
-      )
-    }
+    (system: AISystem) =>
+      system.name
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase())
   )
-
-  const handleSubmit = (
-    e: React.FormEvent
-  ) => {
-    e.preventDefault()
-
-    createMutation.mutate(formData)
-  }
-
-  const sectors = [
-    'HR Tech',
-    'Finance',
-    'Healthcare',
-    'Education',
-    'Legal',
-    'Marketing',
-    'Other',
-  ]
-
-  const useCases = [
-    'CV Screening',
-    'Candidate Ranking',
-    'Performance Evaluation',
-    'Credit Scoring',
-    'Risk Assessment',
-    'Customer Service',
-    'Content Generation',
-    'Other',
-  ]
-
-  const getRiskBadge = (
-    riskLevel: string | null
-  ) => {
-    switch (riskLevel) {
-      case 'unacceptable':
-        return {
-          label: 'Unacceptable',
-          className:
-            'bg-red-100 text-red-700',
-        }
-
-      case 'high':
-        return {
-          label: 'High',
-          className:
-            'bg-orange-100 text-orange-700',
-        }
-
-      case 'limited':
-        return {
-          label: 'Limited',
-          className:
-            'bg-yellow-100 text-yellow-700',
-        }
-
-      case 'minimal':
-        return {
-          label: 'Minimal',
-          className:
-            'bg-green-100 text-green-700',
-        }
-
-      default:
-        return {
-          label: 'Unknown',
-          className:
-            'bg-gray-100 text-gray-700',
-        }
-    }
-  }
 
   return (
     <div className="space-y-8">
@@ -221,9 +69,6 @@ export default function AISystems() {
         </div>
 
         <button
-          onClick={() =>
-            setShowModal(true)
-          }
           className="
             flex items-center gap-2
             px-4 py-2
@@ -235,198 +80,52 @@ export default function AISystems() {
           "
         >
           <Plus className="w-5 h-5" />
-
           Add AI System
         </button>
       </div>
 
-      {/* Search & Filters */}
+      {/* Search */}
       <div
         className="
-          flex flex-col md:flex-row gap-4
           bg-white dark:bg-gray-800
-          p-4
           rounded-xl
           border border-gray-200 dark:border-gray-700
-          shadow-sm
-          transition-colors duration-200
+          p-4
         "
       >
-        {/* Search */}
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+        <div className="relative">
+          <Search
+            className="
+              absolute left-3 top-1/2
+              -translate-y-1/2
+              w-5 h-5
+              text-gray-400
+            "
+          />
 
           <input
             type="text"
             placeholder="Search AI systems..."
-            value={searchTerm}
+            value={searchQuery}
             onChange={(e) =>
-              setSearchTerm(
-                e.target.value
-              )
+              setSearchQuery(e.target.value)
             }
             className="
-              w-full
-              pl-10 pr-4 py-2
-              border border-gray-300 dark:border-gray-600
+              w-full pl-10 pr-4 py-3
               bg-white dark:bg-gray-900
-              text-gray-900 dark:text-white
+              border border-gray-300 dark:border-gray-700
               rounded-lg
-              focus:ring-2 focus:ring-primary-500
-              outline-none
+              text-gray-900 dark:text-white
+              placeholder:text-gray-400
+              focus:outline-none
+              focus:ring-2
+              focus:ring-primary-500
             "
           />
         </div>
-
-        {/* Filters */}
-        <div className="flex flex-wrap gap-3">
-          <div className="relative">
-            <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-
-            <select
-              value={riskFilter}
-              onChange={(e) =>
-                setRiskFilter(
-                  e.target.value
-                )
-              }
-              className="
-                pl-9 pr-4 py-2
-                bg-white dark:bg-gray-900
-                text-gray-900 dark:text-white
-                border border-gray-300 dark:border-gray-600
-                rounded-lg
-              "
-            >
-              <option value="">
-                All Risk Levels
-              </option>
-
-              <option value="unacceptable">
-                Unacceptable Risk
-              </option>
-
-              <option value="high">
-                High Risk
-              </option>
-
-              <option value="limited">
-                Limited Risk
-              </option>
-
-              <option value="minimal">
-                Minimal Risk
-              </option>
-            </select>
-          </div>
-
-          <div className="relative">
-            <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-
-            <select
-              value={complianceFilter}
-              onChange={(e) =>
-                setComplianceFilter(
-                  e.target.value
-                )
-              }
-              className="
-                pl-9 pr-4 py-2
-                bg-white dark:bg-gray-900
-                text-gray-900 dark:text-white
-                border border-gray-300 dark:border-gray-600
-                rounded-lg
-              "
-            >
-              <option value="">
-                All Statuses
-              </option>
-
-              <option value="not_started">
-                Not Started
-              </option>
-
-              <option value="in_progress">
-                In Progress
-              </option>
-
-              <option value="under_review">
-                Under Review
-              </option>
-
-              <option value="compliant">
-                Compliant
-              </option>
-
-              <option value="non_compliant">
-                Non Compliant
-              </option>
-            </select>
-          </div>
-
-          <div className="relative">
-            <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-
-            <select
-              value={sortBy}
-              onChange={(e) =>
-                setSortBy(
-                  e.target.value
-                )
-              }
-              className="
-                pl-9 pr-4 py-2
-                bg-white dark:bg-gray-900
-                text-gray-900 dark:text-white
-                border border-gray-300 dark:border-gray-600
-                rounded-lg
-              "
-            >
-              <option value="created_at">
-                Sort by Date
-              </option>
-
-              <option value="name">
-                Sort by Name
-              </option>
-
-              <option value="risk_level">
-                Sort by Risk
-              </option>
-
-              <option value="compliance_score">
-                Sort by Score
-              </option>
-            </select>
-          </div>
-
-          {(searchTerm ||
-            riskFilter ||
-            complianceFilter) && (
-            <button
-              onClick={() => {
-                setSearchTerm('')
-                setRiskFilter('')
-                setComplianceFilter('')
-              }}
-              className="
-                flex items-center gap-1
-                px-3 py-2
-                text-gray-500 dark:text-gray-400
-                hover:text-red-600
-                hover:bg-red-50 dark:hover:bg-red-900/20
-                rounded-lg
-              "
-            >
-              <X className="w-4 h-4" />
-
-              Clear
-            </button>
-          )}
-        </div>
       </div>
 
-      {/* Loading */}
+      {/* Content */}
       {isLoading ? (
         <div className="text-center py-12 text-gray-500 dark:text-gray-400">
           Loading...
@@ -434,22 +133,21 @@ export default function AISystems() {
       ) : filteredSystems.length === 0 ? (
         <div
           className="
-            text-center py-12
+            text-center py-16
             bg-white dark:bg-gray-800
             rounded-xl
             border border-gray-200 dark:border-gray-700
-            transition-colors duration-200
           "
         >
-          <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
+          <Bot className="w-14 h-14 mx-auto text-gray-300 dark:text-gray-600 mb-4" />
 
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
-            No AI systems found
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+            No AI systems yet
           </h3>
 
           <p className="text-gray-500 dark:text-gray-400 mt-1">
             Add your first AI system to
-            start tracking compliance.
+            start tracking compliance
           </p>
         </div>
       ) : (
@@ -467,134 +165,67 @@ export default function AISystems() {
                 "
               >
                 <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-4">
-                    <div className="p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg">
-                      <Bot className="w-6 h-6 text-primary-600 dark:text-primary-400" />
-                    </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      {system.name}
+                    </h3>
 
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">
-                        {system.name}
-                      </h3>
+                    <p className="text-gray-600 dark:text-gray-400 mt-1">
+                      {system.description ||
+                        'No description available'}
+                    </p>
 
-                      {system.description && (
-                        <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">
-                          {
-                            system.description
-                          }
-                        </p>
+                    <div className="flex items-center gap-2 mt-3">
+                      {system.risk_level && (
+                        <span
+                          className="
+                            text-xs px-2 py-1
+                            rounded-full
+                            bg-red-100
+                            text-red-700
+                          "
+                        >
+                          {system.risk_level}
+                        </span>
                       )}
 
-                      <div className="flex items-center gap-3 mt-2 flex-wrap">
-                        {system.sector && (
-                          <span
-                            className="
-                              text-xs
-                              bg-gray-100 dark:bg-gray-700
-                              text-gray-600 dark:text-gray-300
-                              px-2 py-1 rounded
-                            "
-                          >
-                            {system.sector}
-                          </span>
-                        )}
-
-                        {system.use_case && (
-                          <span
-                            className="
-                              text-xs
-                              bg-gray-100 dark:bg-gray-700
-                              text-gray-600 dark:text-gray-300
-                              px-2 py-1 rounded
-                            "
-                          >
-                            {
-                              system.use_case
-                            }
-                          </span>
-                        )}
-
-                        {system.risk_level && (
-                          <span
-                            className={`text-xs px-2 py-1 rounded ${
-                              getRiskBadge(
-                                system.risk_level
-                              ).className
-                            }`}
-                          >
-                            {
-                              getRiskBadge(
-                                system.risk_level
-                              ).label
-                            }
-                          </span>
-                        )}
-                      </div>
+                      {system.compliance_status && (
+                        <span
+                          className="
+                            text-xs px-2 py-1
+                            rounded-full
+                            bg-blue-100
+                            text-blue-700
+                          "
+                        >
+                          {
+                            system.compliance_status
+                          }
+                        </span>
+                      )}
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
                     <button
                       className="
-                        p-2
-                        text-gray-400 dark:text-gray-300
-                        hover:text-blue-600
-                        rounded-lg
-                        hover:bg-blue-50 dark:hover:bg-blue-900/20
+                        p-2 rounded-lg
+                        hover:bg-gray-100
+                        dark:hover:bg-gray-700
                       "
                     >
-                      <Edit className="w-5 h-5" />
+                      <Edit className="w-5 h-5 text-gray-500 dark:text-gray-300" />
                     </button>
 
                     <button
-                      onClick={() =>
-                        deleteMutation.mutate(
-                          system.id
-                        )
-                      }
                       className="
-                        p-2
-                        text-gray-400 dark:text-gray-300
-                        hover:text-red-600
-                        rounded-lg
-                        hover:bg-red-50 dark:hover:bg-red-900/20
+                        p-2 rounded-lg
+                        hover:bg-red-100
+                        dark:hover:bg-red-900/20
                       "
                     >
-                      <Trash2 className="w-5 h-5" />
+                      <Trash2 className="w-5 h-5 text-red-500" />
                     </button>
-                  </div>
-                </div>
-
-                {/* Compliance */}
-                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-600 dark:text-gray-400">
-                      Compliance Score
-                    </span>
-
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {
-                        system.compliance_score
-                      }
-                      %
-                    </span>
-                  </div>
-
-                  <div className="mt-2 h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${
-                        system.compliance_score >=
-                        80
-                          ? 'bg-green-500'
-                          : system.compliance_score >=
-                            50
-                          ? 'bg-yellow-500'
-                          : 'bg-red-500'
-                      }`}
-                      style={{
-                        width: `${system.compliance_score}%`,
-                      }}
-                    />
                   </div>
                 </div>
               </div>

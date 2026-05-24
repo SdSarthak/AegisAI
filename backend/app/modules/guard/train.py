@@ -12,7 +12,6 @@ from app.modules.guard.training.data.split import train_validation_split
 from app.modules.guard.training.pipelines.train_pipeline import run_training_pipeline
 
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
 HF_DATASET_NAME = "xTRam1/safe-guard-prompt-injection"
@@ -99,4 +98,7 @@ def main():
 
 
 if __name__ == "__main__":
+    from app.core.logging import configure_logging
+    
+    configure_logging()
     main()

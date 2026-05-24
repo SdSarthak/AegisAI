@@ -10,7 +10,7 @@
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://react.dev)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-[Getting Started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [API Reference](docs/api-reference.md) · [Guard Module](docs/guard-module.md) · [RAG Module](docs/rag-module.md) · [Regulations](docs/regulations.md) · [Report a Bug](https://github.com/SdSarthak/AegisAI/issues)
+[Getting Started](https://github.com/SdSarthak/AegisAI/blob/main/docs/getting-started.md)· [Architecture](https://github.com/SdSarthak/AegisAI/blob/main/docs/architecture.md) · [API Reference](https://github.com/SdSarthak/AegisAI/blob/main/docs/api-reference.md) · [Guard Module](https://github.com/SdSarthak/AegisAI/blob/main/docs/guard-module.md) · [RAG Module](https://github.com/SdSarthak/AegisAI/blob/main/docs/rag-module.md) · [Regulations](https://github.com/SdSarthak/AegisAI/blob/main/docs/regulations.md) · [Report a Bug](https://github.com/SdSarthak/AegisAI/issues)
 
 </div>
 
@@ -93,7 +93,7 @@ LLM_BASE_URL=http://localhost:11434/v1
 LLM_MODEL=llama3.2
 ```
 
-Then `docker compose up -d`. See [Getting Started](docs/getting-started.md) for all provider options.
+Then `docker compose up -d`. See [Getting Started](https://github.com/SdSarthak/AegisAI/blob/main/docs/getting-started.md) for all provider options.
 
 ---
 

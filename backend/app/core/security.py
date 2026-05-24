@@ -8,11 +8,11 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.context import user_id_ctx
 from app.core.database import get_db
 
 if TYPE_CHECKING:
     from app.models.user import User  # Prevent circular imports during runtime
-
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_PREFIX}/auth/login")
@@ -95,5 +95,9 @@ async def get_current_user(
         # Standardized to 401 generic failure instead of a distinct "User not found" 401
         # to prevent user enumeration attacks via valid-but-orphaned tokens.
         raise _get_credentials_exception()
+
+    # Bind to the request context so every downstream log line (and the
+    # access log emitted by RequestContextMiddleware) carries user_id.
+    user_id_ctx.set(user.id)
 
     return user

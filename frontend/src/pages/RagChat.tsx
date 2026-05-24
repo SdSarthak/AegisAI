@@ -20,6 +20,7 @@ interface RagSource {
 interface RagAnswer {
   answer: string
   sources: RagSource[]
+  answer_id?: string
 }
 
 function buildAnswerExport(answer: RagAnswer): string {
@@ -37,18 +38,16 @@ function buildAnswerExport(answer: RagAnswer): string {
 
 export default function RagChat() {
   const [question, setQuestion] = useState('')
-  const [submittedQuestion, setSubmittedQuestion] =
-    useState('')
+  const [submittedQuestion, setSubmittedQuestion] = useState('')
+  const [answer, setAnswer] = useState<RagAnswer | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+const [feedbackVote, setFeedbackVote] = useState<
+  'up' | 'down' | null
+>(null)
 
-  const [answer, setAnswer] =
-    useState<RagAnswer | null>(null)
-
-  const [isLoading, setIsLoading] =
-    useState(false)
-
-  const [error, setError] =
-    useState<string | null>(null)
-
+const [feedbackLoading, setFeedbackLoading] =
+  useState(false)
   const handleAsk = async (
     e: React.FormEvent
   ) => {
@@ -102,6 +101,18 @@ export default function RagChat() {
       setIsLoading(false)
     }
   }
+  const handleFeedback = async (vote: 'up' | 'down') => {
+  if (!answer?.answer_id || feedbackVote) return
+  setFeedbackLoading(true)
+  try {
+    await ragApi.feedback({ answer_id: answer.answer_id, vote })
+    setFeedbackVote(vote)
+  } catch {
+    // silently fail
+  } finally {
+    setFeedbackLoading(false)
+  }
+}
 
   return (
     <div
@@ -314,14 +325,39 @@ export default function RagChat() {
                             />
                           </div>
 
-                          <p className="text-gray-700 dark:text-gray-300 leading-7">
-                            {answer.answer}
-                          </p>
+                        <p className="text-gray-700 leading-7">{answer.answer}</p>
+
+                        <div className="border-t border-gray-100 pt-5">
+                          <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                            Source citations
+                          </h3>
+
+                          <div className="space-y-3">
+                            {answer.sources.map((source) => (
+                              <div
+                                key={source.title}
+                                className="bg-gray-50 border border-gray-200 rounded-lg p-4"
+                              >
+                                <div className="flex items-center gap-2 mb-2">
+                                  <FileText className="w-4 h-4 text-primary-600" />
+
+                                  <h4 className="text-sm font-medium text-gray-900">
+                                    {source.title}
+                                  </h4>
+                                </div>
+
+                                <p className="text-sm text-gray-600">
+                                  {source.excerpt}
+                                </p>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
-                )}
+                </div>
+              )}
             </div>
           )}
         </div>
