@@ -7,17 +7,20 @@
     <meta name="color-scheme" content="light dark" />
     <title>EU AI Act Compliance Tool</title>
 
+    <!-- Apply theme before React loads -->
     <script>
       (() => {
         try {
           const theme = localStorage.getItem("theme");
 
-          if (
-            theme === "dark" ||
-            (!theme &&
-              window.matchMedia("(prefers-color-scheme: dark)").matches)
-          ) {
+          const prefersDark = window.matchMedia(
+            '(prefers-color-scheme: dark)'
+          ).matches;
+
+          if (theme === "dark" || (!theme && prefersDark)) {
             document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
           }
         } catch (e) {
           console.error("Theme initialization failed:", e);
@@ -25,28 +28,28 @@
       })();
     </script>
 
-<style>
-  html {
-    background: #f9fafb;
-    color-scheme: light;
-  }
+    <style>
+      html {
+        background: #f9fafb;
+        color-scheme: light;
+      }
 
-  html.dark {
-    background: #111827;
-    color-scheme: dark;
-  }
+      html.dark {
+        background: #111827;
+        color-scheme: dark;
+      }
 
-  body {
-    margin: 0;
-    background: #f9fafb;
-    color: #111827;
-  }
+      body {
+        margin: 0;
+        background: #f9fafb;
+        color: #111827;
+      }
 
-  html.dark body {
-    background: #111827;
-    color: #f3f4f6;
-  }
-</style>
+      html.dark body {
+        background: #111827;
+        color: #f3f4f6;
+      }
+    </style>
   </head>
 
   <body>
