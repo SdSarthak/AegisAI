@@ -27,4 +27,5 @@ __all__ = [
     "WebhookConfig",
 ]
 from app.models.integration import UserIntegration
-__all__ = ["User", "AISystem", "RiskAssessment", "Document", "RAGFeedback", "AISystemAuditLog", "GuardScanLog", "WebhookConfig", "Notification", "ComplianceSnapshot"]
+
+__all__ = ["User", "AISystem", "RiskAssessment", "Document", "RAGFeedback", "AISystemAuditLog", "GuardScanLog", "WebhookConfig", "Notification", "ComplianceSnapshot", "UserIntegration"]
