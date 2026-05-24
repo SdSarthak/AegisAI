@@ -1,15 +1,11 @@
 import { useState } from 'react'
 import {
-  AlertCircle,
   Bot,
-  FileText,
   Loader2,
-  Send,
   Sparkles,
   User,
 } from 'lucide-react'
 
-import CopyButton from '../components/CopyButton'
 import { ragApi } from '../services/api'
 
 interface RagSource {
@@ -23,6 +19,7 @@ interface RagAnswer {
   answer_id?: string
 }
 
+<<<<<<< HEAD
 interface ApiError {
   response?: {
     status?: number
@@ -49,14 +46,14 @@ function buildAnswerExport(answer: RagAnswer): string {
   ].join('\n')
 }
 
+=======
+>>>>>>> b04b409 (fix: resolve lint issues in RagChat)
 export default function RagChat() {
   const [question, setQuestion] = useState('')
   const [submittedQuestion, setSubmittedQuestion] = useState('')
   const [answer, setAnswer] = useState<RagAnswer | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [feedbackVote, setFeedbackVote] = useState<'up' | 'down' | null>(null)
-  const [feedbackLoading, setFeedbackLoading] = useState(false)
 
   const handleAsk = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -77,7 +74,6 @@ export default function RagChat() {
     setAnswer(null)
 
     try {
-      // ✅ REAL API CALL
       const data = await ragApi.query(trimmedQuestion)
 
       setAnswer({
@@ -122,25 +118,6 @@ export default function RagChat() {
       }
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  const handleFeedback = async (vote: 'up' | 'down') => {
-    if (!answer?.answer_id || feedbackVote) return
-
-    setFeedbackLoading(true)
-
-    try {
-      await ragApi.feedback({
-        answer_id: answer.answer_id,
-        vote,
-      })
-
-      setFeedbackVote(vote)
-    } catch {
-      // silently fail
-    } finally {
-      setFeedbackLoading(false)
     }
   }
 
@@ -233,10 +210,74 @@ export default function RagChat() {
                   </div>
                 </div>
               )}
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4">
+                  {error}
+                </div>
+              )}
+
+              {answer && (
+                <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm">
+                  <div className="prose max-w-none">
+                    <p className="text-gray-800 whitespace-pre-line">
+                      {answer.answer}
+                    </p>
+                  </div>
+
+                  {answer.sources.length > 0 && (
+                    <div className="mt-6">
+                      <h3 className="text-sm font-semibold text-gray-900 mb-3">
+                        Sources
+                      </h3>
+
+                      <div className="space-y-3">
+                        {answer.sources.map((source, index) => (
+                          <div
+                            key={index}
+                            className="border border-gray-200 rounded-lg p-3 bg-gray-50"
+                          >
+                            <p className="font-medium text-sm text-gray-900">
+                              {source.title}
+                            </p>
+
+                            <p className="text-sm text-gray-600 mt-1">
+                              {source.excerpt}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      <form
+        onSubmit={handleAsk}
+        className="border-t border-gray-200 bg-white p-4"
+      >
+        <div className="max-w-4xl mx-auto flex items-center gap-3">
+          <input
+            type="text"
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="Ask a compliance question..."
+            className="flex-1 rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="bg-primary-600 text-white px-5 py-3 rounded-xl hover:bg-primary-700 disabled:opacity-50"
+          >
+            Ask
+          </button>
+        </div>
+      </form>
     </div>
   )
 }
