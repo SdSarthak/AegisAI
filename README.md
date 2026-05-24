@@ -13,7 +13,9 @@
 [Getting Started](https://github.com/SdSarthak/AegisAI/blob/main/docs/getting-started.md)· [Architecture](https://github.com/SdSarthak/AegisAI/blob/main/docs/architecture.md) · [API Reference](https://github.com/SdSarthak/AegisAI/blob/main/docs/api-reference.md) · [Guard Module](https://github.com/SdSarthak/AegisAI/blob/main/docs/guard-module.md) · [RAG Module](https://github.com/SdSarthak/AegisAI/blob/main/docs/rag-module.md) · [Regulations](https://github.com/SdSarthak/AegisAI/blob/main/docs/regulations.md) · [Report a Bug](https://github.com/SdSarthak/AegisAI/issues)
 
 </div>
+## Live Preview
 
+🔗 https://aegis-ai-sigma-seven.vercel.app
 ---
 
 ## What is AegisAI?
