@@ -29,7 +29,7 @@ class LLMGuard:
         Initialize the guard with all defense layers.
 
         The classifier automatically loads the fine-tuned model trained by the notebook
-        if available, otherwise falls back to pre-trained DistilBERT.
+        if available, otherwise falls back to deterministic heuristics.
 
         Args:
             classifier_model_path: Path to fine-tuned classifier model.
@@ -42,7 +42,7 @@ class LLMGuard:
         self.regex_filter = RegexFilter()
         logger.info("✓ Regex filter initialized")
 
-        # Layer 2: ML intent classifier (loads trained model or pre-trained fallback)
+        # Layer 2: Intent classifier (loads trained model or deterministic fallback)
         if classifier_model_path is None:
             classifier_model_path = config.get_trained_model_path()
 
