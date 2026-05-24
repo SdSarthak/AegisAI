@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
@@ -28,9 +28,15 @@ export default function Documents() {
   const [searchQuery, setSearchQuery] = useState('')
   const [filterType, setFilterType] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
+  useEffect(() => {
+  setPage(1)
+}, [searchQuery, filterType, filterStatus])
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
   const [copiedDocId, setCopiedDocId] = useState<number | null>(null)
+  const LIMIT = 10
+const [page, setPage] = useState(1)
+const [total, setTotal] = useState(0)
 
   const handleCopy = async (docId: number, content: string) => {
     try {
@@ -46,11 +52,16 @@ export default function Documents() {
     }
   }
 
-  const { data: documentsData, isLoading } = useQuery({
-    queryKey: ['documents'],
-    queryFn: documentsApi.list,
-  })
-  const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
+ const { data: documentsData, isLoading } = useQuery({
+  queryKey: ['documents', page],
+  queryFn: () =>
+    documentsApi.list({ skip: (page - 1) * LIMIT, limit: LIMIT }),
+})
+const documents = Array.isArray(documentsData)
+  ? documentsData
+  : (documentsData?.items ?? [])
+const apiTotal = documentsData?.total ?? documents.length
+if (apiTotal !== total) setTotal(apiTotal)
   const filteredDocuments = documents.filter((doc: Document) => {
   const matchesSearch =
     doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -354,7 +365,31 @@ export default function Documents() {
           ))}
         </div>
       ))}
-
+    {/* Pagination Controls */}
+{!isLoading && documents.length > 0 && (
+  <div className="flex items-center justify-between px-2 py-4">
+    <p className="text-sm text-gray-500">
+      Page {page} of {Math.max(1, Math.ceil(total / LIMIT))}
+      &nbsp;·&nbsp; {total} total document{total !== 1 ? 's' : ''}
+    </p>
+    <div className="flex items-center gap-2">
+      <button
+        onClick={() => setPage((p) => Math.max(1, p - 1))}
+        disabled={page === 1}
+        className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        ← Prev
+      </button>
+      <button
+        onClick={() => setPage((p) => Math.min(Math.ceil(total / LIMIT), p + 1))}
+        disabled={page >= Math.ceil(total / LIMIT)}
+        className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        Next →
+      </button>
+    </div>
+  </div>
+)}
 
       {/* Delete Confirmation Modal */}
       {documentToDelete && (
