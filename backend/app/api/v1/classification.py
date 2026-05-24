@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.encryption import decrypt
 from app.models.user import User
 from app.models.integration import UserIntegration, IntegrationType
 from app.modules.integrations.jira_client import JiraClient
@@ -360,7 +361,7 @@ def classify_ai_system(
 
 
 @router.post("/classify/{system_id}", response_model=RiskClassificationResponse)
-async def classify_and_save(
+def classify_and_save(
     system_id: int,
     data: RiskClassificationRequest,
     db: Session = Depends(get_db),
@@ -398,9 +399,9 @@ async def classify_and_save(
     # Auto-create tickets if HIGH or UNACCEPTABLE
     if result.risk_level in (RiskLevel.HIGH, RiskLevel.UNACCEPTABLE):
         gaps = result.requirements
-        integrations = db.query(UserIntegration).filter_by(user_id=current_user.id).all()
+        integrations_list = db.query(UserIntegration).filter_by(user_id=current_user.id).all()
 
-        for integration in integrations:
+        for integration in integrations_list:
             for gap in gaps:
                 title = f"[AegisAI] {system.name}: {gap[:80]}"
                 description = (
@@ -410,20 +411,21 @@ async def classify_and_save(
                     f"EU AI Act Reference: See AegisAI dashboard for full details."
                 )
                 try:
+                    import asyncio
                     if integration.integration_type == IntegrationType.jira:
                         client = JiraClient(
                             base_url=integration.base_url,
                             email=integration.email,
-                            api_token=integration.api_token,
+                            api_token=decrypt(integration.api_token),
                             project_key=integration.project_key,
                         )
-                        await client.create_issue(title, description)
+                        asyncio.run(client.create_issue(title, description))
                     elif integration.integration_type == IntegrationType.linear:
                         client = LinearClient(
-                            api_key=integration.api_token,
+                            api_key=decrypt(integration.api_token),
                             team_id=integration.project_key,
                         )
-                        await client.create_issue(title, description)
+                        asyncio.run(client.create_issue(title, description))
                 except Exception:
                     pass  # Don't fail classification if ticket creation fails
 

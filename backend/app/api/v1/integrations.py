@@ -1,20 +1,19 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import List
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.encryption import encrypt
 from app.models.user import User
 from app.models.integration import UserIntegration, IntegrationType
 from app.schemas.integration import JiraIntegrationCreate, LinearIntegrationCreate, IntegrationResponse
-from app.modules.integrations.jira_client import JiraClient
-from app.modules.integrations.linear_client import LinearClient
 
 router = APIRouter()
 
 
 @router.post("/jira", response_model=IntegrationResponse)
-async def save_jira_integration(
+def save_jira_integration(
     data: JiraIntegrationCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -26,7 +25,7 @@ async def save_jira_integration(
     if existing:
         existing.base_url = data.base_url
         existing.email = data.email
-        existing.api_token = data.api_token
+        existing.api_token = encrypt(data.api_token)
         existing.project_key = data.project_key
     else:
         existing = UserIntegration(
@@ -34,7 +33,7 @@ async def save_jira_integration(
             integration_type=IntegrationType.jira,
             base_url=data.base_url,
             email=data.email,
-            api_token=data.api_token,
+            api_token=encrypt(data.api_token),
             project_key=data.project_key,
         )
         db.add(existing)
@@ -45,7 +44,7 @@ async def save_jira_integration(
 
 
 @router.post("/linear", response_model=IntegrationResponse)
-async def save_linear_integration(
+def save_linear_integration(
     data: LinearIntegrationCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -55,13 +54,13 @@ async def save_linear_integration(
     ).first()
 
     if existing:
-        existing.api_token = data.api_key
+        existing.api_token = encrypt(data.api_key)
         existing.project_key = data.team_id
     else:
         existing = UserIntegration(
             user_id=current_user.id,
             integration_type=IntegrationType.linear,
-            api_token=data.api_key,
+            api_token=encrypt(data.api_key),
             project_key=data.team_id,
         )
         db.add(existing)
