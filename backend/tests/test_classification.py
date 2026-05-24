@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 # Shared payloads
 # ---------------------------------------------------------------------------
  
-# All-false baseline → MINIMAL risk
+# All-false baseline -> MINIMAL risk
 MINIMAL_PAYLOAD = {
     "use_case_category": "entertainment",
     "is_safety_component": False,
@@ -41,14 +41,14 @@ MINIMAL_PAYLOAD = {
     "biometric_categorization": False,
 }
  
-# HR flag → HIGH risk
+# HR flag -> HIGH risk
 HIGH_PAYLOAD = {
     **MINIMAL_PAYLOAD,
     "use_case_category": "hr_recruitment",
     "hr_recruitment_screening": True,
 }
  
-# Law-enforcement flag → HIGH risk (closest observable proxy for
+# Law-enforcement flag -> HIGH risk (closest observable proxy for
 # what would be UNACCEPTABLE in a fuller implementation)
 UNACCEPTABLE_PROXY_PAYLOAD = {
     **MINIMAL_PAYLOAD,
@@ -57,7 +57,7 @@ UNACCEPTABLE_PROXY_PAYLOAD = {
     "uses_biometric_data": True,
 }
  
-# Chatbot → LIMITED risk
+# Chatbot -> LIMITED risk
 LIMITED_PAYLOAD = {
     **MINIMAL_PAYLOAD,
     "use_case_category": "customer_service",
@@ -566,7 +566,7 @@ class TestClassificationEdgeCases:
     @pytest.mark.parametrize(
         "payload_override,expected_status",
         [
-            ({}, 200),                                          # all defaults → valid
+            ({}, 200),                                          # all defaults -> valid
             ({"use_case_category": ""}, 200),                  # empty string is still a str
             ({"is_safety_component": True}, 200),              # single HIGH flag
             ({"interacts_with_humans": True}, 200),            # single LIMITED flag
