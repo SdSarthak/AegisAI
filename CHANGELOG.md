@@ -7,6 +7,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- Fixed data leakage in scaler/encoder fit_transform() calls — now fitted only on training data; test data uses transform() only (#514)
+
 ### Added
 - LLM Guard console with copy-to-clipboard exports for scan response payloads and raw audit metrics.
 
