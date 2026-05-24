@@ -60,7 +60,7 @@ function App() {
           <Route path="documents" element={<Documents />} />
           <Route path="rag-chat" element={<RagChat />} />
           <Route path="notifications" element={<Notifications />} />
-          <Route path="rag-chat" element={<RagChat />} />
+
 
         </Route>
         <Route path="*" element={<NotFound />} />
