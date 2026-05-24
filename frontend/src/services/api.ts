@@ -178,4 +178,18 @@ export const guardApi = {
   },
 }
 
+export const analyticsApi = {
+  getSummary: async () => {
+    const { data } = await api.get('/analytics/summary')
+    return data
+  },
+  getComplianceTimeline: async (systemId: number, days = 30) => {
+    const { data } = await api.get('/analytics/compliance-timeline', {
+      params: { system_id: systemId, days },
+    })
+    return data
+  },
+}
+
 export default api
+
