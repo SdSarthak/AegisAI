@@ -3,8 +3,9 @@ Notifications API — in-app event feed for users.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
-
+from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user

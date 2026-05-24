@@ -4,9 +4,11 @@ Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
+from __future__ import annotations
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+
 
 
 class NotificationResponse(BaseModel):

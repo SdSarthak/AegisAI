@@ -1,7 +1,7 @@
-"""Document loader for ingesting regulatory PDFs from S3 or local disk."""
-
+from __future__ import annotations
 import os
 from langchain_community.document_loaders import S3DirectoryLoader, PyPDFLoader
+
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from app.core.config import settings
 

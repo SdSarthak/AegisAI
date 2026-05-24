@@ -8,9 +8,10 @@ TODO for contributors (medium difficulty):
   - Persist scan results to the database for audit logs (Completed)
   - Add a GET /guard/stats endpoint returning block/allow/sanitize counts (Completed)
 """
-
+from __future__ import annotations
 import hashlib
 from collections import Counter, defaultdict, deque
+
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Optional

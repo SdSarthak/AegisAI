@@ -1,7 +1,7 @@
-"""FAISS vector store creation and persistence."""
-
+from __future__ import annotations
 import os
 from langchain_community.vectorstores import FAISS
+
 from langchain_openai import OpenAIEmbeddings
 from app.core.config import settings
 from .document_loader import load_documents_from_paths
