@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+- Replace Unicode arrow characters (→) with ASCII equivalents (->) in test comments to prevent SyntaxError on different platforms
+
+---
+
 ## [0.1.0] — 2026-04-05
 
 ### Added
