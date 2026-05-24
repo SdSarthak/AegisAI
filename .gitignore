@@ -102,3 +102,8 @@ ehthumbs.db
 
 # Local dev tooling
 .claude/
+conftest.txt
+lifecycle.txt
+error.txt
+pdf_export.txt
+rag_ingest.txt
