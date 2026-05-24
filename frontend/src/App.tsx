@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuthStore } from './stores/authStore'
+
 import Layout from './components/Layout'
+
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
@@ -11,12 +13,14 @@ import Notifications from './pages/Notifications'
 import Analytics from './pages/Analytics'
 import GuardConsole from './pages/GuardConsole'
 import NotFound from './pages/NotFound'
-import { Toaster } from 'react-hot-toast'
 import RagChat from './pages/RagChat'
+import Onboarding from './pages/Onboarding'
 
+import { Toaster } from 'react-hot-toast'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
+
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />
 }
 
@@ -43,9 +47,14 @@ function App() {
           },
         }}
       />
+
       <Routes>
+        {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/onboarding" element={<Onboarding />} />
+
+        {/* Protected Routes */}
         <Route
           path="/"
           element={
@@ -60,11 +69,11 @@ function App() {
           <Route path="classification/:systemId?" element={<Classification />} />
           <Route path="documents" element={<Documents />} />
           <Route path="guard" element={<GuardConsole />} />
-          <Route path="rag-chat" element={<RagChat />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="rag-chat" element={<RagChat />} />
-
         </Route>
+
+        {/* 404 */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </>
