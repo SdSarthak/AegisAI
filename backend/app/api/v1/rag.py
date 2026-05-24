@@ -17,9 +17,8 @@ import os
 import shutil
 import tempfile
 from typing import List, Optional
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from fastapi import UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -30,9 +29,9 @@ from app.models.user import SubscriptionTier, User
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.vector_store import create_vector_store
 from app.models.rag_query import RagQuery
-from typing import Optional
 
 router = APIRouter()
+
 
 
 class RAGQueryRequest(BaseModel):
