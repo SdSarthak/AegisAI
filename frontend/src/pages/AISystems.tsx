@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
-import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X } from 'lucide-react'
+import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Download } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 interface AISystem {
@@ -19,6 +19,8 @@ interface AISystem {
 export default function AISystems() {
   const queryClient = useQueryClient()
   const [showModal, setShowModal] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
+
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -104,31 +106,91 @@ export default function AISystems() {
   const getRiskBadge = (riskLevel: string | null) => {
     switch (riskLevel) {
       case 'unacceptable':
-        return {
-          label: 'Unacceptable',
-          className: 'bg-red-100 text-red-700',
-        }
+        return { label: 'Unacceptable', className: 'bg-red-100 text-red-700' }
       case 'high':
-        return {
-          label: 'High',
-          className: 'bg-orange-100 text-orange-700',
-        }
+        return { label: 'High', className: 'bg-orange-100 text-orange-700' }
       case 'limited':
-        return {
-          label: 'Limited',
-          className: 'bg-yellow-100 text-yellow-700',
-        }
+        return { label: 'Limited', className: 'bg-yellow-100 text-yellow-700' }
       case 'minimal':
-        return {
-          label: 'Minimal',
-          className: 'bg-green-100 text-green-700',
-        }
+        return { label: 'Minimal', className: 'bg-green-100 text-green-700' }
       default:
-        return {
-          label: 'Unknown',
-          className: 'bg-gray-100 text-gray-700',
-        }
+        return { label: 'Unknown', className: 'bg-gray-100 text-gray-700' }
     }
+  }
+
+  // FIX 1: Use native fetch instead of aiSystemsApi.get() which doesn't exist.
+  // FIX 2: Guard against null token before building the Authorization header.
+  const handleExport = async () => {
+    try {
+      setIsExporting(true)
+
+      const token = localStorage.getItem('token')
+      if (!token) {
+        console.error('No auth token found. Please log in again.')
+        return
+      }
+
+      const params = new URLSearchParams()
+      if (riskFilter) params.set('risk_level', riskFilter)
+
+      const url = `/api/v1/ai-systems/export${params.toString() ? `?${params.toString()}` : ''}`
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'text/csv',
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Export failed with status ${response.status}`)
+      }
+
+      const blob = await response.blob()
+      const objectUrl = window.URL.createObjectURL(blob)
+
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.setAttribute('download', 'ai_systems.csv')
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(objectUrl)
+    } catch (error) {
+      console.error('Export failed:', error)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  // FIX 3: Reset to page 1 whenever filters or sort options change,
+  // so users never land on an empty page after narrowing results.
+  const handleRiskFilterChange = (value: string) => {
+    setRiskFilter(value)
+    setCurrentPage(1)
+  }
+
+  const handleComplianceFilterChange = (value: string) => {
+    setComplianceFilter(value)
+    setCurrentPage(1)
+  }
+
+  const handleSortByChange = (value: string) => {
+    setSortBy(value)
+    setCurrentPage(1)
+  }
+
+  const handleOrderChange = (value: string) => {
+    setOrder(value)
+    setCurrentPage(1)
+  }
+
+  const handleClearFilters = () => {
+    setSearchTerm('')
+    setRiskFilter('')
+    setComplianceFilter('')
+    setCurrentPage(1)
   }
 
   return (
@@ -138,13 +200,24 @@ export default function AISystems() {
           <h1 className="text-2xl font-bold text-gray-900">AI Systems</h1>
           <p className="text-gray-600">Manage your AI systems for compliance tracking</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-        >
-          <Plus className="w-5 h-5" />
-          Add AI System
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            disabled={isExporting}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download className="w-5 h-5" />
+            {isExporting ? 'Exporting...' : 'Export CSV'}
+          </button>
+
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            <Plus className="w-5 h-5" />
+            Add AI System
+          </button>
+        </div>
       </div>
 
       {/* Search and Filters */}
@@ -155,7 +228,10 @@ export default function AISystems() {
             type="text"
             placeholder="Search AI systems..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={(e) => {
+              setSearchTerm(e.target.value)
+              setCurrentPage(1) // FIX 3 applied to search too
+            }}
             className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
           />
         </div>
@@ -164,7 +240,7 @@ export default function AISystems() {
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <select
               value={riskFilter}
-              onChange={(e) => setRiskFilter(e.target.value)}
+              onChange={(e) => handleRiskFilterChange(e.target.value)}
               className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="">All Risk Levels</option>
@@ -178,7 +254,7 @@ export default function AISystems() {
             <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <select
               value={complianceFilter}
-              onChange={(e) => setComplianceFilter(e.target.value)}
+              onChange={(e) => handleComplianceFilterChange(e.target.value)}
               className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="">All Statuses</option>
@@ -194,7 +270,7 @@ export default function AISystems() {
             <select
               id="sort-by-select"
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
+              onChange={(e) => handleSortByChange(e.target.value)}
               className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="created_at">Sort by Date</option>
@@ -207,7 +283,7 @@ export default function AISystems() {
             <select
               id="sort-order-select"
               value={order}
-              onChange={(e) => setOrder(e.target.value)}
+              onChange={(e) => handleOrderChange(e.target.value)}
               className="px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="desc">Descending</option>
@@ -216,11 +292,7 @@ export default function AISystems() {
           </div>
           {(searchTerm || riskFilter || complianceFilter) && (
             <button
-              onClick={() => {
-                setSearchTerm('')
-                setRiskFilter('')
-                setComplianceFilter('')
-              }}
+              onClick={handleClearFilters}
               className="flex items-center gap-1 px-3 py-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all text-sm font-medium"
             >
               <X className="w-4 h-4" />
@@ -240,15 +312,12 @@ export default function AISystems() {
               <div className="flex justify-between items-start">
                 <div className="space-y-3 flex-1">
                   <div className="h-5 bg-gray-200 rounded w-1/3"></div>
-
                   <div className="h-4 bg-gray-200 rounded w-2/3"></div>
-
                   <div className="flex gap-2">
                     <div className="h-5 w-20 bg-gray-200 rounded"></div>
                     <div className="h-5 w-24 bg-gray-200 rounded"></div>
                   </div>
                 </div>
-
                 <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
               </div>
             </div>
@@ -258,12 +327,12 @@ export default function AISystems() {
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-medium text-gray-900">
-            {searchTerm || riskFilter || complianceFilter 
-              ? 'No matching AI systems' 
+            {searchTerm || riskFilter || complianceFilter
+              ? 'No matching AI systems'
               : 'No AI systems yet'}
           </h3>
           <p className="text-gray-500 mt-1">
-            {searchTerm || riskFilter || complianceFilter 
+            {searchTerm || riskFilter || complianceFilter
               ? 'Try adjusting your filters or search term'
               : 'Add your first AI system to start tracking compliance'}
           </p>
@@ -293,7 +362,6 @@ export default function AISystems() {
                     {system.description && (
                       <p className="text-gray-600 text-sm mt-1">{system.description}</p>
                     )}
-
                     {system.updated_at && (
                       <p className="text-xs text-gray-400 mt-2">
                         Updated{' '}
@@ -301,7 +369,7 @@ export default function AISystems() {
                           addSuffix: true,
                         })}
                       </p>
-                    )}    
+                    )}
                     <div className="flex items-center gap-3 mt-2">
                       {system.sector && (
                         <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
@@ -335,7 +403,7 @@ export default function AISystems() {
                   </button>
                 </div>
               </div>
-              
+
               {/* Compliance Progress */}
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <div className="flex items-center justify-between text-sm">
@@ -360,6 +428,8 @@ export default function AISystems() {
         </div>
       )}
 
+      {/* FIX 3: Pagination uses filteredSystems.length for the Next button,
+          so local filters correctly reflect whether more pages exist. */}
       <div className="flex items-center justify-between pt-4">
         <button
           onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
@@ -369,13 +439,11 @@ export default function AISystems() {
           Previous
         </button>
 
-        <span className="text-sm font-medium text-gray-700">
-          Page {currentPage}
-        </span>
+        <span className="text-sm font-medium text-gray-700">Page {currentPage}</span>
 
         <button
           onClick={() => setCurrentPage((prev) => prev + 1)}
-          disabled={systems.length < limit}
+          disabled={filteredSystems.length < limit}
           className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
           Next
@@ -386,9 +454,7 @@ export default function AISystems() {
       {systemToDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
-              Delete AI System
-            </h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">Delete AI System</h2>
             <p className="text-gray-600">
               Are you sure you want to delete {systemToDelete.name}? This cannot be undone.
             </p>
@@ -417,9 +483,7 @@ export default function AISystems() {
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Add AI System
-            </h2>
+            <h2 className="text-lg font-semibold text-gray-900 mb-4">Add AI System</h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700">
@@ -435,9 +499,7 @@ export default function AISystems() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Description
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Description</label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -447,9 +509,7 @@ export default function AISystems() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Sector
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Sector</label>
                 <select
                   value={formData.sector}
                   onChange={(e) => setFormData({ ...formData, sector: e.target.value })}
@@ -462,9 +522,7 @@ export default function AISystems() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Use Case
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Use Case</label>
                 <select
                   value={formData.use_case}
                   onChange={(e) => setFormData({ ...formData, use_case: e.target.value })}
