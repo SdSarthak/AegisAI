@@ -1,7 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch
-import importlib
+from unittest.mock import patch, MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -14,6 +13,7 @@ from app.models.user import User, SubscriptionTier
 class DummyDoc:
     def __init__(self, source):
         self.metadata = {"source": source}
+        self.page_content = f"Content from {source}"
 
 
 def _get_test_db():
@@ -51,30 +51,37 @@ def client():
 
 def test_query_feedback_and_low_quality_flow(client):
     # Mock the QA chain to return controlled result and sources
-    fake_result = {"result": "Test answer", "source_documents": [DummyDoc("doc1.pdf#chunk1"), DummyDoc("doc2.pdf#chunk2")]}
-
-    # Provide a lightweight fake retrieval_chain module (avoid heavy langchain imports)
-    import types, sys
-
-    mod = types.ModuleType("app.modules.rag.retrieval_chain")
+    fake_result = {
+        "result": "Test answer",
+        "source_documents": [
+            DummyDoc("doc1.pdf#chunk1"),
+            DummyDoc("doc2.pdf#chunk2"),
+        ],
+    }
 
     def _fake_get_qa_chain():
         return lambda payload: fake_result
 
-    mod.get_qa_chain = _fake_get_qa_chain
-    sys.modules["app.modules.rag.retrieval_chain"] = mod
+    with patch(
+        "app.modules.rag.retrieval_chain.get_qa_chain", _fake_get_qa_chain
+    ), patch(
+        "app.modules.rag.groundedness.compute_groundedness",
+        return_value=0.85,
+    ):
+        # Call query endpoint
+        resp = client.post("/api/v1/rag/query", json={"question": "What is X?"})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "answer" in data and data["answer"] == "Test answer"
+        assert "answer_id" in data
+        answer_id = data["answer_id"]
 
-    # Call query endpoint
-    resp = client.post("/api/v1/rag/query", json={"question": "What is X?"})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "answer" in data and data["answer"] == "Test answer"
-    assert "answer_id" in data
-    answer_id = data["answer_id"]
-
-    # Submit a thumbs-down for that answer
-    resp2 = client.post("/api/v1/rag/feedback", json={"answer_id": answer_id, "vote": "down"})
-    assert resp2.status_code == 200
+        # Submit a thumbs-down for that answer
+        resp2 = client.post(
+            "/api/v1/rag/feedback",
+            json={"answer_id": answer_id, "vote": "down"},
+        )
+        assert resp2.status_code == 200
 
     # Now query low-quality-chunks as admin: override current_user to be admin
     def _admin_user():

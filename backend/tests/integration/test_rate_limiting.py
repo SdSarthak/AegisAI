@@ -40,6 +40,10 @@ def _authenticate_test_user(db_session):
 
 def test_per_user_rate_limit_blocks_61st_guard_scan_request(client, db_session):
     """After 60 rapid requests, the 61st request should be rate limited."""
+    # Clear in-memory rate limiter state from any prior tests
+    from app.api.v1.guard import _scan_attempts_by_user
+    _scan_attempts_by_user.clear()
+
     auth_headers = _authenticate_test_user(db_session)
 
     fake_guard_module = ModuleType("app.modules.guard.llm_guard")
