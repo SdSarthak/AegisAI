@@ -54,13 +54,21 @@ MODEL_METADATA_PATH = MODELS_DIR / "config.json"
 TRAINING_METRICS_PATH = MODELS_DIR / "training_metrics.json"
 
 
+def _has_model_weights(path: str) -> bool:
+    return any(
+        os.path.exists(os.path.join(path, filename))
+        for filename in ("pytorch_model.bin", "model.safetensors")
+    )
+
+
 def get_trained_model_path() -> str:
     """
     Detect trained model location. Checks multiple paths:
     1. Environment variable CLASSIFIER_MODEL_PATH
     2. Local models directory (guard/models/classifier)
     3. Current directory (intent_classifier)
-    Returns default path if not found (will use pre-trained model as fallback).
+    Returns default path if not found (the classifier will use deterministic
+    heuristic fallback until a fine-tuned model is available).
     """
     if os.path.exists(CLASSIFIER_MODEL_PATH):
         return CLASSIFIER_MODEL_PATH
@@ -73,10 +81,8 @@ def get_trained_model_path() -> str:
     ]
 
     for path in alt_paths:
-        if os.path.exists(path) and os.path.exists(
-            os.path.join(path, "pytorch_model.bin")
-        ):
+        if os.path.exists(path) and _has_model_weights(path):
             return path
 
-    # Return default path (will use pre-trained if fine-tuned not found)
+    # Return default path (classifier will use deterministic fallback if missing)
     return CLASSIFIER_MODEL_PATH
