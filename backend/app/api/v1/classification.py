@@ -13,7 +13,8 @@ from app.schemas.ai_system import (
     RiskClassificationResponse,
     QuestionnaireRiskFactor,
 )
-
+from app.schemas.explain import ExplainRequest, ExplainResponse
+from app.modules.explainer.engine import explain_risk
 router = APIRouter()
 
 QUESTIONNAIRE_RISK_FACTORS: List[QuestionnaireRiskFactor] = [
@@ -108,22 +109,6 @@ QUESTIONNAIRE_RISK_FACTORS: List[QuestionnaireRiskFactor] = [
         triggers_level=RiskLevel.LIMITED,
     ),
 ]
-
-
-class BulkClassificationItem(BaseModel):
-    system_id: int
-    classification: Optional[RiskClassificationResponse] = None
-    error: Optional[str] = None
-
-
-class BulkClassificationRequest(BaseModel):
-    system_ids: List[int]
-
-
-class BulkClassificationResponse(BaseModel):
-    results: List[BulkClassificationItem]
-
-
 class BulkClassificationItem(BaseModel):
     system_id: int
     classification: Optional[RiskClassificationResponse] = None
@@ -407,16 +392,12 @@ def bulk_classify_systems(
     db.commit()
     return BulkClassificationResponse(results=results)
 
-    
-@router.get("/risk-factors", response_model=List[QuestionnaireRiskFactor])
-def get_questionnaire_risk_factors(
+
+@router.post("/explain", response_model=ExplainResponse)
+def explain_ai_system_risk(
+    data: ExplainRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Return the static questionnaire metadata used by the risk classification flow.
-
-    This does not query the database because these factors describe the
-    classification rules themselves, not a user's saved questionnaire answers.
-    Keep this list aligned with RiskClassificationRequest and classify_risk().
-    """
-    return QUESTIONNAIRE_RISK_FACTORS
+    """Explain risk classification from plain text description."""
+    return explain_risk(data)
+   
