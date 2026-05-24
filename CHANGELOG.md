@@ -8,6 +8,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Fixed
+
 - Replace Unicode arrow characters (→) with ASCII equivalents (->) in test comments to prevent SyntaxError on different platforms
 
 ---
@@ -15,6 +16,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [0.1.0] — 2026-04-05
 
 ### Added
+
 - **Compliance Engine** — EU AI Act risk classification (Minimal / Limited / High / Unacceptable)
 - AI system registry with CRUD endpoints
 - Compliance document generation (Technical Documentation, Risk Assessment, Conformity Declaration)
@@ -34,6 +36,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Colab-ready notebook for fine-tuning the Guard classifier
 
 ### Known Limitations (good first contributions!)
+
 - RAG knowledge base is empty by default — needs regulatory documents ingested
 - No audit log for Guard decisions yet
 - Stripe billing wired up but not activated
