@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { isAxiosError } from 'axios'
 import { AlertCircle, Bot, FileText, Loader2, Send, Sparkles, User } from 'lucide-react'
 import CopyButton from '../components/CopyButton'
 import { ragApi } from '../services/api'
@@ -11,6 +12,10 @@ interface RagSource {
 interface RagAnswer {
   answer: string
   sources: RagSource[]
+}
+
+interface RagErrorPayload {
+  detail?: string
 }
 
 function buildAnswerExport(answer: RagAnswer): string {
@@ -58,16 +63,20 @@ export default function RagChat() {
         answer: data.answer,
         sources: data.sources || [],
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       // ✅ ERROR HANDLING
-      if (err.response?.status === 503) {
+      if (isAxiosError<RagErrorPayload>(err) && err.response?.status === 503) {
         setError('Index not ready. Please try again later.')
-      } else if (err.response?.status === 401) {
+      } else if (isAxiosError<RagErrorPayload>(err) && err.response?.status === 401) {
         setError('Unauthorized. Please login again.')
       } else {
+        const detail = isAxiosError<RagErrorPayload>(err)
+          ? err.response?.data?.detail
+          : undefined
+        const message = err instanceof Error ? err.message : undefined
         setError(
-          err?.response?.data?.detail ||
-            err.message ||
+          detail ||
+            message ||
             'Unable to generate an answer right now.'
         )
       }
