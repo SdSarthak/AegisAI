@@ -49,12 +49,12 @@ function App() {
         <Route
           path="/"
           element={
-            <PrivateRoute>
+            
               <Layout />
-            </PrivateRoute>
+            
           }
         >
-          <Route index element={<Dashboard />} />
+          <Route index element={<AISystems />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="ai-systems" element={<AISystems />} />
           <Route path="classification/:systemId?" element={<Classification />} />

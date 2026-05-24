@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import axios from 'axios'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X } from 'lucide-react'
@@ -32,6 +33,7 @@ export default function AISystems() {
   const [order, setOrder] = useState('desc')
   const [systemToDelete, setSystemToDelete] = useState<AISystem | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [exporting, setExporting] = useState(false)
 
   const limit = 10
 
@@ -74,8 +76,42 @@ export default function AISystems() {
 
     return matchesSearch && matchesRisk && matchesCompliance
   })
+  const handleExport = async () => {
+  try {
+    setExporting(true)
+
+    const token = localStorage.getItem('token')
+
+    const resp = await axios.get(
+      '/api/v1/ai-systems/export',
+      {
+        responseType: 'blob',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    )
+
+    const url = window.URL.createObjectURL(new Blob([resp.data]))
+
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', 'ai_systems.csv')
+
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    console.error('Export failed', error)
+  } finally {
+    setExporting(false)
+  }
+}
 
   const handleSubmit = (e: React.FormEvent) => {
+
     e.preventDefault()
     createMutation.mutate(formData)
   }
@@ -138,13 +174,30 @@ export default function AISystems() {
           <h1 className="text-2xl font-bold text-gray-900">AI Systems</h1>
           <p className="text-gray-600">Manage your AI systems for compliance tracking</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-        >
-          <Plus className="w-5 h-5" />
-          Add AI System
-        </button>
+        <div className="flex items-center gap-3">
+  <button
+    onClick={handleExport}
+    disabled={exporting}
+    className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-100 disabled:opacity-50"
+  >
+    {exporting ? 'Exporting...' : 'Export CSV'}
+  </button>
+
+  <button
+    onClick={() => setShowModal(true)}
+    className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+  >
+    <Plus className="w-5 h-5" />
+    Add AI System
+  </button>
+</div>
+        
+        
+        
+        
+        
+        
+
       </div>
 
       {/* Search and Filters */}
