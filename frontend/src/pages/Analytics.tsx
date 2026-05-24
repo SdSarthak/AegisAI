@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import ComplianceRiskChart from '../components/ComplianceRiskChart'
+import { getChartTheme } from '../utils/chartTheme'
 
 import {
   BarChart2,
@@ -45,29 +46,29 @@ const summaryStats = [
     label: 'Total Systems',
     value: '12',
     icon: Activity,
-    color: 'text-blue-600',
-    bg: 'bg-blue-50',
+    color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-50 dark:bg-blue-500/10',
   },
   {
     label: 'Avg Score',
     value: '84%',
     icon: TrendingUp,
-    color: 'text-green-600',
-    bg: 'bg-green-50',
+    color: 'text-green-600 dark:text-green-400',
+    bg: 'bg-green-50 dark:bg-green-500/10',
   },
   {
     label: 'Compliant',
     value: '10',
     icon: ShieldCheck,
-    color: 'text-emerald-600',
-    bg: 'bg-emerald-50',
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bg: 'bg-emerald-50 dark:bg-emerald-500/10',
   },
   {
     label: 'High Risk',
     value: '2',
     icon: AlertTriangle,
-    color: 'text-red-600',
-    bg: 'bg-red-50',
+    color: 'text-red-600 dark:text-red-400',
+    bg: 'bg-red-50 dark:bg-red-500/10',
   },
 ]
 
@@ -82,15 +83,49 @@ export default function Analytics() {
 
   const [loading, setLoading] = useState(true)
 
+  const [isDark, setIsDark] = useState(false)
+
   useEffect(() => {
     fetchRiskDistribution()
   }, [])
 
+  useEffect(() => {
+    const checkTheme = () => {
+      setIsDark(
+        document.documentElement.classList.contains(
+          'dark'
+        )
+      )
+    }
+
+    checkTheme()
+
+    const observer = new MutationObserver(checkTheme)
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
+
+    return () => observer.disconnect()
+  }, [])
+
+  const chartTheme = getChartTheme(isDark)
+
   const fetchRiskDistribution = async () => {
     try {
+<<<<<<< HEAD
       // Try fetching from backend analytics summary endpoint. If it's
       // not implemented or returns an error, fall back to mock data.
       const res = await fetch('/api/v1/analytics/summary')
+=======
+      const mockData: RiskData[] = [
+        { name: 'Minimal Risk', value: 4 },
+        { name: 'Limited Risk', value: 3 },
+        { name: 'High Risk', value: 2 },
+        { name: 'Unacceptable Risk', value: 1 },
+      ]
+>>>>>>> 8f1b859 (fix: improve dark mode compatibility for analytics charts)
 
       if (res.ok) {
         const json = await res.json()
@@ -144,7 +179,11 @@ export default function Analytics() {
         {summaryStats.map((stat) => (
           <div
             key={stat.label}
+<<<<<<< HEAD
             className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 flex items-center gap-4 shadow-sm"
+=======
+            className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 flex items-center gap-4 shadow-sm transition-colors duration-300"
+>>>>>>> 8f1b859 (fix: improve dark mode compatibility for analytics charts)
           >
             <div
               className={`shrink-0 p-3 rounded-lg ${stat.bg}`}
@@ -170,7 +209,11 @@ export default function Analytics() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Line Chart */}
+<<<<<<< HEAD
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm min-w-0">
+=======
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm min-w-0 transition-colors duration-300">
+>>>>>>> 8f1b859 (fix: improve dark mode compatibility for analytics charts)
           <div className="flex items-center gap-2 mb-6">
             <TrendingUp className="w-5 h-5 text-primary-600" />
 
@@ -188,27 +231,46 @@ export default function Analytics() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke="#e5e7eb"
+                  stroke={chartTheme.grid}
                 />
 
                 <XAxis
                   dataKey="name"
-                  stroke="#6b7280"
-                  fontSize={12}
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
                   tickLine={false}
                   axisLine={false}
                 />
 
                 <YAxis
-                  stroke="#6b7280"
-                  fontSize={12}
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
                   tickLine={false}
                   axisLine={false}
                 />
 
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor:
+                      chartTheme.tooltipBg,
+                    border: `1px solid ${chartTheme.tooltipBorder}`,
+                    borderRadius: '8px',
+                    color: chartTheme.text,
+                  }}
+                  labelStyle={{
+                    color: chartTheme.text,
+                  }}
+                />
 
-                <Legend />
+                <Legend
+                  wrapperStyle={{
+                    color: chartTheme.text,
+                  }}
+                />
 
                 <Line
                   type="monotone"
@@ -224,7 +286,11 @@ export default function Analytics() {
         </div>
 
         {/* Bar Chart */}
+<<<<<<< HEAD
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm min-w-0">
+=======
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm min-w-0 transition-colors duration-300">
+>>>>>>> 8f1b859 (fix: improve dark mode compatibility for analytics charts)
           <div className="flex items-center gap-2 mb-6">
             <BarChart2 className="w-5 h-5 text-primary-600" />
 
@@ -242,27 +308,46 @@ export default function Analytics() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke="#e5e7eb"
+                  stroke={chartTheme.grid}
                 />
 
                 <XAxis
                   dataKey="name"
-                  stroke="#6b7280"
-                  fontSize={12}
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
                   tickLine={false}
                   axisLine={false}
                 />
 
                 <YAxis
-                  stroke="#6b7280"
-                  fontSize={12}
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
                   tickLine={false}
                   axisLine={false}
                 />
 
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor:
+                      chartTheme.tooltipBg,
+                    border: `1px solid ${chartTheme.tooltipBorder}`,
+                    borderRadius: '8px',
+                    color: chartTheme.text,
+                  }}
+                  labelStyle={{
+                    color: chartTheme.text,
+                  }}
+                />
 
-                <Legend />
+                <Legend
+                  wrapperStyle={{
+                    color: chartTheme.text,
+                  }}
+                />
 
                 <Bar
                   dataKey="risk"
@@ -279,11 +364,19 @@ export default function Analytics() {
 
       {/* Compliance Risk Distribution Chart */}
       {loading ? (
+<<<<<<< HEAD
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
           Loading risk distribution...
         </div>
       ) : riskPieData.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
+=======
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors duration-300">
+          Loading risk distribution...
+        </div>
+      ) : riskPieData.length === 0 ? (
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors duration-300">
+>>>>>>> 8f1b859 (fix: improve dark mode compatibility for analytics charts)
           No analytics data available.
         </div>
       ) : (
