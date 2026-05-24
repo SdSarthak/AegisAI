@@ -19,8 +19,6 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    """Upgrade schema."""
-    def upgrade() -> None:
     op.create_table(
         'rag_queries',
         sa.Column('id', sa.Integer(), nullable=False),
@@ -36,8 +34,3 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table('rag_queries')
-
-
-def downgrade() -> None:
-    """Downgrade schema."""
-    pass
