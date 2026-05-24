@@ -11,6 +11,7 @@ interface RagSource {
 interface RagAnswer {
   answer: string
   sources: RagSource[]
+  answer_id?: string
 }
 
 function buildAnswerExport(answer: RagAnswer): string {
@@ -31,6 +32,8 @@ export default function RagChat() {
   const [answer, setAnswer] = useState<RagAnswer | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+   const [feedbackVote, setFeedbackVote] = useState<'up' | 'down' | null>(null)
+  const [feedbackLoading, setFeedbackLoading] = useState(false)
 
   const handleAsk = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -85,6 +88,18 @@ export default function RagChat() {
       setIsLoading(false)
     }
   }
+  const handleFeedback = async (vote: 'up' | 'down') => {
+  if (!answer?.answer_id || feedbackVote) return
+  setFeedbackLoading(true)
+  try {
+    await ragApi.feedback({ answer_id: answer.answer_id, vote })
+    setFeedbackVote(vote)
+  } catch {
+    // silently fail
+  } finally {
+    setFeedbackLoading(false)
+  }
+}
 
   return (
     <div className="h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)] flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -209,6 +224,41 @@ export default function RagChat() {
                         </div>
 
                         <p className="text-gray-700 leading-7">{answer.answer}</p>
+
+                        {answer.answer_id && (
+                          <div className="flex items-center gap-3 pt-2">
+                            <span className="text-xs text-gray-500">Was this helpful?</span>
+                            <button
+                              type="button"
+                              disabled={!!feedbackVote || feedbackLoading}
+                              onClick={() => handleFeedback('up')}
+                              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                                feedbackVote === 'up'
+                                  ? 'bg-green-50 border-green-300 text-green-700'
+                                  : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                              aria-label="Thumbs up"
+                            >
+                              👍 {feedbackVote === 'up' ? 'Helpful' : ''}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!!feedbackVote || feedbackLoading}
+                              onClick={() => handleFeedback('down')}
+                              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                                feedbackVote === 'down'
+                                  ? 'bg-red-50 border-red-300 text-red-700'
+                                  : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                              aria-label="Thumbs down"
+                            >
+                              👎 {feedbackVote === 'down' ? 'Not helpful' : ''}
+                            </button>
+                            {feedbackVote && (
+                              <span className="text-xs text-gray-400">Thanks for your feedback!</span>
+                            )}
+                          </div>
+                        )}
 
                         <div className="border-t border-gray-100 pt-5">
                           <h3 className="text-sm font-semibold text-gray-900 mb-3">
