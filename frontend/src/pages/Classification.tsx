@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { classificationApi } from '../services/api'
@@ -6,6 +6,7 @@ import { AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react'
 import ComplianceChecklist, {
   ChecklistItem,
 } from '../components/ComplianceChecklist'
+import CopyButton from '../components/CopyButton'
 
 interface ClassificationResult {
   risk_level: string
@@ -13,6 +14,22 @@ interface ClassificationResult {
   reasons: string[]
   requirements: string[]
   next_steps: string[]
+}
+
+function buildClassificationReport(result: ClassificationResult): string {
+  return [
+    `Risk Level: ${result.risk_level}`,
+    `Confidence: ${Math.round(result.confidence * 100)}%`,
+    '',
+    'Why this classification?',
+    ...result.reasons.map((reason, index) => `${index + 1}. ${reason}`),
+    '',
+    'Legal Requirements',
+    ...result.requirements.map((req, index) => `${index + 1}. ${req}`),
+    '',
+    'Action Plan',
+    ...result.next_steps.map((step, index) => `${index + 1}. ${step}`),
+  ].join('\n')
 }
 
 const CHECKLIST_ITEMS: Record<string, ChecklistItem[]> = {
@@ -103,7 +120,71 @@ export default function Classification() {
     },
   })
 
+
+  // Derive a live preliminary risk level from formData so the panel
+  // updates in real-time as checkboxes are ticked, before the API call.
+  const liveRiskLevel = useMemo((): string | null => {
+    const {
+      law_enforcement,
+      border_control,
+      justice_system,
+      hr_recruitment_screening,
+      hr_promotion_termination,
+      credit_worthiness,
+      insurance_risk_assessment,
+      affects_fundamental_rights,
+      makes_automated_decisions,
+      is_safety_component,
+      uses_biometric_data,
+      biometric_categorization,
+      emotion_recognition,
+      interacts_with_humans,
+      generates_synthetic_content,
+    } = formData
+
+    if (law_enforcement && uses_biometric_data && biometric_categorization) return 'unacceptable'
+
+    const highRiskTriggers = [
+      hr_recruitment_screening,
+      hr_promotion_termination,
+      credit_worthiness,
+      insurance_risk_assessment,
+      law_enforcement,
+      border_control,
+      justice_system,
+      (affects_fundamental_rights && makes_automated_decisions),
+      is_safety_component,
+    ]
+    if (highRiskTriggers.some(Boolean)) return 'high'
+
+    if (interacts_with_humans || generates_synthetic_content || emotion_recognition) return 'limited'
+
+    return 'minimal'
+  }, [formData])
+
+  // Only treat explicitly opt-in fields as "interaction" — fields that default
+  // to true (affects_fundamental_rights, makes_automated_decisions,
+  // hr_recruitment_screening, interacts_with_humans) would fire the preview
+  // immediately on page load before the user does anything, which is misleading.
+  const hasInteracted = useMemo(() => {
+    return (
+      formData.hr_recruitment_screening ||
+      formData.hr_promotion_termination ||
+      formData.credit_worthiness ||
+      formData.insurance_risk_assessment ||
+      formData.law_enforcement ||
+      formData.border_control ||
+      formData.justice_system ||
+      formData.is_safety_component ||
+      formData.uses_biometric_data ||
+      formData.biometric_categorization ||
+      formData.emotion_recognition ||
+      formData.generates_synthetic_content
+    )
+  }, [formData])
+
   const getRiskIcon = (level: string) => {
+
     switch (level) {
       case 'unacceptable':
         return <XCircle className="w-8 h-8 text-red-600" />
@@ -116,18 +197,6 @@ export default function Classification() {
     }
   }
 
-  const getRiskColor = (level: string) => {
-    switch (level) {
-      case 'unacceptable':
-        return 'bg-red-50 border-red-200'
-      case 'high':
-        return 'bg-orange-50 border-orange-200'
-      case 'limited':
-        return 'bg-yellow-50 border-yellow-200'
-      default:
-        return 'bg-green-50 border-green-200'
-    }
-  }
 
   return (
     <div className="space-y-8">
@@ -178,10 +247,7 @@ export default function Classification() {
                     type="checkbox"
                     checked={formData.hr_recruitment_screening}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        hr_recruitment_screening: e.target.checked,
-                      })
+                      setFormData({ ...formData, hr_recruitment_screening: e.target.checked })
                     }
                     className="mt-1"
                   />
@@ -197,15 +263,12 @@ export default function Classification() {
                     type="checkbox"
                     checked={formData.hr_promotion_termination}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        hr_promotion_termination: e.target.checked,
-                      })
+                      setFormData({ ...formData, hr_promotion_termination: e.target.checked })
                     }
                     className="mt-1"
                   />
                   <span className="text-sm text-gray-600">
-                    <strong>Promotion/Termination Decisions</strong>
+                    <strong>Promotion / Termination Decisions</strong>
                     <br />
                     AI influences employment status decisions
                   </span>
@@ -216,10 +279,7 @@ export default function Classification() {
                     type="checkbox"
                     checked={formData.credit_worthiness}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        credit_worthiness: e.target.checked,
-                      })
+                      setFormData({ ...formData, credit_worthiness: e.target.checked })
                     }
                     className="mt-1"
                   />
@@ -233,12 +293,121 @@ export default function Classification() {
                 <label className="flex items-start gap-3">
                   <input
                     type="checkbox"
+                    checked={formData.insurance_risk_assessment}
+                    onChange={(e) =>
+                      setFormData({ ...formData, insurance_risk_assessment: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Insurance Risk Assessment</strong>
+                    <br />
+                    AI evaluates risk for insurance pricing or eligibility
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.law_enforcement}
+                    onChange={(e) =>
+                      setFormData({ ...formData, law_enforcement: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Law Enforcement Use</strong>
+                    <br />
+                    Used by police or judicial authorities for decisions
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.border_control}
+                    onChange={(e) =>
+                      setFormData({ ...formData, border_control: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Border Control / Migration</strong>
+                    <br />
+                    Used for visa, asylum, or border management decisions
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.justice_system}
+                    onChange={(e) =>
+                      setFormData({ ...formData, justice_system: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Justice System / Legal Aid</strong>
+                    <br />
+                    Assists courts or legal processes with decisions
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_safety_component}
+                    onChange={(e) =>
+                      setFormData({ ...formData, is_safety_component: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Safety-Critical Component</strong>
+                    <br />
+                    Part of a product regulated under EU safety legislation
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.uses_biometric_data}
+                    onChange={(e) =>
+                      setFormData({ ...formData, uses_biometric_data: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Uses Biometric Data</strong>
+                    <br />
+                    Processes fingerprints, face scans, or other biometrics
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.biometric_categorization}
+                    onChange={(e) =>
+                      setFormData({ ...formData, biometric_categorization: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Biometric Categorization</strong>
+                    <br />
+                    Categorizes people by race, gender, or political views from biometrics
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
                     checked={formData.affects_fundamental_rights}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        affects_fundamental_rights: e.target.checked,
-                      })
+                      setFormData({ ...formData, affects_fundamental_rights: e.target.checked })
                     }
                     className="mt-1"
                   />
@@ -254,10 +423,7 @@ export default function Classification() {
                     type="checkbox"
                     checked={formData.makes_automated_decisions}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        makes_automated_decisions: e.target.checked,
-                      })
+                      setFormData({ ...formData, makes_automated_decisions: e.target.checked })
                     }
                     className="mt-1"
                   />
@@ -358,41 +524,50 @@ export default function Classification() {
               }`} />
               
               <div className="relative z-10">
-                <div className="flex items-center gap-5 mb-8">
-                  <div className={`p-4 rounded-2xl shadow-inner ${
-                    result.risk_level === 'unacceptable' ? 'bg-red-100' :
-                    result.risk_level === 'high' ? 'bg-orange-100' :
-                    result.risk_level === 'limited' ? 'bg-yellow-100' : 'bg-green-100'
-                  }`}>
-                    {getRiskIcon(result.risk_level)}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-2xl font-black text-gray-900 capitalize tracking-tight">
-                        {result.risk_level} Risk
-                      </h2>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                        result.risk_level === 'unacceptable' ? 'bg-red-200 text-red-800' :
-                        result.risk_level === 'high' ? 'bg-orange-200 text-orange-800' :
-                        result.risk_level === 'limited' ? 'bg-yellow-200 text-yellow-800' : 'bg-green-200 text-green-800'
-                      }`}>
-                        AI Act Classified
-                      </span>
+                <div className="flex items-start justify-between gap-4 mb-8">
+                  <div className="flex items-center gap-5">
+                    <div className={`p-4 rounded-2xl shadow-inner ${
+                      result.risk_level === 'unacceptable' ? 'bg-red-100' :
+                      result.risk_level === 'high' ? 'bg-orange-100' :
+                      result.risk_level === 'limited' ? 'bg-yellow-100' : 'bg-green-100'
+                    }`}>
+                      {getRiskIcon(result.risk_level)}
                     </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full rounded-full transition-all duration-1000 ease-out ${
-                            result.confidence > 0.8 ? 'bg-green-500' : 'bg-yellow-500'
-                          }`}
-                          style={{ width: `${result.confidence * 100}%` }}
-                        />
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-2xl font-black text-gray-900 capitalize tracking-tight">
+                          {result.risk_level} Risk
+                        </h2>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                          result.risk_level === 'unacceptable' ? 'bg-red-200 text-red-800' :
+                          result.risk_level === 'high' ? 'bg-orange-200 text-orange-800' :
+                          result.risk_level === 'limited' ? 'bg-yellow-200 text-yellow-800' : 'bg-green-200 text-green-800'
+                        }`}>
+                          AI Act Classified
+                        </span>
                       </div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase">
-                        {Math.round(result.confidence * 100)}% Confidence
-                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-1000 ease-out ${
+                              result.confidence > 0.8 ? 'bg-green-500' : 'bg-yellow-500'
+                            }`}
+                            style={{ width: `${result.confidence * 100}%` }}
+                          />
+                        </div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase">
+                          {Math.round(result.confidence * 100)}% Confidence
+                        </p>
+                      </div>
                     </div>
                   </div>
+
+                  <CopyButton
+                    text={buildClassificationReport(result)}
+                    label="Copy Report"
+                    successMessage="Classification report copied!"
+                    className="shrink-0"
+                  />
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -469,20 +644,69 @@ export default function Classification() {
                       </span>
                     </div>
 
-                    <ComplianceChecklist
-                      systemId={Number(systemId || 0)}
-                      riskLevel={
-                        result.risk_level as
-                        | 'minimal'
-                        | 'limited'
-                        | 'high'
-                        | 'unacceptable'
-                      }
-                      items={CHECKLIST_ITEMS[result.risk_level] || []}
-                    />
+                    {systemId ? (
+                      <ComplianceChecklist
+                        systemId={Number(systemId)}
+                        riskLevel={
+                          result.risk_level as
+                          | 'minimal'
+                          | 'limited'
+                          | 'high'
+                          | 'unacceptable'
+                        }
+                        items={CHECKLIST_ITEMS[result.risk_level] || []}
+                      />
+                    ) : (
+                      <p className="text-sm text-gray-400 italic">
+                        Save this AI system first to track checklist progress.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
+            </div>
+          ) : hasInteracted && liveRiskLevel ? (
+            // Live preview panel — shown when checkboxes are ticked but API hasn't been called yet
+            <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm animate-in">
+              <div className="flex items-center gap-3 mb-6">
+                {getRiskIcon(liveRiskLevel)}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-2xl font-black text-gray-900 capitalize tracking-tight">
+                      {liveRiskLevel} Risk
+                    </h2>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500">
+                      Preview
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-400 mt-0.5">
+                    Submit the form for full analysis and compliance roadmap
+                  </p>
+                </div>
+              </div>
+
+              <div className={`rounded-xl p-4 mb-6 ${
+                liveRiskLevel === 'unacceptable' ? 'bg-red-50 border border-red-100' :
+                liveRiskLevel === 'high' ? 'bg-orange-50 border border-orange-100' :
+                liveRiskLevel === 'limited' ? 'bg-yellow-50 border border-yellow-100' :
+                'bg-green-50 border border-green-100'
+              }`}>
+                <p className={`text-sm font-medium ${
+                  liveRiskLevel === 'unacceptable' ? 'text-red-800' :
+                  liveRiskLevel === 'high' ? 'text-orange-800' :
+                  liveRiskLevel === 'limited' ? 'text-yellow-800' :
+                  'text-green-800'
+                }`}>
+                  {liveRiskLevel === 'unacceptable' && 'This system may be prohibited under EU AI Act Article 5. Review immediately.'}
+                  {liveRiskLevel === 'high' && 'High-risk systems require technical documentation, conformity assessment, and human oversight (Annex III).'}
+                  {liveRiskLevel === 'limited' && 'Limited-risk systems must meet transparency obligations under Article 52.'}
+                  {liveRiskLevel === 'minimal' && 'Minimal risk — no mandatory obligations, but voluntary best practices are recommended.'}
+                </p>
+              </div>
+
+              <p className="text-xs text-gray-400 text-center">
+                This is a real-time estimate based on your selections. Click <strong>Classify Risk Level</strong> for the full AI Act analysis.
+              </p>
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">

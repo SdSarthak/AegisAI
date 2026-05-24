@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { AlertCircle, Bot, FileText, Loader2, Send, Sparkles, User } from 'lucide-react'
+import CopyButton from '../components/CopyButton'
+import { ragApi } from '../services/api'
 
 interface RagSource {
   title: string
@@ -9,6 +11,19 @@ interface RagSource {
 interface RagAnswer {
   answer: string
   sources: RagSource[]
+  answer_id?: string
+}
+
+function buildAnswerExport(answer: RagAnswer): string {
+  return [
+    'AI Response',
+    answer.answer,
+    '',
+    'Source citations',
+    ...answer.sources.map(
+      (source, index) => `${index + 1}. ${source.title}\n${source.excerpt}`
+    ),
+  ].join('\n')
 }
 
 export default function RagChat() {
@@ -17,11 +32,14 @@ export default function RagChat() {
   const [answer, setAnswer] = useState<RagAnswer | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+   const [feedbackVote, setFeedbackVote] = useState<'up' | 'down' | null>(null)
+  const [feedbackLoading, setFeedbackLoading] = useState(false)
 
   const handleAsk = async (e: React.FormEvent) => {
     e.preventDefault()
 
     const trimmedQuestion = question.trim()
+
     if (!trimmedQuestion) {
       setError('Please enter a question before asking.')
       setSubmittedQuestion('')
@@ -36,38 +54,42 @@ export default function RagChat() {
     setAnswer(null)
 
     try {
-      // TODO: Replace this simulated response with the real RAG API call in the follow-up issue.
-      // Suggested integration point:
-      // const { data } = await api.post('/api/v1/rag/query', { question: trimmedQuestion })
-      // setAnswer({ answer: data.answer, sources: data.sources })
-      await new Promise((resolve) => setTimeout(resolve, 900)) // TODO (#73): replace with actual POST /api/v1/rag/query call
-
-      if (trimmedQuestion.toLowerCase().includes('error')) {
-        throw new Error('Simulated RAG service failure. Try another question.')
-      }
+      // ✅ REAL API CALL
+      const data = await ragApi.query(trimmedQuestion)
 
       setAnswer({
-        answer:
-          'Based on the available compliance knowledge base, this question appears related to EU AI Act risk classification and documentation obligations. Once API wiring is added, this panel will show grounded answers generated from indexed regulatory sources.',
-        sources: [
-          {
-            title: 'EU AI Act - Risk Classification Guidance',
-            excerpt:
-              'High-risk AI systems require risk management, technical documentation, logging, transparency, human oversight, accuracy, robustness, and cybersecurity controls.',
-          },
-          {
-            title: 'AegisAI Compliance Knowledge Base',
-            excerpt:
-              'RAG responses should include source citations so users can verify which documents informed the generated answer.',
-          },
-        ],
+        answer: data.answer,
+        sources: data.sources || [],
       })
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to generate an answer right now.')
+    } catch (err: any) {
+      // ✅ ERROR HANDLING
+      if (err.response?.status === 503) {
+        setError('Index not ready. Please try again later.')
+      } else if (err.response?.status === 401) {
+        setError('Unauthorized. Please login again.')
+      } else {
+        setError(
+          err?.response?.data?.detail ||
+            err.message ||
+            'Unable to generate an answer right now.'
+        )
+      }
     } finally {
       setIsLoading(false)
     }
   }
+  const handleFeedback = async (vote: 'up' | 'down') => {
+  if (!answer?.answer_id || feedbackVote) return
+  setFeedbackLoading(true)
+  try {
+    await ragApi.feedback({ answer_id: answer.answer_id, vote })
+    setFeedbackVote(vote)
+  } catch {
+    // silently fail
+  } finally {
+    setFeedbackLoading(false)
+  }
+}
 
   return (
     <div className="h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)] flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -179,11 +201,60 @@ export default function RagChat() {
                         <Bot className="w-5 h-5 text-primary-600" />
                       </div>
                       <div className="space-y-5 min-w-0">
+                        <div className="flex items-center justify-between gap-3">
+                          <h3 className="text-sm font-semibold text-gray-900">
+                            Generated answer
+                          </h3>
+
+                          <CopyButton
+                            text={buildAnswerExport(answer)}
+                            label="Copy Answer"
+                            successMessage="Answer copied!"
+                          />
+                        </div>
+
                         <p className="text-gray-700 leading-7">{answer.answer}</p>
+
+                        {answer.answer_id && (
+                          <div className="flex items-center gap-3 pt-2">
+                            <span className="text-xs text-gray-500">Was this helpful?</span>
+                            <button
+                              type="button"
+                              disabled={!!feedbackVote || feedbackLoading}
+                              onClick={() => handleFeedback('up')}
+                              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                                feedbackVote === 'up'
+                                  ? 'bg-green-50 border-green-300 text-green-700'
+                                  : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                              aria-label="Thumbs up"
+                            >
+                              👍 {feedbackVote === 'up' ? 'Helpful' : ''}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={!!feedbackVote || feedbackLoading}
+                              onClick={() => handleFeedback('down')}
+                              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                                feedbackVote === 'down'
+                                  ? 'bg-red-50 border-red-300 text-red-700'
+                                  : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+                              } disabled:opacity-50 disabled:cursor-not-allowed`}
+                              aria-label="Thumbs down"
+                            >
+                              👎 {feedbackVote === 'down' ? 'Not helpful' : ''}
+                            </button>
+                            {feedbackVote && (
+                              <span className="text-xs text-gray-400">Thanks for your feedback!</span>
+                            )}
+                          </div>
+                        )}
+
                         <div className="border-t border-gray-100 pt-5">
                           <h3 className="text-sm font-semibold text-gray-900 mb-3">
                             Source citations
                           </h3>
+
                           <div className="space-y-3">
                             {answer.sources.map((source) => (
                               <div
@@ -192,11 +263,15 @@ export default function RagChat() {
                               >
                                 <div className="flex items-center gap-2 mb-2">
                                   <FileText className="w-4 h-4 text-primary-600" />
+
                                   <h4 className="text-sm font-medium text-gray-900">
                                     {source.title}
                                   </h4>
                                 </div>
-                                <p className="text-sm text-gray-600">{source.excerpt}</p>
+
+                                <p className="text-sm text-gray-600">
+                                  {source.excerpt}
+                                </p>
                               </div>
                             ))}
                           </div>
@@ -217,6 +292,7 @@ export default function RagChat() {
             <label htmlFor="rag-question" className="sr-only">
               Question
             </label>
+
             <textarea
               id="rag-question"
               value={question}
@@ -226,6 +302,7 @@ export default function RagChat() {
               disabled={isLoading}
               className="min-w-0 flex-1 resize-none bg-transparent border-0 p-0 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 disabled:text-gray-500"
             />
+
             <button
               type="submit"
               disabled={isLoading}
@@ -240,11 +317,12 @@ export default function RagChat() {
               )}
             </button>
           </div>
+
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 mt-2">
             <p className="text-xs text-gray-500">
-              Try typing `error` to preview the error state. 
-              {/* TODO: This statement is just for testing. Remove it after integration of API */}
+              Ask compliance questions and get source-backed answers.
             </p>
+
             <p className="text-xs text-gray-400">
               Use this assistant to explore risk, documentation, and governance obligations.
             </p>

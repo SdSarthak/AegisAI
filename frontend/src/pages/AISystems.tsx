@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X } from 'lucide-react'
+import { formatDistanceToNow } from 'date-fns'
 
 interface AISystem {
   id: number
@@ -12,6 +13,7 @@ interface AISystem {
   risk_level: string | null
   compliance_status: string
   compliance_score: number
+  updated_at: string
 }
 
 export default function AISystems() {
@@ -29,10 +31,19 @@ export default function AISystems() {
   const [sortBy, setSortBy] = useState('created_at')
   const [order, setOrder] = useState('desc')
   const [systemToDelete, setSystemToDelete] = useState<AISystem | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+
+  const limit = 10
 
   const { data: systemsData, isLoading } = useQuery({
-    queryKey: ['ai-systems', sortBy, order],
-    queryFn: () => aiSystemsApi.list({ sort_by: sortBy, order }),
+    queryKey: ['ai-systems', sortBy, order, currentPage],
+    queryFn: () =>
+      aiSystemsApi.list({
+        sort_by: sortBy,
+        order,
+        page: currentPage,
+        limit,
+      }),
   })
   const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 
@@ -220,7 +231,29 @@ export default function AISystems() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-500">Loading...</div>
+        <div className="grid gap-4">
+          {[...Array(4)].map((_, index) => (
+            <div
+              key={index}
+              className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse"
+            >
+              <div className="flex justify-between items-start">
+                <div className="space-y-3 flex-1">
+                  <div className="h-5 bg-gray-200 rounded w-1/3"></div>
+
+                  <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+
+                  <div className="flex gap-2">
+                    <div className="h-5 w-20 bg-gray-200 rounded"></div>
+                    <div className="h-5 w-24 bg-gray-200 rounded"></div>
+                  </div>
+                </div>
+
+                <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : filteredSystems.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />
@@ -260,6 +293,15 @@ export default function AISystems() {
                     {system.description && (
                       <p className="text-gray-600 text-sm mt-1">{system.description}</p>
                     )}
+
+                    {system.updated_at && (
+                      <p className="text-xs text-gray-400 mt-2">
+                        Updated{' '}
+                        {formatDistanceToNow(new Date(system.updated_at), {
+                          addSuffix: true,
+                        })}
+                      </p>
+                    )}    
                     <div className="flex items-center gap-3 mt-2">
                       {system.sector && (
                         <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
@@ -318,6 +360,27 @@ export default function AISystems() {
         </div>
       )}
 
+      <div className="flex items-center justify-between pt-4">
+        <button
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+        >
+          Previous
+        </button>
+
+        <span className="text-sm font-medium text-gray-700">
+          Page {currentPage}
+        </span>
+
+        <button
+          onClick={() => setCurrentPage((prev) => prev + 1)}
+          disabled={systems.length < limit}
+          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+        >
+          Next
+        </button>
+      </div>
 
       {/* Delete Confirmation Modal */}
       {systemToDelete && (

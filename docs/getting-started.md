@@ -374,7 +374,7 @@ The CI pipeline (`.github/workflows/ci.yml`) runs all tests automatically on eve
 
 ## Training the Guard classifier
 
-By default, the Guard module uses `microsoft/deberta-v3-small` with random classification head weights. Fine-tune it for real accuracy:
+By default, the Guard module uses deterministic heuristics when no fine-tuned classifier is installed. Fine-tune `microsoft/deberta-v3-small` for stronger semantic coverage:
 
 ### Option 1 — Google Colab (recommended, free GPU)
 
@@ -415,3 +415,22 @@ If you don't have an OpenAI API key, you can run AegisAI locally using Ollama.
 ```
 
 3. The backend will automatically connect to Ollama at:
+
+Training takes ~30 minutes on CPU, ~5 minutes on GPU. The fine-tuned model is saved to `backend/app/modules/guard/models/intent_classifier/` and picked up automatically on the next backend restart.
+
+
+
+
+## Seed Demo Data
+
+After starting the backend and database:
+
+```bash
+cd backend
+python -m scripts.seed
+```
+
+Demo credentials:
+
+- Email: admin@aegisai.dev
+- Password: password123
