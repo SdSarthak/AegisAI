@@ -1,23 +1,30 @@
 import os
 from pathlib import Path
-from dotenv import load_dotenv
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv():
+        return False
 
 load_dotenv()
 
 # Project paths
-PROJECT_ROOT = Path(__file__).parent          # backend/app/modules/guard/
+PROJECT_ROOT = Path(__file__).parent  # backend/app/modules/guard/
 BACKEND_ROOT = PROJECT_ROOT.parent.parent.parent  # backend/
-DATA_DIR = BACKEND_ROOT / "data"              # backend/data/
-MODELS_DIR = PROJECT_ROOT / "models"          # backend/app/modules/guard/models/
+DATA_DIR = BACKEND_ROOT / "data"  # backend/data/
+MODELS_DIR = PROJECT_ROOT / "models"  # backend/app/modules/guard/models/
 
 # Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = "gemini-2.0-flash"  # or gemini-1.5-pro
 
-# Model paths - supports both Colab (Google Drive) and local training
-# Colab notebook saves to: /content/drive/My Drive/llm-guard/intent_classifier
-# Local training saves to: guard/models/intent_classifier
-CLASSIFIER_MODEL_PATH = os.getenv("CLASSIFIER_MODEL_PATH", str(MODELS_DIR / "intent_classifier"))
+# Model paths - supports both Colab (Google Drive) and local training.
+# The standardized local training pipeline saves to: guard/models/classifier.
+# Older local training saved to: guard/models/intent_classifier.
+CLASSIFIER_MODEL_PATH = os.getenv(
+    "CLASSIFIER_MODEL_PATH", str(MODELS_DIR / "classifier")
+)
 TOKENIZER_PATH = CLASSIFIER_MODEL_PATH  # Tokenizer stored in same directory as model
 
 # Security settings
@@ -47,26 +54,35 @@ MODEL_METADATA_PATH = MODELS_DIR / "config.json"
 TRAINING_METRICS_PATH = MODELS_DIR / "training_metrics.json"
 
 
+def _has_model_weights(path: str) -> bool:
+    return any(
+        os.path.exists(os.path.join(path, filename))
+        for filename in ("pytorch_model.bin", "model.safetensors")
+    )
+
+
 def get_trained_model_path() -> str:
     """
     Detect trained model location. Checks multiple paths:
     1. Environment variable CLASSIFIER_MODEL_PATH
-    2. Local models directory (guard/models/intent_classifier)
+    2. Local models directory (guard/models/classifier)
     3. Current directory (intent_classifier)
-    Returns default path if not found (will use pre-trained model as fallback).
+    Returns default path if not found (the classifier will use deterministic
+    heuristic fallback until a fine-tuned model is available).
     """
     if os.path.exists(CLASSIFIER_MODEL_PATH):
         return CLASSIFIER_MODEL_PATH
-    
+
     # Check alternative locations
     alt_paths = [
+        str(MODELS_DIR / "classifier"),
         str(MODELS_DIR / "intent_classifier"),
         "./intent_classifier",
     ]
-    
+
     for path in alt_paths:
-        if os.path.exists(path) and os.path.exists(os.path.join(path, "pytorch_model.bin")):
+        if os.path.exists(path) and _has_model_weights(path):
             return path
-    
-    # Return default path (will use pre-trained if fine-tuned not found)
+
+    # Return default path (classifier will use deterministic fallback if missing)
     return CLASSIFIER_MODEL_PATH

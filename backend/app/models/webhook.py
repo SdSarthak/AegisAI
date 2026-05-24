@@ -23,7 +23,7 @@ class WebhookConfig(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     url = Column(String(1000), nullable=False)
-    secret = Column(String(255), nullable=True)       # HMAC signing secret
+    secret = Column(String(255), nullable=True)  # HMAC signing secret
     is_active = Column(Boolean, default=True)
 
     # List of event types to deliver, e.g. ["guard_block", "compliance_drift"]

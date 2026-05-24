@@ -11,12 +11,14 @@ alembic==1.13.1
 # ── Auth ──────────────────────────────────────────────────────────────────────
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
+bcrypt==3.2.2
 
 # ── Settings & Validation ─────────────────────────────────────────────────────
 pydantic==2.5.3
 pydantic-settings==2.1.0
 email-validator==2.1.0
 python-dotenv==1.0.0
+PyYAML==6.0.1
 
 # ── Payments (Stripe) ─────────────────────────────────────────────────────────
 stripe==7.12.0
@@ -47,8 +49,12 @@ prometheus-client==0.18.0
 # ── HTTP & Utilities ──────────────────────────────────────────────────────────
 httpx==0.26.0
 
+# ── Observability ─────────────────────────────────────────────────────────────
+python-json-logger==2.0.7
+
 # ── PDF Utilities ────────────────────────────────────────────────────────────────
 pdfplumber==0.10.3
+pypdf>=3.0.0            # required by LangChain's PyPDFLoader
 
 # ── Testing ───────────────────────────────────────────────────────────────────
 pytest==7.4.4

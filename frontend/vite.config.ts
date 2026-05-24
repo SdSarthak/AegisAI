@@ -10,10 +10,12 @@ export default defineConfig({
     },
   },
   server: {
+    host: true,
+    allowedHosts: ['.onrender.com'],
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: process.env.BACKEND_URL || 'http://localhost:8000',
         changeOrigin: true,
       },
     },

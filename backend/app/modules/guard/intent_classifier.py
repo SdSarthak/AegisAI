@@ -2,6 +2,7 @@
 
 import os
 import json
+import re
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
 import numpy as np
@@ -17,11 +18,13 @@ from transformers import (
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
 from . import guard_config as config
+from .regex_rules import RegexFilter
 
 
 @dataclass
 class ClassificationResult:
     """Result of intent classification."""
+
     intent: str  # "benign", "suspicious", "malicious"
     confidence: float  # 0.0 to 1.0
     class_scores: Dict[str, float]  # Scores for each class
@@ -30,7 +33,9 @@ class ClassificationResult:
 class PromptDataset(Dataset):
     """PyTorch Dataset for prompt classification."""
 
-    def __init__(self, texts: List[str], labels: List[int], tokenizer, max_length: int = 128):
+    def __init__(
+        self, texts: List[str], labels: List[int], tokenizer, max_length: int = 128
+    ):
         self.texts = texts
         self.labels = labels
         self.tokenizer = tokenizer
@@ -61,12 +66,33 @@ class PromptDataset(Dataset):
 class IntentClassifier:
     """Fine-tuned DeBERTa classifier for prompt injection intent detection."""
 
+    EXTRA_MALICIOUS_PATTERNS = [
+        r"\bdo\s+anything\s+now\b",
+        r"\bdan\s+mode\b",
+        r"\bignore\s+(your|the)\s+(rules|guidelines|policy|policies|safety)\b",
+        r"\breveal\s+(your|the)\s+(hidden|developer|system)\s+(instructions|prompt)\b",
+        r"\bprint\s+(your|the)\s+(hidden|developer|system)\s+(instructions|prompt)\b",
+        r"\bdo\s+not\s+(refuse|deny|decline)\b",
+        r"\bwithout\s+(ethical|safety|policy)\s+(limits|limitations|restrictions)\b",
+    ]
+
+    EXTRA_SUSPICIOUS_PATTERNS = [
+        r"\bhidden\s+instructions\b",
+        r"\bdeveloper\s+instructions\b",
+        r"\bconfidential\s+instructions\b",
+        r"\bprompt\s+leak\b",
+        r"\bsafety\s+filters?\b",
+        r"\bcontent\s+filters?\b",
+    ]
+
     def __init__(self, model_path: Optional[str] = None, device: Optional[str] = None):
         """
-        Initialize classifier with fine-tuned or pre-trained model.
-        
-        Tries to load fine-tuned model first, falls back to pre-trained DeBERTa-v3-small.
-        
+        Initialize classifier with a fine-tuned model or deterministic fallback.
+
+        Tries to load a fine-tuned model first. If none is available, uses
+        deterministic heuristics instead of a base DeBERTa model with random
+        classification head weights.
+
         Args:
             model_path: Path to trained model directory. If None, auto-detects using config.
             device: Device to use ('cpu' or 'cuda'). Auto-detects GPU if None.
@@ -76,61 +102,137 @@ class IntentClassifier:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device)
-        
+
         # Use intent classes from config
         self.intent_to_id = config.INTENT_TO_ID
         self.id_to_intent = config.ID_TO_INTENT
-        
+
         # Determine model path
         if model_path is None:
             model_path = config.get_trained_model_path()
-        
-        # Load tokenizer from model directory
-        tokenizer_path = model_path
-        
+
         # Load model
         model_exists = model_path and os.path.exists(model_path)
-        has_weights = model_exists and os.path.exists(os.path.join(model_path, "pytorch_model.bin"))
-        
+        has_weights = model_exists and self._has_trained_weights(model_path)
+
         if model_exists and has_weights:
             print(f"✓ Loading fine-tuned model from {model_path}")
             try:
-                from transformers import AutoTokenizer, AutoModelForSequenceClassification
-                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
-                self.model = AutoModelForSequenceClassification.from_pretrained(model_path)
+                from transformers import (
+                    AutoTokenizer,
+                    AutoModelForSequenceClassification,
+                )
+
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+                self.model = AutoModelForSequenceClassification.from_pretrained(
+                    model_path
+                )
+                self.uses_heuristic_fallback = False
                 print(f"✓ Model and tokenizer loaded successfully")
             except Exception as e:
-                print(f"⚠ Failed to load model: {e}. Falling back to pre-trained.")
-                self._load_pretrained()
+                print(f"⚠ Failed to load model: {e}. Falling back to deterministic rules.")
+                self._load_heuristic_fallback()
         else:
             print(f"⚠ Fine-tuned model not found at {model_path}")
-            print(f"  Using pre-trained DeBERTa (train with notebook for better results)")
-            self._load_pretrained()
-        
-        self.model.to(self.device)
-        self.model.eval()
-    
+            print(
+                "  Using deterministic heuristic fallback. Train or provide a fine-tuned "
+                "classifier for semantic coverage."
+            )
+            self._load_heuristic_fallback()
+
+        if self.model is not None:
+            self.model.to(self.device)
+            self.model.eval()
+
+    @staticmethod
+    def _has_trained_weights(model_path: str) -> bool:
+        """Return True when a model directory contains saved fine-tuned weights."""
+        return any(
+            os.path.exists(os.path.join(model_path, filename))
+            for filename in ("pytorch_model.bin", "model.safetensors")
+        )
+
+    def _load_heuristic_fallback(self):
+        """Use deterministic rules instead of a randomly initialized classifier head."""
+        self.tokenizer = None
+        self.model = None
+        self.regex_filter = RegexFilter()
+        self._extra_malicious = [
+            re.compile(pattern, re.IGNORECASE) for pattern in self.EXTRA_MALICIOUS_PATTERNS
+        ]
+        self._extra_suspicious = [
+            re.compile(pattern, re.IGNORECASE) for pattern in self.EXTRA_SUSPICIOUS_PATTERNS
+        ]
+        self.uses_heuristic_fallback = True
+
     def _load_pretrained(self):
-        """Load pre-trained DeBERTa model."""
+        """Load pre-trained DeBERTa model for explicit fine-tuning only."""
         print("Loading pre-trained DeBERTa v3 small...")
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
-        
+
         model_name = "microsoft/deberta-v3-small"
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(
             model_name, num_labels=3
         )
+        self.uses_heuristic_fallback = False
+
+    def _classify_with_heuristics(self, prompt: str) -> ClassificationResult:
+        """Classify prompts deterministically when no fine-tuned model is installed."""
+        regex_result = self.regex_filter.check(prompt)
+        malicious_hits = [p.pattern for p in self._extra_malicious if p.search(prompt)]
+        suspicious_hits = [p.pattern for p in self._extra_suspicious if p.search(prompt)]
+
+        if regex_result.score >= 0.8 or malicious_hits:
+            confidence = 0.95 if regex_result.score >= 0.8 else 0.9
+            return ClassificationResult(
+                intent="malicious",
+                confidence=confidence,
+                class_scores={
+                    "benign": 1.0 - confidence,
+                    "suspicious": 0.0,
+                    "malicious": confidence,
+                },
+            )
+
+        if regex_result.score >= 0.5 or suspicious_hits:
+            confidence = 0.85 if regex_result.score >= 0.5 else 0.7
+            return ClassificationResult(
+                intent="suspicious",
+                confidence=confidence,
+                class_scores={
+                    "benign": 1.0 - confidence,
+                    "suspicious": confidence,
+                    "malicious": 0.0,
+                },
+            )
+
+        if regex_result.score > 0.0:
+            return ClassificationResult(
+                intent="suspicious",
+                confidence=0.55,
+                class_scores={"benign": 0.45, "suspicious": 0.55, "malicious": 0.0},
+            )
+
+        return ClassificationResult(
+            intent="benign",
+            confidence=0.9,
+            class_scores={"benign": 0.9, "suspicious": 0.07, "malicious": 0.03},
+        )
 
     def classify(self, prompt: str) -> ClassificationResult:
         """
         Classify a prompt's intent.
-        
+
         Args:
             prompt: Prompt to classify
-            
+
         Returns:
             ClassificationResult with intent, confidence, and class scores
         """
+        if self.uses_heuristic_fallback:
+            return self._classify_with_heuristics(prompt)
+
         inputs = self.tokenizer(
             prompt,
             max_length=128,
@@ -153,7 +255,8 @@ class IntentClassifier:
 
         # Create class scores dict
         class_scores = {
-            self.id_to_intent[i]: float(probabilities[i]) for i in range(len(probabilities))
+            self.id_to_intent[i]: float(probabilities[i])
+            for i in range(len(probabilities))
         }
 
         return ClassificationResult(
@@ -163,10 +266,10 @@ class IntentClassifier:
     def batch_classify(self, prompts: List[str]) -> List[ClassificationResult]:
         """
         Classify multiple prompts at once.
-        
+
         Args:
             prompts: List of prompts to classify
-            
+
         Returns:
             List of ClassificationResult objects
         """
@@ -188,7 +291,7 @@ class IntentClassifier:
     ) -> Dict:
         """
         Fine-tune the model on labeled prompt data.
-        
+
         Args:
             train_texts: Training prompt texts
             train_labels: Training labels ("benign", "suspicious", "malicious")
@@ -198,10 +301,14 @@ class IntentClassifier:
             batch_size: Batch size for training
             learning_rate: Learning rate for optimizer
             output_dir: Directory to save fine-tuned model
-            
+
         Returns:
             Dictionary with training metrics
         """
+        if self.uses_heuristic_fallback:
+            self._load_pretrained()
+            self.model.to(self.device)
+
         # Convert labels to ids
         train_label_ids = [self.intent_to_id[label] for label in train_labels]
         val_label_ids = [self.intent_to_id[label] for label in val_labels]
@@ -260,7 +367,9 @@ class IntentClassifier:
                     attention_mask = batch["attention_mask"].to(self.device)
                     labels = batch["labels"].to(self.device)
 
-                    outputs = self.model(input_ids=input_ids, attention_mask=attention_mask)
+                    outputs = self.model(
+                        input_ids=input_ids, attention_mask=attention_mask
+                    )
                     logits = outputs.logits
                     preds = torch.argmax(logits, dim=1)
 

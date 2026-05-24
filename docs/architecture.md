@@ -104,7 +104,9 @@ A four-layer defence pipeline that inspects every prompt before it reaches an LL
 | `modules/guard/sanitizer.py` | Layer 4: removes meta-instructions from SANITIZE-level prompts |
 | `modules/guard/llm_guard.py` | Orchestrator — runs all 4 layers |
 | `modules/guard/guard_config.py` | Paths, thresholds, intent class mappings |
-| `modules/guard/train.py` | Training script for fine-tuning the classifier |
+| `modules/guard/train.py` | Backward-compatible CLI wrapper for classifier training |
+| `modules/guard/training/` | Standard ML training pipeline: config, data, training, evaluation, artifacts |
+| `modules/guard/models/classifier/` | Standard output location for the fine-tuned classifier |
 | `api/v1/guard.py` | REST endpoint with per-user rate limiting |
 | `guard-sdk/` | Standalone package (`pip install aegisai-guard`) |
 | `scripts/scan_prompts.py` | CLI to scan `.prompts/` files against the Guard API |
@@ -350,7 +352,9 @@ AegisAI/
 │   │   │   ├── document.py
 │   │   │   └── analytics.py
 │   │   ├── modules/
-│   │   │   ├── guard/               ← 4-layer pipeline + train script
+│   │   │   ├── guard/               ← 4-layer pipeline + standardized training
+│   │   │   │   ├── training/        ← config, data, trainer, evaluation, artifacts
+│   │   │   │   └── models/classifier/ ← fine-tuned classifier output
 │   │   │   ├── rag/                 ← FAISS + LangChain + feedback aggregation
 │   │   │   ├── llm/llm_client.py    ← OpenAI-compatible LLM wrapper
 │   │   │   └── badge/badge_generator.py  ← SVG renderer
@@ -415,7 +419,7 @@ AegisAI/
 Both Guard and RAG use a single `LLMClient` speaking the OpenAI chat-completions API. Provider is swappable with a single `.env` change — OpenAI, Ollama, Groq, Together AI, vLLM all work without code changes.
 
 ### 2. Four-layer Guard pipeline
-Each layer has a distinct cost/coverage tradeoff. The pipeline is fail-safe: if the DeBERTa model fails to load, it falls back to the pre-trained base rather than disabling the Guard entirely.
+Each layer has a distinct cost/coverage tradeoff. The pipeline is fail-safe: if a fine-tuned DeBERTa checkpoint is unavailable or fails to load, it falls back to deterministic heuristics rather than disabling the Guard or using random classifier weights.
 
 ### 3. Per-user rate limiting on Guard scan
 Prevents abuse without authentication bypass. The limit is configurable via environment variables.
