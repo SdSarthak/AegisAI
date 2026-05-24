@@ -6,23 +6,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <title>EU AI Act Compliance Tool</title>
-<script>
-  (() => {
-    try {
-      const theme = localStorage.getItem("theme");
 
-      if (
-        theme === "dark" ||
-        (!theme &&
-          window.matchMedia("(prefers-color-scheme: dark)').matches)
-      ) {
-        document.documentElement.classList.add("dark");
-      }
-    } catch (e) {
-      console.error("Theme initialization failed:", e);
-    }
-  })();
-</script>
+    <script>
+      (() => {
+        try {
+          const theme = localStorage.getItem("theme");
+
+          if (
+            theme === "dark" ||
+            (!theme &&
+              window.matchMedia("(prefers-color-scheme: dark)").matches)
+          ) {
+            document.documentElement.classList.add("dark");
+          }
+        } catch (e) {
+          console.error("Theme initialization failed:", e);
+        }
+      })();
+    </script>
 
 <style>
   html {
