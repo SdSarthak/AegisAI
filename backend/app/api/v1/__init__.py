@@ -1,5 +1,7 @@
 from fastapi import APIRouter
 from app.api.v1 import auth, ai_systems, documents, classification, guard, rag, badge, analytics, notifications, webhooks, integrations
+from app.api.v1 import compliance
+
 
 
 api_router = APIRouter()
@@ -17,3 +19,9 @@ api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytic
 api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 api_router.include_router(webhooks.router, prefix="/webhooks", tags=["Webhooks"])
 api_router.include_router(integrations.router, prefix="/integrations", tags=["Integrations"])
+
+api_router.include_router(
+    compliance.router,
+    prefix="/compliance",
+    tags=["Compliance"]
+)

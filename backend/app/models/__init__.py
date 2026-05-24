@@ -8,4 +8,5 @@ from app.models.webhook import WebhookConfig
 from app.models.notification import Notification                      
 from app.models.compliance_snapshot import ComplianceSnapshot
 from app.models.integration import UserIntegration
-__all__ = ["User", "AISystem", "RiskAssessment", "Document", "RAGFeedback", "AISystemAuditLog", "GuardScanLog", "WebhookConfig", "Notification", "ComplianceSnapshot"]
+
+__all__ = ["User", "AISystem", "RiskAssessment", "Document", "RAGFeedback", "AISystemAuditLog", "GuardScanLog", "WebhookConfig", "Notification", "ComplianceSnapshot", "UserIntegration"]
