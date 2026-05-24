@@ -374,7 +374,7 @@ The CI pipeline (`.github/workflows/ci.yml`) runs all tests automatically on eve
 
 ## Training the Guard classifier
 
-By default, the Guard module uses `microsoft/deberta-v3-small` with random classification head weights. Fine-tune it for real accuracy:
+By default, the Guard module uses deterministic heuristics when no fine-tuned classifier is installed. Fine-tune `microsoft/deberta-v3-small` for stronger semantic coverage:
 
 ### Option 1 — Google Colab (recommended, free GPU)
 

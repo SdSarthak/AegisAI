@@ -9,7 +9,7 @@ The Guard module is a four-layer prompt injection defence pipeline. It sits betw
 - [Why prompt injection matters](#why-prompt-injection-matters)
 - [How the pipeline works](#how-the-pipeline-works)
 - [Layer 1 — Regex filter](#layer-1--regex-filter)
-- [Layer 2 — Intent classifier (DeBERTa)](#layer-2--intent-classifier-deberta)
+- [Layer 2 — Intent classifier](#layer-2--intent-classifier)
 - [Layer 3 — Decision engine](#layer-3--decision-engine)
 - [Layer 4 — Sanitizer](#layer-4--sanitizer)
 - [Rate limiting](#rate-limiting)
@@ -76,7 +76,7 @@ User prompt
  (original) (cleaned)  (no LLM)
 ```
 
-The pipeline is **fail-safe**: if DeBERTa fails to load, it falls back to the pre-trained base model and logs a warning. The regex layer always runs.
+The pipeline is **fail-safe**: if a fine-tuned DeBERTa checkpoint is unavailable or fails to load, it falls back to deterministic heuristics and logs a warning. The regex layer always runs.
 
 ---
 
@@ -104,11 +104,11 @@ The regex layer contributes **40% weight** to the final combined score.
 
 ---
 
-## Layer 2 — Intent classifier (DeBERTa)
+## Layer 2 — Intent classifier
 
 **File:** `backend/app/modules/guard/intent_classifier.py`
 
-A fine-tuned `microsoft/deberta-v3-small` transformer classifying the *semantic intent* of a prompt:
+When a trained checkpoint is installed, this layer uses a fine-tuned `microsoft/deberta-v3-small` transformer to classify the *semantic intent* of a prompt:
 
 | Class | Meaning |
 |---|---|
@@ -116,9 +116,9 @@ A fine-tuned `microsoft/deberta-v3-small` transformer classifying the *semantic 
 | `suspicious` | Borderline — may be attempting manipulation |
 | `malicious` | Clear injection or jailbreak attempt |
 
-This layer catches attacks that regex misses: obfuscated phrasings, foreign-language injections, Base64-encoded instructions, and creative reformulations of known attacks.
+The trained model catches attacks that regex misses: obfuscated phrasings, foreign-language injections, Base64-encoded instructions, and creative reformulations of known attacks.
 
-**By default** the module uses the pre-trained DeBERTa-v3-small base model with random classification head weights. **Fine-tuning is strongly recommended** — see [Training your own classifier](#training-your-own-classifier).
+**By default** the module uses a deterministic heuristic fallback instead of loading a base DeBERTa model with random classification head weights. **Fine-tuning is strongly recommended** for semantic coverage — see [Training your own classifier](#training-your-own-classifier).
 
 **Output fields:**
 - `intent: str` — `"benign"` | `"suspicious"` | `"malicious"`

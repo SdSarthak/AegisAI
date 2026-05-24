@@ -24,7 +24,7 @@ print(result["decision"])  # "block"
 
 Four-layer pipeline:
 1. **RegexFilter** — fast pattern matching (~0 ms)
-2. **IntentClassifier** — DeBERTa-v3-small ML model (~200 ms CPU)
+2. **IntentClassifier** — fine-tuned DeBERTa-v3-small when installed, deterministic heuristics otherwise
 3. **DecisionEngine** — combines scores into allow / sanitize / block
 4. **PromptSanitizer** — strips malicious meta-instructions when decision is `sanitize`
 
