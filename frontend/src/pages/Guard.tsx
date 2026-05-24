@@ -117,7 +117,7 @@ export default function Guard() {
                     {metricsPayload && (
                         <div>
                             <div className="flex items-center justify-between mb-2">
-                                <p className="text-sm font-medium text-gray-700">Raw System Execution Metrics</p>
+                                <p className="text-sm font-medium text-gray-700">Matched Patterns</p>
                                 <button
                                     onClick={() => handleCopy(metricsPayload, 'metrics')}
                                     className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-primary-600 transition-colors"

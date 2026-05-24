@@ -46,7 +46,6 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/guard" element={<Guard />} />
         <Route
           path="/"
           element={
