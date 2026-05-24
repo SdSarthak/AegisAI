@@ -31,6 +31,7 @@ from app.models.notification import NotificationType
 from app.models.user import User
 from app.api.v1.notifications import create_notification
 from app.models.notification import NotificationType
+from app.models.user import User
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.pagination import PaginatedResponse
@@ -186,7 +187,6 @@ def scan_prompt(
     request: ScanRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """Scan a single prompt for injection risks using the LLM Guard pipeline.
 
