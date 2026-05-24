@@ -10,7 +10,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 - LLM Guard console with copy-to-clipboard exports for scan response payloads and raw audit metrics.
 
----
+### Fixed
+- Fixed reproducibility issues by adding `random_state=42` to dataset splitting (`train_test_split()`) calls across multiple ML project templates.
 
 ## [0.1.0] — 2026-04-05
 
