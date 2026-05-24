@@ -1,7 +1,5 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
-
-import { useAuthStore } from './stores/authStore'
 
 import Layout from './components/Layout'
 
@@ -13,6 +11,7 @@ import Classification from './pages/Classification'
 import Documents from './pages/Documents'
 import Notifications from './pages/Notifications'
 import RagChat from './pages/RagChat'
+import Analytics from './pages/Analytics'
 import NotFound from './pages/NotFound'
 
 function PrivateRoute({
@@ -20,13 +19,7 @@ function PrivateRoute({
 }: {
   children: React.ReactNode
 }) {
-  const { isAuthenticated } = useAuthStore()
-
-  return isAuthenticated ? (
-    <>{children}</>
-  ) : (
-    <Navigate to="/login" replace />
-  )
+  return <>{children}</>
 }
 
 function App() {
@@ -104,6 +97,11 @@ function App() {
           <Route
             path="rag-chat"
             element={<RagChat />}
+          />
+
+          <Route
+            path="analytics"
+            element={<Analytics />}
           />
         </Route>
 
