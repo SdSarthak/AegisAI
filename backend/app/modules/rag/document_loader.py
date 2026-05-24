@@ -36,7 +36,7 @@ def load_documents_from_qa_csv(csv_path: str):
     """Load regulatory QA pairs from CSV file as searchable documents."""
     
     import csv
-    from langchain.schema import Document
+    from langchain_core.documents import Document
 
     documents = []
     with open(csv_path, newline="", encoding="utf-8") as f:
