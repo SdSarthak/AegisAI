@@ -1,4 +1,9 @@
-import { Routes, Route } from 'react-router-dom'
+import {
+  Routes,
+  Route,
+  Navigate,
+} from 'react-router-dom'
+import { useAuthStore } from './stores/authStore'
 import { Toaster } from 'react-hot-toast'
 
 import Layout from './components/Layout'
@@ -19,7 +24,13 @@ function PrivateRoute({
 }: {
   children: React.ReactNode
 }) {
-  return <>{children}</>
+  const { isAuthenticated } = useAuthStore()
+
+  return isAuthenticated ? (
+    <>{children}</>
+  ) : (
+    <Navigate to="/login" replace />
+  )
 }
 
 function App() {
