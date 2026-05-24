@@ -1,4 +1,15 @@
-import { BarChart2, TrendingUp, AlertTriangle, ShieldCheck, Activity } from 'lucide-react'
+import { useEffect, useState } from 'react'
+
+import ComplianceRiskChart from '../components/ComplianceRiskChart'
+
+import {
+  BarChart2,
+  TrendingUp,
+  AlertTriangle,
+  ShieldCheck,
+  Activity,
+} from 'lucide-react'
+
 import {
   LineChart,
   Line,
@@ -9,7 +20,7 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend
+  Legend,
 } from 'recharts'
 
 const lineChartData = [
@@ -30,55 +41,164 @@ const barChartData = [
 ]
 
 const summaryStats = [
-  { label: 'Total Systems', value: '12', icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50' },
-  { label: 'Avg Score', value: '84%', icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50' },
-  { label: 'Compliant', value: '10', icon: ShieldCheck, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-  { label: 'High Risk', value: '2', icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50' },
+  {
+    label: 'Total Systems',
+    value: '12',
+    icon: Activity,
+    color: 'text-blue-600',
+    bg: 'bg-blue-50',
+  },
+  {
+    label: 'Avg Score',
+    value: '84%',
+    icon: TrendingUp,
+    color: 'text-green-600',
+    bg: 'bg-green-50',
+  },
+  {
+    label: 'Compliant',
+    value: '10',
+    icon: ShieldCheck,
+    color: 'text-emerald-600',
+    bg: 'bg-emerald-50',
+  },
+  {
+    label: 'High Risk',
+    value: '2',
+    icon: AlertTriangle,
+    color: 'text-red-600',
+    bg: 'bg-red-50',
+  },
 ]
 
+type RiskData = {
+  name: string
+  value: number
+}
+
 export default function Analytics() {
+  const [riskPieData, setRiskPieData] =
+    useState<RiskData[]>([])
+
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchRiskDistribution()
+  }, [])
+
+  const fetchRiskDistribution = async () => {
+    try {
+      // Temporary mock data until backend API is available
+      const mockData: RiskData[] = [
+        { name: 'Minimal Risk', value: 4 },
+        { name: 'Limited Risk', value: 3 },
+        { name: 'High Risk', value: 2 },
+        { name: 'Unacceptable Risk', value: 1 },
+      ]
+
+      setRiskPieData(mockData)
+    } catch (error) {
+      console.error(
+        'Failed to fetch risk distribution:',
+        error
+      )
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Analytics</h1>
-        <p className="text-gray-600">Compliance score trends and risk analysis</p>
+        <h1 className="text-2xl font-bold text-gray-900">
+          Analytics
+        </h1>
+
+        <p className="text-gray-600">
+          Compliance score trends and risk analysis
+        </p>
       </div>
 
-      {/* Summary stats row */}
+      {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {summaryStats.map((stat) => (
-          <div key={stat.label} className="bg-white rounded-xl border border-gray-200 p-6 flex items-center gap-4 shadow-sm">
-            <div className={`shrink-0 p-3 rounded-lg ${stat.bg}`}>
-              <stat.icon className={`w-6 h-6 ${stat.color}`} />
+          <div
+            key={stat.label}
+            className="bg-white rounded-xl border border-gray-200 p-6 flex items-center gap-4 shadow-sm"
+          >
+            <div
+              className={`shrink-0 p-3 rounded-lg ${stat.bg}`}
+            >
+              <stat.icon
+                className={`w-6 h-6 ${stat.color}`}
+              />
             </div>
+
             <div>
-              <p className="text-sm text-gray-500 font-medium">{stat.label}</p>
-              <p className="text-2xl font-bold text-gray-900 mt-1">{stat.value}</p>
+              <p className="text-sm text-gray-500 font-medium">
+                {stat.label}
+              </p>
+
+              <p className="text-2xl font-bold text-gray-900 mt-1">
+                {stat.value}
+              </p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Charts area */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Line Chart */}
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm min-w-0">
           <div className="flex items-center gap-2 mb-6">
             <TrendingUp className="w-5 h-5 text-primary-600" />
-            <h2 className="font-semibold text-gray-900">Compliance Score Timeline</h2>
+
+            <h2 className="font-semibold text-gray-900">
+              Compliance Score Timeline
+            </h2>
           </div>
+
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={lineChartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                <XAxis dataKey="name" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <LineChart data={lineChartData}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="#e5e7eb"
                 />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                <Line type="monotone" dataKey="score" name="Avg Score" stroke="#0ea5e9" strokeWidth={3} activeDot={{ r: 6 }} />
+
+                <XAxis
+                  dataKey="name"
+                  stroke="#6b7280"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <YAxis
+                  stroke="#6b7280"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <Tooltip />
+
+                <Legend />
+
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  name="Avg Score"
+                  stroke="#0ea5e9"
+                  strokeWidth={3}
+                  activeDot={{ r: 6 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -88,25 +208,68 @@ export default function Analytics() {
         <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm min-w-0">
           <div className="flex items-center gap-2 mb-6">
             <BarChart2 className="w-5 h-5 text-primary-600" />
-            <h2 className="font-semibold text-gray-900">Risk Distribution by System</h2>
+
+            <h2 className="font-semibold text-gray-900">
+              Risk Distribution by System
+            </h2>
           </div>
+
           <div className="h-72 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barChartData} margin={{ top: 5, right: 20, bottom: 5, left: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                <XAxis dataKey="name" stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="#6b7280" fontSize={12} tickLine={false} axisLine={false} />
-                <Tooltip
-                  contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                  cursor={{ fill: '#f3f4f6' }}
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <BarChart data={barChartData}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="#e5e7eb"
                 />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                <Bar dataKey="risk" name="Risk Score" fill="#f43f5e" radius={[4, 4, 0, 0]} maxBarSize={40} />
+
+                <XAxis
+                  dataKey="name"
+                  stroke="#6b7280"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <YAxis
+                  stroke="#6b7280"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <Tooltip />
+
+                <Legend />
+
+                <Bar
+                  dataKey="risk"
+                  name="Risk Score"
+                  fill="#f43f5e"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={40}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
+
+      {/* Compliance Risk Distribution Chart */}
+      {loading ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500">
+          Loading risk distribution...
+        </div>
+      ) : riskPieData.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500">
+          No analytics data available.
+        </div>
+      ) : (
+        <ComplianceRiskChart data={riskPieData} />
+      )}
     </div>
   )
 }
