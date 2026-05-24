@@ -205,7 +205,15 @@ Recent community contributions (May 2026):
 > Open items are great contribution opportunities — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
+## Data Pipeline
 
+A simple ETL-style data pipeline has been added for preprocessing AI-related datasets.
+
+Features:
+- Load raw CSV data
+- Remove missing values
+- Normalize text
+- Export cleaned dataset
 ## Contributing
 
 We welcome contributions of all kinds — code, docs, tests, regulatory expertise.
