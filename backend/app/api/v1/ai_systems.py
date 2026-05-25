@@ -8,6 +8,7 @@ import io
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.config import settings
 from app.models.user import User
 from app.models.ai_system import AISystem
 from app.models.audit_log import AISystemAuditLog
@@ -22,6 +23,93 @@ from app.schemas.audit_log import AISystemAuditLogResponse
 from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
+
+
+def _read_upload_file(file: UploadFile, max_bytes: int) -> str:
+    """Read a CSV upload with a hard byte cap."""
+
+    file.file.seek(0)
+    chunks: list[bytes] = []
+    total_bytes = 0
+
+    while True:
+        chunk = file.file.read(min(1024 * 1024, max_bytes + 1 - total_bytes))
+        if not chunk:
+            break
+
+        total_bytes += len(chunk)
+        if total_bytes > max_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=(
+                    f"CSV upload exceeds the maximum size of {max_bytes // (1024 * 1024)}MB."
+                ),
+            )
+
+        chunks.append(chunk)
+
+    try:
+        return b"".join(chunks).decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File must be UTF-8 encoded CSV",
+        )
+
+
+def _process_import_rows(
+    csv_reader: csv.DictReader,
+    db: Session,
+    current_user: User,
+    max_rows: int,
+) -> tuple[int, list[dict[str, object]]]:
+    """Import CSV rows up to the configured maximum."""
+
+    errors: list[dict[str, object]] = []
+    created_count = 0
+
+    for row_num, row in enumerate(csv_reader, start=2):
+        if row_num - 1 > max_rows:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=(
+                    f"CSV upload exceeds the maximum row count of {max_rows}."
+                ),
+            )
+
+        if not any(row.values()):
+            continue
+
+        name = row.get("name", "").strip()
+        if not name:
+            errors.append({"row": row_num, "error": "name is required"})
+            continue
+
+        existing = db.query(AISystem).filter(
+            AISystem.owner_id == current_user.id,
+            AISystem.name == name
+        ).first()
+
+        if existing:
+            errors.append({"row": row_num, "error": f"duplicate name '{name}'"})
+            continue
+
+        try:
+            ai_system = AISystem(
+                owner_id=current_user.id,
+                name=name,
+                description=row.get("description", "").strip() or None,
+                version=row.get("version", "").strip() or None,
+                use_case=row.get("use_case", "").strip() or None,
+                sector=row.get("sector", "").strip() or None
+            )
+            db.add(ai_system)
+            created_count += 1
+        except Exception as e:
+            errors.append({"row": row_num, "error": str(e)})
+
+    return created_count, errors
 
 
 @router.post("/", response_model=AISystemResponse, status_code=status.HTTP_201_CREATED)
@@ -134,9 +222,6 @@ def bulk_import_systems(
     Raises:
         HTTPException: If the upload is not a valid UTF-8 CSV file.
     """
-    errors = []
-    created_count = 0
-
     if not file.filename or not file.filename.lower().endswith('.csv'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -144,8 +229,10 @@ def bulk_import_systems(
         )
 
     try:
-        content = file.file.read()
-        decoded_content = content.decode("utf-8")
+        decoded_content = _read_upload_file(
+            file,
+            settings.AI_SYSTEM_BULK_IMPORT_MAX_BYTES,
+        )
 
         if not decoded_content.strip():
             return BulkImportResponse(created=0, errors=[])
@@ -159,37 +246,12 @@ def bulk_import_systems(
                 detail="Invalid CSV format: No headers found"
             )
 
-        for row_num, row in enumerate(csv_reader, start=2):
-            if not any(row.values()):
-                continue
-
-            name = row.get("name", "").strip()
-            if not name:
-                errors.append({"row": row_num, "error": "name is required"})
-                continue
-
-            existing = db.query(AISystem).filter(
-                AISystem.owner_id == current_user.id,
-                AISystem.name == name
-            ).first()
-
-            if existing:
-                errors.append({"row": row_num, "error": f"duplicate name '{name}'"})
-                continue
-
-            try:
-                ai_system = AISystem(
-                    owner_id=current_user.id,
-                    name=name,
-                    description=row.get("description", "").strip() or None,
-                    version=row.get("version", "").strip() or None,
-                    use_case=row.get("use_case", "").strip() or None,
-                    sector=row.get("sector", "").strip() or None
-                )
-                db.add(ai_system)
-                created_count += 1
-            except Exception as e:
-                errors.append({"row": row_num, "error": str(e)})
+        created_count, errors = _process_import_rows(
+            csv_reader,
+            db,
+            current_user,
+            settings.AI_SYSTEM_BULK_IMPORT_MAX_ROWS,
+        )
 
         db.commit()
 

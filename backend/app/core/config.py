@@ -38,6 +38,15 @@ class Settings(BaseSettings):
     # Module 2: LLM Guard
     GUARD_SANITIZATION_LEVEL: str = "medium"  # low | medium | high
     GUARD_MAX_PROMPT_LENGTH: int = 2000
+    GUARD_RATE_LIMIT_REQUESTS: int = 60
+    GUARD_RATE_LIMIT_WINDOW_SECONDS: int = 60
+
+    # Shared infrastructure
+    REDIS_URL: str = ""
+
+    # Module 1: AI System bulk import
+    AI_SYSTEM_BULK_IMPORT_MAX_BYTES: int = 5 * 1024 * 1024
+    AI_SYSTEM_BULK_IMPORT_MAX_ROWS: int = 5000
 
     # Module 3: RAG Intelligence
     S3_BUCKET_NAME: str = ""

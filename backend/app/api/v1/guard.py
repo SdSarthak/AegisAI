@@ -10,9 +10,8 @@ TODO for contributors (medium difficulty):
 """
 
 import hashlib
-from collections import Counter, defaultdict, deque
+from collections import Counter
 from datetime import datetime, timedelta, timezone
-from threading import Lock
 from typing import Optional
 import logging
 
@@ -26,6 +25,7 @@ from app.api.v1.notifications import create_notification
 from app.core.config import settings
 from app.core.database import SessionLocal, get_db
 from app.core.security import get_current_user
+from app.core.rate_limit import guard_scan_rate_limiter
 from app.models.guard_scan_log import GuardScanLog
 from app.models.notification import NotificationType
 from app.models.user import User
@@ -36,11 +36,6 @@ from app.modules.guard import guard_config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-_RATE_LIMIT_REQUESTS = 60
-_RATE_LIMIT_WINDOW_SECONDS = 60
-_scan_attempts_by_user: dict[int, deque[datetime]] = defaultdict(deque)
-_rate_limit_lock = Lock()
 
 
 class ScanRequest(BaseModel):
@@ -77,34 +72,6 @@ class BulkScanResponse(BaseModel):
 
 VALID_SANITIZATION_LEVELS = {"low", "medium", "high"}
 user_guard_configs: dict[int, dict[str, float | str]] = {}
-
-
-def _check_rate_limit(user_id: int) -> tuple[bool, int]:
-    """Return whether the user is limited and the seconds to retry after."""
-    now = datetime.now(timezone.utc)
-    window_start = now - timedelta(seconds=_RATE_LIMIT_WINDOW_SECONDS)
-
-    with _rate_limit_lock:
-        attempts = _scan_attempts_by_user[user_id]
-
-        while attempts and attempts[0] <= window_start:
-            attempts.popleft()
-
-        if len(attempts) >= _RATE_LIMIT_REQUESTS:
-            retry_after = max(
-                1,
-                int(
-                    (
-                        _RATE_LIMIT_WINDOW_SECONDS
-                        - (now - attempts[0]).total_seconds()
-                    )
-                    + 0.999
-                ),
-            )
-            return True, retry_after
-
-        attempts.append(now)
-        return False, 0
 
 
 def _infer_detection_type(regex_flag: bool, intent: str) -> str:
@@ -195,13 +162,20 @@ def scan_prompt(
     Raises:
         HTTPException: If scan processing fails or the request is rate limited.
     """
-    limited, retry_after = _check_rate_limit(current_user.id)
+    limited, retry_after = guard_scan_rate_limiter.check_and_consume(
+        key=f"guard:scan:{current_user.id}",
+        limit=settings.GUARD_RATE_LIMIT_REQUESTS,
+        window_seconds=settings.GUARD_RATE_LIMIT_WINDOW_SECONDS,
+    )
 
     if limited:
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={
-                "detail": "Rate limit exceeded: 60 requests per minute per user. Please try again later.",
+                "detail": (
+                    f"Rate limit exceeded: {settings.GUARD_RATE_LIMIT_REQUESTS} "
+                    f"requests per {settings.GUARD_RATE_LIMIT_WINDOW_SECONDS} seconds per user. Please try again later."
+                ),
             },
             headers={"Retry-After": str(retry_after)},
         )
@@ -560,40 +534,26 @@ def bulk_scan_prompts(
             detail=str(e),
         )
 
-    now = datetime.now(timezone.utc)
-    window_start = now - timedelta(seconds=_RATE_LIMIT_WINDOW_SECONDS)
     batch_size = len(request.prompts)
 
-    with _rate_limit_lock:
-        attempts = _scan_attempts_by_user[current_user.id]
+    limited, retry_after = guard_scan_rate_limiter.check_and_consume(
+        key=f"guard:scan:{current_user.id}",
+        limit=settings.GUARD_RATE_LIMIT_REQUESTS,
+        window_seconds=settings.GUARD_RATE_LIMIT_WINDOW_SECONDS,
+        cost=batch_size,
+    )
 
-        while attempts and attempts[0] <= window_start:
-            attempts.popleft()
-
-        if len(attempts) + batch_size > _RATE_LIMIT_REQUESTS:
-            retry_after = (
-                max(
-                    1,
-                    int(
-                        (
-                            _RATE_LIMIT_WINDOW_SECONDS
-                            - (now - attempts[0]).total_seconds()
-                        )
-                        + 0.999
-                    ),
-                )
-                if attempts
-                else _RATE_LIMIT_WINDOW_SECONDS
-            )
-
-            return JSONResponse(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                content={"detail": "Rate limit exceeded. Please try again later."},
-                headers={"Retry-After": str(retry_after)},
-            )
-
-        for _ in range(batch_size):
-            attempts.append(now)
+    if limited:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "detail": (
+                    f"Rate limit exceeded: {settings.GUARD_RATE_LIMIT_REQUESTS} "
+                    f"requests per {settings.GUARD_RATE_LIMIT_WINDOW_SECONDS} seconds per user. Please try again later."
+                ),
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
 
     try:
         from app.modules.guard.llm_guard import LLMGuard
