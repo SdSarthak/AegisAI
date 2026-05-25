@@ -6,11 +6,15 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.notification import Notification
-from app.schemas.notification import NotificationResponse, NotificationMarkRead
+from app.schemas.notification import (
+    NotificationResponse,
+    NotificationMarkRead,
+)
 from app.schemas.pagination import PaginatedResponse
 
 
@@ -26,6 +30,22 @@ def create_notification(
     resource_type: str | None = None,
     resource_id: int | None = None,
 ) -> Notification:
+    """
+    Create and store a new notification for a user.
+
+    Args:
+        db (Session): Database session dependency.
+        user_id (int): ID of the notification recipient.
+        notification_type (str): Type/category of notification.
+        title (str): Notification title.
+        message (str): Notification message content.
+        resource_type (str | None): Associated resource type.
+        resource_id (int | None): Associated resource ID.
+
+    Returns:
+        Notification: Newly created notification object.
+    """
+
     notification = Notification(
         user_id=user_id,
         notification_type=notification_type,
@@ -34,9 +54,11 @@ def create_notification(
         resource_type=resource_type,
         resource_id=resource_id,
     )
+
     db.add(notification)
     db.commit()
     db.refresh(notification)
+
     return notification
 
 
@@ -48,8 +70,24 @@ def list_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return notifications for the current user."""
-    query = db.query(Notification).filter(Notification.user_id == current_user.id)
+    """
+    Retrieve notifications for the authenticated user.
+
+    Args:
+        unread_only (bool): Whether to return only unread notifications.
+        page (int): Current pagination page number.
+        limit (int): Maximum number of notifications per page.
+        current_user (User): Authenticated user dependency.
+        db (Session): Database session dependency.
+
+    Returns:
+        PaginatedResponse[NotificationResponse]:
+        Paginated list of user notifications.
+    """
+
+    query = db.query(Notification).filter(
+        Notification.user_id == current_user.id
+    )
 
     if unread_only:
         query = query.filter(Notification.is_read.is_(False))
@@ -77,7 +115,18 @@ def mark_notifications_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Mark a list of notification IDs as read."""
+    """
+    Mark selected notifications as read.
+
+    Args:
+        body (NotificationMarkRead): Notification IDs to mark as read.
+        current_user (User): Authenticated user dependency.
+        db (Session): Database session dependency.
+
+    Returns:
+        None: Empty response with HTTP 204 status code.
+    """
+
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.id.in_(body.ids),
@@ -87,6 +136,7 @@ def mark_notifications_read(
     )
 
     db.commit()
+
     return None
 
 
@@ -96,7 +146,21 @@ def delete_notification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a single notification owned by the current user."""
+    """
+    Delete a notification owned by the authenticated user.
+
+    Args:
+        notification_id (int): ID of the notification to delete.
+        current_user (User): Authenticated user dependency.
+        db (Session): Database session dependency.
+
+    Returns:
+        None: Empty response with HTTP 204 status code.
+
+    Raises:
+        HTTPException: If the notification does not exist.
+    """
+
     notification = (
         db.query(Notification)
         .filter(
@@ -114,4 +178,5 @@ def delete_notification(
 
     db.delete(notification)
     db.commit()
+
     return None
