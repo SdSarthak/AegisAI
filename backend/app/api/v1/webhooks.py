@@ -21,32 +21,47 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.models.webhook import WebhookConfig  # Assuming this is the SQLAlchemy model
+from app.models.webhook import WebhookConfig
 from app.schemas.webhook import WebhookCreate, WebhookResponse
+
 
 router = APIRouter()
 
 
-@router.post("", response_model=WebhookResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=WebhookResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_webhook(
     body: WebhookCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """
-    Register a new webhook endpoint for the current user.
+    Register a new webhook endpoint for the authenticated user.
+
+    Args:
+        body (WebhookCreate): Webhook configuration payload.
+        current_user (User): Authenticated user dependency.
+        db (Session): Database session dependency.
+
+    Returns:
+        WebhookResponse: Newly created webhook configuration.
     """
+
     # Force the user_id to be the authenticated user to prevent spoofing
     webhook_data = body.model_dump()
+
     db_webhook = WebhookConfig(
         **webhook_data,
-        user_id=current_user.id
+        user_id=current_user.id,
     )
-    
+
     db.add(db_webhook)
     db.commit()
     db.refresh(db_webhook)
-    
+
     return db_webhook
 
 
@@ -56,11 +71,23 @@ def list_webhooks(
     db: Session = Depends(get_db),
 ):
     """
-    List all webhook configs for the current user.
+    Retrieve all webhook configurations for the authenticated user.
+
+    Args:
+        current_user (User): Authenticated user dependency.
+        db (Session): Database session dependency.
+
+    Returns:
+        List[WebhookResponse]: List of configured webhooks.
     """
+
     # Fetch webhooks strictly scoped to the authenticated user
-    webhooks = db.query(WebhookConfig).filter(WebhookConfig.user_id == current_user.id).all()
-    
+    webhooks = (
+        db.query(WebhookConfig)
+        .filter(WebhookConfig.user_id == current_user.id)
+        .all()
+    )
+
     return webhooks
 
 
@@ -71,19 +98,35 @@ def delete_webhook(
     db: Session = Depends(get_db),
 ):
     """
-    Delete a webhook config (must belong to current user).
+    Delete a webhook configuration owned by the authenticated user.
+
+    Args:
+        webhook_id (int): ID of the webhook configuration.
+        current_user (User): Authenticated user dependency.
+        db (Session): Database session dependency.
+
+    Returns:
+        None: Empty response with HTTP 204 status code.
+
+    Raises:
+        HTTPException: If the webhook configuration is not found.
     """
+
     # Query checking BOTH the webhook ID and the user ID
-    db_webhook = db.query(WebhookConfig).filter(
-        WebhookConfig.id == webhook_id,
-        WebhookConfig.user_id == current_user.id
-    ).first()
+    db_webhook = (
+        db.query(WebhookConfig)
+        .filter(
+            WebhookConfig.id == webhook_id,
+            WebhookConfig.user_id == current_user.id,
+        )
+        .first()
+    )
 
     # Generic 404 error (hides existence of other users' webhooks)
     if not db_webhook:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Webhook not found"
+            detail="Webhook not found",
         )
 
     db.delete(db_webhook)
