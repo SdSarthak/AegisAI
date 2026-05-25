@@ -70,8 +70,10 @@ docker compose up -d
 # Backend
 cd backend
 python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
+# Recommended: Python 3.10 or 3.11 for compatibility with Torch and PostgreSQL dependencies
 pip install -r requirements.txt
-cp .env.example .env   # fill in values
+cp .env.example .env   # configure DATABASE_URL and SECRET_KEY before running migrations
+alembic upgrade head
 uvicorn app.main:app --reload
 
 # Frontend (new terminal)
