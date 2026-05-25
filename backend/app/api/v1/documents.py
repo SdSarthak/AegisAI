@@ -1,3 +1,9 @@
+from datetime import datetime, timedelta
+
+from jose import jwt, JWTError
+from jose.exceptions import ExpiredSignatureError
+
+from fastapi import HTTPException, Depends
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
@@ -5,6 +11,7 @@ from typing import List
 from io import BytesIO
 import re
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
@@ -25,8 +32,27 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
+
 router = APIRouter()
 
+def create_share_token(document_id: int):
+    expire = datetime.utcnow() + timedelta(
+        days=settings.DOCUMENT_SHARE_EXPIRE_DAYS
+    )
+
+    payload = {
+        "document_id": document_id,
+        "type": "document_share",
+        "exp": expire
+    }
+
+    token = jwt.encode(
+        payload,
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM
+    )
+
+    return token
 
 # Document templates for generation
 DOCUMENT_TEMPLATES = {
@@ -194,6 +220,83 @@ def list_documents(
     documents = base_query.offset(offset).limit(limit).all()
     return PaginatedResponse(items=documents, total=total, page=page, limit=limit)
 
+@router.get("/share/{token}", response_model=DocumentResponse)
+def get_shared_document(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Access shared document without authentication."""
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Share link expired"
+        )
+
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid share token"
+        )
+
+    if payload.get("type") != "document_share":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type"
+        )
+
+    document_id = payload.get("document_id")
+
+    if not document_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token payload"
+        )
+
+    document = db.query(Document).filter(
+        Document.id == document_id
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    return document
+
+@router.post("/{document_id}/share")
+def share_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Generate share link for a document."""
+
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    token = create_share_token(document.id)
+
+    return {
+        "share_url": f"/api/v1/documents/share/{token}",
+        "expires_in_days": settings.DOCUMENT_SHARE_EXPIRE_DAYS
+    }
 
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(

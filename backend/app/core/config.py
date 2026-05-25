@@ -3,6 +3,7 @@ from typing import List
 
 
 class Settings(BaseSettings):
+    DOCUMENT_SHARE_EXPIRE_DAYS: int = 7
     # App
     APP_NAME: str = "AegisAI"
     DEBUG: bool = False
