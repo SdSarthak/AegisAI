@@ -160,19 +160,18 @@ AegisAI/
 ## What's New
 
 Recent community contributions (May 2026):
-
-- **PDF export** — download any compliance document as PDF (`GET /documents/{id}/pdf`)
-- **Bulk CSV import** — register many AI systems at once (`POST /ai-systems/import`)
-- **AI Systems search + filter** by name, risk level, and compliance status
-- **Per-user rate limiting** on Guard scan endpoint
-- **SVG compliance badges** — embed a live compliance badge in your README
-- **PATCH /users/me** — update user profile
-- **RAG feedback** — thumbs up/down on answers + low-quality chunk surfacing
-- **Guard SDK** — standalone package in `guard-sdk/` (PyPI coming soon)
-- **Global toast notifications** in the frontend (react-hot-toast)
-- **Guard scan CI Action** — automatically scans `.prompts/` files on every PR
-- **75-row regulatory QA dataset** for RAG evaluation
-- **Multi-regulation comparison doc** — EU AI Act vs UK AI Bill vs India DPDP
+- **PDF Export** — Download compliance documents as PDF files (`GET /documents/{id}/pdf`)
+- **Bulk CSV Import** — Register multiple AI systems at once (`POST /ai-systems/import`)
+- **AI Systems Search & Filter** — Filter by name, risk level, and compliance status
+- **Per-User Rate Limiting** — Added protection on the Guard scan endpoint
+- **SVG Compliance Badges** — Embed live compliance badges in your README
+- **User Profile Updates** — Update user profiles via `PATCH /users/me`
+- **RAG Feedback System** — Thumbs up/down feedback with low-quality chunk surfacing
+- **Guard SDK** — Standalone package available in `guard-sdk/` (PyPI support coming soon)
+- **Global Toast Notifications** — Frontend notifications powered by react-hot-toast
+- **Guard Scan CI Action** — Automatically scans `.prompts/` files on every PR
+- **Regulatory QA Dataset** — 75-row dataset for RAG evaluation
+- **Multi-Regulation Comparison Docs** — EU AI Act vs UK AI Bill vs India DPDP
 
 ---
 
