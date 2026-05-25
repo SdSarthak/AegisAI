@@ -1,0 +1,16 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "https://https://aegis-backend-n9dk.onrender.com/api/v1/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://https://aegis-backend-n9dk.onrender.com/health"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
