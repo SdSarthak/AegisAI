@@ -280,27 +280,104 @@ def guard_info():
         "sanitization_level": guard_config.SANITIZATION_LEVEL,
     }
 
+VALID_DECISIONS = {"allow", "sanitize", "block"}
+VALID_INTENTS = {"benign", "suspicious", "malicious"}
+
+
+def build_history_filters(
+    current_user_id: int,
+    decision: Optional[str],
+    intent: Optional[str],
+    start_date: Optional[datetime],
+    end_date: Optional[datetime],
+):
+    filters = [GuardScanLog.user_id == current_user_id]
+
+    # -----------------------
+    # decision filter
+    # -----------------------
+    if decision:
+        decision = decision.strip().lower()
+
+        if decision not in VALID_DECISIONS:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid decision filter",
+            )
+
+        filters.append(GuardScanLog.decision == decision)
+
+    # -----------------------
+    # intent filter
+    # -----------------------
+    if intent:
+        intent = intent.strip().lower()
+
+        if intent not in VALID_INTENTS:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid intent filter",
+            )
+
+        filters.append(GuardScanLog.intent == intent)
+
+    # -----------------------
+    # date filters
+    # -----------------------
+    if start_date:
+        filters.append(GuardScanLog.scanned_at >= start_date)
+
+    if end_date:
+        filters.append(GuardScanLog.scanned_at <= end_date)
+
+    return filters
+
 @router.get("/history", response_model=PaginatedResponse[GuardScanLogResponse])
 def get_guard_history(
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
-    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+
+    decision: Optional[str] = Query(None),
+    intent: Optional[str] = Query(None),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return the current user's Guard scan history, newest first."""
-    base_query = db.query(GuardScanLog).filter(
-        GuardScanLog.user_id == current_user.id,
+
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(
+            status_code=400,
+            detail="start_date cannot be after end_date",
+        )
+
+    filters = build_history_filters(
+        current_user.id,
+        decision,
+        intent,
+        start_date,
+        end_date
     )
 
-    total = base_query.count()
+    query = db.query(GuardScanLog).filter(*filters)
+
+    total = query.count()
+
     logs = (
-        base_query.order_by(GuardScanLog.created_at.desc())
+        query.order_by(GuardScanLog.scanned_at.desc())
         .offset((page - 1) * limit)
         .limit(limit)
         .all()
     )
 
-    return PaginatedResponse(items=logs, total=total, page=page, limit=limit)
+    return PaginatedResponse(
+        items=logs,
+        total=total,
+        page=page,
+        limit=limit,
+    )
 
 
 @router.get("/stats", response_model=GuardStatsResponse)
