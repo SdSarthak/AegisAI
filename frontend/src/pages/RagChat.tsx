@@ -61,6 +61,7 @@ export default function RagChat() {
         answer: data.answer,
         sources: data.sources || [],
       })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       // ✅ ERROR HANDLING
       if (err.response?.status === 503) {
