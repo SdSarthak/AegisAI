@@ -12,8 +12,10 @@ TODO for contributors (good first issue):
   - Acceptance criteria: calling generate_badge_svg() returns a string
     that starts with "<svg" and can be saved as a .svg file.
 """
+from __future__ import annotations
 
 STATUS_COLORS = {
+
     "compliant": "#4ade80",  # green
     "in_progress": "#facc15",  # yellow
     "under_review": "#60a5fa",  # blue

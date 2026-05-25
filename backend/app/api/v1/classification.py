@@ -13,6 +13,8 @@ from app.schemas.ai_system import (
     RiskClassificationResponse,
     QuestionnaireRiskFactor,
 )
+from app.schemas.classification import ExplainRequest, ExplainResponse
+from app.modules.explainer import explain_system_risk
 
 router = APIRouter()
 
@@ -468,5 +470,17 @@ def bulk_classify_systems(
 
     db.commit()
     return BulkClassificationResponse(results=results)
+
+
+@router.post("/explain", response_model=ExplainResponse)
+def explain_classification(
+    request: ExplainRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Explain the risk classification of an AI system description under the EU AI Act.
+    Returns predicted risk level, reasoning, legal articles, and action recommendations.
+    """
+    return explain_system_risk(request.description)
 
 

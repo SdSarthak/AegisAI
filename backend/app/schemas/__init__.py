@@ -12,6 +12,7 @@ from app.schemas.document import DocumentCreate, DocumentResponse
 from app.schemas.audit_log import AISystemAuditLogResponse
 from app.schemas.pagination import PaginatedResponse
 from app.schemas.guard_stats import GuardStatsResponse
+from app.schemas.classification import ExplainRequest, ExplainResponse
 
 __all__ = [
     "UserCreate", "UserLogin", "UserResponse", "UserUpdateSchema", "Token",
@@ -23,4 +24,7 @@ __all__ = [
     "AISystemAuditLogResponse",
     "PaginatedResponse",
     "GuardStatsResponse",
+    "ExplainRequest",
+    "ExplainResponse",
 ]
+
