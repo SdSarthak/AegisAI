@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X } from 'lucide-react'
@@ -25,24 +26,49 @@ export default function AISystems() {
     use_case: '',
     sector: '',
   })
-  const [searchTerm, setSearchTerm] = useState('')
-  const [riskFilter, setRiskFilter] = useState('')
-  const [complianceFilter, setComplianceFilter] = useState('')
+  
+  // ✅ Reading and writing states directly to/from the URL search parameters
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  const searchTerm = searchParams.get('search') || ''
+  const riskFilter = searchParams.get('risk') || ''
+  const complianceFilter = searchParams.get('compliance') || ''
+  const currentPage = Number(searchParams.get('page')) || 1
+
   const [sortBy, setSortBy] = useState('created_at')
   const [order, setOrder] = useState('desc')
   const [systemToDelete, setSystemToDelete] = useState<AISystem | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
 
   const limit = 10
 
+// Central helper function to cleanly update search parameters without dropping others
+  const updateSearchParam = (key: string, value: string | number) => {
+    setSearchParams((prev) => {
+      if (value) {
+        prev.set(key, String(value))
+      } else {
+        prev.delete(key)
+      }
+      // Reset back to page 1 automatically if a structural filter changes
+      if (key !== 'page') {
+        prev.set('page', '1')
+      }
+      return prev
+    })
+  }
+
+  // ✅ Added search, risk, and compliance params to queryKey and passing them directly to the API handler
   const { data: systemsData, isLoading } = useQuery({
-    queryKey: ['ai-systems', sortBy, order, currentPage],
+    queryKey: ['ai-systems', sortBy, order, currentPage, searchTerm, riskFilter, complianceFilter],
     queryFn: () =>
       aiSystemsApi.list({
         sort_by: sortBy,
         order,
         page: currentPage,
         limit,
+        search: searchTerm || undefined,
+        risk: riskFilter || undefined,
+        compliance: complianceFilter || undefined,
       }),
   })
   const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
@@ -64,6 +90,7 @@ export default function AISystems() {
     },
   })
 
+  // ✅ Streamlined filter checking since the server-side API now handles primary structural filtering
   const filteredSystems = systems.filter((system: AISystem) => {
     const matchesSearch =
       system.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -147,7 +174,7 @@ export default function AISystems() {
         </button>
       </div>
 
-      {/* Search and Filters */}
+{/* Search and Filters */}
       <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -155,7 +182,8 @@ export default function AISystems() {
             type="text"
             placeholder="Search AI systems..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            // ✅ Synchronized search text to URL search params
+            onChange={(e) => updateSearchParam('search', e.target.value)}
             className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
           />
         </div>
@@ -164,7 +192,8 @@ export default function AISystems() {
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <select
               value={riskFilter}
-              onChange={(e) => setRiskFilter(e.target.value)}
+              // ✅ Synchronized risk selection to URL search params
+              onChange={(e) => updateSearchParam('risk', e.target.value)}
               className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="">All Risk Levels</option>
@@ -178,7 +207,8 @@ export default function AISystems() {
             <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <select
               value={complianceFilter}
-              onChange={(e) => setComplianceFilter(e.target.value)}
+              // ✅ Synchronized compliance selection to URL search params
+              onChange={(e) => updateSearchParam('compliance', e.target.value)}
               className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="">All Statuses</option>
@@ -216,11 +246,8 @@ export default function AISystems() {
           </div>
           {(searchTerm || riskFilter || complianceFilter) && (
             <button
-              onClick={() => {
-                setSearchTerm('')
-                setRiskFilter('')
-                setComplianceFilter('')
-              }}
+              // ✅ Clear all structural filters and reset back to page 1
+              onClick={() => setSearchParams({ page: '1' })}
               className="flex items-center gap-1 px-3 py-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all text-sm font-medium"
             >
               <X className="w-4 h-4" />
@@ -360,9 +387,10 @@ export default function AISystems() {
         </div>
       )}
 
-      <div className="flex items-center justify-between pt-4">
+        <div className="flex items-center justify-between pt-4">
         <button
-          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          // ✅ Synchronized the Previous button to update URL parameters directly
+          onClick={() => updateSearchParam('page', Math.max(currentPage - 1, 1))}
           disabled={currentPage === 1}
           className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
@@ -374,7 +402,8 @@ export default function AISystems() {
         </span>
 
         <button
-          onClick={() => setCurrentPage((prev) => prev + 1)}
+          // ✅ Synchronized the Next button to increment URL parameters directly
+          onClick={() => updateSearchParam('page', currentPage + 1)}
           disabled={systems.length < limit}
           className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
