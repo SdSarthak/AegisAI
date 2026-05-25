@@ -2,7 +2,7 @@
 
 # AegisAI
 
-**Open-source AI Governance, Risk & Compliance (AI-GRC) Platform**
+**Open-Source AI Governance, Risk & Compliance (AI-GRC) Platform**
 
 [![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python)](https://python.org)
@@ -20,7 +20,7 @@
 
 Every company shipping AI in Europe now faces legal obligations under the **EU AI Act** (in force April 2026). Most compliance tools cost thousands per month and are closed-source.
 
-**AegisAI is the open-source alternative** — a full-stack platform that combines three things into one:
+**AegisAI is the open-source alternative** — a full-stack platform that combines three core capabilities into one:
 
 | Module | What it does |
 |---|---|
@@ -52,7 +52,7 @@ Every company shipping AI in Europe now faces legal obligations under the **EU A
 git clone https://github.com/SdSarthak/AegisAI.git
 cd AegisAI
 
-cp backend/.env.example backend/.env
+copy backend\.env.example backend\.env
 # Edit backend/.env — set SECRET_KEY and LLM_API_KEY at minimum
 
 docker compose up -d
@@ -69,7 +69,8 @@ docker compose up -d
 ```bash
 # Backend
 cd backend
-python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
+python -m venv venv
+venv\Scripts\activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 cp .env.example .env   # fill in values
 uvicorn app.main:app --reload
@@ -202,7 +203,7 @@ Recent community contributions (May 2026):
 - [ ] OAuth2 / SSO support
 - [ ] Stripe billing integration
 
-> Open items are great contribution opportunities — see [CONTRIBUTING.md](CONTRIBUTING.md).
+> Open roadmap items are great contribution opportunities — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -232,5 +233,5 @@ Copyright (C) 2024 **Sarthak Doshi** ([@SdSarthak](https://github.com/SdSarthak)
 ---
 
 <div align="center">
-  <sub>Built with care. If AegisAI helps you, give it a star.</sub>
+  <sub>Built with care ❤️ If AegisAI helps you, consider giving it a star.</sub>
 </div>
