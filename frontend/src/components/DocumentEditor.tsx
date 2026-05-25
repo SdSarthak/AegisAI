@@ -35,7 +35,6 @@ export default function DocumentEditor({
       onSave?.(content)
       setSaveError('')
     } catch (error) {
-      console.error('Save failed:', error)
       setSaveError('Failed to save changes')
     }
     setIsSaving(false)
@@ -73,14 +72,16 @@ export default function DocumentEditor({
           {showPreview ? 'Edit' : 'Preview'}
         </button>
         <div className="flex items-center gap-3">
-          
-          {saveError && (
-  <span className="text-sm text-red-500">
-    {saveError}
-  </span>
-  
-)}
-{isSaving && <span className="text-sm text-gray-500">Saving...</span>}
+         {saveError && (
+            <span className="text-sm text-red-500">
+              {saveError}
+            </span>
+          )}
+          {isSaving && (
+            <span className="text-sm text-gray-500">
+              Saving...
+            </span>
+          )} 
           <button
             type="button"
             onClick={handleSave}
