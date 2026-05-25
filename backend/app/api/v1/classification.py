@@ -84,6 +84,12 @@ QUESTIONNAIRE_RISK_FACTORS: List[QuestionnaireRiskFactor] = [
         triggers_level=RiskLevel.HIGH,
     ),
     QuestionnaireRiskFactor(
+        id="education_vocational_training",
+        question="Is the system used to determine access to or assign natural persons to educational and vocational training institutions?",
+        article="Annex III point 3",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
         id="interacts_with_humans",
         question="Does the system directly interact with humans, such as a chatbot or virtual assistant?",
         article="Article 52(1)",
@@ -177,6 +183,13 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
         high_risk_indicators.append("Credit/insurance assessment AI")
         reasons.append(
             "AI for creditworthiness or insurance risk assessment is HIGH risk under Annex III"
+        )
+
+    # Education and vocational training (Annex III, point 3)
+    if data.education_vocational_training:
+        high_risk_indicators.append("Education/vocational training AI")
+        reasons.append(
+            "AI used for determining access to education or vocational training is HIGH risk under Annex III"
         )
 
     # Safety component

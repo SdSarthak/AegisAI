@@ -5,6 +5,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Compliance Engine** — Added Education & Vocational Training (Annex III point 3) risk factor to EU AI Act classification.
+
+---
+
 ## [0.1.0] — 2026-04-05
 
 ### Added
