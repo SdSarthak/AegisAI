@@ -38,7 +38,6 @@ export default function DocumentEditor({
   // Auto-save after 2 seconds
   useEffect(() => {
     if (content === initialContent) return
-
     if (saveTimeout) clearTimeout(saveTimeout)
 
     const timeout = setTimeout(async () => {
