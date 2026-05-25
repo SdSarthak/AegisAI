@@ -13,6 +13,7 @@ This guide gets AegisAI running locally in under 10 minutes.
 - [Option B — Manual setup](#option-b--manual-setup)
 - [Option C — Ollama (free, no API key)](#option-c--ollama-free-no-api-key)
 - [LLM provider options](#llm-provider-options)
+- [Environment Variables](#️-environment-variables)
 - [First steps in the UI](#first-steps-in-the-ui)
 - [Using the API directly](#using-the-api-directly)
 - [Running tests](#running-tests)
@@ -174,6 +175,67 @@ Ollama runs separately on your machine; the backend connects to it via `LLM_BASE
 | **Groq** (cloud, free tier) | Free tier | `LLM_API_KEY=gsk_...`, `LLM_BASE_URL=https://api.groq.com/openai/v1`, `LLM_MODEL=llama-3.3-70b-versatile` |
 | **OpenAI** | Paid | `LLM_API_KEY=sk-...` (leave `LLM_BASE_URL` empty) |
 | **Together AI** | Free trial | `LLM_API_KEY=...`, `LLM_BASE_URL=https://api.together.xyz/v1` |
+
+---
+
+## ⚙️ Environment Variables
+
+After copying `backend/.env.example` to `backend/.env`, here is a full reference for every variable:
+
+### 🔧 App
+| Variable | Description | Required | Default |
+|---|---|---|---|
+| `APP_NAME` | Application name | No | `AegisAI` |
+| `DEBUG` | Enable debug mode | No | `true` |
+| `API_V1_PREFIX` | API route prefix | No | `/api/v1` |
+
+### 🗄️ Database
+| Variable | Description | Required | Example |
+|---|---|---|---|
+| `DATABASE_URL` | PostgreSQL connection string | **Yes** | `postgresql://postgres:postgres@localhost:5432/aegisai_db` |
+
+### 🔐 Authentication
+| Variable | Description | Required | Example |
+|---|---|---|---|
+| `SECRET_KEY` | JWT signing secret — generate with `openssl rand -hex 32` | **Yes** | `a3f9...` |
+| `ALGORITHM` | JWT signing algorithm | No | `HS256` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Token expiry duration in minutes | No | `30` |
+
+### 🤖 LLM Provider
+| Variable | Description | Required | Example |
+|---|---|---|---|
+| `LLM_API_KEY` | API key for your LLM provider | **Yes** | `sk-...` |
+| `LLM_BASE_URL` | Custom LLM endpoint — leave empty for OpenAI | No | `http://localhost:11434/v1` |
+| `LLM_MODEL` | Model name to use | No | `gpt-4o-mini` |
+
+### 🛡️ LLM Guard Module
+| Variable | Description | Required | Default |
+|---|---|---|---|
+| `GUARD_SANITIZATION_LEVEL` | Sanitization strictness: `low`, `medium`, or `high` | No | `medium` |
+| `GUARD_MAX_PROMPT_LENGTH` | Maximum allowed prompt length in characters | No | `2000` |
+
+### 📚 RAG Intelligence Module
+| Variable | Description | Required | Default |
+|---|---|---|---|
+| `S3_BUCKET_NAME` | S3 bucket name for document storage | No | — |
+| `FAISS_INDEX_PATH` | Local path to store the FAISS vector index | No | `faiss_index` |
+| `RAG_CHUNK_SIZE` | Document chunk size for indexing | No | `1000` |
+| `RAG_CHUNK_OVERLAP` | Overlap between consecutive chunks | No | `200` |
+
+### 📊 MLflow Tracking
+| Variable | Description | Required | Default |
+|---|---|---|---|
+| `MLFLOW_TRACKING_URI` | MLflow server URI — leave empty to store runs locally in `./mlruns` | No | — |
+
+### 💳 Stripe (Optional — leave blank to run without billing)
+| Variable | Description | Required |
+|---|---|---|
+| `STRIPE_SECRET_KEY` | Stripe secret key | No |
+| `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key | No |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret | No |
+| `STRIPE_PRICE_STARTER` | Price ID for Starter plan | No |
+| `STRIPE_PRICE_GROWTH` | Price ID for Growth plan | No |
+| `STRIPE_PRICE_SCALE` | Price ID for Scale plan | No |
 
 ---
 
@@ -374,7 +436,7 @@ The CI pipeline (`.github/workflows/ci.yml`) runs all tests automatically on eve
 
 ## Training the Guard classifier
 
-By default, the Guard module uses `microsoft/deberta-v3-small` with random classification head weights. Fine-tune it for real accuracy:
+By default, the Guard module uses deterministic heuristics when no fine-tuned classifier is installed. Fine-tune `microsoft/deberta-v3-small` for stronger semantic coverage:
 
 ### Option 1 — Google Colab (recommended, free GPU)
 
