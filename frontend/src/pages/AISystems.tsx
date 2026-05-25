@@ -276,8 +276,29 @@ export default function AISystems() {
             </button>
           )}
         </div>
-      ) : (
-        <div className="grid gap-4">
+      ) : filteredSystems.length === 0 ? (
+  <div className="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center">
+    <div className="flex justify-center mb-4">
+      <Bot className="w-12 h-12 text-gray-400" />
+    </div>
+
+    <h3 className="text-lg font-semibold text-gray-900">
+      No AI systems found
+    </h3>
+
+    <p className="text-gray-600 mt-2">
+      Add your first AI system to start tracking compliance
+    </p>
+
+    <button
+      onClick={() => setShowModal(true)}
+      className="mt-6 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+    >
+      Register your first AI system
+    </button>
+  </div>
+) : (
+  <div className="grid gap-4">
           {filteredSystems.map((system: AISystem) => (
             <div
               key={system.id}

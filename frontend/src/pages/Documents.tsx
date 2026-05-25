@@ -1,3 +1,4 @@
+import { useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
@@ -21,6 +22,7 @@ interface AISystem {
 }
 
 export default function Documents() {
+  const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [showModal, setShowModal] = useState(false)
   const [selectedSystem, setSelectedSystem] = useState<number | null>(null)
@@ -244,6 +246,13 @@ export default function Documents() {
           <p className="text-gray-500 mt-1">
             Generate your first compliance document
           </p>
+          <button
+            onClick={() => navigate('/ai-systems')}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+          <Plus className="w-5 h-5" />
+          Register your first AI system
+          </button>
         </div>
       ) : (
         filteredDocuments.length === 0 ? (
@@ -256,104 +265,113 @@ export default function Documents() {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {filteredDocuments.map((doc: Document) => (
-            <div
-              key={doc.id}
-              className="bg-white rounded-xl border border-gray-200 p-6"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-primary-50 rounded-lg">
-                    <FileText className="w-6 h-6 text-primary-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{doc.title}</h3>
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                        {doc.document_type.replace(/_/g, ' ')}
-                      </span>
-                      <span
-                        className={`text-xs px-2 py-1 rounded ${getStatusColor(
-                          doc.status
-                        )}`}
-                      >
-                        {doc.status}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(doc.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  {doc.content && (
-                    <CopyButton
-                      text={doc.content}
-                      label="Copy"
-                      copiedLabel="Copied!"
-                      successMessage="Document copied!"
-                      iconOnly
-                    />
-                  )}
-                  <button
-                    onClick={() => setEditingDoc(doc)}
-                    className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
-                    title="Edit"
-                  >
-                    <Edit className="w-5 h-5" />
-                  </button>
-
-                  <button
-                    onClick={() => handleCopy(doc.id, doc.content || '')}
-                    className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
-                    title={copiedDocId === doc.id ? 'Copied!' : 'Copy Markdown'}
-                  >
-                    {copiedDocId === doc.id ? (
-                      <Check className="w-5 h-5" />
-                    ) : (
-                      <Copy className="w-5 h-5" />
-                    )}
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      // Download as text file
-                      const blob = new Blob([doc.content || ''], {
-                        type: 'text/markdown',
-                      })
-                      const url = URL.createObjectURL(blob)
-                      const a = document.createElement('a')
-                      a.href = url
-                      a.download = `${doc.title}.md`
-                      a.click()
-                    }}
-                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-                  >
-                    <Download className="w-5 h-5" />
-                  </button>
-
-                  <button
-                    onClick={() => setDocumentToDelete(doc)}
-                    className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Preview */}
-              {doc.content && (
-                <div className="mt-4 pt-4 border-t border-gray-100">
-                  <pre className="text-xs text-gray-600 bg-gray-50 p-3 rounded-lg overflow-auto max-h-32">
-                    {doc.content.slice(0, 500)}...
-                  </pre>
-                </div>
-              )}
+  <div className="grid gap-4">
+    {filteredDocuments.map((doc: Document) => (
+      <div
+        key={doc.id}
+        className="bg-white rounded-xl border border-gray-200 p-6"
+      >
+        <div className="flex items-start justify-between">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-primary-50 rounded-lg">
+              <FileText className="w-6 h-6 text-primary-600" />
             </div>
-          ))}
+
+            <div>
+              <h3 className="font-semibold text-gray-900">
+                {doc.title}
+              </h3>
+
+              <div className="flex items-center gap-3 mt-2">
+                <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                  {doc.document_type.replace(/_/g, ' ')}
+                </span>
+
+                <span
+                  className={`text-xs px-2 py-1 rounded ${getStatusColor(
+                    doc.status
+                  )}`}
+                >
+                  {doc.status}
+                </span>
+
+                <span className="text-xs text-gray-500">
+                  {new Date(doc.created_at).toLocaleDateString()}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {doc.content && (
+              <CopyButton
+                text={doc.content}
+                label="Copy"
+                copiedLabel="Copied!"
+                successMessage="Document copied!"
+                iconOnly
+              />
+            )}
+
+            <button
+              onClick={() => setEditingDoc(doc)}
+              className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
+              title="Edit"
+            >
+              <Edit className="w-5 h-5" />
+            </button>
+
+            <button
+              onClick={() => handleCopy(doc.id, doc.content || '')}
+              className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
+              title={copiedDocId === doc.id ? 'Copied!' : 'Copy Markdown'}
+            >
+              {copiedDocId === doc.id ? (
+                <Check className="w-5 h-5" />
+              ) : (
+                <Copy className="w-5 h-5" />
+              )}
+            </button>
+
+            <button
+              onClick={() => {
+                const blob = new Blob([doc.content || ''], {
+                  type: 'text/markdown',
+                })
+
+                const url = URL.createObjectURL(blob)
+
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `${doc.title}.md`
+                a.click()
+              }}
+              className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            >
+              <Download className="w-5 h-5" />
+            </button>
+
+            <button
+              onClick={() => setDocumentToDelete(doc)}
+              className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
+            >
+              <Trash2 className="w-5 h-5" />
+            </button>
+          </div>
         </div>
-      ))}
+
+        {doc.content && (
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <pre className="text-xs text-gray-600 bg-gray-50 p-3 rounded-lg overflow-auto max-h-32">
+              {doc.content.slice(0, 500)}...
+            </pre>
+          </div>
+        )}
+      </div>
+    ))}
+  </div>
+))
+}
 
 
       {/* Delete Confirmation Modal */}
