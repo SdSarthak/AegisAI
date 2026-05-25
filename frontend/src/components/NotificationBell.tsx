@@ -49,13 +49,14 @@ export default function NotificationBell() {
 
   // Live data via useQuery
   const queryClient = useQueryClient()
-  const { data: notifications = [] } = useQuery({
+  const { data } = useQuery({
     queryKey: ['notifications', 'unread'],
     queryFn: () => notificationsApi.list(true),
     refetchInterval: 60_000,
   })
 
-  const unreadCount = notifications.filter((n: NotificationPreview) => !n.is_read).length
+  const notificationItems = data?.items || []
+  const unreadCount = notificationItems.filter((n: NotificationPreview) => !n.is_read).length
 
   const handleNotificationClick = async (id: number) => {
     await notificationsApi.markRead([id])
@@ -155,13 +156,13 @@ export default function NotificationBell() {
 
 
         <div className="max-h-80 overflow-y-auto divide-y divide-gray-50">
-          {notifications.length === 0 ? (
+          {notificationItems.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <Bell className="w-10 h-10 mx-auto mb-2 text-gray-200" />
               <p className="text-sm text-gray-400">No notifications yet</p>
             </div>
           ) : (
-            notifications.slice(0, 5).map((notification: NotificationPreview) => (
+            notificationItems.slice(0, 5).map((notification: NotificationPreview) => (
               <button
                 key={notification.id}
                 type="button"
