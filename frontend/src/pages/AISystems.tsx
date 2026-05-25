@@ -35,16 +35,16 @@ export default function AISystems() {
 
   const limit = 10
 
-  const { data: systemsData, isLoading } = useQuery({
-    queryKey: ['ai-systems', sortBy, order, currentPage],
-    queryFn: () =>
-      aiSystemsApi.list({
-        sort_by: sortBy,
-        order,
-        page: currentPage,
-        limit,
-      }),
-  })
+ const { data: systemsData, isLoading } = useQuery({
+  queryKey: ['ai-systems', sortBy, order, currentPage, riskFilter],
+  queryFn: () =>
+    aiSystemsApi.list({
+      sort_by: sortBy,
+      order,
+      page: currentPage,
+      limit,
+    }),
+});
   const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 
   const createMutation = useMutation({
@@ -164,7 +164,10 @@ export default function AISystems() {
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <select
               value={riskFilter}
-              onChange={(e) => setRiskFilter(e.target.value)}
+              onChange={(e) => {
+                setRiskFilter(e.target.value);
+                setCurrentPage(1);
+              }}
               className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="">All Risk Levels</option>
