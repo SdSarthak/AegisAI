@@ -241,7 +241,6 @@ def update_document(
     
     return document
 
-# ✅ After
 @router.post("/generate", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
 def generate_document(
     request: DocumentGenerateRequest,
