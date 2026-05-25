@@ -11,20 +11,14 @@ TODO for contributors (high difficulty):
 
 import time
 from fastapi import APIRouter, Depends, HTTPException, status
-Contributor note:
-  - POST /rag/ingest implemented: multipart PDF upload → document_loader → FAISS rebuild
-  - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - TODO: Integrate MLflow tracking from modules/rag/ml_flow.py
-  - TODO: Add streaming responses via SSE for long answers
-"""
+
 
 import os
 import shutil
 import tempfile
 from typing import List, Optional
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from fastapi import UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -35,9 +29,9 @@ from app.models.user import SubscriptionTier, User
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.vector_store import create_vector_store
 from app.models.rag_query import RagQuery
-from typing import Optional
 
 router = APIRouter()
+
 
 
 class RAGQueryRequest(BaseModel):
@@ -77,9 +71,9 @@ def ingest_documents(
     ``settings.FAISS_INDEX_PATH``.
 
     **Returns**
-    - ``files_processed`` – number of PDFs successfully saved and chunked
-    - ``chunks_created``  – total text chunks fed into the vector store
-    - ``index_size_bytes`` – on-disk size of the persisted FAISS index
+    - ``files_processed`` - number of PDFs successfully saved and chunked
+    - ``chunks_created``  - total text chunks fed into the vector store
+    - ``index_size_bytes`` - on-disk size of the persisted FAISS index
 
     **Errors**
     - ``400`` if no valid PDF files are supplied
@@ -209,7 +203,6 @@ def query_knowledge_base(
             pass
 
         return RAGQueryResponse(answer=answer, sources=sources, answer_id=feedback.id)
-        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

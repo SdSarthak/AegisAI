@@ -31,10 +31,19 @@ export default function AISystems() {
   const [sortBy, setSortBy] = useState('created_at')
   const [order, setOrder] = useState('desc')
   const [systemToDelete, setSystemToDelete] = useState<AISystem | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+
+  const limit = 10
 
   const { data: systemsData, isLoading } = useQuery({
-    queryKey: ['ai-systems', sortBy, order],
-    queryFn: () => aiSystemsApi.list({ sort_by: sortBy, order }),
+    queryKey: ['ai-systems', sortBy, order, currentPage],
+    queryFn: () =>
+      aiSystemsApi.list({
+        sort_by: sortBy,
+        order,
+        page: currentPage,
+        limit,
+      }),
   })
   const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 
@@ -351,6 +360,27 @@ export default function AISystems() {
         </div>
       )}
 
+      <div className="flex items-center justify-between pt-4">
+        <button
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+        >
+          Previous
+        </button>
+
+        <span className="text-sm font-medium text-gray-700">
+          Page {currentPage}
+        </span>
+
+        <button
+          onClick={() => setCurrentPage((prev) => prev + 1)}
+          disabled={systems.length < limit}
+          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+        >
+          Next
+        </button>
+      </div>
 
       {/* Delete Confirmation Modal */}
       {systemToDelete && (

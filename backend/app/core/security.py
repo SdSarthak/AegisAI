@@ -1,18 +1,18 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, TYPE_CHECKING
 
-from jose import JWTError, jwt
+from jose import ExpiredSignatureError, JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.context import user_id_ctx
 from app.core.database import get_db
 
 if TYPE_CHECKING:
     from app.models.user import User  # Prevent circular imports during runtime
-
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_PREFIX}/auth/login")
@@ -68,6 +68,13 @@ def decode_token(token: str) -> Dict[str, Any]:
             token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
         )
         return payload
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired. Please log in again.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     except JWTError:
         raise _get_credentials_exception()
 
@@ -95,5 +102,9 @@ async def get_current_user(
         # Standardized to 401 generic failure instead of a distinct "User not found" 401
         # to prevent user enumeration attacks via valid-but-orphaned tokens.
         raise _get_credentials_exception()
+
+    # Bind to the request context so every downstream log line (and the
+    # access log emitted by RequestContextMiddleware) carries user_id.
+    user_id_ctx.set(user.id)
 
     return user

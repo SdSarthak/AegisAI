@@ -10,12 +10,12 @@ import {
   MessageSquareText,
   LogOut,
   Shield,
+  ShieldCheck,
   ChevronLeft,
   ChevronRight,
   BarChart,
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
-// ThemeToggle imported above
 
 
 
@@ -25,6 +25,7 @@ const navigation = [
   { name: 'AI Systems', href: '/ai-systems', icon: Bot },
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
+  { name: 'LLM Guard', href: '/guard', icon: ShieldCheck },
   { name: 'Chatbot', href: '/rag-chat', icon: MessageSquareText },
 ]
 
