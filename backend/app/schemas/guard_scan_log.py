@@ -22,3 +22,10 @@ class GuardScanLogResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class GuardStatsResponse(BaseModel):
+    total_scans: int
+    blocked: int
+    sanitized: int
+    allowed: int
+    block_rate: float

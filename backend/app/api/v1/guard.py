@@ -27,6 +27,7 @@ from app.api.v1.notifications import create_notification
 from app.models.notification import NotificationType
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.pagination import PaginatedResponse
+from app.schemas.guard_scan_log import GuardStatsResponse
 
 router = APIRouter()
 
@@ -183,6 +184,43 @@ def get_guard_history(
         .all()
     )
     return PaginatedResponse(items=logs, total=total, page=page, limit=limit)
+
+@router.get("/stats", response_model=GuardStatsResponse)
+def get_guard_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Return aggregated Guard statistics for the authenticated user.
+    """
+
+    logs_query = db.query(GuardScanLog).filter(
+        GuardScanLog.user_id == current_user.id
+    )
+
+    total_scans = logs_query.count()
+
+    blocked = logs_query.filter(
+        GuardScanLog.decision == "block"
+    ).count()
+
+    sanitized = logs_query.filter(
+        GuardScanLog.decision == "sanitize"
+    ).count()
+
+    allowed = logs_query.filter(
+        GuardScanLog.decision == "allow"
+    ).count()
+
+    block_rate = blocked / total_scans if total_scans > 0 else 0
+
+    return {
+        "total_scans": total_scans,
+        "blocked": blocked,
+        "sanitized": sanitized,
+        "allowed": allowed,
+        "block_rate": round(block_rate, 3),
+    }
 
 
 # Temporary in-memory config store
