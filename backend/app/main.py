@@ -20,7 +20,11 @@ from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.core.telemetry import setup_telemetry
 from app.api.v1 import api_router, badge
+<<<<<<< HEAD
 from app.plugins.regulation_loader import init_registry
+=======
+from app.tasks.scheduler import scheduler
+>>>>>>> b21cecc (fix: start scheduler in FastAPI lifespan)
 import app.models  # ensure all ORM models are imported so tables are created
 
 # -------------------------------------------------------------------
@@ -45,6 +49,11 @@ async def lifespan(app: FastAPI):
         # Initialize database tables during application startup
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables initialized.")
+
+        # START SCHEDULER
+        scheduler.start()
+        logger.info("Background scheduler started.")
+
     except Exception:
         logger.exception("Failed to initialize database tables")
         raise
@@ -55,10 +64,16 @@ async def lifespan(app: FastAPI):
     app.state.registry = init_registry(builtin_dir, custom_dir)
     logger.info("Regulation registry initialized.")
 
-    yield  # Control is passed to FastAPI and the application runs
+    yield  # App runs here
 
     logger.info("Shutting down AegisAI backend...")
-    # Place any teardown logic here (e.g., closing thread pools, background tasks)
+
+    # STOP SCHEDULER
+    try:
+        scheduler.shutdown()
+        logger.info("Background scheduler stopped.")
+    except Exception:
+        logger.exception("Error while shutting down scheduler")
 
 # -------------------------------------------------------------------
 # FastAPI Application Initialization
