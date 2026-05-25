@@ -107,6 +107,12 @@ QUESTIONNAIRE_RISK_FACTORS: List[QuestionnaireRiskFactor] = [
         article="Article 52 / Annex III context",
         triggers_level=RiskLevel.LIMITED,
     ),
+    QuestionnaireRiskFactor(
+    id="real_time_remote_biometric_identification",
+    question="Does the system perform real-time remote biometric identification in public spaces?",
+    article="Annex III / Article 5",
+    triggers_level=RiskLevel.UNACCEPTABLE,
+    ),
 ]
 
 

@@ -67,6 +67,7 @@ class RiskClassificationRequest(BaseModel):
     generates_synthetic_content: bool = False  # Deepfakes, AI-generated media
     emotion_recognition: bool = False
     biometric_categorization: bool = False
+    real_time_remote_biometric_identification: bool = False
 
 
 class RiskClassificationResponse(BaseModel):
