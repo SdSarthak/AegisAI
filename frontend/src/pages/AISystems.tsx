@@ -45,7 +45,10 @@ export default function AISystems() {
         limit,
       }),
   })
-  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
+  const systems = systemsData && typeof systemsData === 'object' && 'items' in systemsData
+  ? ((systemsData as any).items as AISystem[])
+  : (Array.isArray(systemsData) ? systemsData : [])
+
 
   const createMutation = useMutation({
     mutationFn: aiSystemsApi.create,
@@ -375,7 +378,7 @@ export default function AISystems() {
 
         <button
           onClick={() => setCurrentPage((prev) => prev + 1)}
-          disabled={systems.length < limit}
+          disabled={systemsData && typeof systemsData === 'object' && 'items' in systemsData ? ((systemsData as any).items as any[]).length < limit : systems.length < limit}
           className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
           Next
@@ -499,3 +502,5 @@ export default function AISystems() {
     </div>
   )
 }
+
+
