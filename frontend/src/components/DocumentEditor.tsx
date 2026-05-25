@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Save, Eye, EyeOff } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { marked } from 'marked'
 import api from '../services/api'
+import { sanitizePreviewHtml } from '../utils/sanitizePreviewHtml'
 
 interface DocumentEditorProps {
   documentId: number
@@ -22,6 +23,10 @@ export default function DocumentEditor({
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
+  const previewHtml = useMemo(
+    () => sanitizePreviewHtml(marked.parse(content, { async: false }) as string),
+    [content]
+  )
 
   const handleSave = useCallback(async () => {
     setIsSaving(true)
@@ -91,7 +96,7 @@ export default function DocumentEditor({
       <div className="flex-1 overflow-auto">
         {showPreview ? (
           <div className="prose max-w-none p-6">
-            <div dangerouslySetInnerHTML={{ __html: marked.parse(content, { async: false }) }} />
+            <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
           </div>
         ) : (
           <div className="h-full">
