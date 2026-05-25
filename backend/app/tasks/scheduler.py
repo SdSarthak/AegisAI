@@ -21,22 +21,68 @@ TODO for contributors (high priority):
 """
 
 # TODO (high priority): uncomment and implement once APScheduler is installed
-# from apscheduler.schedulers.asyncio import AsyncIOScheduler
-# from app.core.database import SessionLocal
-# from app.models.compliance_snapshot import ComplianceSnapshot
-# from app.models.ai_system import AISystem
-# from app.models.risk_assessment import RiskAssessment
-# from app.models.notification import Notification, NotificationType
-# from datetime import datetime, timedelta
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from app.core.database import SessionLocal
+from app.models.compliance_snapshot import ComplianceSnapshot
+from app.models.ai_system import AISystem, RiskAssessment
+from app.models.notification import Notification, NotificationType
+from app.api.v1.notifications import create_notification
+from datetime import datetime, timedelta
 
-# scheduler = AsyncIOScheduler()
+scheduler = AsyncIOScheduler()
 
 
-# @scheduler.scheduled_job("cron", hour=2, minute=0)   # runs daily at 02:00 UTC
-# def snapshot_compliance_scores():
-#     """Daily job: capture a ComplianceSnapshot for every AI system."""
-#     # TODO: implement
-#     pass
+@scheduler.scheduled_job("cron", hour=3, minute=0)
+def send_reassessment_reminders():
+    """Daily job: notify users when a risk assessment is expiring within 30 days."""
+
+    db = SessionLocal()
+
+    try:
+        now = datetime.utcnow()
+        cutoff = now + timedelta(days=30)
+        seven_days_ago = now - timedelta(days=7)
+
+        due_assessments = (
+            db.query(RiskAssessment)
+            .filter(RiskAssessment.valid_until <= cutoff)
+            .filter(RiskAssessment.valid_until >= now)
+            .all()
+        )
+
+        for assessment in due_assessments:
+            system = assessment.ai_system
+
+            existing_notification = (
+                db.query(Notification)
+                .filter(Notification.user_id == system.owner_id)
+                .filter(
+                    Notification.notification_type
+                    == NotificationType.REASSESSMENT_DUE.value
+                )
+                .filter(Notification.resource_id == system.id)
+                .filter(Notification.created_at >= seven_days_ago)
+                .first()
+            )
+
+            if existing_notification:
+                continue
+
+            create_notification(
+                db=db,
+                user_id=system.owner_id,
+                notification_type=NotificationType.REASSESSMENT_DUE.value,
+                title="Risk assessment due soon",
+                message=(
+                    f"{system.name} requires re-assessment by "
+                    f"{assessment.valid_until.date()}"
+                ),
+                resource_type="ai_system",
+                resource_id=system.id,
+            )
+
+    finally:
+        db.close()
 
 
 # @scheduler.scheduled_job("cron", hour=3, minute=0)   # runs daily at 03:00 UTC
