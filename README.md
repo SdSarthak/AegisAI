@@ -15,6 +15,11 @@
 </div>
 
 ---
+## Live Demo
+
+https://aegis-ai-sigma-seven.vercel.app
+
+---
 
 ## What is AegisAI?
 
