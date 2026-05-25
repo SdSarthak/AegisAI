@@ -16,10 +16,12 @@ TODO for contributors (help wanted):
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
+
 
 router = APIRouter()
 
@@ -32,14 +34,26 @@ def get_compliance_timeline(
     db: Session = Depends(get_db),
 ):
     """
-    Return daily compliance snapshots for a given AI system.
+    Retrieve daily compliance snapshots for an AI system.
 
-    TODO (help wanted): query ComplianceSnapshot filtered by ai_system_id and
-    snapshotted_at >= now - days. Verify the system belongs to current_user.
+    Args:
+        system_id (int): ID of the AI system.
+        days (int): Number of past days to include in the timeline.
+        current_user (User): Authenticated user dependency.
+        db (Session): Database session dependency.
+
+    Returns:
+        ComplianceTimelineResponse:
+        Daily compliance timeline data for the selected system.
+
+    Raises:
+        HTTPException: If the endpoint is not implemented.
     """
+
     # TODO: implement — replace with real DB query
     raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Not implemented yet",
     )
 
 
@@ -49,11 +63,21 @@ def get_analytics_summary(
     db: Session = Depends(get_db),
 ):
     """
-    Return aggregate compliance stats for the current user's systems.
+    Retrieve aggregate analytics summary for user AI systems.
 
-    TODO (help wanted): aggregate counts and averages from ai_systems table.
+    Args:
+        current_user (User): Authenticated user dependency.
+        db (Session): Database session dependency.
+
+    Returns:
+        dict: Aggregated compliance statistics and metrics.
+
+    Raises:
+        HTTPException: If the endpoint is not implemented.
     """
+
     # TODO: implement
     raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail="Not implemented yet",
     )
