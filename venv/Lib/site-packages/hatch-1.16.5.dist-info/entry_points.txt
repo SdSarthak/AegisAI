@@ -1,0 +1,2 @@
+[console_scripts]
+hatch = hatch.cli:main

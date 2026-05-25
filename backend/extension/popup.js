@@ -1,1 +1,0 @@
-console.log("AegisAI Prompt Protector Loaded");
