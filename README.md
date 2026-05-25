@@ -91,6 +91,9 @@ Set in `backend/.env`:
 LLM_API_KEY=ollama
 LLM_BASE_URL=http://localhost:11434/v1
 LLM_MODEL=llama3.2
+## 🛠 Troubleshooting
+
+This section collects common setup and runtime problems contributors encounter, with quick checks and recommended fixes.
 ```
 
 Then `docker compose up -d`. See [Getting Started](https://github.com/SdSarthak/AegisAI/blob/main/docs/getting-started.md) for all provider options.
