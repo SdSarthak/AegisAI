@@ -291,7 +291,24 @@ def get_ai_system_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get paginated and sorted audit history for a specific AI system."""
+    """Get paginated audit history for a specific AI system.
+
+    Args:
+        system_id: The unique identifier of the AI system.
+        order: Sort direction for changed_at - asc or desc (default: desc).
+        page: Page number, 1-indexed (default: 1).
+        limit: Number of items per page, max 100 (default: 20).
+        db: Database session dependency.
+        current_user: The authenticated user extracted from the JWT token.
+
+    Returns:
+        PaginatedResponse[AISystemAuditLogResponse]: Paginated audit log
+            entries for the specified AI system.
+
+    Raises:
+        HTTPException: 400 if order value is invalid.
+        HTTPException: 404 if AI system not found or not owned by user.
+    """
     
     # 1. Validate sorting parameter
     if order not in ("asc", "desc"):
