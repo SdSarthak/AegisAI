@@ -33,11 +33,21 @@ def get_compliance_timeline(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Return daily compliance snapshots for a given AI system.
+    """Return daily compliance snapshots for a given AI system.
 
-    TODO (help wanted): query ComplianceSnapshot filtered by ai_system_id and
-    snapshotted_at >= now - days. Verify the system belongs to current_user.
+    Args:
+        system_id: The unique identifier of the AI system to query.
+        days: Number of past days to include in the timeline (default: 30).
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        ComplianceTimelineResponse: A list of daily compliance snapshot
+            data points for the specified AI system.
+
+    Raises:
+        HTTPException: 501 if the endpoint is not yet implemented.
+        HTTPException: 403 if the system does not belong to current_user.
     """
     # TODO: implement — replace with real DB query
     raise HTTPException(
@@ -50,10 +60,18 @@ def get_analytics_summary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Return aggregate compliance stats for the current user's systems.
+    """Return aggregate compliance statistics for the current user's systems.
 
-    TODO (help wanted): aggregate counts and averages from ai_systems table.
+    Args:
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        dict: Aggregated stats including total systems, average compliance
+            score, count by risk level, and count by compliance status.
+
+    Raises:
+        HTTPException: 501 if the endpoint is not yet implemented.
     """
     # Return aggregate counts by risk level for the current user's AI systems.
     # Keep this implementation minimal: counts for minimal/limited/high/unacceptable.

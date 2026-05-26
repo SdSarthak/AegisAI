@@ -4,17 +4,51 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/aegis.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>EU AI Act Compliance Tool</title>
-    <script>
+<script>
   (() => {
-    const theme = localStorage.getItem("theme");
+    try {
+      const theme = localStorage.getItem("theme");
+      const prefersDark = window.matchMedia(
+        "(prefers-color-scheme: dark)"
+      ).matches;
 
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
+      if (theme === "dark" || (!theme && prefersDark)) {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
+    } catch (e) {
+      console.error("Theme initialization failed:", e);
     }
   })();
 </script>
+
+<style>
+  html {
+    background: #f9fafb;
+    color-scheme: light;
+  }
+
+  html.dark {
+    background: #111827;
+    color-scheme: dark;
+  }
+
+  body {
+    margin: 0;
+    background: #f9fafb;
+    color: #111827;
+  }
+
+  html.dark body {
+    background: #111827;
+    color: #f3f4f6;
+  }
+</style>
   </head>
+
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>

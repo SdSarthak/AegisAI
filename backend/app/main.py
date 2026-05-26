@@ -6,6 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 import logging
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Dict, Any
 
 from fastapi import FastAPI
@@ -20,6 +21,7 @@ from app.core.database import engine, Base
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.api.v1 import api_router, badge
+from app.plugins.regulation_loader import init_registry
 import app.models  # ensure all ORM models are imported so tables are created
 
 # -------------------------------------------------------------------
@@ -39,14 +41,20 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown events for the FastAPI application.
     """
     logger.info("Starting AegisAI backend...")
-    
+
     try:
         # Initialize database tables during application startup
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables initialized.")
     except Exception:
         logger.exception("Failed to initialize database tables")
-        raise 
+        raise
+
+    # Initialize regulation ruleset registry (stored on app.state for route access)
+    builtin_dir = Path(__file__).resolve().parent.parent / "regulations"
+    custom_dir = builtin_dir / "custom"
+    app.state.registry = init_registry(builtin_dir, custom_dir)
+    logger.info("Regulation registry initialized.")
 
     yield  # Control is passed to FastAPI and the application runs
 
