@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import NotificationBell from './NotificationBell'
 import ThemeToggle from './ThemeToggle'
 import {
   LayoutDashboard,
@@ -15,9 +16,6 @@ import {
   ChevronRight,
   BarChart,
 } from 'lucide-react'
-import NotificationBell from './NotificationBell'
-
-
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -112,21 +110,20 @@ export default function Layout() {
                 {displayName}
               </p>
               <p className="text-xs text-gray-500 truncate dark:text-gray-400">
-  {companyName}
-</p>
-</div>
+                {companyName}
+              </p>
+            </div>
 
-<div className="flex items-center gap-1">
-  <button
-    onClick={logout}
-    className="p-2 text-gray-400 dark:text-gray-300 hover:text-gray-600 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
-    aria-label="Log out"
-    title="Log out"
-  >
-    <LogOut className="w-5 h-5" />
-  </button>
-</div>
-
+            <div className="flex items-center gap-1">
+              <button
+                onClick={logout}
+                className="p-2 text-gray-400 dark:text-gray-300 hover:text-gray-600 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
+                aria-label="Log out"
+                title="Log out"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -137,7 +134,6 @@ export default function Layout() {
           isCollapsed ? 'pl-20' : 'pl-64'
         }`}
       >
-
         <header className="sticky top-0 z-30 flex items-center justify-end gap-1 px-8 py-3 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
           <NotificationBell />
           <ThemeToggle />
