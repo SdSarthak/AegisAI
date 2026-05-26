@@ -512,6 +512,11 @@ def get_guard_stats(
 
     scans_per_day = list(daily_buckets.values())
 
+    # Ensure each daily bucket contains a total `count` field for
+    # compatibility with the response schema (date + count).
+    for b in scans_per_day:
+        b["count"] = int(b.get("allow", 0) or 0) + int(b.get("sanitize", 0) or 0) + int(b.get("block", 0) or 0)
+
     return {
         "window": window,
         "total_scans": total_scans,

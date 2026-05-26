@@ -20,6 +20,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
+from sqlalchemy import func
+from app.models.ai_system import AISystem, RiskLevel
 
 router = APIRouter()
 
@@ -53,7 +55,31 @@ def get_analytics_summary(
 
     TODO (help wanted): aggregate counts and averages from ai_systems table.
     """
-    # TODO: implement
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    # Return aggregate counts by risk level for the current user's AI systems.
+    # Keep this implementation minimal: counts for minimal/limited/high/unacceptable.
+    counts = (
+      db.query(AISystem.risk_level, func.count(AISystem.id))
+      .filter(AISystem.owner_id == current_user.id)
+      .group_by(AISystem.risk_level)
+      .all()
     )
+
+    # Map results into a predictable shape for the frontend.
+    result = {
+      "counts": {
+        "minimal": 0,
+        "limited": 0,
+        "high": 0,
+        "unacceptable": 0,
+      }
+    }
+
+    for risk, cnt in counts:
+      if risk is None:
+        continue
+      # risk is an enum member (RiskLevel) or its value; normalize by string.
+      key = risk.value if hasattr(risk, "value") else str(risk)
+      if key in result["counts"]:
+        result["counts"][key] = int(cnt)
+
+    return result
