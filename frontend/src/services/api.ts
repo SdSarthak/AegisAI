@@ -141,6 +141,10 @@ export const aiSystemsApi = {
     sort_by?: string
     order?: string
     skip?: number
+    search?: string
+    risk_level?: string
+    compliance_status?: string
+    page?: number
     limit?: number
   }) => {
     const { data } = await api.get('/ai-systems/', { params })
