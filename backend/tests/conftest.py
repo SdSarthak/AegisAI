@@ -73,3 +73,13 @@ def client(db_engine):
     transaction.rollback()
     connection.close()
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_guard_rate_limits():
+    """Keep in-memory guard rate limits isolated between tests."""
+    from app.api.v1.guard import _scan_attempts_by_user
+
+    _scan_attempts_by_user.clear()
+    yield
+    _scan_attempts_by_user.clear()
