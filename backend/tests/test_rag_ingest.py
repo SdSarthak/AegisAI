@@ -21,24 +21,26 @@ def _make_pdf_upload(filename: str = "test.pdf", content: bytes = b"%PDF-1.4 fak
     return (filename, io.BytesIO(content), "application/pdf")
 
 
+# ---------------------------------------------------------------------------
+# Shared patches applied to every test in this module
+# ---------------------------------------------------------------------------
+
+# Patch the two RAG functions called inside the endpoint
+PATCH_LOAD_DOCS = "app.api.v1.rag.load_documents_from_paths"
+PATCH_CREATE_VS = "app.api.v1.rag.create_vector_store"
+
+# Patch os.path helpers *inside the rag module* so we don't break
+# tempfile / shutil operations that also rely on the real os.path.
+PATCH_OS_EXISTS = "app.api.v1.rag.os.path.exists"
+PATCH_OS_GETSIZE = "app.api.v1.rag.os.path.getsize"
+
+
 def _mock_current_user():
     """Return a minimal fake User object accepted by get_current_user."""
     user = MagicMock()
     user.id = "test-user-id"
     user.email = "test@example.com"
     return user
-
-
-# ---------------------------------------------------------------------------
-# Shared patches applied to every test in this module
-# ---------------------------------------------------------------------------
-
-# Patch get_current_user so we never need a real JWT
-PATCH_AUTH = "app.core.security.get_current_user"
-
-# Patch the two RAG functions called inside the endpoint
-PATCH_LOAD_DOCS = "app.api.v1.rag.load_documents_from_paths"
-PATCH_CREATE_VS = "app.api.v1.rag.create_vector_store"
 
 
 @pytest.fixture
@@ -72,9 +74,8 @@ class TestRagIngest:
         mock_create.return_value = MagicMock()
 
         with (
-            patch(PATCH_AUTH, return_value=_mock_current_user()),
-            patch("os.path.exists", return_value=True),
-            patch("os.path.getsize", return_value=512_000),
+            patch(PATCH_OS_EXISTS, return_value=True),
+            patch(PATCH_OS_GETSIZE, return_value=512_000),
         ):
             response = client.post(
                 "/api/v1/rag/ingest",
@@ -100,9 +101,8 @@ class TestRagIngest:
         mock_create.return_value = MagicMock()
 
         with (
-            patch(PATCH_AUTH, return_value=_mock_current_user()),
-            patch("os.path.exists", return_value=True),
-            patch("os.path.getsize", return_value=100_000),
+            patch(PATCH_OS_EXISTS, return_value=True),
+            patch(PATCH_OS_GETSIZE, return_value=100_000),
         ):
             response = client.post(
                 "/api/v1/rag/ingest",
@@ -128,7 +128,6 @@ class TestRagIngest:
         FastAPI validates the required File(...) parameter before our code runs.
         """
         response = client.post("/api/v1/rag/ingest")
-
         assert response.status_code == 422
 
     @patch(PATCH_CREATE_VS)
@@ -137,11 +136,10 @@ class TestRagIngest:
         """
         4. Uploading a non-PDF file should return 400 with a clear message.
         """
-        with patch(PATCH_AUTH, return_value=_mock_current_user()):
-            response = client.post(
-                "/api/v1/rag/ingest",
-                files={"files": ("report.docx", io.BytesIO(b"fake docx"), "application/vnd.openxmlformats-officedocument")},
-            )
+        response = client.post(
+            "/api/v1/rag/ingest",
+            files={"files": ("report.docx", io.BytesIO(b"fake docx"), "application/vnd.openxmlformats-officedocument")},
+        )
 
         assert response.status_code == 400
         assert "pdf" in response.json()["detail"].lower()
@@ -159,11 +157,10 @@ class TestRagIngest:
         mock_load.return_value = []   # loader returns nothing
         mock_create.return_value = MagicMock()
 
-        with patch(PATCH_AUTH, return_value=_mock_current_user()):
-            response = client.post(
-                "/api/v1/rag/ingest",
-                files={"files": _make_pdf_upload("blank.pdf")},
-            )
+        response = client.post(
+            "/api/v1/rag/ingest",
+            files={"files": _make_pdf_upload("blank.pdf")},
+        )
 
         assert response.status_code == 400
         assert "text" in response.json()["detail"].lower()
@@ -183,11 +180,10 @@ class TestRagIngest:
         mock_load.return_value = [MagicMock()]
         mock_create.side_effect = RuntimeError("Embedding model unavailable")
 
-        with patch(PATCH_AUTH, return_value=_mock_current_user()):
-            response = client.post(
-                "/api/v1/rag/ingest",
-                files={"files": _make_pdf_upload("eu_ai_act.pdf")},
-            )
+        response = client.post(
+            "/api/v1/rag/ingest",
+            files={"files": _make_pdf_upload("eu_ai_act.pdf")},
+        )
 
         assert response.status_code == 503
         assert "FAISS" in response.json()["detail"]
@@ -197,33 +193,17 @@ class TestRagIngest:
     # Auth
     # ------------------------------------------------------------------
 
-    def test_unauthenticated_request_returns_401(self, client):
+    def test_unauthenticated_request_returns_401(self, unauthenticated_client):
         """
         7. A request without a valid JWT should be rejected before the
         endpoint logic runs at all.
         """
-        # Override the conftest's default auth to force an actual 401
-        from app.core.security import get_current_user
-        from fastapi import HTTPException, status
-        
-        def raise_unauthorized():
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Not authenticated",
-            )
-        
-        app.dependency_overrides[get_current_user] = raise_unauthorized
-        
-        try:
-            response = client.post(
-                "/api/v1/rag/ingest",
-                files={"files": _make_pdf_upload()},
-            )
-            # FastAPI returns 401 or 403 depending on the security scheme
-            assert response.status_code in (401, 403)
-        finally:
-            # Remove the override so the conftest fixture can clean up cleanly
-            app.dependency_overrides.pop(get_current_user, None)
+        response = unauthenticated_client.post(
+            "/api/v1/rag/ingest",
+            files={"files": _make_pdf_upload()},
+        )
+        # FastAPI returns 401 or 403 depending on the security scheme
+        assert response.status_code in (401, 403)
 
     # ------------------------------------------------------------------
     # Response schema
@@ -240,9 +220,8 @@ class TestRagIngest:
         mock_create.return_value = MagicMock()
 
         with (
-            patch(PATCH_AUTH, return_value=_mock_current_user()),
-            patch("os.path.exists", return_value=True),
-            patch("os.path.getsize", return_value=1024),
+            patch(PATCH_OS_EXISTS, return_value=True),
+            patch(PATCH_OS_GETSIZE, return_value=1024),
         ):
             response = client.post(
                 "/api/v1/rag/ingest",
