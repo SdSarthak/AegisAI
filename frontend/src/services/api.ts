@@ -62,6 +62,9 @@ export const aiSystemsApi = {
     order?: string
     page?: number
     limit?: number
+    search?: string
+    risk_level?: string
+    compliance_status?: string
   }) => {
     // Fix for Issue #631: Transform frontend 'page' into the backend-expected 'skip' query offset parameter
     const limit = params?.limit ?? 10
@@ -69,11 +72,14 @@ export const aiSystemsApi = {
     const skip = (page - 1) * limit
 
     const queryParams = {
-      sort_by: params?.sort_by,
-      order: params?.order,
-      skip: skip,
-      limit: limit,
-    }
+  sort_by: params?.sort_by,
+  order: params?.order,
+  skip: skip,
+  limit: limit,
+  search: params?.search || undefined,
+  risk_level: params?.risk_level || undefined,
+  compliance_status: params?.compliance_status || undefined,
+}
 
     const { data } = await api.get('/ai-systems/', { params: queryParams })
     return data
