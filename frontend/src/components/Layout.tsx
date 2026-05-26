@@ -138,9 +138,9 @@ export default function Layout() {
         }`}
       >
 
-        <header className="sticky top-0 z-30 flex items-center justify-end gap-1 px-8 py-3 bg-white/80 backdrop-blur-md border-b border-gray-200/60">
+        <header className="sticky top-0 z-30 flex items-center justify-end gap-1 px-8 py-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200/60 dark:border-gray-700">
           <NotificationBell />
-          <ThemeToggle />
+          
         </header>
 
         <main className="p-8 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
