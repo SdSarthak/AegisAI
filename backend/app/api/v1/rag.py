@@ -280,7 +280,14 @@ def query_knowledge_base(
         answer = str(result.get("result", ""))
 
         # Groundedness Check
-        chunk_texts = [str(doc.page_content) for doc in source_docs]
+        chunk_texts = [
+            str(
+                getattr(doc, "page_content", None)
+                or (getattr(doc, "metadata", {}) or {}).get("text")
+                or (getattr(doc, "metadata", {}) or {}).get("source", "")
+            )
+            for doc in source_docs
+        ]
         groundedness_score = compute_groundedness(answer, chunk_texts)
         low_confidence = groundedness_score < 0.70
 
