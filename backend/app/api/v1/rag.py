@@ -1,13 +1,4 @@
-"""
-RAG Intelligence API — regulatory knowledge base query endpoint.
-Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
-SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (high difficulty):
-  - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
-  - Add streaming responses via SSE for long answers
-"""
+from __future__ import annotations
 
 import time
 from fastapi import APIRouter, Depends, HTTPException, status

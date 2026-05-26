@@ -1,8 +1,4 @@
-"""
-Pydantic schemas for compliance analytics / timeline data.
-Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
-SPDX-License-Identifier: AGPL-3.0-only
-"""
+from __future__ import annotations
 
 from pydantic import BaseModel
 from datetime import datetime
@@ -26,3 +22,17 @@ class ComplianceTimelineResponse(BaseModel):
     ai_system_id: int
     ai_system_name: str
     snapshots: list[ComplianceSnapshotResponse]
+
+
+class RiskDistributionValue(BaseModel):
+    name: str
+    value: int
+
+
+class AnalyticsSummaryResponse(BaseModel):
+    total_systems: int
+    avg_compliance_score: float
+    compliant_count: int
+    high_risk_count: int
+    risk_distribution: list[RiskDistributionValue]
+

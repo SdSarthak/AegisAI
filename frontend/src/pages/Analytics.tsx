@@ -23,6 +23,9 @@ import {
   Legend,
 } from 'recharts'
 
+import useDarkMode from '../hooks/useDarkMode'
+import { analyticsApi } from '../services/api'
+
 const lineChartData = [
   { name: 'Jan', score: 65 },
   { name: 'Feb', score: 72 },
@@ -40,82 +43,93 @@ const barChartData = [
   { name: 'System E', risk: 20 },
 ]
 
-const summaryStats = [
-  {
-    label: 'Total Systems',
-    value: '12',
-    icon: Activity,
-    color: 'text-blue-600',
-    bg: 'bg-blue-50',
-  },
-  {
-    label: 'Avg Score',
-    value: '84%',
-    icon: TrendingUp,
-    color: 'text-green-600',
-    bg: 'bg-green-50',
-  },
-  {
-    label: 'Compliant',
-    value: '10',
-    icon: ShieldCheck,
-    color: 'text-emerald-600',
-    bg: 'bg-emerald-50',
-  },
-  {
-    label: 'High Risk',
-    value: '2',
-    icon: AlertTriangle,
-    color: 'text-red-600',
-    bg: 'bg-red-50',
-  },
-]
-
 type RiskData = {
   name: string
   value: number
 }
 
 export default function Analytics() {
-  const [riskPieData, setRiskPieData] =
-    useState<RiskData[]>([])
-
+  const isDark = useDarkMode()
+  const [riskPieData, setRiskPieData] = useState<RiskData[]>([])
   const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState({
+    total_systems: 0,
+    avg_compliance_score: 0,
+    compliant_count: 0,
+    high_risk_count: 0,
+  })
 
   useEffect(() => {
-    fetchRiskDistribution()
+    fetchAnalyticsData()
   }, [])
 
-  const fetchRiskDistribution = async () => {
+  const fetchAnalyticsData = async () => {
     try {
-      // Temporary mock data until backend API is available
-      const mockData: RiskData[] = [
-        { name: 'Minimal Risk', value: 4 },
-        { name: 'Limited Risk', value: 3 },
-        { name: 'High Risk', value: 2 },
-        { name: 'Unacceptable Risk', value: 1 },
-      ]
-
-      setRiskPieData(mockData)
+      const summary = await analyticsApi.getSummary()
+      setStats({
+        total_systems: summary.total_systems,
+        avg_compliance_score: summary.avg_compliance_score,
+        compliant_count: summary.compliant_count,
+        high_risk_count: summary.high_risk_count,
+      })
+      setRiskPieData(summary.risk_distribution)
     } catch (error) {
       console.error(
-        'Failed to fetch risk distribution:',
+        'Failed to fetch analytics data:',
         error
       )
+      // fallback to mock data on error so UI never breaks
+      setRiskPieData([
+        { name: 'Minimal Risk', value: 0 },
+        { name: 'Limited Risk', value: 0 },
+        { name: 'High Risk', value: 0 },
+        { name: 'Unacceptable Risk', value: 0 },
+      ])
     } finally {
       setLoading(false)
     }
   }
 
+  const summaryStats = [
+    {
+      label: 'Total Systems',
+      value: stats.total_systems.toString(),
+      icon: Activity,
+      color: 'text-blue-600 dark:text-blue-400',
+      bg: 'bg-blue-50 dark:bg-blue-950/40',
+    },
+    {
+      label: 'Avg Score',
+      value: `${stats.avg_compliance_score}%`,
+      icon: TrendingUp,
+      color: 'text-green-600 dark:text-green-400',
+      bg: 'bg-green-50 dark:bg-green-950/40',
+    },
+    {
+      label: 'Compliant',
+      value: stats.compliant_count.toString(),
+      icon: ShieldCheck,
+      color: 'text-emerald-600 dark:text-emerald-400',
+      bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    },
+    {
+      label: 'High Risk',
+      value: stats.high_risk_count.toString(),
+      icon: AlertTriangle,
+      color: 'text-red-600 dark:text-red-400',
+      bg: 'bg-red-50 dark:bg-red-950/40',
+    },
+  ]
+
   return (
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
           Analytics
         </h1>
 
-        <p className="text-gray-600">
+        <p className="text-gray-600 dark:text-gray-400">
           Compliance score trends and risk analysis
         </p>
       </div>
@@ -125,7 +139,7 @@ export default function Analytics() {
         {summaryStats.map((stat) => (
           <div
             key={stat.label}
-            className="bg-white rounded-xl border border-gray-200 p-6 flex items-center gap-4 shadow-sm"
+            className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 flex items-center gap-4 shadow-sm"
           >
             <div
               className={`shrink-0 p-3 rounded-lg ${stat.bg}`}
@@ -136,11 +150,11 @@ export default function Analytics() {
             </div>
 
             <div>
-              <p className="text-sm text-gray-500 font-medium">
+              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
                 {stat.label}
               </p>
 
-              <p className="text-2xl font-bold text-gray-900 mt-1">
+              <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                 {stat.value}
               </p>
             </div>
@@ -151,11 +165,11 @@ export default function Analytics() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Line Chart */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm min-w-0">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm min-w-0">
           <div className="flex items-center gap-2 mb-6">
-            <TrendingUp className="w-5 h-5 text-primary-600" />
+            <TrendingUp className="w-5 h-5 text-primary-600 dark:text-primary-400" />
 
-            <h2 className="font-semibold text-gray-900">
+            <h2 className="font-semibold text-gray-900 dark:text-white">
               Compliance Score Timeline
             </h2>
           </div>
@@ -169,27 +183,48 @@ export default function Analytics() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke="#e5e7eb"
+                  stroke={isDark ? '#374151' : '#e5e7eb'}
                 />
 
                 <XAxis
                   dataKey="name"
-                  stroke="#6b7280"
+                  stroke={isDark ? '#9ca3af' : '#6b7280'}
                   fontSize={12}
                   tickLine={false}
                   axisLine={false}
                 />
 
                 <YAxis
-                  stroke="#6b7280"
+                  stroke={isDark ? '#9ca3af' : '#6b7280'}
                   fontSize={12}
                   tickLine={false}
                   axisLine={false}
                 />
 
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: isDark ? '#1f2937' : '#ffffff',
+                    borderColor: isDark ? '#374151' : '#e5e7eb',
+                    color: isDark ? '#ffffff' : '#000000',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                  }}
+                  itemStyle={{
+                    color: isDark ? '#e5e7eb' : '#374151',
+                  }}
+                  labelStyle={{
+                    fontWeight: 'bold',
+                    color: isDark ? '#ffffff' : '#111827',
+                  }}
+                />
 
-                <Legend />
+                <Legend
+                  formatter={(value) => (
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {value}
+                    </span>
+                  )}
+                />
 
                 <Line
                   type="monotone"
@@ -205,11 +240,11 @@ export default function Analytics() {
         </div>
 
         {/* Bar Chart */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm min-w-0">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm min-w-0">
           <div className="flex items-center gap-2 mb-6">
-            <BarChart2 className="w-5 h-5 text-primary-600" />
+            <BarChart2 className="w-5 h-5 text-primary-600 dark:text-primary-400" />
 
-            <h2 className="font-semibold text-gray-900">
+            <h2 className="font-semibold text-gray-900 dark:text-white">
               Risk Distribution by System
             </h2>
           </div>
@@ -223,27 +258,48 @@ export default function Analytics() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke="#e5e7eb"
+                  stroke={isDark ? '#374151' : '#e5e7eb'}
                 />
 
                 <XAxis
                   dataKey="name"
-                  stroke="#6b7280"
+                  stroke={isDark ? '#9ca3af' : '#6b7280'}
                   fontSize={12}
                   tickLine={false}
                   axisLine={false}
                 />
 
                 <YAxis
-                  stroke="#6b7280"
+                  stroke={isDark ? '#9ca3af' : '#6b7280'}
                   fontSize={12}
                   tickLine={false}
                   axisLine={false}
                 />
 
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: isDark ? '#1f2937' : '#ffffff',
+                    borderColor: isDark ? '#374151' : '#e5e7eb',
+                    color: isDark ? '#ffffff' : '#000000',
+                    borderRadius: '8px',
+                    boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)',
+                  }}
+                  itemStyle={{
+                    color: isDark ? '#e5e7eb' : '#374151',
+                  }}
+                  labelStyle={{
+                    fontWeight: 'bold',
+                    color: isDark ? '#ffffff' : '#111827',
+                  }}
+                />
 
-                <Legend />
+                <Legend
+                  formatter={(value) => (
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {value}
+                    </span>
+                  )}
+                />
 
                 <Bar
                   dataKey="risk"
@@ -260,11 +316,11 @@ export default function Analytics() {
 
       {/* Compliance Risk Distribution Chart */}
       {loading ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
           Loading risk distribution...
         </div>
       ) : riskPieData.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
           No analytics data available.
         </div>
       ) : (
