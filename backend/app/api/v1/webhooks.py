@@ -4,8 +4,14 @@ Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
-from typing import List
+import asyncio
+import hashlib
+import hmac
+import json
+import logging
+from typing import Any, List
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -16,6 +22,86 @@ from app.models.webhook import WebhookConfig
 from app.schemas.webhook import WebhookCreate, WebhookResponse
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+def _build_signature(secret: str, payload_body: bytes) -> str:
+    """Generate HMAC-SHA256 signature for webhook payload."""
+    return hmac.new(
+        secret.encode("utf-8"),
+        payload_body,
+        hashlib.sha256,
+    ).hexdigest()
+
+
+async def _post_webhook(
+    url: str,
+    event: str,
+    payload: dict[str, Any],
+    secret: str | None,
+) -> None:
+    """Post webhook payload to a configured endpoint."""
+    try:
+        payload_body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+
+        headers = {
+            "X-AegisAI-Event": event,
+        }
+
+        if secret:
+            headers["X-AegisAI-Signature"] = _build_signature(secret, payload_body)
+
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            await client.post(
+                url,
+                content=payload_body,
+                headers=headers,
+            )
+    except Exception:
+        logger.exception("Webhook delivery failed for event=%s url=%s", event, url)
+
+
+def deliver_webhook(
+    db: Session,
+    user_id: int,
+    event: str,
+    payload: dict[str, Any],
+) -> None:
+    """
+    Fire-and-forget delivery to active user webhooks subscribed to the event.
+
+    Delivery failures are logged and never block the caller.
+    """
+    webhooks = (
+        db.query(WebhookConfig)
+        .filter(
+            WebhookConfig.user_id == user_id,
+            WebhookConfig.is_active.is_(True),
+        )
+        .all()
+    )
+
+    for webhook in webhooks:
+        subscribed_events = webhook.events or []
+
+        if event not in subscribed_events:
+            continue
+
+        try:
+            asyncio.create_task(
+                _post_webhook(
+                    url=webhook.url,
+                    event=event,
+                    payload=payload,
+                    secret=webhook.secret,
+                )
+            )
+        except RuntimeError:
+            logger.exception(
+                "Webhook delivery could not be scheduled for event=%s url=%s",
+                event,
+                webhook.url,
+            )
 
 
 @router.post("", response_model=WebhookResponse, status_code=status.HTTP_201_CREATED)
