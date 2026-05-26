@@ -36,7 +36,7 @@ export default function AISystems() {
   const limit = 10
 
   const { data: systemsData, isLoading } = useQuery({
-    queryKey: ['ai-systems', sortBy, order, currentPage],
+    queryKey: ['ai-systems', sortBy, order, currentPage, riskFilter, complianceFilter],
     queryFn: () =>
       aiSystemsApi.list({
         sort_by: sortBy,
@@ -164,7 +164,7 @@ export default function AISystems() {
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <select
               value={riskFilter}
-              onChange={(e) => setRiskFilter(e.target.value)}
+              onChange={(e) => { setRiskFilter(e.target.value); setCurrentPage(1) }}
               className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="">All Risk Levels</option>
@@ -178,7 +178,7 @@ export default function AISystems() {
             <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <select
               value={complianceFilter}
-              onChange={(e) => setComplianceFilter(e.target.value)}
+              onChange={(e) => { setComplianceFilter(e.target.value); setCurrentPage(1) }}
               className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="">All Statuses</option>
@@ -194,7 +194,7 @@ export default function AISystems() {
             <select
               id="sort-by-select"
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value)}
+              onChange={(e) => { setSortBy(e.target.value); setCurrentPage(1) }}
               className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="created_at">Sort by Date</option>
@@ -207,7 +207,7 @@ export default function AISystems() {
             <select
               id="sort-order-select"
               value={order}
-              onChange={(e) => setOrder(e.target.value)}
+              onChange={(e) => { setOrder(e.target.value); setCurrentPage(1) }}
               className="px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="desc">Descending</option>
@@ -220,6 +220,7 @@ export default function AISystems() {
                 setSearchTerm('')
                 setRiskFilter('')
                 setComplianceFilter('')
+                setCurrentPage(1)
               }}
               className="flex items-center gap-1 px-3 py-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all text-sm font-medium"
             >
@@ -375,7 +376,7 @@ export default function AISystems() {
 
         <button
           onClick={() => setCurrentPage((prev) => prev + 1)}
-          disabled={systems.length < limit}
+          disabled={!!systemsData?.total && currentPage * limit >= systemsData.total}
           className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
           Next
