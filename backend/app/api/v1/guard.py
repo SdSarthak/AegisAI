@@ -9,9 +9,7 @@ TODO for contributors (medium difficulty):
   - Add a GET /guard/stats endpoint returning block/allow/sanitize counts (Completed)
 """
 
-import base64
 import hashlib
-import json
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
@@ -33,6 +31,7 @@ from app.models.notification import NotificationType
 from app.models.user import User
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.guard_stats import GuardStatsResponse
+from app.schemas.pagination import PaginatedResponse
 from app.modules.guard import guard_config
 
 router = APIRouter()
@@ -80,9 +79,6 @@ class BulkScanResponse(BaseModel):
 
 
 VALID_SANITIZATION_LEVELS = {"low", "medium", "high"}
-VALID_DECISIONS = {"allow", "sanitize", "block"}
-VALID_INTENTS = {"benign", "suspicious", "malicious"}
-
 user_guard_configs: dict[int, dict[str, float | str]] = {}
 
 
@@ -183,36 +179,6 @@ def log_scan(user_id: int, prompt: str, result: dict) -> None:
         db.close()
 
 
-def build_history_filters(
-    current_user_id: int,
-    decision: Optional[str],
-    intent: Optional[str],
-    start_date: Optional[datetime],
-    end_date: Optional[datetime],
-):
-    filters = [GuardScanLog.user_id == current_user_id]
-
-    if decision:
-        decision = decision.strip().lower()
-        if decision not in VALID_DECISIONS:
-            raise HTTPException(status_code=400, detail="Invalid decision filter")
-        filters.append(GuardScanLog.decision == decision)
-
-    if intent:
-        intent = intent.strip().lower()
-        if intent not in VALID_INTENTS:
-            raise HTTPException(status_code=400, detail="Invalid intent filter")
-        filters.append(GuardScanLog.intent == intent)
-
-    if start_date:
-        filters.append(GuardScanLog.scanned_at >= start_date)
-
-    if end_date:
-        filters.append(GuardScanLog.scanned_at <= end_date)
-
-    return filters
-
-
 @router.post("/scan", response_model=ScanResponse)
 def scan_prompt(
     request: ScanRequest,
@@ -306,6 +272,7 @@ def scan_prompt(
 
     except Exception as e:
         logger.exception("Guard scan failed")
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the Guard scan."
@@ -332,6 +299,7 @@ def guard_info():
     Returns:
         dict: Module status, device, model_name, and sanitization_level.
     """
+
     try:
         import torch
         device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -350,26 +318,78 @@ def guard_info():
         "sanitization_level": guard_config.SANITIZATION_LEVEL,
     }
 
+VALID_DECISIONS = {"allow", "sanitize", "block"}
+VALID_INTENTS = {"benign", "suspicious", "malicious"}
 
-@router.get("/history")
+
+def build_history_filters(
+    current_user_id: int,
+    decision: Optional[str],
+    intent: Optional[str],
+    start_date: Optional[datetime],
+    end_date: Optional[datetime],
+):
+    filters = [GuardScanLog.user_id == current_user_id]
+
+    # -----------------------
+    # decision filter
+    # -----------------------
+    if decision:
+        decision = decision.strip().lower()
+
+        if decision not in VALID_DECISIONS:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid decision filter",
+            )
+
+        filters.append(GuardScanLog.decision == decision)
+
+    # -----------------------
+    # intent filter
+    # -----------------------
+    if intent:
+        intent = intent.strip().lower()
+
+        if intent not in VALID_INTENTS:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid intent filter",
+            )
+
+        filters.append(GuardScanLog.intent == intent)
+
+    # -----------------------
+    # date filters
+    # -----------------------
+    if start_date:
+        filters.append(GuardScanLog.scanned_at >= start_date)
+
+    if end_date:
+        filters.append(GuardScanLog.scanned_at <= end_date)
+
+    return filters
+
+@router.get("/history", response_model=PaginatedResponse[GuardScanLogResponse])
 def get_guard_history(
-    cursor: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
+
     decision: Optional[str] = Query(None),
     intent: Optional[str] = Query(None),
     start_date: Optional[datetime] = Query(None),
     end_date: Optional[datetime] = Query(None),
+
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return the current user's Guard scan history, newest first.
 
-    Uses cursor-based pagination for stable, consistent results even
-    when new logs are inserted. Pass the returned next_cursor as the
-    cursor param to get the next page.
+    Supports filtering by decision, intent, and date range, with
+    pagination.
 
     Args:
-        cursor: Opaque base64 cursor from previous response (optional).
+        page: Page number, 1-indexed (default: 1).
         limit: Number of items per page, max 100 (default: 20).
         decision: Optional filter - allow, sanitize, or block.
         intent: Optional filter - benign, suspicious, or malicious.
@@ -379,11 +399,13 @@ def get_guard_history(
         current_user: The authenticated user extracted from the JWT token.
 
     Returns:
-        dict: items, next_cursor (None if no more pages), and has_more flag.
+        PaginatedResponse[GuardScanLogResponse]: Paginated scan history.
 
     Raises:
-        HTTPException: 400 if cursor is invalid or date range is invalid.
+        HTTPException: 400 if start_date is after end_date or filters
+            contain invalid values.
     """
+
     if start_date and end_date and start_date > end_date:
         raise HTTPException(
             status_code=400,
@@ -395,54 +417,26 @@ def get_guard_history(
         decision,
         intent,
         start_date,
-        end_date,
+        end_date
     )
 
-    # Decode cursor if provided
-    if cursor:
-        try:
-            decoded = json.loads(base64.b64decode(cursor).decode())
-            cursor_scanned_at = datetime.fromisoformat(decoded["scanned_at"])
-            cursor_id = int(decoded["id"])
-        except Exception:
-            raise HTTPException(status_code=400, detail="Invalid cursor")
+    query = db.query(GuardScanLog).filter(*filters)
 
-        # Only fetch rows that come after the cursor position
-        filters.append(
-            (GuardScanLog.scanned_at < cursor_scanned_at)
-            | (
-                (GuardScanLog.scanned_at == cursor_scanned_at)
-                & (GuardScanLog.id < cursor_id)
-            )
-        )
+    total = query.count()
 
     logs = (
-        db.query(GuardScanLog)
-        .filter(*filters)
-        .order_by(GuardScanLog.scanned_at.desc(), GuardScanLog.id.desc())
-        .limit(limit + 1)  # fetch one extra to detect next page
+        query.order_by(GuardScanLog.scanned_at.desc())
+        .offset((page - 1) * limit)
+        .limit(limit)
         .all()
     )
 
-    has_more = len(logs) > limit
-    if has_more:
-        logs = logs[:limit]
-
-    # Build next cursor from the last item in the current page
-    next_cursor = None
-    if has_more and logs:
-        last = logs[-1]
-        payload = json.dumps({
-            "scanned_at": last.scanned_at.isoformat(),
-            "id": last.id,
-        })
-        next_cursor = base64.b64encode(payload.encode()).decode()
-
-    return {
-        "items": logs,
-        "next_cursor": next_cursor,
-        "has_more": has_more,
-    }
+    return PaginatedResponse(
+        items=logs,
+        total=total,
+        page=page,
+        limit=limit,
+    )
 
 
 @router.get("/stats", response_model=GuardStatsResponse)
@@ -586,12 +580,10 @@ def get_guard_stats(
 
     scans_per_day = list(daily_buckets.values())
 
+    # Ensure each daily bucket contains a total `count` field for
+    # compatibility with the response schema (date + count).
     for b in scans_per_day:
-        b["count"] = (
-            int(b.get("allow", 0) or 0)
-            + int(b.get("sanitize", 0) or 0)
-            + int(b.get("block", 0) or 0)
-        )
+        b["count"] = int(b.get("allow", 0) or 0) + int(b.get("sanitize", 0) or 0) + int(b.get("block", 0) or 0)
 
     return {
         "window": window,
@@ -647,7 +639,10 @@ def update_guard_config(
             are outside the 0.0-1.0 range.
     """
     if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
-        raise HTTPException(status_code=400, detail="Invalid sanitization level")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid sanitization level",
+        )
 
     if not (0.0 <= config.malicious_threshold <= 1.0):
         raise HTTPException(
@@ -702,7 +697,10 @@ def bulk_scan_prompts(
     try:
         request.validate_prompts()
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        )
 
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(seconds=_RATE_LIMIT_WINDOW_SECONDS)
@@ -797,8 +795,9 @@ def bulk_scan_prompts(
 
     except Exception as e:
         db.rollback()
-        logger.exception("Bulk guard scan failed")
+        logger.exception("Bulk guard scan failed")                                     
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."
         )
+    
