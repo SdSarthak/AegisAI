@@ -15,11 +15,12 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Optional
 import logging
+import base64
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import func
+from sqlalchemy import func, tuple_
 from sqlalchemy.orm import Session
 
 from app.api.v1.notifications import create_notification
@@ -272,6 +273,63 @@ def guard_info():
 VALID_DECISIONS = {"allow", "sanitize", "block"}
 VALID_INTENTS = {"benign", "suspicious", "malicious"}
 
+class CursorPagination:
+    """
+    Simple cursor-based pagination helper:
+    - stable ordering: (scanned_at DESC, id DESC)
+    - base64 cursor: (scanned_at|id)
+    """
+
+    @staticmethod
+    def encode(scanned_at: datetime, log_id: int) -> str:
+        raw = f"{scanned_at.replace(tzinfo=timezone.utc).isoformat(timespec='seconds')}|{log_id}"
+        return base64.urlsafe_b64encode(raw.encode()).decode()
+
+    @staticmethod
+    def decode(cursor: str) -> tuple[datetime, int]:
+        try:
+            decoded = base64.urlsafe_b64decode(cursor.encode()).decode()
+            ts, id_str = decoded.split("|")
+
+            dt = datetime.fromisoformat(ts)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+
+            return dt, int(id_str)
+
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid cursor format")
+
+    @staticmethod
+    def apply_filters(query, cursor: Optional[str]):
+        if not cursor:
+            return query
+
+        cursor_dt, cursor_id = CursorPagination.decode(cursor)
+
+        return query.filter(
+            tuple_(GuardScanLog.scanned_at, GuardScanLog.id)
+            < (cursor_dt, cursor_id)
+        )
+
+    @staticmethod
+    def apply_ordering(query):
+        return query.order_by(
+            GuardScanLog.scanned_at.desc(),
+            GuardScanLog.id.desc(),
+        )
+
+    @staticmethod
+    def paginate(query, limit: int):
+        items = query.limit(limit + 1).all()
+
+        next_cursor = None
+        if len(items) > limit:
+            last = items[limit - 1]
+            next_cursor = CursorPagination.encode(last.scanned_at, last.id)
+            items = items[:limit]
+
+        return items, next_cursor
 
 def build_history_filters(
     current_user_id: int,
@@ -323,7 +381,7 @@ def build_history_filters(
 
 @router.get("/history", response_model=PaginatedResponse[GuardScanLogResponse])
 def get_guard_history(
-    page: int = Query(1, ge=1),
+    cursor: Optional[str] = Query(None, description="Pagination cursor"),
     limit: int = Query(20, ge=1, le=100),
 
     decision: Optional[str] = Query(None),
@@ -334,7 +392,7 @@ def get_guard_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the current user's Guard scan history, newest first."""
+    """Return the current user's Guard scan history (cursor paginated)."""
 
     if start_date and end_date and start_date > end_date:
         raise HTTPException(
@@ -347,25 +405,21 @@ def get_guard_history(
         decision,
         intent,
         start_date,
-        end_date
+        end_date,
     )
 
     query = db.query(GuardScanLog).filter(*filters)
 
-    total = query.count()
+    # cursor + ordering handled by helper
+    query = CursorPagination.apply_filters(query, cursor)
+    query = CursorPagination.apply_ordering(query)
 
-    logs = (
-        query.order_by(GuardScanLog.scanned_at.desc())
-        .offset((page - 1) * limit)
-        .limit(limit)
-        .all()
-    )
+    logs, next_cursor = CursorPagination.paginate(query, limit)
 
     return PaginatedResponse(
         items=logs,
-        total=total,
-        page=page,
         limit=limit,
+        next_cursor=next_cursor,
     )
 
 
