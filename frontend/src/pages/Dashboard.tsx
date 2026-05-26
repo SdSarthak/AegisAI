@@ -59,13 +59,13 @@ export default function Dashboard() {
     },
     {
       name: 'High Risk',
-      value: systems.filter((s: { risk_level: string }) => s.risk_level === 'high').length,
+      value: systems.filter((s) => s.risk_level === 'high').length,
       icon: AlertTriangle,
       color: 'bg-red-500',
     },
     {
       name: 'Compliant',
-      value: systems.filter((s: { compliance_status: string }) => s.compliance_status === 'compliant').length,
+      value: systems.filter((s) => s.compliance_status === 'compliant').length,
       icon: CheckCircle,
       color: 'bg-emerald-500',
     },
@@ -180,12 +180,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {systems.slice(0, 5).map((system: {
-              id: number
-              name: string
-              risk_level: string | null
-              compliance_status: string
-            }) => (
+            {systems.slice(0, 5).map((system) => (
               <div
                 key={system.id}
                 className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700"
