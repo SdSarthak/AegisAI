@@ -27,14 +27,15 @@ export default function DocumentEditor({
     const renderedMarkdown = marked.parse(content, { async: false }) as string
     return DOMPurify.sanitize(renderedMarkdown)
   }, [content])
-
+  const [saveError, setSaveError] = useState('')
   const handleSave = useCallback(async () => {
     setIsSaving(true)
     try {
       await api.put(`/documents/${documentId}`, { content })
       onSave?.(content)
+      setSaveError('')
     } catch (error) {
-      console.error('Save failed:', error)
+      setSaveError('Failed to save changes')
     }
     setIsSaving(false)
   }, [content, documentId, onSave])
@@ -71,7 +72,16 @@ export default function DocumentEditor({
           {showPreview ? 'Edit' : 'Preview'}
         </button>
         <div className="flex items-center gap-3">
-          {isSaving && <span className="text-sm text-gray-500">Saving...</span>}
+         {saveError && (
+            <span className="text-sm text-red-500">
+              {saveError}
+            </span>
+          )}
+          {isSaving && (
+            <span className="text-sm text-gray-500">
+              Saving...
+            </span>
+          )} 
           <button
             type="button"
             onClick={handleSave}

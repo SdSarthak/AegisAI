@@ -88,15 +88,34 @@ export default function Analytics() {
 
   const fetchRiskDistribution = async () => {
     try {
-      // Temporary mock data until backend API is available
-      const mockData: RiskData[] = [
-        { name: 'Minimal Risk', value: 4 },
-        { name: 'Limited Risk', value: 3 },
-        { name: 'High Risk', value: 2 },
-        { name: 'Unacceptable Risk', value: 1 },
-      ]
+      // Try fetching from backend analytics summary endpoint. If it's
+      // not implemented or returns an error, fall back to mock data.
+      const res = await fetch('/api/v1/analytics/summary')
 
-      setRiskPieData(mockData)
+      if (res.ok) {
+        const json = await res.json()
+
+        // Expecting a summary object with counts per risk level. If the
+        // backend later returns a different shape, adjust mapping here.
+        const mapped: RiskData[] = [
+          { name: 'Minimal Risk', value: json.counts?.minimal || 0 },
+          { name: 'Limited Risk', value: json.counts?.limited || 0 },
+          { name: 'High Risk', value: json.counts?.high || 0 },
+          { name: 'Unacceptable Risk', value: json.counts?.unacceptable || 0 },
+        ]
+
+        setRiskPieData(mapped)
+      } else {
+        // Backend endpoint not available yet; use mock data.
+        const mockData: RiskData[] = [
+          { name: 'Minimal Risk', value: 4 },
+          { name: 'Limited Risk', value: 3 },
+          { name: 'High Risk', value: 2 },
+          { name: 'Unacceptable Risk', value: 1 },
+        ]
+
+        setRiskPieData(mockData)
+      }
     } catch (error) {
       console.error(
         'Failed to fetch risk distribution:',
@@ -111,11 +130,11 @@ export default function Analytics() {
     <div className="space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
           Analytics
         </h1>
 
-        <p className="text-gray-600">
+        <p className="text-gray-600 dark:text-gray-400">
           Compliance score trends and risk analysis
         </p>
       </div>
@@ -125,7 +144,7 @@ export default function Analytics() {
         {summaryStats.map((stat) => (
           <div
             key={stat.label}
-            className="bg-white rounded-xl border border-gray-200 p-6 flex items-center gap-4 shadow-sm"
+            className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 flex items-center gap-4 shadow-sm"
           >
             <div
               className={`shrink-0 p-3 rounded-lg ${stat.bg}`}
@@ -136,11 +155,11 @@ export default function Analytics() {
             </div>
 
             <div>
-              <p className="text-sm text-gray-500 font-medium">
+              <p className="text-sm text-gray-500 dark:text-gray-400 font-medium">
                 {stat.label}
               </p>
 
-              <p className="text-2xl font-bold text-gray-900 mt-1">
+              <p className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
                 {stat.value}
               </p>
             </div>
@@ -151,11 +170,11 @@ export default function Analytics() {
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Line Chart */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm min-w-0">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm min-w-0">
           <div className="flex items-center gap-2 mb-6">
             <TrendingUp className="w-5 h-5 text-primary-600" />
 
-            <h2 className="font-semibold text-gray-900">
+            <h2 className="font-semibold text-gray-900 dark:text-white">
               Compliance Score Timeline
             </h2>
           </div>
@@ -205,11 +224,11 @@ export default function Analytics() {
         </div>
 
         {/* Bar Chart */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm min-w-0">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm min-w-0">
           <div className="flex items-center gap-2 mb-6">
             <BarChart2 className="w-5 h-5 text-primary-600" />
 
-            <h2 className="font-semibold text-gray-900">
+            <h2 className="font-semibold text-gray-900 dark:text-white">
               Risk Distribution by System
             </h2>
           </div>
@@ -260,11 +279,11 @@ export default function Analytics() {
 
       {/* Compliance Risk Distribution Chart */}
       {loading ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
           Loading risk distribution...
         </div>
       ) : riskPieData.length === 0 ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
           No analytics data available.
         </div>
       ) : (

@@ -102,6 +102,7 @@ export default function Classification() {
     law_enforcement: false,
     border_control: false,
     justice_system: false,
+    education_vocational_training: false,
     interacts_with_humans: true,
     generates_synthetic_content: false,
     emotion_recognition: false,
@@ -431,6 +432,25 @@ export default function Classification() {
                     <strong>Automated Decision Making</strong>
                     <br />
                     Makes decisions without meaningful human review
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.education_vocational_training}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        education_vocational_training: e.target.checked,
+                      })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Education & Vocational Training</strong>
+                    <br />
+                    AI determines access to or assigns persons to educational institutions
                   </span>
                 </label>
               </div>
