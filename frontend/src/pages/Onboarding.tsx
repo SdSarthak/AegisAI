@@ -50,7 +50,6 @@ export default function Onboarding() {
 
   const handleNext = () => {
     if (isLastStep) {
-      console.log('Onboarding Data:', formData)
       navigate('/')
     } else {
       setCurrentStep((s) => s + 1)

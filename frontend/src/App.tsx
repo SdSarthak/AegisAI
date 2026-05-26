@@ -52,7 +52,6 @@ function App() {
         {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/onboarding" element={<Onboarding />} />
 
         {/* Protected Routes */}
         <Route
@@ -64,9 +63,13 @@ function App() {
           }
         >
           <Route index element={<Dashboard />} />
+          <Route path="onboarding" element={<Onboarding />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="ai-systems" element={<AISystems />} />
-          <Route path="classification/:systemId?" element={<Classification />} />
+          <Route
+            path="classification/:systemId?"
+            element={<Classification />}
+          />
           <Route path="documents" element={<Documents />} />
           <Route path="guard" element={<GuardConsole />} />
           <Route path="notifications" element={<Notifications />} />
