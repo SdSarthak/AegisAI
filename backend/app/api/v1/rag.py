@@ -19,7 +19,7 @@ import tempfile
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -43,6 +43,8 @@ class RAGQueryResponse(BaseModel):
     answer: str
     sources: list[str] = []
     answer_id: Optional[str] = None
+    groundedness_score: float = Field(0.0, description="Cosine similarity score (0.0 to 1.0) measuring answer groundedness in retrieved chunks.")
+    low_confidence: bool = Field(False, description="True if groundedness score falls below the accepted threshold.")
 
 
 class RAGIngestResponse(BaseModel):
@@ -156,6 +158,7 @@ def query_knowledge_base(
     """
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
+        from app.modules.rag.groundedness import compute_groundedness
         from app.core.database import Base
 
         qa_chain = get_qa_chain()
@@ -167,6 +170,11 @@ def query_knowledge_base(
         source_docs = result.get("source_documents", [])
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
         answer = str(result.get("result", ""))
+
+        # Groundedness Check
+        chunk_texts = [str(doc.page_content) for doc in source_docs]
+        groundedness_score = compute_groundedness(answer, chunk_texts)
+        low_confidence = groundedness_score < 0.70
 
         # Ensure tables exist on this DB bind (useful for test DB overrides)
         try:
@@ -203,7 +211,13 @@ def query_knowledge_base(
         except Exception:
             pass
 
-        return RAGQueryResponse(answer=answer, sources=sources, answer_id=feedback.id)
+        return RAGQueryResponse(
+            answer=answer, 
+            sources=sources, 
+            answer_id=feedback.id,
+            groundedness_score=groundedness_score,
+            low_confidence=low_confidence
+        )
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
