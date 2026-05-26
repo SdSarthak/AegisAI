@@ -245,7 +245,7 @@ export default function Documents() {
             Generate your first compliance document
           </p>
         </div>
-      ) : (
+      ) : 
         filteredDocuments.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <h3 className="text-lg font-medium text-gray-900">
@@ -353,7 +353,7 @@ export default function Documents() {
             </div>
           ))}
         </div>
-      ))}
+      )}
 
 
       {/* Delete Confirmation Modal */}
