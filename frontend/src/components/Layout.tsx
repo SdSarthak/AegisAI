@@ -16,9 +16,6 @@ import {
   ChevronRight,
   BarChart,
 } from 'lucide-react'
-import NotificationBell from './NotificationBell'
-
-
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
