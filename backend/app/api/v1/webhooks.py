@@ -24,7 +24,20 @@ def create_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Register a new webhook endpoint for the current user."""
+    """Register a new webhook endpoint for the current user.
+
+    The ``user_id`` is forced to the authenticated user's ID to prevent
+    spoofing.  The ``url`` field is coerced to a plain string for storage.
+
+    Args:
+        body: ``WebhookCreate`` schema with ``url``, ``events``, and
+            optional ``secret``.
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy database session (injected).
+
+    Returns:
+        WebhookResponse: The newly created webhook config (HTTP 201).
+    """
     webhook_data = body.model_dump()
     webhook_data["url"] = str(body.url)
 
@@ -45,7 +58,17 @@ def list_webhooks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all webhook configs for the current user."""
+    """List all webhook configurations for the current user.
+
+    Results are scoped to the authenticated user only.
+
+    Args:
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy database session (injected).
+
+    Returns:
+        List[WebhookResponse]: All webhook configs belonging to the user.
+    """
     return (
         db.query(WebhookConfig)
         .filter(WebhookConfig.user_id == current_user.id)
@@ -59,7 +82,22 @@ def delete_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a webhook config belonging to the current user."""
+    """Delete a webhook configuration belonging to the current user.
+
+    The query filters by **both** ``webhook_id`` and ``current_user.id``
+    to prevent Broken Object-Level Authorization (BOLA).  A generic
+    404 is returned for non-existent or other-user webhooks to avoid
+    leaking information about other users' resources.
+
+    Args:
+        webhook_id: Primary-key of the webhook to delete.
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy database session (injected).
+
+    Raises:
+        HTTPException(404): If the webhook does not exist or does not
+            belong to the current user.
+    """
     db_webhook = (
         db.query(WebhookConfig)
         .filter(

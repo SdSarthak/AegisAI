@@ -146,12 +146,28 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Ask a regulatory question and get an answer grounded in source documents.
+    """Ask a regulatory question and get an answer grounded in source documents.
+
+    Queries the vector database using a LangChain QA retrieval pipeline.
+    The query and result are logged asynchronously to MLflow, and a
+    ``RagQuery`` audit record is created.
 
     Example questions:
     - "Does my CV-screening tool qualify as high-risk under the EU AI Act?"
     - "What are the transparency requirements for chatbots?"
+
+    Args:
+        request: Request body with the ``question`` string.
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        RAGQueryResponse: Generated answer, list of source chunks used,
+            and an ``answer_id`` for subsequent feedback.
+
+    Raises:
+        HTTPException(503): If the RAG index is missing or the LLM
+            backend is unavailable.
     """
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
@@ -217,7 +233,14 @@ def query_knowledge_base(
 
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health():
-    """Check if the RAG module is available."""
+    """Check if the RAG module is available and fully initialised.
+
+    Checks if the required FAISS index has been loaded into memory.
+
+    Returns:
+        dict: Diagnostics with ``module``, ``status`` (available/unavailable),
+            and a boolean ``index_loaded`` flag.
+    """
     from app.modules.rag.vector_store import check_index_exists
     
     index_loaded = check_index_exists()
@@ -248,7 +271,20 @@ def rag_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Record a thumbs-up or thumbs-down for a previously returned answer."""
+    """Record a thumbs-up or thumbs-down for a previously returned answer.
+
+    Args:
+        payload: ``RAGFeedbackRequest`` with ``answer_id`` and ``vote``
+            (``"up"`` or ``"down"``).
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        dict: Confirmation payload ``{"status": "ok", "answer_id": ...}``.
+
+    Raises:
+        HTTPException(404): If the provided ``answer_id`` is not found.
+    """
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
@@ -268,9 +304,21 @@ def get_low_quality_chunks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Admin endpoint: aggregate feedback by source chunk and return low-quality candidates.
+    """Admin endpoint: return low-quality source chunks based on user feedback.
 
-    A chunk is considered low-quality when thumbs_down / total_feedback > threshold.
+    A chunk is considered low-quality when:
+    ``thumbs_down / (thumbs_up + thumbs_down) > threshold``.
+
+    Args:
+        threshold: The negative feedback ratio limit (default: 0.3).
+        current_user: Authenticated user (must have ``SCALE`` subscription tier).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        dict: The applied threshold and a list of low-quality chunk objects.
+
+    Raises:
+        HTTPException(403): If the user does not have admin/SCALE privileges.
     """
     # Admin-only access: restrict to system owners / scale tier
     try:
@@ -309,7 +357,18 @@ def get_rag_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return paginated list of the current user's past RAG queries."""
+    """Return paginated list of the current user's past RAG queries.
+
+    Args:
+        page: 1-indexed page number (default 1).
+        page_size: Items per page (default 10).
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        dict: Response payload containing the current ``page``, ``page_size``,
+            and a ``results`` list.
+    """
     offset = (page - 1) * page_size
     queries = (
         db.query(RagQuery)

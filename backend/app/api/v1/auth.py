@@ -61,7 +61,21 @@ users_router = APIRouter()
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user."""
+    """Register a new user account.
+
+    Creates a user with hashed password.  Duplicate emails are rejected.
+
+    Args:
+        user_data: ``UserCreate`` schema with email, password, full_name,
+            and optional company_name.
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        UserResponse: The newly created user (HTTP 201).
+
+    Raises:
+        HTTPException(400): If the email is already registered.
+    """
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
@@ -85,7 +99,19 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
-    """Login and get access token."""
+    """Authenticate a user and return a JWT access token.
+
+    Args:
+        form_data: OAuth2 form with ``username`` (email) and ``password``.
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        Token: ``{"access_token": "...", "token_type": "bearer"}``.
+
+    Raises:
+        HTTPException(401): If the email/password combination is invalid.
+        HTTPException(400): If the user account is inactive.
+    """
     user = db.query(User).filter(User.email == form_data.username).first()
 
     if not user or not verify_password(form_data.password, user.hashed_password):
@@ -110,7 +136,14 @@ def login(
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Get current user information."""
+    """Return the profile of the currently authenticated user.
+
+    Args:
+        current_user: Authenticated ``User`` (injected via JWT).
+
+    Returns:
+        UserResponse: The user's profile fields.
+    """
     return current_user
 
 
@@ -120,7 +153,23 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Change the authenticated user's password."""
+    """Change the authenticated user's password.
+
+    Validates the current password before applying the new one.
+    The new password must satisfy strength rules enforced by
+    ``ChangePasswordRequest``.
+
+    Args:
+        payload: Body with ``current_password`` and ``new_password``.
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        dict: ``{"message": "Password updated successfully"}``.
+
+    Raises:
+        HTTPException(400): If the current password is incorrect.
+    """
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -139,7 +188,20 @@ def update_current_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update the authenticated user's profile details."""
+    """Partially update the authenticated user's profile.
+
+    Only fields present in the request body are changed; ``None`` values
+    are skipped.
+
+    Args:
+        user_data: ``UserUpdateSchema`` with optional ``full_name`` and
+            ``company_name``.
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        UserResponse: The updated user profile.
+    """
     if user_data.full_name is not None:
         current_user.full_name = user_data.full_name
     if user_data.company_name is not None:
@@ -156,7 +218,19 @@ def get_current_user_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Get stats summary for the authenticated user."""
+    """Return aggregate statistics for the authenticated user.
+
+    Computes system counts, document totals, risk-level breakdown, and
+    number of compliant systems.
+
+    Args:
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        UserStatsResponse: ``total_systems``, ``total_documents``,
+            ``risk_breakdown`` (dict), and ``compliant_systems`` (int).
+    """
     systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
 
     risk_breakdown: dict = {}

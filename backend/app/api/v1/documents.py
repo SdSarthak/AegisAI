@@ -165,7 +165,20 @@ def create_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new document."""
+    """Create a new manual document.
+
+    Unlike ``/generate``, this endpoint creates a document from user-provided
+    content directly.
+
+    Args:
+        doc_data: ``DocumentCreate`` schema containing title, content,
+            document_type, and ai_system_id.
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        DocumentResponse: The newly created document (HTTP 201).
+    """
     document = Document(
         owner_id=current_user.id,
         title=doc_data.title,
@@ -186,7 +199,17 @@ def list_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List all documents for the current user with pagination."""
+    """List all documents for the current user with pagination.
+
+    Args:
+        page: 1-indexed page number.
+        limit: Items per page (1–100).
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        PaginatedResponse[DocumentResponse]: Paginated document list.
+    """
     base_query = db.query(Document).filter(Document.owner_id == current_user.id)
     total = base_query.count()
     offset = (page - 1) * limit
@@ -201,7 +224,19 @@ def get_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get a specific document."""
+    """Retrieve a specific document.
+
+    Args:
+        document_id: Primary-key of the document.
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        DocumentResponse: The requested document.
+
+    Raises:
+        HTTPException(404): If not found or not owned by the user.
+    """
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -221,7 +256,22 @@ def update_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update document content."""
+    """Update a document's content.
+
+    Only the ``content`` field can be modified through this endpoint.
+
+    Args:
+        document_id: Primary-key of the document to update.
+        body: ``DocumentUpdateRequest`` containing the new markdown content.
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        DocumentResponse: The updated document.
+
+    Raises:
+        HTTPException(404): If not found or not owned by the user.
+    """
     # Fetch document
     document = db.query(Document).filter(
         Document.id == document_id,
@@ -247,7 +297,25 @@ def generate_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate a compliance document for an AI system."""
+    """Generate a compliance document using an LLM.
+
+    Builds a document for an AI system using the system's latest risk
+    assessment. If the LLM generation fails, it falls back to filling
+    a static template.
+
+    Args:
+        request: ``DocumentGenerateRequest`` with ``ai_system_id`` and
+            ``document_type``.
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        DocumentResponse: The generated document in a ``GENERATED`` state.
+
+    Raises:
+        HTTPException(404): If the AI system is not found.
+        HTTPException(400): If no template is available for the requested type.
+    """
     # Get the AI system
     ai_system = (
         db.query(AISystem)
@@ -327,7 +395,16 @@ def delete_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a document."""
+    """Delete a document permanently.
+
+    Args:
+        document_id: Primary-key of the document.
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Raises:
+        HTTPException(404): If not found or not owned by the user.
+    """
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -351,8 +428,21 @@ def export_document_pdf(
 ):
     """Export a document as a PDF file.
     
+    Converts the stored markdown content to PDF via an external API.
+
+    Args:
+        document_id: Primary-key of the document.
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
     Returns:
-        - Response status 200 with PDF bytes
+        StreamingResponse: PDF attachment (``application/pdf``).
+
+    Raises:
+        HTTPException(404): If the document is not found.
+        HTTPException(400): If the document has no content.
+        HTTPException(500): If the external PDF generation fails.
+
         - Content-Type: application/pdf
         - File starts with %PDF- magic bytes
         - File size > 1KB

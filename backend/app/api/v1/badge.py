@@ -31,8 +31,21 @@ def get_compliance_badge(
     format: str = "svg",  # "svg" | "json"
     db: Session = Depends(get_db),
 ):
-    """
-    Return a public compliance badge for an AI system.
+    """Return a public compliance badge for an AI system.
+
+    This endpoint is **public** (no JWT required) so organisations can
+    embed the badge in their README or website.
+
+    Args:
+        system_id: Primary-key of the AI system.
+        format: Response format, either ``svg`` or ``json`` (default ``svg``).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        Response: Either an SVG image or a JSON dict depending on ``format``.
+
+    Raises:
+        HTTPException(404): If the requested AI system does not exist.
     """
     system = db.query(AISystem).filter(AISystem.id == system_id).first()
     if not system:

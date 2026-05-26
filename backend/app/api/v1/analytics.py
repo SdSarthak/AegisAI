@@ -31,11 +31,22 @@ def get_compliance_timeline(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Return daily compliance snapshots for a given AI system.
+    """Return daily compliance snapshots for a given AI system.
 
     TODO (help wanted): query ComplianceSnapshot filtered by ai_system_id and
     snapshotted_at >= now - days. Verify the system belongs to current_user.
+
+    Args:
+        system_id: Primary-key of the AI system.
+        days: Number of days of history to retrieve (default 30).
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        ComplianceTimelineResponse: (Not implemented)
+
+    Raises:
+        HTTPException(501): Endpoint is currently not implemented.
     """
     # TODO: implement — replace with real DB query
     raise HTTPException(
@@ -48,10 +59,19 @@ def get_analytics_summary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Return aggregate compliance stats for the current user's systems.
+    """Return aggregate compliance stats for the current user's systems.
 
     TODO (help wanted): aggregate counts and averages from ai_systems table.
+
+    Args:
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        dict: (Not implemented)
+
+    Raises:
+        HTTPException(501): Endpoint is currently not implemented.
     """
     # TODO: implement
     raise HTTPException(

@@ -26,6 +26,22 @@ def create_notification(
     resource_type: str | None = None,
     resource_id: int | None = None,
 ) -> Notification:
+    """Create and persist a new user notification.
+
+    This is an internal helper function, not an API endpoint.
+
+    Args:
+        db: SQLAlchemy session.
+        user_id: Target user ID to receive the notification.
+        notification_type: String identifier (e.g., ``"guard_block"``).
+        title: Short title for the notification.
+        message: Detailed body text.
+        resource_type: Optional related resource (e.g., ``"guard_scan"``).
+        resource_id: Optional ID of the related resource.
+
+    Returns:
+        Notification: The newly created database record.
+    """
     notification = Notification(
         user_id=user_id,
         notification_type=notification_type,
@@ -48,7 +64,20 @@ def list_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return notifications for the current user."""
+    """Return paginated notifications for the current user.
+
+    Results are sorted newest-first.
+
+    Args:
+        unread_only: If ``True``, filters out notifications marked as read.
+        page: 1-indexed page number (default 1).
+        limit: Items per page (default 50, max 100).
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        PaginatedResponse[NotificationResponse]: The requested notifications.
+    """
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
 
     if unread_only:
@@ -77,7 +106,19 @@ def mark_notifications_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Mark a list of notification IDs as read."""
+    """Mark a list of notification IDs as read.
+
+    Performs a bulk update.  Silently ignores IDs that do not exist or
+    belong to other users.
+
+    Args:
+        body: ``NotificationMarkRead`` schema containing a list of ``ids``.
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        None: On success (HTTP 204).
+    """
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.id.in_(body.ids),
@@ -96,7 +137,20 @@ def delete_notification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a single notification owned by the current user."""
+    """Delete a single notification owned by the current user.
+
+    Args:
+        notification_id: Primary-key of the notification to delete.
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        None: On success (HTTP 204).
+
+    Raises:
+        HTTPException(404): If the notification does not exist or does
+            not belong to the current user.
+    """
     notification = (
         db.query(Notification)
         .filter(

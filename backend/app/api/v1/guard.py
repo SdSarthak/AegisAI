@@ -80,7 +80,19 @@ user_guard_configs: dict[int, dict[str, float | str]] = {}
 
 
 def _check_rate_limit(user_id: int) -> tuple[bool, int]:
-    """Return whether the user is limited and the seconds to retry after."""
+    """Check whether a user has exceeded the per-user rate limit.
+
+    Uses a sliding-window algorithm (60 requests / 60 seconds) with a
+    thread-safe deque per user.
+
+    Args:
+        user_id: Primary-key of the user to check.
+
+    Returns:
+        A ``(is_limited, retry_after)`` tuple.  ``is_limited`` is ``True``
+        when the window is full; ``retry_after`` is the number of seconds
+        the caller should wait before retrying.
+    """
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(seconds=_RATE_LIMIT_WINDOW_SECONDS)
 
@@ -108,7 +120,16 @@ def _check_rate_limit(user_id: int) -> tuple[bool, int]:
 
 
 def _infer_detection_type(regex_flag: bool, intent: str) -> str:
-    """Infer whether regex, ML, both, or neither triggered the scan decision."""
+    """Infer the detection source that triggered the scan decision.
+
+    Args:
+        regex_flag: ``True`` if the regex analyser flagged the prompt.
+        intent: Intent label from the ML classifier (``benign``,
+            ``suspicious``, or ``malicious``).
+
+    Returns:
+        One of ``"none"``, ``"regex"``, ``"ml"``, or ``"combined"``.
+    """
     if not regex_flag and intent == "benign":
         return "none"
     if regex_flag and intent == "benign":
@@ -119,7 +140,19 @@ def _infer_detection_type(regex_flag: bool, intent: str) -> str:
 
 
 def _build_guard_scan_log(user_id: int, prompt: str, result: dict) -> GuardScanLog:
-    """Build a GuardScanLog row without storing raw prompt text."""
+    """Build a ``GuardScanLog`` ORM instance from a scan result.
+
+    The raw prompt text is **not** stored — only its SHA-256 hash —
+    to avoid persisting potentially sensitive or adversarial content.
+
+    Args:
+        user_id: ID of the user who initiated the scan.
+        prompt: The original prompt string (hashed, not stored).
+        result: Raw result dict returned by ``LLMGuard.guard()``.
+
+    Returns:
+        GuardScanLog: A populated (but uncommitted) ORM instance.
+    """
     metadata = result.get("metadata", {})
     regex_analysis = metadata.get("regex_analysis", {})
     intent_analysis = metadata.get("intent_analysis", {})
@@ -147,7 +180,16 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict) -> GuardScanL
 
 
 def log_scan(user_id: int, prompt: str, result: dict) -> None:
-    """Log scan details and create block notification without storing raw prompt."""
+    """Persist scan results and fire a block notification (background task).
+
+    Called via ``BackgroundTasks`` so the HTTP response is not delayed.
+    Opens its own ``SessionLocal`` to avoid sharing the request session.
+
+    Args:
+        user_id: ID of the user who performed the scan.
+        prompt: The original prompt (hashed before storage).
+        result: Raw result dict from ``LLMGuard.guard()``.
+    """
     db = SessionLocal()
 
     try:
@@ -182,9 +224,24 @@ def scan_prompt(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Scan a prompt for injection risks.
-    Returns a decision: allow, sanitize, or block.
+    """Scan a single prompt for injection risks.
+
+    Applies regex-based and ML-based analysis, then returns a decision
+    of ``allow``, ``sanitize``, or ``block``.  The scan result is
+    persisted asynchronously via a background task.
+
+    Args:
+        request: Body containing the ``prompt`` string to scan.
+        background_tasks: FastAPI background-task scheduler (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        ScanResponse: Decision, confidence score, reasoning, and any
+            matched regex patterns.
+
+    Raises:
+        HTTPException(429): If the user exceeds 60 requests per minute.
+        HTTPException(500): If the guard engine encounters an internal error.
     """
     limited, retry_after = _check_rate_limit(current_user.id)
 
@@ -243,13 +300,27 @@ def scan_prompt(
 
 @router.get("/health", tags=["LLM Guard"])
 def guard_health():
-    """Check if the Guard module is available."""
+    """Liveness probe for the Guard module.
+
+    No authentication required.  Returns a simple status dict.
+
+    Returns:
+        dict: ``{"module": "llm_guard", "status": "available"}``.
+    """
     return {"module": "llm_guard", "status": "available"}
 
 
 @router.get("/info", tags=["LLM Guard"])
 def guard_info():
-    """Return diagnostic information about the Guard module."""
+    """Return diagnostic information about the Guard module.
+
+    Reports the compute device (``cpu`` or ``cuda``), loaded model name,
+    and active sanitisation level.  No authentication required.
+
+    Returns:
+        dict: Keys ``module``, ``status``, ``device``, ``model_name``,
+            ``sanitization_level``.
+    """
 
     try:
         import torch
@@ -334,7 +405,27 @@ def get_guard_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the current user's Guard scan history, newest first."""
+    """Return the current user's Guard scan history, newest first.
+
+    Supports optional filtering by decision, intent, and date range.
+
+    Args:
+        page: 1-indexed page number.
+        limit: Items per page (1–100, default 20).
+        decision: Optional filter — ``allow``, ``sanitize``, or ``block``.
+        intent: Optional filter — ``benign``, ``suspicious``, or ``malicious``.
+        start_date: Optional inclusive lower bound (ISO 8601).
+        end_date: Optional inclusive upper bound (ISO 8601).
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        PaginatedResponse[GuardScanLogResponse]: Paginated scan logs.
+
+    Raises:
+        HTTPException(400): If ``start_date > end_date``, or if an invalid
+            decision/intent filter value is supplied.
+    """
 
     if start_date and end_date and start_date > end_date:
         raise HTTPException(
@@ -376,9 +467,24 @@ def get_guard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Get Guard scan statistics for the specified window and user.
-    Admins can query stats for any user; regular users only for themselves.
+    """Return aggregate Guard scan statistics.
+
+    Computes totals, decision breakdown, detection-type breakdown,
+    top matched regex patterns, and daily scan counts for the
+    requested time window.
+
+    Args:
+        window: Time window — ``24h``, ``7d``, ``30d``, or ``all``.
+        user_id: Optional target user ID (admin-only; defaults to self).
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        GuardStatsResponse: Aggregated statistics dict.
+
+    Raises:
+        HTTPException(403): If a non-admin user tries to query another
+            user's statistics.
     """
     target_user_id = user_id if user_id is not None else current_user.id
     is_admin = getattr(current_user, "role", None) == "admin"
@@ -504,7 +610,19 @@ def get_guard_stats(
 
 @router.get("/config", tags=["LLM Guard"])
 def get_guard_config(current_user: User = Depends(get_current_user)):
-    """Get per-user guard configuration."""
+    """Retrieve the in-memory guard configuration for the current user.
+
+    Returns stored overrides if present, otherwise the default config:
+    ``{"sanitization_level": "medium", "malicious_threshold": 0.8,
+    "suspicious_threshold": 0.5}``.
+
+    Args:
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        dict: Keys ``sanitization_level`` (str), ``malicious_threshold``
+            (float), and ``suspicious_threshold`` (float).
+    """
     default_config = {
         "sanitization_level": "medium",
         "malicious_threshold": 0.8,
@@ -519,7 +637,23 @@ def update_guard_config(
     config: GuardConfigRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Update per-user guard configuration."""
+    """Update the in-memory guard configuration for the current user.
+
+    Validates that the sanitisation level is one of ``low``, ``medium``,
+    or ``high`` and that both threshold values fall within ``[0.0, 1.0]``.
+
+    Args:
+        config: Request body with ``sanitization_level``,
+            ``malicious_threshold``, and ``suspicious_threshold``.
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        dict: Confirmation message and the updated config.
+
+    Raises:
+        HTTPException(400): If the sanitisation level is invalid or a
+            threshold is outside the ``[0, 1]`` range.
+    """
     if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
         raise HTTPException(
             status_code=400,
@@ -556,9 +690,26 @@ def bulk_scan_prompts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Scan a batch of prompts, max 50, for injection risks.
-    Each prompt counts as one rate-limit unit and produces one GuardScanLog row.
+    """Scan a batch of prompts (max 50) for injection risks.
+
+    Each prompt counts as one rate-limit unit.  Rate-limit availability is
+    checked **upfront** for the entire batch; individual prompts are then
+    scanned sequentially.  All ``GuardScanLog`` rows are committed in a
+    single transaction.
+
+    Args:
+        request: Body containing a ``prompts`` list (≤ 50 strings).
+        current_user: Authenticated user (injected via JWT).
+        db: SQLAlchemy session (injected).
+
+    Returns:
+        BulkScanResponse: Per-prompt results with ``total`` and
+            ``processed`` counts.
+
+    Raises:
+        HTTPException(400): If more than 50 prompts are supplied.
+        HTTPException(429): If the batch would exceed the rate limit.
+        HTTPException(500): If the guard engine encounters an internal error.
     """
     try:
         request.validate_prompts()

@@ -30,7 +30,17 @@ def create_ai_system(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new AI system for compliance tracking."""
+    """Register a new AI system for compliance tracking.
+
+    Args:
+        system_data: ``AISystemCreate`` with name, description, version,
+            use_case, and sector.
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        AISystemResponse: The created AI system (HTTP 201).
+    """
     ai_system = AISystem(
         owner_id=current_user.id,
         name=system_data.name,
@@ -62,7 +72,23 @@ def list_ai_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List all AI systems for the current user, with optional sorting and pagination."""
+    """List the current user's AI systems with sorting and pagination.
+
+    Args:
+        sort_by: Column to sort on (``name``, ``risk_level``,
+            ``compliance_score``, ``created_at``).
+        order: ``asc`` or ``desc``.
+        page: 1-indexed page number.
+        limit: Items per page (1–100).
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        PaginatedResponse[AISystemResponse]: Sorted, paginated list.
+
+    Raises:
+        HTTPException(400): If ``sort_by`` or ``order`` is invalid.
+    """
     if sort_by not in _SORTABLE_FIELDS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -97,7 +123,23 @@ def bulk_import_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Import AI systems from a CSV file."""
+    """Bulk-import AI systems from a UTF-8 CSV file.
+
+    The CSV must have a header row.  The ``name`` column is required;
+    ``description``, ``version``, ``use_case``, and ``sector`` are
+    optional.  Duplicate names (per-user) are reported as row errors.
+
+    Args:
+        file: Uploaded ``.csv`` file.
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        BulkImportResponse: ``created`` count and per-row ``errors``.
+
+    Raises:
+        HTTPException(400): If the file is not a valid UTF-8 CSV.
+    """
     errors = []
     created_count = 0
 
@@ -180,7 +222,22 @@ def export_ai_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Export the authenticated user's AI systems registry as a CSV file."""
+    """Export the user's AI systems as a downloadable CSV.
+
+    Optionally filters by risk level before export.
+
+    Args:
+        risk_level: Optional filter (``minimal``, ``limited``, ``high``,
+            ``unacceptable``).
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        StreamingResponse: CSV attachment (``text/csv``).
+
+    Raises:
+        HTTPException(400): If the supplied risk_level is invalid.
+    """
     query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
 
     if risk_level is not None:
@@ -234,7 +291,23 @@ def get_ai_system_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get paginated and sorted audit history for a specific AI system."""
+    """Return paginated audit history for a specific AI system.
+
+    Args:
+        system_id: Primary-key of the AI system.
+        order: Sort direction for ``changed_at`` (``asc`` or ``desc``).
+        page: 1-indexed page number.
+        limit: Items per page (1–100).
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        PaginatedResponse[AISystemAuditLogResponse]: Audit log entries.
+
+    Raises:
+        HTTPException(400): If the ``order`` value is invalid.
+        HTTPException(404): If the AI system is not found.
+    """
     
     # 1. Validate sorting parameter
     if order not in ("asc", "desc"):
@@ -294,7 +367,19 @@ def get_ai_system(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get a specific AI system."""
+    """Retrieve a single AI system by ID.
+
+    Args:
+        system_id: Primary-key of the AI system.
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        AISystemResponse: The requested AI system.
+
+    Raises:
+        HTTPException(404): If not found or not owned by the user.
+    """
     system = (
         db.query(AISystem)
         .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
@@ -315,7 +400,23 @@ def update_ai_system(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update an AI system."""
+    """Update an AI system (partial update supported).
+
+    Only fields present in the request body are modified.  Triggers an
+    audit-log entry via ``_changed_by_id``.
+
+    Args:
+        system_id: Primary-key of the AI system.
+        system_data: ``AISystemUpdate`` with optional fields.
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        AISystemResponse: The updated AI system.
+
+    Raises:
+        HTTPException(404): If not found or not owned by the user.
+    """
     system = (
         db.query(AISystem)
         .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
@@ -343,7 +444,16 @@ def delete_ai_system(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete an AI system."""
+    """Permanently delete an AI system.
+
+    Args:
+        system_id: Primary-key of the AI system.
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Raises:
+        HTTPException(404): If not found or not owned by the user.
+    """
     system = (
         db.query(AISystem)
         .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
@@ -366,7 +476,22 @@ def update_ai_system_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update only the compliance_status of an AI system."""
+    """Patch only the compliance status of an AI system.
+
+    Records an audit-log entry via ``_changed_by_id``.
+
+    Args:
+        system_id: Primary-key of the AI system.
+        payload: Body with ``compliance_status`` value.
+        db: SQLAlchemy session (injected).
+        current_user: Authenticated user (injected via JWT).
+
+    Returns:
+        AISystemResponse: The updated AI system.
+
+    Raises:
+        HTTPException(404): If not found or not owned by the user.
+    """
     system = db.query(AISystem).filter(
         AISystem.id == system_id,
         AISystem.owner_id == current_user.id,
