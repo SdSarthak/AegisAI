@@ -88,15 +88,34 @@ export default function Analytics() {
 
   const fetchRiskDistribution = async () => {
     try {
-      // Temporary mock data until backend API is available
-      const mockData: RiskData[] = [
-        { name: 'Minimal Risk', value: 4 },
-        { name: 'Limited Risk', value: 3 },
-        { name: 'High Risk', value: 2 },
-        { name: 'Unacceptable Risk', value: 1 },
-      ]
+      // Try fetching from backend analytics summary endpoint. If it's
+      // not implemented or returns an error, fall back to mock data.
+      const res = await fetch('/api/v1/analytics/summary')
 
-      setRiskPieData(mockData)
+      if (res.ok) {
+        const json = await res.json()
+
+        // Expecting a summary object with counts per risk level. If the
+        // backend later returns a different shape, adjust mapping here.
+        const mapped: RiskData[] = [
+          { name: 'Minimal Risk', value: json.counts?.minimal || 0 },
+          { name: 'Limited Risk', value: json.counts?.limited || 0 },
+          { name: 'High Risk', value: json.counts?.high || 0 },
+          { name: 'Unacceptable Risk', value: json.counts?.unacceptable || 0 },
+        ]
+
+        setRiskPieData(mapped)
+      } else {
+        // Backend endpoint not available yet; use mock data.
+        const mockData: RiskData[] = [
+          { name: 'Minimal Risk', value: 4 },
+          { name: 'Limited Risk', value: 3 },
+          { name: 'High Risk', value: 2 },
+          { name: 'Unacceptable Risk', value: 1 },
+        ]
+
+        setRiskPieData(mockData)
+      }
     } catch (error) {
       console.error(
         'Failed to fetch risk distribution:',
