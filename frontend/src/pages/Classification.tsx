@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { classificationApi } from '../services/api'
@@ -102,6 +102,7 @@ export default function Classification() {
     law_enforcement: false,
     border_control: false,
     justice_system: false,
+    education_vocational_training: false,
     interacts_with_humans: true,
     generates_synthetic_content: false,
     emotion_recognition: false,
@@ -120,7 +121,71 @@ export default function Classification() {
     },
   })
 
+
+  // Derive a live preliminary risk level from formData so the panel
+  // updates in real-time as checkboxes are ticked, before the API call.
+  const liveRiskLevel = useMemo((): string | null => {
+    const {
+      law_enforcement,
+      border_control,
+      justice_system,
+      hr_recruitment_screening,
+      hr_promotion_termination,
+      credit_worthiness,
+      insurance_risk_assessment,
+      affects_fundamental_rights,
+      makes_automated_decisions,
+      is_safety_component,
+      uses_biometric_data,
+      biometric_categorization,
+      emotion_recognition,
+      interacts_with_humans,
+      generates_synthetic_content,
+    } = formData
+
+    if (law_enforcement && uses_biometric_data && biometric_categorization) return 'unacceptable'
+
+    const highRiskTriggers = [
+      hr_recruitment_screening,
+      hr_promotion_termination,
+      credit_worthiness,
+      insurance_risk_assessment,
+      law_enforcement,
+      border_control,
+      justice_system,
+      (affects_fundamental_rights && makes_automated_decisions),
+      is_safety_component,
+    ]
+    if (highRiskTriggers.some(Boolean)) return 'high'
+
+    if (interacts_with_humans || generates_synthetic_content || emotion_recognition) return 'limited'
+
+    return 'minimal'
+  }, [formData])
+
+  // Only treat explicitly opt-in fields as "interaction" — fields that default
+  // to true (affects_fundamental_rights, makes_automated_decisions,
+  // hr_recruitment_screening, interacts_with_humans) would fire the preview
+  // immediately on page load before the user does anything, which is misleading.
+  const hasInteracted = useMemo(() => {
+    return (
+      formData.hr_recruitment_screening ||
+      formData.hr_promotion_termination ||
+      formData.credit_worthiness ||
+      formData.insurance_risk_assessment ||
+      formData.law_enforcement ||
+      formData.border_control ||
+      formData.justice_system ||
+      formData.is_safety_component ||
+      formData.uses_biometric_data ||
+      formData.biometric_categorization ||
+      formData.emotion_recognition ||
+      formData.generates_synthetic_content
+    )
+  }, [formData])
+
   const getRiskIcon = (level: string) => {
+
     switch (level) {
       case 'unacceptable':
         return <XCircle className="w-8 h-8 text-red-600" />
@@ -183,10 +248,7 @@ export default function Classification() {
                     type="checkbox"
                     checked={formData.hr_recruitment_screening}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        hr_recruitment_screening: e.target.checked,
-                      })
+                      setFormData({ ...formData, hr_recruitment_screening: e.target.checked })
                     }
                     className="mt-1"
                   />
@@ -202,15 +264,12 @@ export default function Classification() {
                     type="checkbox"
                     checked={formData.hr_promotion_termination}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        hr_promotion_termination: e.target.checked,
-                      })
+                      setFormData({ ...formData, hr_promotion_termination: e.target.checked })
                     }
                     className="mt-1"
                   />
                   <span className="text-sm text-gray-600">
-                    <strong>Promotion/Termination Decisions</strong>
+                    <strong>Promotion / Termination Decisions</strong>
                     <br />
                     AI influences employment status decisions
                   </span>
@@ -221,10 +280,7 @@ export default function Classification() {
                     type="checkbox"
                     checked={formData.credit_worthiness}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        credit_worthiness: e.target.checked,
-                      })
+                      setFormData({ ...formData, credit_worthiness: e.target.checked })
                     }
                     className="mt-1"
                   />
@@ -238,12 +294,121 @@ export default function Classification() {
                 <label className="flex items-start gap-3">
                   <input
                     type="checkbox"
+                    checked={formData.insurance_risk_assessment}
+                    onChange={(e) =>
+                      setFormData({ ...formData, insurance_risk_assessment: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Insurance Risk Assessment</strong>
+                    <br />
+                    AI evaluates risk for insurance pricing or eligibility
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.law_enforcement}
+                    onChange={(e) =>
+                      setFormData({ ...formData, law_enforcement: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Law Enforcement Use</strong>
+                    <br />
+                    Used by police or judicial authorities for decisions
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.border_control}
+                    onChange={(e) =>
+                      setFormData({ ...formData, border_control: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Border Control / Migration</strong>
+                    <br />
+                    Used for visa, asylum, or border management decisions
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.justice_system}
+                    onChange={(e) =>
+                      setFormData({ ...formData, justice_system: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Justice System / Legal Aid</strong>
+                    <br />
+                    Assists courts or legal processes with decisions
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_safety_component}
+                    onChange={(e) =>
+                      setFormData({ ...formData, is_safety_component: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Safety-Critical Component</strong>
+                    <br />
+                    Part of a product regulated under EU safety legislation
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.uses_biometric_data}
+                    onChange={(e) =>
+                      setFormData({ ...formData, uses_biometric_data: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Uses Biometric Data</strong>
+                    <br />
+                    Processes fingerprints, face scans, or other biometrics
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.biometric_categorization}
+                    onChange={(e) =>
+                      setFormData({ ...formData, biometric_categorization: e.target.checked })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Biometric Categorization</strong>
+                    <br />
+                    Categorizes people by race, gender, or political views from biometrics
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
                     checked={formData.affects_fundamental_rights}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        affects_fundamental_rights: e.target.checked,
-                      })
+                      setFormData({ ...formData, affects_fundamental_rights: e.target.checked })
                     }
                     className="mt-1"
                   />
@@ -259,10 +424,7 @@ export default function Classification() {
                     type="checkbox"
                     checked={formData.makes_automated_decisions}
                     onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        makes_automated_decisions: e.target.checked,
-                      })
+                      setFormData({ ...formData, makes_automated_decisions: e.target.checked })
                     }
                     className="mt-1"
                   />
@@ -270,6 +432,25 @@ export default function Classification() {
                     <strong>Automated Decision Making</strong>
                     <br />
                     Makes decisions without meaningful human review
+                  </span>
+                </label>
+
+                <label className="flex items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.education_vocational_training}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        education_vocational_training: e.target.checked,
+                      })
+                    }
+                    className="mt-1"
+                  />
+                  <span className="text-sm text-gray-600">
+                    <strong>Education & Vocational Training</strong>
+                    <br />
+                    AI determines access to or assigns persons to educational institutions
                   </span>
                 </label>
               </div>
@@ -483,20 +664,69 @@ export default function Classification() {
                       </span>
                     </div>
 
-                    <ComplianceChecklist
-                      systemId={Number(systemId || 0)}
-                      riskLevel={
-                        result.risk_level as
-                        | 'minimal'
-                        | 'limited'
-                        | 'high'
-                        | 'unacceptable'
-                      }
-                      items={CHECKLIST_ITEMS[result.risk_level] || []}
-                    />
+                    {systemId ? (
+                      <ComplianceChecklist
+                        systemId={Number(systemId)}
+                        riskLevel={
+                          result.risk_level as
+                          | 'minimal'
+                          | 'limited'
+                          | 'high'
+                          | 'unacceptable'
+                        }
+                        items={CHECKLIST_ITEMS[result.risk_level] || []}
+                      />
+                    ) : (
+                      <p className="text-sm text-gray-400 italic">
+                        Save this AI system first to track checklist progress.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>
+            </div>
+          ) : hasInteracted && liveRiskLevel ? (
+            // Live preview panel — shown when checkboxes are ticked but API hasn't been called yet
+            <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm animate-in">
+              <div className="flex items-center gap-3 mb-6">
+                {getRiskIcon(liveRiskLevel)}
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-2xl font-black text-gray-900 capitalize tracking-tight">
+                      {liveRiskLevel} Risk
+                    </h2>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500">
+                      Preview
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-400 mt-0.5">
+                    Submit the form for full analysis and compliance roadmap
+                  </p>
+                </div>
+              </div>
+
+              <div className={`rounded-xl p-4 mb-6 ${
+                liveRiskLevel === 'unacceptable' ? 'bg-red-50 border border-red-100' :
+                liveRiskLevel === 'high' ? 'bg-orange-50 border border-orange-100' :
+                liveRiskLevel === 'limited' ? 'bg-yellow-50 border border-yellow-100' :
+                'bg-green-50 border border-green-100'
+              }`}>
+                <p className={`text-sm font-medium ${
+                  liveRiskLevel === 'unacceptable' ? 'text-red-800' :
+                  liveRiskLevel === 'high' ? 'text-orange-800' :
+                  liveRiskLevel === 'limited' ? 'text-yellow-800' :
+                  'text-green-800'
+                }`}>
+                  {liveRiskLevel === 'unacceptable' && 'This system may be prohibited under EU AI Act Article 5. Review immediately.'}
+                  {liveRiskLevel === 'high' && 'High-risk systems require technical documentation, conformity assessment, and human oversight (Annex III).'}
+                  {liveRiskLevel === 'limited' && 'Limited-risk systems must meet transparency obligations under Article 52.'}
+                  {liveRiskLevel === 'minimal' && 'Minimal risk — no mandatory obligations, but voluntary best practices are recommended.'}
+                </p>
+              </div>
+
+              <p className="text-xs text-gray-400 text-center">
+                This is a real-time estimate based on your selections. Click <strong>Classify Risk Level</strong> for the full AI Act analysis.
+              </p>
             </div>
           ) : (
             <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">

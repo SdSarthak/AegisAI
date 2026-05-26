@@ -9,10 +9,6 @@ TODO for contributors (high difficulty):
   - Add streaming responses via SSE for long answers
 """
 
-import time
-from fastapi import APIRouter, Depends, HTTPException, status
-
-
 import os
 import shutil
 import tempfile
@@ -30,9 +26,9 @@ from app.models.user import SubscriptionTier, User
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.vector_store import create_vector_store
 from app.models.rag_query import RagQuery
-from typing import Optional
 
 router = APIRouter()
+
 
 
 class RAGQueryRequest(BaseModel):
