@@ -102,3 +102,7 @@ ehthumbs.db
 
 # Local dev tooling
 .claude/
+
+# Custom regulation rulesets
+regulations/custom/*
+!regulations/custom/.gitkeep

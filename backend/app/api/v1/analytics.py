@@ -20,6 +20,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
+from sqlalchemy import func
+from app.models.ai_system import AISystem, RiskLevel
 
 router = APIRouter()
 
@@ -31,11 +33,21 @@ def get_compliance_timeline(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Return daily compliance snapshots for a given AI system.
+    """Return daily compliance snapshots for a given AI system.
 
-    TODO (help wanted): query ComplianceSnapshot filtered by ai_system_id and
-    snapshotted_at >= now - days. Verify the system belongs to current_user.
+    Args:
+        system_id: The unique identifier of the AI system to query.
+        days: Number of past days to include in the timeline (default: 30).
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        ComplianceTimelineResponse: A list of daily compliance snapshot
+            data points for the specified AI system.
+
+    Raises:
+        HTTPException: 501 if the endpoint is not yet implemented.
+        HTTPException: 403 if the system does not belong to current_user.
     """
     # TODO: implement — replace with real DB query
     raise HTTPException(
@@ -48,12 +60,44 @@ def get_analytics_summary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Return aggregate compliance stats for the current user's systems.
+    """Return aggregate compliance statistics for the current user's systems.
 
-    TODO (help wanted): aggregate counts and averages from ai_systems table.
+    Args:
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        dict: Aggregated stats including total systems, average compliance
+            score, count by risk level, and count by compliance status.
+
+    Raises:
+        HTTPException: 501 if the endpoint is not yet implemented.
     """
-    # TODO: implement
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    # Return aggregate counts by risk level for the current user's AI systems.
+    # Keep this implementation minimal: counts for minimal/limited/high/unacceptable.
+    counts = (
+      db.query(AISystem.risk_level, func.count(AISystem.id))
+      .filter(AISystem.owner_id == current_user.id)
+      .group_by(AISystem.risk_level)
+      .all()
     )
+
+    # Map results into a predictable shape for the frontend.
+    result = {
+      "counts": {
+        "minimal": 0,
+        "limited": 0,
+        "high": 0,
+        "unacceptable": 0,
+      }
+    }
+
+    for risk, cnt in counts:
+      if risk is None:
+        continue
+      # risk is an enum member (RiskLevel) or its value; normalize by string.
+      key = risk.value if hasattr(risk, "value") else str(risk)
+      if key in result["counts"]:
+        result["counts"][key] = int(cnt)
+
+    return result

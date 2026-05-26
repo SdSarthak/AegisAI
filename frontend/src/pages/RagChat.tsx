@@ -14,6 +14,20 @@ interface RagAnswer {
   answer_id?: string
 }
 
+interface ApiError {
+  response?: {
+    status?: number
+    data?: {
+      detail?: string
+    }
+  }
+  message?: string
+}
+
+function isApiError(error: unknown): error is ApiError {
+  return typeof error === 'object' && error !== null
+}
+
 function buildAnswerExport(answer: RagAnswer): string {
   return [
     'AI Response',
@@ -81,6 +95,18 @@ export default function RagChat() {
         setError(
           errorResponse?.response?.data?.detail ||
             errorResponse.message ||
+    } catch (err: unknown) {
+      // ✅ ERROR HANDLING
+      const apiError = isApiError(err) ? err : {}
+
+      if (apiError.response?.status === 503) {
+        setError('Index not ready. Please try again later.')
+      } else if (apiError.response?.status === 401) {
+        setError('Unauthorized. Please login again.')
+      } else {
+        setError(
+          apiError.response?.data?.detail ||
+            apiError.message ||
             'Unable to generate an answer right now.'
         )
       }

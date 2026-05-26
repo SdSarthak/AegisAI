@@ -71,6 +71,7 @@ class RiskClassificationRequest(BaseModel):
     law_enforcement: bool = False
     border_control: bool = False
     justice_system: bool = False
+    education_vocational_training: bool = False
 
     # Transparency (Article 52)
     interacts_with_humans: bool = True  # Chatbots, virtual assistants
