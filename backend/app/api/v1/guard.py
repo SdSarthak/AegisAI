@@ -65,6 +65,9 @@ class BulkScanRequest(BaseModel):
     prompts: list[str]
 
     def validate_prompts(self) -> None:
+        if not self.prompts:
+            raise ValueError("At least one prompt is required per batch request.")
+
         if len(self.prompts) > 50:
             raise ValueError("Maximum 50 prompts allowed per batch request.")
 
