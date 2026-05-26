@@ -17,3 +17,10 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+# Import models to ensure they are registered on Base.metadata when other
+# modules import `Base` and call `Base.metadata.create_all(...)` (some tests
+# create a test sqlite engine and call create_all before app.main runs). This
+# guarantees all ORM tables are present.
+import app.models  # noqa: E402

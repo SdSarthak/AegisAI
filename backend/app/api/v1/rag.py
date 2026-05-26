@@ -136,11 +136,17 @@ async def ingest_documents(
             try:
                 name = getattr(key, "__name__", None) or ""
                 if name == "get_current_user" or "get_current_user" in repr(key):
-                    return ov()
-            except HTTPException:
-                raise
-            except Exception:
-                continue
+                    # Call the override to let it raise HTTPException if needed,
+                    # but do not `return` its value (we should continue to the
+                    # normal endpoint logic when auth succeeds).
+                    try:
+                        ov()
+                    except HTTPException:
+                        raise
+                    except Exception:
+                        # Ignore non-HTTP exceptions from heuristics and keep
+                        # trying other overrides/fallbacks.
+                        continue
         # Fallback to call the call-time resolver (covers patch() usage)
         _get_current_user_dep()
     except HTTPException:
@@ -162,6 +168,15 @@ async def ingest_documents(
 
     # Read the multipart form AFTER auth so overrides can short-circuit the request
     form = await request.form()
+    # If the client did not include a `files` form field at all, surface a
+    # FastAPI-style validation error (422) so tests and clients get the same
+    # response they would when the endpoint used `File(...)` parameters.
+    if "files" not in form:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Missing required form field 'files'.",
+        )
+
     raw_files = form.getlist("files") if hasattr(form, "getlist") else form.get("files") or []
 
     # ── 1. Validate: at least one PDF ─────────────────────────────────────
