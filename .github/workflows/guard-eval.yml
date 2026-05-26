@@ -18,6 +18,15 @@ name: Guard Model Evaluation
 
 on:
   pull_request:
+    branches: [main]
+    paths:
+      - "backend/app/modules/guard/**"
+      - "backend/data/guard_holdout.csv"
+      - "backend/data/guard_baseline.json"
+      - "backend/scripts/evaluate_guard_ci.py"
+      - ".github/workflows/guard-eval.yml"
+  pull_request_target:
+    branches: [main]
     paths:
       - "backend/app/modules/guard/**"
       - "backend/data/guard_holdout.csv"
@@ -60,7 +69,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
