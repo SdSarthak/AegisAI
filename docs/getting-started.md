@@ -13,6 +13,7 @@ This guide gets AegisAI running locally in under 10 minutes.
 - [Option B — Manual setup](#option-b--manual-setup)
 - [Option C — Ollama (free, no API key)](#option-c--ollama-free-no-api-key)
 - [LLM provider options](#llm-provider-options)
+- [Environment Variables](#️-environment-variables)
 - [First steps in the UI](#first-steps-in-the-ui)
 - [Using the API directly](#using-the-api-directly)
 - [Running tests](#running-tests)
