@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Download } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import toast from 'react-hot-toast'
 
 interface AISystem {
   id: number
@@ -126,7 +127,7 @@ export default function AISystems() {
 
       const token = localStorage.getItem('token')
       if (!token) {
-        console.error('No auth token found. Please log in again.')
+        toast.error('No auth token found. Please log in again.')
         return
       }
 
@@ -158,7 +159,7 @@ export default function AISystems() {
       link.remove()
       window.URL.revokeObjectURL(objectUrl)
     } catch (error) {
-      console.error('Export failed:', error)
+      toast.error('Export failed:', error)
     } finally {
       setIsExporting(false)
     }
