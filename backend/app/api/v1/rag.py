@@ -10,7 +10,7 @@ TODO for contributors (high difficulty):
 """
 
 import time
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 
 
 import os
@@ -117,9 +117,11 @@ class RAGIngestResponse(BaseModel):
     tags=["RAG Intelligence"],
     dependencies=[Depends(_get_current_user_dep)],
 )
-def ingest_documents(
+async def ingest_documents(
+    request: Request,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(_get_current_user_dep),
-    files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
+    db: Session = Depends(get_db),
 ):
     """
 
@@ -158,11 +160,15 @@ def ingest_documents(
     - ``503`` if the embedding model or FAISS build step fails
     """
 
+    # Read the multipart form AFTER auth so overrides can short-circuit the request
+    form = await request.form()
+    raw_files = form.getlist("files") if hasattr(form, "getlist") else form.get("files") or []
+
     # ── 1. Validate: at least one PDF ─────────────────────────────────────
     pdf_files = [
-        f for f in files
-        if f.filename and f.filename.lower().endswith(".pdf")
-        and f.content_type in ("application/pdf", "binary/octet-stream", None)
+        f for f in raw_files
+        if getattr(f, "filename", None) and str(f.filename).lower().endswith(".pdf")
+        and getattr(f, "content_type", None) in ("application/pdf", "binary/octet-stream", None)
     ]
     if not pdf_files:
         raise HTTPException(
