@@ -482,6 +482,7 @@ def get_guard_stats(
         if date_key not in daily_buckets:
             daily_buckets[date_key] = {
                 "date": date_key,
+                "count": 0,
                 "allow": 0,
                 "sanitize": 0,
                 "block": 0,
@@ -489,6 +490,9 @@ def get_guard_stats(
 
         if decision in {"allow", "sanitize", "block"}:
             daily_buckets[date_key][decision] = count
+            daily_buckets[date_key]["count"] = (
+                int(daily_buckets[date_key]["count"]) + count
+            )
 
     scans_per_day = list(daily_buckets.values())
 
