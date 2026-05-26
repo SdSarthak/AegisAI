@@ -49,13 +49,12 @@ export default function Onboarding() {
   }
 
   const handleNext = () => {
-    if (isLastStep) {
-      console.log('Onboarding Data:', formData)
-      navigate('/')
-    } else {
-      setCurrentStep((s) => s + 1)
-    }
+  if (isLastStep) {
+    navigate('/')
+  } else {
+    setCurrentStep((s) => s + 1)
   }
+}
 
   const handleBack = () => {
     setCurrentStep((s) => Math.max(0, s - 1))
