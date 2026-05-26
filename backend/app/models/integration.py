@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Enum, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Text, Enum, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -18,7 +18,7 @@ class UserIntegration(Base):
     integration_type = Column(Enum(IntegrationType), nullable=False)
     base_url = Column(String(512), nullable=True)   # Jira only
     email = Column(String(255), nullable=True)       # Jira only
-    api_token = Column(String(512), nullable=False)  # Jira: API token, Linear: API key
+    api_token = Column(Text, nullable=False)  # Jira: API token, Linear: API key
     project_key = Column(String(255), nullable=True) # Jira: project key, Linear: team ID
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
