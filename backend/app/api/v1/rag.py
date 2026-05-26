@@ -146,12 +146,24 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Ask a regulatory question and get an answer grounded in source documents.
+    """Query the regulatory knowledge base with a natural language question.
 
-    Example questions:
-    - "Does my CV-screening tool qualify as high-risk under the EU AI Act?"
-    - "What are the transparency requirements for chatbots?"
+    Runs the question through the RAG pipeline, retrieves relevant chunks
+    from the FAISS index, generates a grounded answer, persists feedback
+    and query records, and logs metrics to MLflow.
+
+    Args:
+        request: Request body containing the question string.
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        RAGQueryResponse: Generated answer, source document references,
+            and a unique answer_id for feedback submission.
+
+    Raises:
+        HTTPException: 503 if the FAISS index is not found or the RAG
+            module encounters an error.
     """
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
@@ -217,7 +229,12 @@ def query_knowledge_base(
 
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health():
-    """Check if the RAG module is available."""
+    """Check if the RAG module is available and the FAISS index is loaded.
+
+    Returns:
+        dict: Module name, status (available/unavailable), index_loaded
+            flag, and an optional message if the index is missing.
+    """
     from app.modules.rag.vector_store import check_index_exists
     
     index_loaded = check_index_exists()
@@ -248,7 +265,19 @@ def rag_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Record a thumbs-up or thumbs-down for a previously returned answer."""
+    """Record a thumbs-up or thumbs-down vote for a previously returned answer.
+
+    Args:
+        payload: Request body containing answer_id and vote (up or down).
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        dict: Status confirmation and the answer_id that was voted on.
+
+    Raises:
+        HTTPException: 404 if the answer_id is not found.
+    """
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
@@ -268,9 +297,23 @@ def get_low_quality_chunks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Admin endpoint: aggregate feedback by source chunk and return low-quality candidates.
+    """Return source chunks with high negative feedback ratios.
 
-    A chunk is considered low-quality when thumbs_down / total_feedback > threshold.
+    Aggregates thumbs_up and thumbs_down counts per source chunk across
+    all RAGFeedback records and returns chunks where the ratio of
+    thumbs_down to total feedback exceeds the threshold. Admin only.
+
+    Args:
+        threshold: Minimum thumbs_down ratio to flag a chunk (default: 0.3).
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        dict: Threshold value and list of low-quality chunks with their
+            thumbs_down count, total feedback, and ratio.
+
+    Raises:
+        HTTPException: 403 if user does not have Scale tier access.
     """
     # Admin-only access: restrict to system owners / scale tier
     try:
@@ -309,7 +352,18 @@ def get_rag_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return paginated list of the current user's past RAG queries."""
+    """Return paginated list of the current user's past RAG queries.
+
+    Args:
+        page: Page number, 1-indexed (default: 1).
+        page_size: Number of results per page (default: 10).
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        dict: Page info and list of past queries with id, question,
+            answer_summary, source_count, and created_at.
+    """
     offset = (page - 1) * page_size
     queries = (
         db.query(RagQuery)
