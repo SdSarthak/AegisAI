@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -14,8 +14,73 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.webhook import WebhookConfig
 from app.schemas.webhook import WebhookCreate, WebhookResponse
+import asyncio
+import json
+import hmac
+import hashlib
+import logging
+import httpx
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+async def _async_deliver(url: str, headers: dict, payload_bytes: bytes, timeout: int = 5):
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            await client.post(url, content=payload_bytes, headers=headers)
+    except Exception as exc:
+        logger.warning("Webhook delivery to %s failed: %s", url, exc)
+
+
+def deliver_webhook(db: Session, user_id: int, event: str, payload: dict, background_tasks: BackgroundTasks | None = None) -> None:
+    """Dispatch webhook payloads for active webhook configs matching the event.
+
+    This schedules an async background delivery using `asyncio.create_task` so
+    it does not block request handling. Failures are logged at WARNING level.
+    """
+    # Query active webhooks for this user that subscribe to the event
+    configs = (
+        db.query(WebhookConfig)
+        .filter(WebhookConfig.user_id == user_id, WebhookConfig.is_active == True)
+        .all()
+    )
+
+    if not configs:
+        return
+
+    payload_bytes = json.dumps({"event": event, "payload": payload}).encode("utf-8")
+
+    for w in configs:
+        try:
+            if w.events and event not in (w.events or []):
+                continue
+
+            headers = {
+                "Content-Type": "application/json",
+                "X-AegisAI-Event": event,
+            }
+
+            if w.secret:
+                sig = hmac.new(w.secret.encode("utf-8"), payload_bytes, hashlib.sha256).hexdigest()
+                headers["X-AegisAI-Signature"] = sig
+
+            # Schedule async delivery via FastAPI BackgroundTasks when available
+            if background_tasks is not None:
+                try:
+                    background_tasks.add_task(_async_deliver, w.url, headers, payload_bytes)
+                except Exception:
+                    # If BackgroundTasks.add_task fails for some reason, fallback
+                    asyncio.get_event_loop().run_until_complete(_async_deliver(w.url, headers, payload_bytes))
+            else:
+                # No BackgroundTasks provided: try scheduling on the running loop
+                try:
+                    asyncio.create_task(_async_deliver(w.url, headers, payload_bytes))
+                except RuntimeError:
+                    asyncio.get_event_loop().run_until_complete(_async_deliver(w.url, headers, payload_bytes))
+
+        except Exception as exc:
+            logger.warning("Failed to schedule webhook delivery for %s: %s", getattr(w, "url", "<unknown>"), exc)
 
 
 @router.post("", response_model=WebhookResponse, status_code=status.HTTP_201_CREATED)

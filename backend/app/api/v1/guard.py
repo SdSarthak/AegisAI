@@ -146,20 +146,36 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict) -> GuardScanL
     )
 
 
-def log_scan(user_id: int, prompt: str, result: dict) -> None:
-    """Log scan details and create block notification without storing raw prompt."""
-    db = SessionLocal()
+def log_scan(user_id: int, prompt: str, result: dict, db: Session | None = None) -> None:
+    """Log scan details and create block notification without storing raw prompt.
+
+    If `db` is provided we create a new session bound to the same engine so
+    background tasks operate on the same database as the request tests. If no
+    `db` is given, fall back to the global `SessionLocal` behavior.
+    """
+    local_session = None
 
     try:
+        if db is not None:
+            # Create a new session bound to the same engine as the provided session
+            from sqlalchemy.orm import sessionmaker
+
+            bind = db.get_bind()
+            Local = sessionmaker(autocommit=False, autoflush=False, bind=bind)
+            local_session = Local()
+            session = local_session
+        else:
+            session = SessionLocal()
+
         log = _build_guard_scan_log(user_id, prompt, result)
 
-        db.add(log)
-        db.commit()
-        db.refresh(log)
+        session.add(log)
+        session.commit()
+        session.refresh(log)
 
         if log.decision == "block":
             create_notification(
-                db=db,
+                db=session,
                 user_id=user_id,
                 notification_type=NotificationType.GUARD_BLOCK.value,
                 title="Prompt blocked by LLM Guard",
@@ -167,13 +183,18 @@ def log_scan(user_id: int, prompt: str, result: dict) -> None:
                 resource_type="guard_scan",
                 resource_id=log.id,
             )
-            db.commit()
+            session.commit()
 
     except Exception:
-        db.rollback()
+        if session is not None:
+            session.rollback()
         raise
     finally:
-        db.close()
+        if local_session is not None:
+            local_session.close()
+        elif db is None:
+            # we created the global SessionLocal instance
+            session.close()
 
 
 @router.post("/scan", response_model=ScanResponse)
@@ -220,6 +241,7 @@ def scan_prompt(
             current_user.id,
             request.prompt,
             result,
+            db,
         )
 
         response = ScanResponse(
@@ -245,7 +267,8 @@ def scan_prompt(
                         "confidence": response.confidence,
                         "matched_patterns": response.matched_patterns,
                         "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
-                    }
+                    },
+                    background_tasks=background_tasks,
                 )
             except Exception as e:
                 logger.error(f"Failed to trigger webhook payload: {str(e)}")
