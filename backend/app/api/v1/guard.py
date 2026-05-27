@@ -10,11 +10,8 @@ TODO for contributors (medium difficulty):
 """
 
 import hashlib
-from collections import Counter, defaultdict, deque
+from collections import Counter
 from datetime import datetime, timedelta, timezone
-from threading import Lock
-from typing import Optional, TypedDict
-import logging
 
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -27,6 +24,7 @@ from app.api.v1.notifications import create_notification
 from app.core.config import settings
 from app.core.database import SessionLocal, get_db
 from app.core.security import get_current_user
+from app.core.rate_limit import guard_scan_rate_limiter
 from app.models.guard_scan_log import GuardScanLog
 from app.models.notification import NotificationType
 from app.models.user import User
@@ -37,11 +35,6 @@ from app.modules.guard import guard_config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
-
-_RATE_LIMIT_REQUESTS = 60
-_RATE_LIMIT_WINDOW_SECONDS = 60
-_scan_attempts_by_user: dict[int, deque[datetime]] = defaultdict(deque)
-_rate_limit_lock = Lock()
 
 
 class ScanRequest(BaseModel):
@@ -87,34 +80,6 @@ class UserGuardConfig(TypedDict):
 
 # Temporary in-memory config store
 user_guard_configs: dict[int, UserGuardConfig] = {}
-
-
-def _check_rate_limit(user_id: int) -> tuple[bool, int]:
-    """Return whether the user is limited and the seconds to retry after."""
-    now = datetime.now(timezone.utc)
-    window_start = now - timedelta(seconds=_RATE_LIMIT_WINDOW_SECONDS)
-
-    with _rate_limit_lock:
-        attempts = _scan_attempts_by_user[user_id]
-
-        while attempts and attempts[0] <= window_start:
-            attempts.popleft()
-
-        if len(attempts) >= _RATE_LIMIT_REQUESTS:
-            retry_after = max(
-                1,
-                int(
-                    (
-                        _RATE_LIMIT_WINDOW_SECONDS
-                        - (now - attempts[0]).total_seconds()
-                    )
-                    + 0.999
-                ),
-            )
-            return True, retry_after
-
-        attempts.append(now)
-        return False, 0
 
 
 def _infer_detection_type(regex_flag: bool, intent: str) -> str:
@@ -192,17 +157,33 @@ def scan_prompt(
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
 ):
+    """Scan a prompt for injection risks.
+
+    Args:
+        request: Prompt text and scan options submitted by the client.
+        background_tasks: FastAPI background task runner used for scan logging.
+        current_user: Authenticated user submitting the prompt.
+
+    Returns:
+        ScanResponse describing the guard decision and any sanitization details.
+
+    Raises:
+        HTTPException: If scan processing fails or the request is rate limited.
     """
-    Scan a prompt for injection risks.
-    Returns a decision: allow, sanitize, or block.
-    """
-    limited, retry_after = _check_rate_limit(current_user.id)
+    limited, retry_after = guard_scan_rate_limiter.check_and_consume(
+        key=f"guard:scan:{current_user.id}",
+        limit=settings.GUARD_RATE_LIMIT_REQUESTS,
+        window_seconds=settings.GUARD_RATE_LIMIT_WINDOW_SECONDS,
+    )
 
     if limited:
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={
-                "detail": "Rate limit exceeded: 60 requests per minute per user. Please try again later.",
+                "detail": (
+                    f"Rate limit exceeded: {settings.GUARD_RATE_LIMIT_REQUESTS} "
+                    f"requests per {settings.GUARD_RATE_LIMIT_WINDOW_SECONDS} seconds per user. Please try again later."
+                ),
             },
             headers={"Retry-After": str(retry_after)},
         )
@@ -253,14 +234,23 @@ def scan_prompt(
 
 @router.get("/health", tags=["LLM Guard"])
 def guard_health():
-    """Check if the Guard module is available."""
+    """Check whether the Guard module is available.
+
+    Returns:
+        A status payload describing the Guard module availability.
+    """
     return {"module": "llm_guard", "status": "available"}
+
 
 
 
 @router.get("/info", tags=["LLM Guard"])
 def guard_info():
-    """Return diagnostic information about the Guard module."""
+    """Return diagnostic information about the Guard module.
+
+    Returns:
+        A status payload containing device and model details.
+    """
 
     try:
         import torch
@@ -280,104 +270,37 @@ def guard_info():
         "sanitization_level": guard_config.SANITIZATION_LEVEL,
     }
 
-VALID_DECISIONS = {"allow", "sanitize", "block"}
-VALID_INTENTS = {"benign", "suspicious", "malicious"}
-
-
-def build_history_filters(
-    current_user_id: int,
-    decision: Optional[str],
-    intent: Optional[str],
-    start_date: Optional[datetime],
-    end_date: Optional[datetime],
-):
-    filters = [GuardScanLog.user_id == current_user_id]
-
-    # -----------------------
-    # decision filter
-    # -----------------------
-    if decision:
-        decision = decision.strip().lower()
-
-        if decision not in VALID_DECISIONS:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid decision filter",
-            )
-
-        filters.append(GuardScanLog.decision == decision)
-
-    # -----------------------
-    # intent filter
-    # -----------------------
-    if intent:
-        intent = intent.strip().lower()
-
-        if intent not in VALID_INTENTS:
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid intent filter",
-            )
-
-        filters.append(GuardScanLog.intent == intent)
-
-    # -----------------------
-    # date filters
-    # -----------------------
-    if start_date:
-        filters.append(GuardScanLog.scanned_at >= start_date)
-
-    if end_date:
-        filters.append(GuardScanLog.scanned_at <= end_date)
-
-    return filters
-
 @router.get("/history", response_model=PaginatedResponse[GuardScanLogResponse])
 def get_guard_history(
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
-
-    decision: Optional[str] = Query(None),
-    intent: Optional[str] = Query(None),
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
-
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the current user's Guard scan history, newest first."""
+    """Return the current user's Guard scan history, newest first.
 
-    if start_date and end_date and start_date > end_date:
-        raise HTTPException(
-            status_code=400,
-            detail="start_date cannot be after end_date",
-        )
+    Args:
+        page: Page number to return, starting at 1.
+        limit: Maximum number of scan logs to include per page.
+        db: Database session used to query scan history.
+        current_user: Authenticated user whose history is requested.
 
-    filters = build_history_filters(
-        current_user.id,
-        decision,
-        intent,
-        start_date,
-        end_date
+    Returns:
+        PaginatedResponse containing the user's scan history.
+    """
+    base_query = db.query(GuardScanLog).filter(
+        GuardScanLog.user_id == current_user.id,
     )
 
-    query = db.query(GuardScanLog).filter(*filters)
-
-    total = query.count()
-
+    total = base_query.count()
     logs = (
-        query.order_by(GuardScanLog.scanned_at.desc())
+        base_query.order_by(GuardScanLog.created_at.desc())
         .offset((page - 1) * limit)
         .limit(limit)
         .all()
     )
 
-    return PaginatedResponse(
-        items=logs,
-        total=total,
-        page=page,
-        limit=limit,
-    )
+    return PaginatedResponse(items=logs, total=total, page=page, limit=limit)
 
 
 @router.get("/stats", response_model=GuardStatsResponse)
@@ -387,9 +310,19 @@ def get_guard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Get Guard scan statistics for the specified window and user.
-    Admins can query stats for any user; regular users only for themselves.
+    """Return Guard scan statistics for a time window and user.
+
+    Args:
+        window: Time window to aggregate over (24h, 7d, 30d, or all).
+        user_id: Optional user ID to query; defaults to the current user.
+        db: Database session used to aggregate scan statistics.
+        current_user: Authenticated user requesting the statistics.
+
+    Returns:
+        GuardStatsResponse containing decision, detection, and trend statistics.
+
+    Raises:
+        HTTPException: If the caller is not allowed to query another user's stats.
     """
     target_user_id = user_id if user_id is not None else current_user.id
     is_admin = getattr(current_user, "role", None) == "admin"
@@ -509,7 +442,14 @@ def get_guard_stats(
 
 @router.get("/config", tags=["LLM Guard"])
 def get_guard_config(current_user: User = Depends(get_current_user)):
-    """Get per-user guard configuration."""
+    """Return the current user's Guard configuration.
+
+    Args:
+        current_user: Authenticated user whose Guard config is requested.
+
+    Returns:
+        The user's saved Guard configuration, or the default config.
+    """
     default_config = {
         "sanitization_level": "medium",
         "malicious_threshold": 0.8,
@@ -524,7 +464,18 @@ def update_guard_config(
     config: GuardConfigRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Update per-user guard configuration."""
+    """Update the current user's Guard configuration.
+
+    Args:
+        config: Sanitization level and threshold values to persist.
+        current_user: Authenticated user whose Guard config is being updated.
+
+    Returns:
+        A confirmation payload containing the saved configuration.
+
+    Raises:
+        HTTPException: If any configuration value is out of range.
+    """
     if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
         raise HTTPException(
             status_code=400,
@@ -561,9 +512,18 @@ def bulk_scan_prompts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Scan a batch of prompts, max 50, for injection risks.
-    Each prompt counts as one rate-limit unit and produces one GuardScanLog row.
+    """Scan a batch of prompts for injection risks.
+
+    Args:
+        request: Prompt list payload to scan in one batch.
+        current_user: Authenticated user submitting the batch.
+        db: Database session used to persist batch scan results.
+
+    Returns:
+        BulkScanResponse containing scan results, totals, and processed count.
+
+    Raises:
+        HTTPException: If the batch exceeds limits or validation fails.
     """
     try:
         request.validate_prompts()
@@ -573,40 +533,26 @@ def bulk_scan_prompts(
             detail=str(e),
         )
 
-    now = datetime.now(timezone.utc)
-    window_start = now - timedelta(seconds=_RATE_LIMIT_WINDOW_SECONDS)
     batch_size = len(request.prompts)
 
-    with _rate_limit_lock:
-        attempts = _scan_attempts_by_user[current_user.id]
+    limited, retry_after = guard_scan_rate_limiter.check_and_consume(
+        key=f"guard:scan:{current_user.id}",
+        limit=settings.GUARD_RATE_LIMIT_REQUESTS,
+        window_seconds=settings.GUARD_RATE_LIMIT_WINDOW_SECONDS,
+        cost=batch_size,
+    )
 
-        while attempts and attempts[0] <= window_start:
-            attempts.popleft()
-
-        if len(attempts) + batch_size > _RATE_LIMIT_REQUESTS:
-            retry_after = (
-                max(
-                    1,
-                    int(
-                        (
-                            _RATE_LIMIT_WINDOW_SECONDS
-                            - (now - attempts[0]).total_seconds()
-                        )
-                        + 0.999
-                    ),
-                )
-                if attempts
-                else _RATE_LIMIT_WINDOW_SECONDS
-            )
-
-            return JSONResponse(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                content={"detail": "Rate limit exceeded. Please try again later."},
-                headers={"Retry-After": str(retry_after)},
-            )
-
-        for _ in range(batch_size):
-            attempts.append(now)
+    if limited:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "detail": (
+                    f"Rate limit exceeded: {settings.GUARD_RATE_LIMIT_REQUESTS} "
+                    f"requests per {settings.GUARD_RATE_LIMIT_WINDOW_SECONDS} seconds per user. Please try again later."
+                ),
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
 
     try:
         from app.modules.guard.llm_guard import LLMGuard
