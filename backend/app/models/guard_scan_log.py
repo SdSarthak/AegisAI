@@ -2,8 +2,6 @@
 GuardScanLog model — records every prompt scan decision made by the LLM Guard.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-Prompts are stored as SHA-256 hashes only — never raw text — to protect user privacy.
 """
 
 from datetime import datetime
@@ -20,6 +18,7 @@ class GuardScanLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
+    raw_prompt = Column(String, nullable=True)
     prompt_hash = Column(String(64), nullable=False)  # SHA-256 hex digest
     decision = Column(String(16), nullable=False)      # allow | sanitize | block
     confidence = Column(Float, nullable=False)
@@ -33,6 +32,7 @@ class GuardScanLog(Base):
     ml_confidence = Column(Float, default=0.0, nullable=False)
     combined_score = Column(Float, default=0.0, nullable=False)
     prompt_length = Column(Integer, nullable=True)
+    ip_address = Column(String(45), nullable=True)
     scanned_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

@@ -16,7 +16,7 @@ from threading import Lock
 from typing import Optional
 import logging
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -121,8 +121,8 @@ def _infer_detection_type(regex_flag: bool, intent: str) -> str:
     return "combined"
 
 
-def _build_guard_scan_log(user_id: int, prompt: str, result: dict) -> GuardScanLog:
-    """Build a GuardScanLog row without storing raw prompt text."""
+def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> GuardScanLog:
+    """Build a GuardScanLog row capturing raw prompt and IP address."""
     metadata = result.get("metadata", {})
     regex_analysis = metadata.get("regex_analysis", {})
     intent_analysis = metadata.get("intent_analysis", {})
@@ -134,6 +134,7 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict) -> GuardScanL
 
     return GuardScanLog(
         user_id=user_id,
+        raw_prompt=prompt,
         prompt_hash=hashlib.sha256(prompt.encode()).hexdigest(),
         decision=result.get("decision", "allow"),
         confidence=decision_reasoning.get("confidence", 0.0),
@@ -145,16 +146,17 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict) -> GuardScanL
         ml_confidence=intent_analysis.get("confidence", 0.0),
         combined_score=decision_reasoning.get("confidence", 0.0),
         prompt_length=len(prompt),
+        ip_address=ip_address,
         scanned_at=datetime.utcnow(),
     )
 
 
-def log_scan(user_id: int, prompt: str, result: dict) -> None:
-    """Log scan details and create block notification without storing raw prompt."""
+def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> None:
+    """Log scan details and create block notification."""
     db = SessionLocal()
 
     try:
-        log = _build_guard_scan_log(user_id, prompt, result)
+        log = _build_guard_scan_log(user_id, prompt, result, ip_address)
 
         db.add(log)
         db.commit()
@@ -182,6 +184,7 @@ def log_scan(user_id: int, prompt: str, result: dict) -> None:
 @router.post("/scan", response_model=ScanResponse)
 def scan_prompt(
     request: ScanRequest,
+    request_obj: Request,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -233,11 +236,14 @@ def scan_prompt(
         guard = LLMGuard(sanitization_level=san_level)
         result = guard.guard(request.prompt)
 
+        ip_address = request_obj.client.host if request_obj.client else None
+
         background_tasks.add_task(
             log_scan,
             current_user.id,
             request.prompt,
             result,
+            ip_address,
         )
 
         response = ScanResponse(
@@ -671,6 +677,7 @@ def update_guard_config(
 @router.post("/scan/batch", response_model=BulkScanResponse)
 def bulk_scan_prompts(
     request: BulkScanRequest,
+    request_obj: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -754,9 +761,11 @@ def bulk_scan_prompts(
         guard = LLMGuard(sanitization_level=san_level)
         results: list[ScanResponse] = []
 
+        ip_address = request_obj.client.host if request_obj.client else None
+
         for prompt in request.prompts:
             result = guard.guard(prompt)
-            log = _build_guard_scan_log(current_user.id, prompt, result)
+            log = _build_guard_scan_log(current_user.id, prompt, result, ip_address)
 
             db.add(log)
             db.flush()
