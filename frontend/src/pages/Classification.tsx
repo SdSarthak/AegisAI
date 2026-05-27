@@ -176,7 +176,6 @@ export default function Classification() {
     generates_synthetic_content: false,
     emotion_recognition: false,
     biometric_categorization: false,
-    education_vocational_training: false,
   })
 
   const classifyMutation = useMutation({

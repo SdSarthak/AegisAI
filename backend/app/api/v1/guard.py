@@ -267,7 +267,7 @@ def guard_info():
 
 @router.get("/history", response_model=PaginatedResponse[GuardScanLogResponse])
 def get_guard_history(
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    skip: int = Query(0, ge=0, description="Items to skip"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -290,12 +290,12 @@ def get_guard_history(
     total = base_query.count()
     logs = (
         base_query.order_by(GuardScanLog.created_at.desc())
-        .offset((page - 1) * limit)
+        .offset(skip)
         .limit(limit)
         .all()
     )
 
-    return PaginatedResponse(items=logs, total=total, page=page, limit=limit)
+    return PaginatedResponse(items=logs, total=total, skip=skip, limit=limit)
 
 
 @router.get("/stats", response_model=GuardStatsResponse)

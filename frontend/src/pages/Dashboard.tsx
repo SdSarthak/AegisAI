@@ -13,7 +13,7 @@ export default function Dashboard() {
 
   const { data: documentsData, isLoading: documentsLoading } = useQuery({
     queryKey: ['documents'],
-    queryFn: documentsApi.list,
+    queryFn: () => documentsApi.list(),
   })
   const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
   const isLoading = systemsLoading || documentsLoading
