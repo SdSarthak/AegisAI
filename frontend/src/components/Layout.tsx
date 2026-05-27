@@ -24,7 +24,7 @@ const navigation = [
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
   { name: 'LLM Guard', href: '/guard', icon: ShieldCheck },
-  { name: 'Chatbot', href: '/rag-chat', icon: MessageSquareText },
+  { name: 'RAG Chat', href: '/rag-chat', icon: MessageSquareText },
 ]
 
 export default function Layout() {
