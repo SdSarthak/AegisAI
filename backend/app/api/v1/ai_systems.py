@@ -20,6 +20,8 @@ from app.schemas.ai_system import (
 )
 from app.schemas.audit_log import AISystemAuditLogResponse
 from app.schemas.pagination import PaginatedResponse
+from app.modules.compliance.eu_ai_act import evaluate_compliance
+from app.schemas.compliance import ComplianceGapResponse, ComplianceRequirementItem
 
 router = APIRouter()
 
@@ -385,8 +387,6 @@ def update_ai_system_status(
     return system
 
 
-from app.modules.compliance.eu_ai_act import evaluate_compliance
-from app.schemas.compliance import ComplianceGapResponse, ComplianceRequirementItem
 
 
 @router.get("/{system_id}/gaps", response_model=ComplianceGapResponse)
