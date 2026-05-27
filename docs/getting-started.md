@@ -17,6 +17,7 @@ This guide gets AegisAI running locally in under 10 minutes.
 - [First steps in the UI](#first-steps-in-the-ui)
 - [Using the API directly](#using-the-api-directly)
 - [Running tests](#running-tests)
+- [Troubleshooting](#troubleshooting)
 - [Training the Guard classifier](#training-the-guard-classifier)
 
 ---
@@ -178,64 +179,18 @@ Ollama runs separately on your machine; the backend connects to it via `LLM_BASE
 
 ---
 
-## ⚙️ Environment Variables
+## Troubleshooting
 
-After copying `backend/.env.example` to `backend/.env`, here is a full reference for every variable:
-
-### 🔧 App
-| Variable | Description | Required | Default |
-|---|---|---|---|
-| `APP_NAME` | Application name | No | `AegisAI` |
-| `DEBUG` | Enable debug mode | No | `true` |
-| `API_V1_PREFIX` | API route prefix | No | `/api/v1` |
-
-### 🗄️ Database
-| Variable | Description | Required | Example |
-|---|---|---|---|
-| `DATABASE_URL` | PostgreSQL connection string | **Yes** | `postgresql://postgres:postgres@localhost:5432/aegisai_db` |
-
-### 🔐 Authentication
-| Variable | Description | Required | Example |
-|---|---|---|---|
-| `SECRET_KEY` | JWT signing secret — generate with `openssl rand -hex 32` | **Yes** | `a3f9...` |
-| `ALGORITHM` | JWT signing algorithm | No | `HS256` |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Token expiry duration in minutes | No | `30` |
-
-### 🤖 LLM Provider
-| Variable | Description | Required | Example |
-|---|---|---|---|
-| `LLM_API_KEY` | API key for your LLM provider | **Yes** | `sk-...` |
-| `LLM_BASE_URL` | Custom LLM endpoint — leave empty for OpenAI | No | `http://localhost:11434/v1` |
-| `LLM_MODEL` | Model name to use | No | `gpt-4o-mini` |
-
-### 🛡️ LLM Guard Module
-| Variable | Description | Required | Default |
-|---|---|---|---|
-| `GUARD_SANITIZATION_LEVEL` | Sanitization strictness: `low`, `medium`, or `high` | No | `medium` |
-| `GUARD_MAX_PROMPT_LENGTH` | Maximum allowed prompt length in characters | No | `2000` |
-
-### 📚 RAG Intelligence Module
-| Variable | Description | Required | Default |
-|---|---|---|---|
-| `S3_BUCKET_NAME` | S3 bucket name for document storage | No | — |
-| `FAISS_INDEX_PATH` | Local path to store the FAISS vector index | No | `faiss_index` |
-| `RAG_CHUNK_SIZE` | Document chunk size for indexing | No | `1000` |
-| `RAG_CHUNK_OVERLAP` | Overlap between consecutive chunks | No | `200` |
-
-### 📊 MLflow Tracking
-| Variable | Description | Required | Default |
-|---|---|---|---|
-| `MLFLOW_TRACKING_URI` | MLflow server URI — leave empty to store runs locally in `./mlruns` | No | — |
-
-### 💳 Stripe (Optional — leave blank to run without billing)
-| Variable | Description | Required |
+| Problem | Quick check | Recommended fix |
 |---|---|---|
-| `STRIPE_SECRET_KEY` | Stripe secret key | No |
-| `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key | No |
-| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret | No |
-| `STRIPE_PRICE_STARTER` | Price ID for Starter plan | No |
-| `STRIPE_PRICE_GROWTH` | Price ID for Growth plan | No |
-| `STRIPE_PRICE_SCALE` | Price ID for Scale plan | No |
+| Docker Compose fails to start | Run `docker compose ps` and `docker compose logs -f backend postgres frontend`. | Make sure Docker Desktop is running, then rebuild with `docker compose up --build -d`. If a container is stale, stop it with `docker compose down` first. |
+| `.env` values are missing or ignored | Confirm `backend/.env` exists and includes `SECRET_KEY`, `DATABASE_URL`, and `LLM_API_KEY`. | Copy `backend/.env.example` again, then restart the backend shell or container so it reloads the file. |
+| PostgreSQL connection or migration errors | Check the database container or local service is running, then run `alembic upgrade head` from `backend/`. | Verify `DATABASE_URL` points at `localhost:5432` for local setups and re-run migrations after the database is reachable. |
+| Port conflicts on `5173`, `8000`, or `5432` | Check what is listening on the port before starting the stack. | Stop the conflicting process or change the port mapping in Docker Compose / the frontend dev server. On Linux or macOS, use `lsof -i :8000`; on Windows PowerShell, use `Get-NetTCPConnection -LocalPort 8000`. |
+| Ollama is unreachable | Test `curl http://localhost:11434/v1/models` and confirm Ollama is running locally. | Start Ollama, keep `LLM_API_KEY=ollama`, and ensure `LLM_BASE_URL=http://localhost:11434/v1` in `backend/.env`. |
+| Python or Node installs fail on native builds | Look for errors mentioning `psycopg2`, `numpy`, `node-gyp`, or missing compiler tools. | Use Python 3.11 and Node 20+. On Linux, install build tooling such as `build-essential` and `python3-dev`; on Windows, install the Visual Studio Build Tools. |
+
+Recommended baseline versions: Python 3.11, Node.js 20, Docker Desktop or Docker Engine current release, and PostgreSQL 15.
 
 ---
 

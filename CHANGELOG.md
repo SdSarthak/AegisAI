@@ -3,6 +3,16 @@
 All notable changes to AegisAI are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- **LLM Guard Prompt Normalization** — Preprocessor layer (`normalizer.py`) to prevent Unicode, zero-width, and homoglyph bypasses:
+  - Strips invisible format characters in Unicode `Cf` category (e.g. zero-width space, non-joiner, joiner)
+  - Normalizes stylized font variations using NFKC compatibility normalization
+  - Resolves Cyrillic and Greek homoglyphs to standard Latin equivalents via static mapping
+  - Retains both `normalized_prompt` and `user_prompt` in orchestrator response
+- Unit and integration tests for bypass payloads (`test_normalizer.py` and `test_guard.py`)
+
 ---
 
 ## [Unreleased]
