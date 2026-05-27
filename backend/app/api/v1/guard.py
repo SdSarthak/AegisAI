@@ -15,7 +15,10 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Optional, TypedDict
 
+<<<<<<< HEAD
 from app.api.v1.webhooks import deliver_webhook
+=======
+>>>>>>> 7238fe6 (feat: add comprehensive audit logging for guard scan decisions)
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -133,7 +136,6 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: s
         ip_address=ip_address,
         scanned_at=datetime.utcnow(),
     )
-
 
 
 def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> None:
@@ -1061,6 +1063,7 @@ def update_guard_config(
 @router.post("/scan/batch", response_model=BulkScanResponse)
 def bulk_scan_prompts(
     request: BulkScanRequest,
+    request_obj: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -1123,9 +1126,11 @@ def bulk_scan_prompts(
         guard = LLMGuard(sanitization_level=san_level)
         results: list[ScanResponse] = []
 
+        ip_address = request_obj.client.host if request_obj.client else None
+
         for prompt in request.prompts:
             result = guard.guard(prompt)
-            log = _build_guard_scan_log(current_user.id, prompt, result)
+            log = _build_guard_scan_log(current_user.id, prompt, result, ip_address)
 
             db.add(log)
             db.flush()

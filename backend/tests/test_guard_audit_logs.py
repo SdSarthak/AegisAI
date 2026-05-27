@@ -118,4 +118,3 @@ def test_analytics_audit_logs_pagination_and_role_access(client, db_session):
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 2
-

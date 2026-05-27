@@ -141,8 +141,6 @@ def get_analytics_summary(
         "counts": counts,
         "compliance_statuses": compliance_statuses,
     }
-
-
 @router.get("/audit-logs")
 def get_audit_logs(
     page: int = 1,
