@@ -27,14 +27,14 @@ export default function ComplianceRiskChart({
   data,
 }: Props) {
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
       <div className="flex items-center gap-2 mb-2">
-        <h2 className="text-xl font-semibold text-gray-900">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
           Compliance Risk Distribution
         </h2>
       </div>
 
-      <p className="text-sm text-gray-500 mb-6">
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
         Distribution of AI systems across EU AI Act
         risk categories.
       </p>

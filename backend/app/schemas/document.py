@@ -20,6 +20,13 @@ class DocumentUpdateRequest(BaseModel):
     """Request to update document content only."""
     content: str
 
+class DocumentTemplateResponse(BaseModel):
+    """Available document template metadata for generation."""
+
+    type: DocumentType
+    name: str
+    description: str
+
 class DocumentResponse(BaseModel):
     id: int
     title: str

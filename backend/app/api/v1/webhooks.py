@@ -84,7 +84,16 @@ def create_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Register a new webhook endpoint for the current user."""
+    """Register a new webhook endpoint for the current user.
+
+    Args:
+        body: Payload containing the webhook URL and event configuration.
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        WebhookResponse: The newly created webhook configuration with HTTP 201.
+    """
     webhook_data = body.model_dump()
     webhook_data["url"] = str(body.url)
 
@@ -105,7 +114,15 @@ def list_webhooks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all webhook configs for the current user."""
+    """List all webhook configurations for the current user.
+
+    Args:
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        List[WebhookResponse]: All webhook configs belonging to the current user.
+    """
     return (
         db.query(WebhookConfig)
         .filter(WebhookConfig.user_id == current_user.id)
@@ -119,7 +136,19 @@ def delete_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a webhook config belonging to the current user."""
+    """Delete a webhook configuration belonging to the current user.
+
+    Args:
+        webhook_id: The unique identifier of the webhook to delete.
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        None: HTTP 204 No Content on success.
+
+    Raises:
+        HTTPException: 404 if webhook not found or not owned by user.
+    """
     db_webhook = (
         db.query(WebhookConfig)
         .filter(

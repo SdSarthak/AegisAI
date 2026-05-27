@@ -65,6 +65,9 @@ class BulkScanRequest(BaseModel):
     prompts: list[str]
 
     def validate_prompts(self) -> None:
+        if not self.prompts:
+            raise ValueError("At least one prompt is required per batch request.")
+
         if len(self.prompts) > 50:
             raise ValueError("Maximum 50 prompts allowed per batch request.")
 
@@ -183,9 +186,24 @@ def scan_prompt(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Scan a prompt for injection risks.
-    Returns a decision: allow, sanitize, or block.
+    """Scan a single prompt for injection risks using the LLM Guard pipeline.
+
+    Runs a 4-layer detection pipeline (regex + ML classifier + sanitizer)
+    and returns a decision. Results are logged asynchronously as a
+    background task. Enforces per-user rate limiting of 60 req/min.
+
+    Args:
+        request: Request body containing the prompt string to scan.
+        background_tasks: FastAPI background task runner for async logging.
+        current_user: The authenticated user extracted from the JWT token.
+
+    Returns:
+        ScanResponse: Decision (allow/sanitize/block), confidence score,
+            reasoning, sanitized prompt if applicable, and matched patterns.
+
+    Raises:
+        HTTPException: 429 if rate limit is exceeded.
+        HTTPException: 500 if an internal guard error occurs.
     """
     limited, retry_after = _check_rate_limit(current_user.id)
 
@@ -264,13 +282,24 @@ def scan_prompt(
 
 @router.get("/health", tags=["LLM Guard"])
 def guard_health():
-    """Check if the Guard module is available."""
+    """Check if the LLM Guard module is available and operational.
+
+    Returns:
+        dict: Module name and availability status.
+    """
     return {"module": "llm_guard", "status": "available"}
 
 
 @router.get("/info", tags=["LLM Guard"])
 def guard_info():
-    """Return diagnostic information about the Guard module."""
+    """Return diagnostic information about the Guard module configuration.
+
+    Includes device info (CPU/CUDA), loaded model name, and current
+    sanitization level.
+
+    Returns:
+        dict: Module status, device, model_name, and sanitization_level.
+    """
 
     try:
         import torch
@@ -355,7 +384,28 @@ def get_guard_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the current user's Guard scan history, newest first."""
+    """Return the current user's Guard scan history, newest first.
+
+    Supports filtering by decision, intent, and date range, with
+    pagination.
+
+    Args:
+        page: Page number, 1-indexed (default: 1).
+        limit: Number of items per page, max 100 (default: 20).
+        decision: Optional filter - allow, sanitize, or block.
+        intent: Optional filter - benign, suspicious, or malicious.
+        start_date: Optional start of date range filter.
+        end_date: Optional end of date range filter.
+        db: Database session dependency.
+        current_user: The authenticated user extracted from the JWT token.
+
+    Returns:
+        PaginatedResponse[GuardScanLogResponse]: Paginated scan history.
+
+    Raises:
+        HTTPException: 400 if start_date is after end_date or filters
+            contain invalid values.
+    """
 
     if start_date and end_date and start_date > end_date:
         raise HTTPException(
@@ -397,9 +447,23 @@ def get_guard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Get Guard scan statistics for the specified window and user.
-    Admins can query stats for any user; regular users only for themselves.
+    """Return Guard scan statistics for a specified time window.
+
+    Aggregates scan counts by decision, detection type, top matched
+    patterns, and daily scan activity. Admins can query any user's stats;
+    regular users can only query their own.
+
+    Args:
+        window: Time window - 24h, 7d, 30d, or all (default: 7d).
+        user_id: Optional target user ID (admin only).
+        db: Database session dependency.
+        current_user: The authenticated user extracted from the JWT token.
+
+    Returns:
+        GuardStatsResponse: Aggregated statistics for the specified window.
+
+    Raises:
+        HTTPException: 403 if non-admin queries another user's stats.
     """
     target_user_id = user_id if user_id is not None else current_user.id
     is_admin = getattr(current_user, "role", None) == "admin"
@@ -503,6 +567,7 @@ def get_guard_stats(
         if date_key not in daily_buckets:
             daily_buckets[date_key] = {
                 "date": date_key,
+                "count": 0,
                 "allow": 0,
                 "sanitize": 0,
                 "block": 0,
@@ -510,6 +575,9 @@ def get_guard_stats(
 
         if decision in {"allow", "sanitize", "block"}:
             daily_buckets[date_key][decision] = count
+            daily_buckets[date_key]["count"] = (
+                int(daily_buckets[date_key]["count"]) + count
+            )
 
     scans_per_day = list(daily_buckets.values())
 
@@ -530,7 +598,18 @@ def get_guard_stats(
 
 @router.get("/config", tags=["LLM Guard"])
 def get_guard_config(current_user: User = Depends(get_current_user)):
-    """Get per-user guard configuration."""
+    """Get the current user's Guard configuration settings.
+
+    Returns per-user overrides if set, otherwise returns default config
+    with medium sanitization level and standard thresholds.
+
+    Args:
+        current_user: The authenticated user extracted from the JWT token.
+
+    Returns:
+        dict: Current sanitization_level, malicious_threshold, and
+            suspicious_threshold values.
+    """
     default_config = {
         "sanitization_level": "medium",
         "malicious_threshold": 0.8,
@@ -545,7 +624,21 @@ def update_guard_config(
     config: GuardConfigRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Update per-user guard configuration."""
+    """Update the current user's Guard configuration settings.
+
+    Args:
+        config: New configuration containing sanitization_level,
+            malicious_threshold (0.0-1.0), and suspicious_threshold
+            (0.0-1.0).
+        current_user: The authenticated user extracted from the JWT token.
+
+    Returns:
+        dict: Success message and the updated configuration.
+
+    Raises:
+        HTTPException: 400 if sanitization_level is invalid or thresholds
+            are outside the 0.0-1.0 range.
+    """
     if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
         raise HTTPException(
             status_code=400,
@@ -582,9 +675,25 @@ def bulk_scan_prompts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Scan a batch of prompts, max 50, for injection risks.
-    Each prompt counts as one rate-limit unit and produces one GuardScanLog row.
+    """Scan a batch of up to 50 prompts for injection risks.
+
+    Each prompt in the batch counts as one rate-limit unit. Results are
+    persisted as individual GuardScanLog rows. Block decisions trigger
+    notifications.
+
+    Args:
+        request: Request body containing a list of prompt strings (max 50).
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        BulkScanResponse: List of per-prompt scan results, total count,
+            and processed count.
+
+    Raises:
+        HTTPException: 400 if more than 50 prompts are submitted.
+        HTTPException: 429 if rate limit would be exceeded by the batch.
+        HTTPException: 500 if an internal guard error occurs.
     """
     try:
         request.validate_prompts()
