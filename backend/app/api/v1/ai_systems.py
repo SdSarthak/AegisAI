@@ -383,3 +383,52 @@ def update_ai_system_status(
     db.commit()
     db.refresh(system)
     return system
+
+
+from app.modules.compliance.eu_ai_act import evaluate_compliance
+from app.schemas.compliance import ComplianceGapResponse, ComplianceRequirementItem
+
+
+@router.get("/{system_id}/gaps", response_model=ComplianceGapResponse)
+def get_compliance_gaps(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return unmet EU AI Act requirements for a given AI system based on its risk level."""
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .first()
+    )
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found",
+        )
+
+    risk_level = system.risk_level.value if system.risk_level else "minimal"
+    questionnaire_responses = system.questionnaire_responses or {}
+
+    all_items = evaluate_compliance(risk_level, questionnaire_responses)
+
+    return ComplianceGapResponse(
+        system_id=system.id,
+        system_name=system.name,
+        risk_level=risk_level,
+        compliance_status=system.compliance_status.value if system.compliance_status else "not_started",
+        total_requirements=len(all_items),
+        done_count=sum(1 for i in all_items if i.status == "done"),
+        partial_count=sum(1 for i in all_items if i.status == "partial"),
+        missing_count=sum(1 for i in all_items if i.status == "missing"),
+        requirements=[
+            ComplianceRequirementItem(
+                requirement=i.requirement,
+                article_reference=i.article_reference,
+                status=i.status,
+                action_needed=i.action_needed,
+            )
+            for i in all_items
+        ],
+    )
