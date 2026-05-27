@@ -58,13 +58,25 @@ export const authApi = {
 // AI Systems API
 export const aiSystemsApi = {
   list: async (params?: {
-  sort_by?: string
-  order?: string
-  skip?: number
-  limit?: number
+    sort_by?: string
+    order?: string
+    page?: number
+    limit?: number
   }) => {
-  const { data } = await api.get('/ai-systems/', { params })
-  return data
+    // Fix for Issue #631: Transform frontend 'page' into the backend-expected 'skip' query offset parameter
+    const limit = params?.limit ?? 10
+    const page = params?.page ?? 1
+    const skip = (page - 1) * limit
+
+    const queryParams = {
+      sort_by: params?.sort_by,
+      order: params?.order,
+      skip: skip,
+      limit: limit,
+    }
+
+    const { data } = await api.get('/ai-systems/', { params: queryParams })
+    return data
   },
   get: async (id: number) => {
     const { data } = await api.get(`/ai-systems/${id}`)
@@ -152,9 +164,31 @@ export const ragApi = {
     const { data } = await api.post('/rag/query', {
       question,
     })
+    return data
+  },
+  feedback: async (payload: { answer_id: string; vote: 'up' | 'down' }) => {
+    const { data } = await api.post('/rag/feedback', {
+      answer_id: payload.answer_id,
+      vote: payload.vote,
+    })
+    return data
+  },
+}
 
+export interface GuardScanResponse {
+  decision: 'allow' | 'sanitize' | 'block' | string
+  confidence: number
+  reasoning: string
+  sanitized_prompt?: string | null
+  matched_patterns?: string[]
+}
+
+export const guardApi = {
+  scan: async (prompt: string): Promise<GuardScanResponse> => {
+    const { data } = await api.post('/guard/scan', { prompt })
     return data
   },
 }
 
 export default api
+

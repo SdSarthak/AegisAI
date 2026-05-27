@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Save, Eye, EyeOff } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
+import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import api from '../services/api'
 
@@ -22,14 +23,19 @@ export default function DocumentEditor({
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
-
+  const sanitizedPreview = useMemo(() => {
+    const renderedMarkdown = marked.parse(content, { async: false }) as string
+    return DOMPurify.sanitize(renderedMarkdown)
+  }, [content])
+  const [saveError, setSaveError] = useState('')
   const handleSave = useCallback(async () => {
     setIsSaving(true)
     try {
       await api.put(`/documents/${documentId}`, { content })
       onSave?.(content)
+      setSaveError('')
     } catch (error) {
-      console.error('Save failed:', error)
+      setSaveError('Failed to save changes')
     }
     setIsSaving(false)
   }, [content, documentId, onSave])
@@ -66,7 +72,16 @@ export default function DocumentEditor({
           {showPreview ? 'Edit' : 'Preview'}
         </button>
         <div className="flex items-center gap-3">
-          {isSaving && <span className="text-sm text-gray-500">Saving...</span>}
+         {saveError && (
+            <span className="text-sm text-red-500">
+              {saveError}
+            </span>
+          )}
+          {isSaving && (
+            <span className="text-sm text-gray-500">
+              Saving...
+            </span>
+          )} 
           <button
             type="button"
             onClick={handleSave}
@@ -91,7 +106,7 @@ export default function DocumentEditor({
       <div className="flex-1 overflow-auto">
         {showPreview ? (
           <div className="prose max-w-none p-6">
-            <div dangerouslySetInnerHTML={{ __html: marked.parse(content, { async: false }) }} />
+            <div dangerouslySetInnerHTML={{ __html: sanitizedPreview }} />
           </div>
         ) : (
           <div className="h-full">

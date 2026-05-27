@@ -8,14 +8,13 @@ from typing import Dict, Optional
 from . import RegexFilter, IntentClassifier, DecisionEngine, PromptSanitizer
 from .decision_engine import Decision
 from .sanitizer import SanitizationLevel
+from .normalizer import normalize_prompt
 from ..llm.llm_client import LLMClient
 from . import guard_config as config
 
-# Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+# Logging is configured centrally in app.core.logging (configure_logging).
+# Importing this module must not call logging.basicConfig — doing so would
+# clobber the JSON root handler when the API imports the Guard pipeline.
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +30,7 @@ class LLMGuard:
         Initialize the guard with all defense layers.
 
         The classifier automatically loads the fine-tuned model trained by the notebook
-        if available, otherwise falls back to pre-trained DistilBERT.
+        if available, otherwise falls back to deterministic heuristics.
 
         Args:
             classifier_model_path: Path to fine-tuned classifier model.
@@ -44,7 +43,7 @@ class LLMGuard:
         self.regex_filter = RegexFilter()
         logger.info("✓ Regex filter initialized")
 
-        # Layer 2: ML intent classifier (loads trained model or pre-trained fallback)
+        # Layer 2: Intent classifier (loads trained model or deterministic fallback)
         if classifier_model_path is None:
             classifier_model_path = config.get_trained_model_path()
 
@@ -84,9 +83,13 @@ class LLMGuard:
         timestamp = datetime.now().isoformat()
         logger.info(f"Processing prompt at {timestamp}")
 
+        # Preprocess and normalize prompt to secure against Unicode bypasses
+        normalized_prompt = normalize_prompt(user_prompt)
+
         result = {
             "timestamp": timestamp,
             "user_prompt": user_prompt,
+            "normalized_prompt": normalized_prompt,
             "decision": None,
             "response": None,
             "metadata": {
@@ -99,7 +102,7 @@ class LLMGuard:
 
         # Step 1: Regex Filter (Fast First Gate)
         logger.debug("Step 1: Running regex filter...")
-        regex_result = self.regex_filter.check(user_prompt)
+        regex_result = self.regex_filter.check(normalized_prompt)
         result["metadata"]["regex_analysis"] = {
             "flag": regex_result.flag,
             "matched_patterns": regex_result.matched_patterns,
@@ -109,7 +112,7 @@ class LLMGuard:
 
         # Step 2: Intent Classification (ML Layer)
         logger.debug("Step 2: Classifying intent...")
-        intent_result = self.classifier.classify(user_prompt)
+        intent_result = self.classifier.classify(normalized_prompt)
         result["metadata"]["intent_analysis"] = {
             "intent": intent_result.intent,
             "confidence": intent_result.confidence,
@@ -146,7 +149,7 @@ class LLMGuard:
         elif decision_result.decision == Decision.SANITIZE:
             logger.info("Prompt marked for SANITIZATION")
             sanitized_prompt, sanitization_summary = self.sanitizer.sanitize(
-                user_prompt
+                normalized_prompt
             )
             result["metadata"]["sanitization"] = {
                 "original_length": len(user_prompt),
@@ -176,7 +179,7 @@ class LLMGuard:
 
             if self.llm_client:
                 try:
-                    response = self.llm_client.call(user_prompt)
+                    response = self.llm_client.call(normalized_prompt)
                     result["response"] = response
                     logger.info("Response generated successfully from Gemini")
                 except Exception as e:
@@ -265,4 +268,7 @@ def main():
 
 
 if __name__ == "__main__":
+    from app.core.logging import configure_logging
+
+    configure_logging()
     main()
