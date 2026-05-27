@@ -8,16 +8,13 @@ import pytest
 from app.core.security import create_access_token
 from app.models.user import User
 # Injects the core rate_limiter memory tracking instance
-from app.core import rate_limiter 
+from app.core.rate_limiter import limiter
 
 
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
     """Locally purges in-memory rate-limiter caches to guarantee complete test isolation."""
-    if hasattr(rate_limiter, '_cache') and rate_limiter._cache is not None:
-        rate_limiter._cache.clear()
-    elif hasattr(rate_limiter, 'limiter') and hasattr(rate_limiter.limiter, '_cache'):
-        rate_limiter.limiter._cache.clear()
+    limiter.clear()
     yield
 
 
