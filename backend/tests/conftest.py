@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SECRET_KEY"] = "testsecret"
 
+
 from app.core.database import Base, SessionLocal
 from app.core.security import decode_token, get_current_user
 from app.models.user import SubscriptionTier
