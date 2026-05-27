@@ -107,6 +107,7 @@ def ingest_documents(
     Raises:
         HTTPException: If no valid PDFs are supplied or indexing fails.
     """
+    # 1. Validate: at least one PDF.
     pdf_files = [
         f
         for f in files
@@ -120,6 +121,7 @@ def ingest_documents(
             detail="No valid PDF files supplied. Please upload files with a .pdf extension.",
         )
 
+    # 2. Save uploads to a temporary directory.
     tmp_dir = tempfile.mkdtemp(prefix="aegis_ingest_")
     saved_paths: list[str] = []
 
@@ -130,6 +132,7 @@ def ingest_documents(
                 shutil.copyfileobj(upload.file, buf)
             saved_paths.append(dest)
 
+        # 3. Chunk documents to get the accurate chunk count.
         chunks = load_documents_from_paths(saved_paths)
         if not chunks:
             raise HTTPException(
@@ -140,7 +143,7 @@ def ingest_documents(
                 ),
             )
 
-        # ── 4. Merge into existing FAISS index (or create new) ────────────
+        # 4. Merge into existing FAISS index or create a new one.
         try:
             merge_into_vector_store(saved_paths)
         except Exception as exc:
@@ -149,7 +152,7 @@ def ingest_documents(
                 detail=f"Failed to build FAISS index: {exc}",
             )
 
-        # ── 5. Persist ingestion metadata ─────────────────────────────────
+        # 5. Persist ingestion metadata.
         # Count chunks per file so the registry is accurate
         per_file_chunks: dict[str, int] = {}
         for chunk in chunks:
@@ -171,7 +174,7 @@ def ingest_documents(
 
         db.commit()
 
-        # ── 6. Calculate on-disk index size ───────────────────────────────
+        # 6. Calculate on-disk index size.
         index_path = settings.FAISS_INDEX_PATH
         index_size_bytes = 0
         for fname in ("index.faiss", "index.pkl"):
@@ -185,7 +188,7 @@ def ingest_documents(
             index_size_bytes=index_size_bytes,
         )
     finally:
-        # ── 7. Always clean up the temp directory ─────────────────────────
+        # 7. Always clean up the temp directory.
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
@@ -315,7 +318,10 @@ def query_knowledge_base(
 
         source_docs = result.get("source_documents", [])
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
+        chunk_texts = [str(getattr(doc, "page_content", "")) for doc in source_docs]
         answer = str(result.get("result", ""))
+        groundedness_score = compute_groundedness(answer, chunk_texts)
+        low_confidence = groundedness_score < 0.70
 
         # Ensure tables exist on this DB bind (useful for test DB overrides)
         try:
@@ -339,6 +345,7 @@ def query_knowledge_base(
         db.commit()
         db.refresh(feedback)
 
+        # Log to MLflow. Failures are swallowed inside log_query.
         try:
             from app.modules.rag.ml_flow import log_query
 
