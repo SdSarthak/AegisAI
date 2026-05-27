@@ -140,6 +140,7 @@ def ingest_documents(
                 ),
             )
 
+        # ── 4. Merge into existing FAISS index (or create new) ────────────
         try:
             merge_into_vector_store(saved_paths)
         except Exception as exc:
@@ -148,6 +149,7 @@ def ingest_documents(
                 detail=f"Failed to build FAISS index: {exc}",
             )
 
+        # ── 5. Persist ingestion metadata ─────────────────────────────────
         # Count chunks per file so the registry is accurate
         per_file_chunks: dict[str, int] = {}
         for chunk in chunks:
@@ -169,6 +171,7 @@ def ingest_documents(
 
         db.commit()
 
+        # ── 6. Calculate on-disk index size ───────────────────────────────
         index_path = settings.FAISS_INDEX_PATH
         index_size_bytes = 0
         for fname in ("index.faiss", "index.pkl"):
@@ -182,6 +185,7 @@ def ingest_documents(
             index_size_bytes=index_size_bytes,
         )
     finally:
+        # ── 7. Always clean up the temp directory ─────────────────────────
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
@@ -313,6 +317,7 @@ def query_knowledge_base(
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
         answer = str(result.get("result", ""))
 
+        # Ensure tables exist on this DB bind (useful for test DB overrides)
         try:
             Base.metadata.create_all(bind=db.get_bind())
         except Exception:
