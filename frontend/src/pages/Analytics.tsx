@@ -294,6 +294,7 @@ export default function Analytics() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Line Chart */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm min-w-0">
           <div className="flex items-center gap-2 mb-6">
             <TrendingUp className="w-5 h-5 text-primary-600" />
@@ -366,6 +367,7 @@ export default function Analytics() {
           </div>
         </div>
 
+        {/* Bar Chart */}
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm min-w-0">
           <div className="flex items-center gap-2 mb-6">
             <BarChart2 className="w-5 h-5 text-primary-600" />
@@ -441,6 +443,10 @@ export default function Analytics() {
       {loading ? (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
           Loading risk distribution...
+        </div>
+      ) : riskPieData.length === 0 ? (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
+          No analytics data available.
         </div>
       ) : (
         <ComplianceRiskChart data={riskPieData} theme={theme} />
