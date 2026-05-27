@@ -13,6 +13,7 @@ import GuardConsole from './pages/GuardConsole'
 import NotFound from './pages/NotFound'
 import { Toaster } from 'react-hot-toast'
 import RagChat from './pages/RagChat'
+import Guard from './pages/Guard'
 
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -62,8 +63,7 @@ function App() {
           <Route path="guard" element={<GuardConsole />} />
           <Route path="rag-chat" element={<RagChat />} />
           <Route path="notifications" element={<Notifications />} />
-          <Route path="rag-chat" element={<RagChat />} />
-
+          <Route path="guard" element={<Guard />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Routes>
