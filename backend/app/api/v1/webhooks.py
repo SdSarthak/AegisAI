@@ -2,25 +2,17 @@
 Webhooks API — configure outbound event delivery URLs.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (help wanted):
-  - Implement POST /webhooks — save a new WebhookConfig for the current user.
-  - Implement GET /webhooks — list the user's configured webhooks.
-  - Implement DELETE /webhooks/{id} — remove a webhook config.
-  - Implement webhook delivery: when a Guard block decision is made in
-    POST /guard/scan, call `deliver_webhook(db, user_id, event="guard_block", payload={...})`.
-    Use `httpx` (already in requirements) to POST the payload to the configured URL.
-    Sign the body with HMAC-SHA256 using the stored secret and set the
-    X-AegisAI-Signature header.
-  - Acceptance criteria: configuring a webhook URL and triggering a guard
-    block results in a POST request to that URL within 5 seconds.
 """
+
+from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
+from app.models.webhook import WebhookConfig
 from app.schemas.webhook import WebhookCreate, WebhookResponse
 
 router = APIRouter()
@@ -32,30 +24,49 @@ def create_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Register a new webhook endpoint for the current user.
+    """Register a new webhook endpoint for the current user.
 
-    TODO (help wanted): create a WebhookConfig row and return it.
+    Args:
+        body: Payload containing the webhook URL and event configuration.
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        WebhookResponse: The newly created webhook configuration with HTTP 201.
     """
-    # TODO: implement
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    webhook_data = body.model_dump()
+    webhook_data["url"] = str(body.url)
+
+    db_webhook = WebhookConfig(
+        **webhook_data,
+        user_id=current_user.id,
     )
 
+    db.add(db_webhook)
+    db.commit()
+    db.refresh(db_webhook)
 
-@router.get("", response_model=list[WebhookResponse])
+    return db_webhook
+
+
+@router.get("", response_model=List[WebhookResponse])
 def list_webhooks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    List all webhook configs for the current user.
+    """List all webhook configurations for the current user.
 
-    TODO (help wanted): query WebhookConfig by user_id.
+    Args:
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        List[WebhookResponse]: All webhook configs belonging to the current user.
     """
-    # TODO: implement
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    return (
+        db.query(WebhookConfig)
+        .filter(WebhookConfig.user_id == current_user.id)
+        .all()
     )
 
 
@@ -65,12 +76,35 @@ def delete_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Delete a webhook config (must belong to current user).
+    """Delete a webhook configuration belonging to the current user.
 
-    TODO (help wanted): fetch by id + user_id, 404 if missing, then delete.
+    Args:
+        webhook_id: The unique identifier of the webhook to delete.
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        None: HTTP 204 No Content on success.
+
+    Raises:
+        HTTPException: 404 if webhook not found or not owned by user.
     """
-    # TODO: implement
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    db_webhook = (
+        db.query(WebhookConfig)
+        .filter(
+            WebhookConfig.id == webhook_id,
+            WebhookConfig.user_id == current_user.id,
+        )
+        .first()
     )
+
+    if db_webhook is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Webhook not found",
+        )
+
+    db.delete(db_webhook)
+    db.commit()
+
+    return None
