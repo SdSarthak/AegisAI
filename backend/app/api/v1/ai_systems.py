@@ -67,6 +67,7 @@ def _process_import_rows(
 
     errors: list[dict[str, object]] = []
     created_count = 0
+    seen_names: set[str] = set()
 
     for row_num, row in enumerate(csv_reader, start=2):
         if row_num - 1 > max_rows:
@@ -86,9 +87,14 @@ def _process_import_rows(
             errors.append({"row": row_num, "error": "name is required"})
             continue
 
+        # Check for duplicates within the same uploaded CSV first
+        if name in seen_names:
+            errors.append({"row": row_num, "error": f"duplicate name '{name}' in uploaded file"})
+            continue
+
         existing = db.query(AISystem).filter(
             AISystem.owner_id == current_user.id,
-            AISystem.name == name
+            AISystem.name == name,
         ).first()
 
         if existing:
@@ -106,6 +112,7 @@ def _process_import_rows(
             )
             db.add(ai_system)
             created_count += 1
+            seen_names.add(name)
         except Exception as e:
             errors.append({"row": row_num, "error": str(e)})
 
@@ -128,6 +135,18 @@ def create_ai_system(
     Returns:
         The created AI system serialized as AISystemResponse.
     """
+    # Enforce per-user uniqueness of AI system names to match bulk import behavior
+    existing = db.query(AISystem).filter(
+        AISystem.owner_id == current_user.id,
+        AISystem.name == system_data.name,
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"AI system with name '{system_data.name}' already exists",
+        )
+
     ai_system = AISystem(
         owner_id=current_user.id,
         name=system_data.name,
