@@ -2,22 +2,28 @@ import { useState, useEffect } from 'react'
 import { Sun, Moon } from 'lucide-react'
 
 export default function ThemeToggle() {
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('theme') === 'dark'
-    }
-    return false
-  })
+  const [isDark, setIsDark] = useState(false)
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', isDark)
-    localStorage.setItem('theme', isDark ? 'dark' : 'light')
-  }, [isDark])
+    const storedTheme = localStorage.getItem('theme')
+    const shouldUseDark = storedTheme === 'dark'
+
+    setIsDark(shouldUseDark)
+    document.documentElement.classList.toggle('dark', shouldUseDark)
+  }, [])
+
+  const toggleTheme = () => {
+    const nextTheme = !isDark
+
+    setIsDark(nextTheme)
+    document.documentElement.classList.toggle('dark', nextTheme)
+    localStorage.setItem('theme', nextTheme ? 'dark' : 'light')
+  }
 
   return (
     <button
       type="button"
-      onClick={() => setIsDark((d) => !d)}
+      onClick={toggleTheme}
       className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
       title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
