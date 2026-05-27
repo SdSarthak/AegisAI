@@ -59,3 +59,13 @@ def client(db_engine):
     transaction.rollback()
     connection.close()
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_rate_limits():
+    """Clear LLM Guard rate limits dictionary between tests to ensure isolation."""
+    try:
+        from app.api.v1.guard import _scan_attempts_by_user
+        _scan_attempts_by_user.clear()
+    except ImportError:
+        pass
