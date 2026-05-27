@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, Dict
 from datetime import datetime
 from app.models.user import SubscriptionTier
@@ -7,8 +7,8 @@ from app.models.user import SubscriptionTier
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
-    full_name: Optional[str] = None
-    company_name: Optional[str] = None
+    full_name: Optional[str] = Field(None, max_length=100)
+    company_name: Optional[str] = Field(None, max_length=100)
 
 
 class UserLogin(BaseModel):
@@ -31,8 +31,8 @@ class UserResponse(BaseModel):
 
 
 class UserUpdateSchema(BaseModel):
-    full_name: Optional[str] = None
-    company_name: Optional[str] = None
+    full_name: Optional[str] = Field(None, max_length=100)
+    company_name: Optional[str] = Field(None, max_length=100)
 
 
 class Token(BaseModel):
