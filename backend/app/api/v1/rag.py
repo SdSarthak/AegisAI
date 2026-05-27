@@ -35,7 +35,7 @@ router = APIRouter()
 
 
 class RAGQueryRequest(BaseModel):
-    question: str
+    question: str = Field(..., min_length=1, max_length=2000)
 
 
 class RAGQueryResponse(BaseModel):
@@ -65,19 +65,17 @@ def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Accept one or more PDF uploads, process them through the document loader,
-    build (or rebuild) the FAISS vector index, and persist it to
-    ``settings.FAISS_INDEX_PATH``.
+    """Ingest one or more regulatory PDFs and rebuild the FAISS index.
 
-    **Returns**
-    - ``files_processed`` - number of PDFs successfully saved and chunked
-    - ``chunks_created``  - total text chunks fed into the vector store
-    - ``index_size_bytes`` - on-disk size of the persisted FAISS index
+    Args:
+        files: One or more PDF uploads to save, chunk, and index.
+        current_user: Authenticated user requesting the ingestion.
 
-    **Errors**
-    - ``400`` if no valid PDF files are supplied
-    - ``503`` if the embedding model or FAISS build step fails
+    Returns:
+        RAGIngestResponse with file, chunk, and index size counts.
+
+    Raises:
+        HTTPException: If no valid PDFs are supplied or indexing fails.
     """
 
     # ── 1. Validate: at least one PDF ─────────────────────────────────────
@@ -146,12 +144,18 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Ask a regulatory question and get an answer grounded in source documents.
+    """Answer a regulatory question using the RAG knowledge base.
 
-    Example questions:
-    - "Does my CV-screening tool qualify as high-risk under the EU AI Act?"
-    - "What are the transparency requirements for chatbots?"
+    Args:
+        request: Query payload containing the user's question.
+        current_user: Authenticated user asking the question.
+        db: Database session used to persist the query and feedback record.
+
+    Returns:
+        RAGQueryResponse containing the generated answer and source references.
+
+    Raises:
+        HTTPException: If the RAG subsystem cannot produce an answer.
     """
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
@@ -217,7 +221,11 @@ def query_knowledge_base(
 
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health():
-    """Check if the RAG module is available."""
+    """Check whether the RAG module has an available index.
+
+    Returns:
+        A status payload describing whether the RAG index is available.
+    """
     from app.modules.rag.vector_store import check_index_exists
     
     index_loaded = check_index_exists()
@@ -248,7 +256,19 @@ def rag_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Record a thumbs-up or thumbs-down for a previously returned answer."""
+    """Record feedback for a previously returned RAG answer.
+
+    Args:
+        payload: Answer ID and vote direction submitted by the user.
+        current_user: Authenticated user submitting the feedback.
+        db: Database session used to update the feedback row.
+
+    Returns:
+        A confirmation payload containing the feedback status and answer ID.
+
+    Raises:
+        HTTPException: If the referenced answer does not exist.
+    """
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
@@ -268,9 +288,18 @@ def get_low_quality_chunks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Admin endpoint: aggregate feedback by source chunk and return low-quality candidates.
+    """Return source chunks whose feedback ratio exceeds the threshold.
 
-    A chunk is considered low-quality when thumbs_down / total_feedback > threshold.
+    Args:
+        threshold: Minimum thumbs-down ratio required to flag a chunk.
+        current_user: Authenticated user; must have admin access.
+        db: Database session used to aggregate feedback.
+
+    Returns:
+        A payload containing the threshold and low-quality chunk candidates.
+
+    Raises:
+        HTTPException: If the caller is not allowed to access the admin report.
     """
     # Admin-only access: restrict to system owners / scale tier
     try:
@@ -309,7 +338,17 @@ def get_rag_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return paginated list of the current user's past RAG queries."""
+    """Return the current user's paginated RAG query history.
+
+    Args:
+        page: Page number to return, starting at 1.
+        page_size: Maximum number of queries to include per page.
+        current_user: Authenticated user whose query history is requested.
+        db: Database session used to query the history table.
+
+    Returns:
+        A paginated history payload containing the user's past RAG queries.
+    """
     offset = (page - 1) * page_size
     queries = (
         db.query(RagQuery)
