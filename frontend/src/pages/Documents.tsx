@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus, Edit } from 'lucide-react'
+import { FileText, Download, Trash2, Plus, Edit, Copy } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 
 interface Document {
@@ -90,6 +90,15 @@ export default function Documents() {
     }
   }
 
+  const handleCopy = async (content: string) => {
+  try {
+    await navigator.clipboard.writeText(content)
+    alert('Copied to clipboard!')
+  } catch (error) {
+    console.error('Copy failed:', error)
+  }
+}
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'approved':
@@ -170,6 +179,7 @@ export default function Documents() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  
                   <button
                     onClick={() => setEditingDoc(doc)}
                     className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
@@ -177,6 +187,15 @@ export default function Documents() {
                   >
                     <Edit className="w-5 h-5" />
                   </button>
+                  
+                   <button
+                      onClick={() => handleCopy(doc.content || '')}
+                      className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
+                      title="Copy"
+                    >
+                      <Copy className="w-5 h-5" />
+                    </button>
+
                   <button
                     onClick={() => {
                       // Download as text file
