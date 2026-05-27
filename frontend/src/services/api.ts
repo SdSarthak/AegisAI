@@ -300,6 +300,22 @@ export interface GuardExplainResponse {
   latency_ms: number
 }
 
+export interface GuardScanLog {
+  id?: number
+  decision: 'allow' | 'sanitize' | 'block'
+  confidence: number
+  reasoning: string
+  sanitized_prompt?: string | null
+  matched_patterns: string[]
+  scanned_at?: string
+}
+
+export interface GuardHistoryResponse {
+  items: GuardScanLog[]
+  limit: number
+  next_cursor: string | null
+}
+
 export const guardApi = {
   scan: async (prompt: string): Promise<GuardScanResponse> => {
     const { data } = await api.post('/guard/scan', { prompt })
@@ -328,6 +344,22 @@ export const guardApi = {
 export const analyticsApi = {
   summary: async () => {
     const { data } = await api.get('/analytics/summary')
+    return data
+  },
+}
+
+export const guardHistoryApi = {
+  list: async (params?: {
+    cursor?: string | null
+    limit?: number
+    decision?: string
+    intent?: string
+  }): Promise<GuardHistoryResponse> => {
+    const { data } = await api.get<GuardHistoryResponse>(
+      '/guard/history',
+      { params }
+    )
+
     return data
   },
 }
