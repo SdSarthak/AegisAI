@@ -70,7 +70,7 @@ def test_per_user_rate_limit_blocks_61st_guard_scan_request(client, db_session):
             "app.modules.guard.intent_classifier": fake_intent_classifier_module,
             "app.modules.llm.llm_client": fake_llm_client_module,
         },
-    ):
+    ), patch("app.api.v1.guard.SessionLocal", return_value=db_session):
         status_codes = []
         payload = {"prompt": "Hello, this is a harmless test prompt."}
 
