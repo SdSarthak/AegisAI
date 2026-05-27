@@ -14,6 +14,7 @@ from app.models.user import User, SubscriptionTier
 class DummyDoc:
     def __init__(self, source):
         self.metadata = {"source": source}
+        self.page_content = ""
 
 
 def _get_test_db():

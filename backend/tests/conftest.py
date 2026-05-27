@@ -58,3 +58,18 @@ def client(db_engine):
     transaction.rollback()
     connection.close()
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_guard_rate_limits():
+    # Ensure per-user rate limit state does not leak between tests
+    try:
+        from app.api.v1 import guard as guard_api
+
+        guard_api._scan_attempts_by_user.clear()
+        yield
+    finally:
+        try:
+            guard_api._scan_attempts_by_user.clear()
+        except Exception:
+            pass
