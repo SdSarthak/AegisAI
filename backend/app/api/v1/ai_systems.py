@@ -57,7 +57,7 @@ _SORTABLE_FIELDS = {
 def list_ai_systems(
     sort_by: Optional[str] = Query("created_at", description="Sort field: name, risk_level, compliance_score, created_at"),
     order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    skip: int = Query(0, ge=0, description="Items to skip"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -79,16 +79,15 @@ def list_ai_systems(
 
     base_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
     total = base_query.count()
-    offset = (page - 1) * limit
 
     systems = (
         base_query
         .order_by(direction)
-        .offset(offset)
+        .offset(skip)
         .limit(limit)
         .all()
     )
-    return PaginatedResponse(items=systems, total=total, page=page, limit=limit)
+    return PaginatedResponse(items=systems, total=total, skip=skip, limit=limit)
 
 
 @router.post("/import", response_model=BulkImportResponse)
@@ -229,7 +228,7 @@ def export_ai_systems(
 def get_ai_system_history(
     system_id: int,
     order: Optional[str] = Query("desc", description="Sort direction for changed_at: asc, desc"),
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    skip: int = Query(0, ge=0, description="Items to skip"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -275,7 +274,7 @@ def get_ai_system_history(
     logs = (
         base_query
         .order_by(direction)
-        .offset((page - 1) * limit)
+        .offset(skip)
         .limit(limit)
         .all()
     )
@@ -283,7 +282,7 @@ def get_ai_system_history(
     return PaginatedResponse(
         items=logs,
         total=total,
-        page=page,
+        skip=skip,
         limit=limit,
     )
 

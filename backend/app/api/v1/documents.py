@@ -181,7 +181,7 @@ def create_document(
 
 @router.get("/", response_model=PaginatedResponse[DocumentResponse])
 def list_documents(
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    skip: int = Query(0, ge=0, description="Items to skip"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -189,10 +189,9 @@ def list_documents(
     """List all documents for the current user with pagination."""
     base_query = db.query(Document).filter(Document.owner_id == current_user.id)
     total = base_query.count()
-    offset = (page - 1) * limit
 
-    documents = base_query.offset(offset).limit(limit).all()
-    return PaginatedResponse(items=documents, total=total, page=page, limit=limit)
+    documents = base_query.offset(skip).limit(limit).all()
+    return PaginatedResponse(items=documents, total=total, skip=skip, limit=limit)
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
