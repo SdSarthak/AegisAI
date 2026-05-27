@@ -12,12 +12,13 @@ TODO for contributors (help wanted):
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from sqlalchemy import func
+from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.user import User
-from app.models.ai_system import AISystem
 from app.schemas.analytics import ComplianceTimelineResponse
 
 router = APIRouter()
@@ -61,30 +62,41 @@ def get_analytics_summary(
     Returns:
         Aggregate compliance statistics for the user's AI systems.
     """
-    risk_counts = (
+    systems_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
+    total_systems = systems_query.count()
+    average_score = (
+        db.query(func.avg(AISystem.compliance_score))
+        .filter(AISystem.owner_id == current_user.id)
+        .scalar()
+    )
+
+    counts = {risk.value: 0 for risk in RiskLevel}
+    risk_rows = (
         db.query(AISystem.risk_level, func.count(AISystem.id))
         .filter(AISystem.owner_id == current_user.id)
         .group_by(AISystem.risk_level)
         .all()
     )
+    for risk_level, count in risk_rows:
+        if risk_level:
+            counts[risk_level.value] = count
 
-    counts = {
-        "minimal": 0,
-        "limited": 0,
-        "high": 0,
-        "unacceptable": 0,
-    }
-
-    total_systems = 0
-    for risk_level, count in risk_counts:
-        total_systems += count
-        if risk_level is None:
-            continue
-        key = risk_level.value if hasattr(risk_level, "value") else str(risk_level)
-        if key in counts:
-            counts[key] = int(count)
+    compliance_status = {status_.value: 0 for status_ in ComplianceStatus}
+    status_rows = (
+        db.query(AISystem.compliance_status, func.count(AISystem.id))
+        .filter(AISystem.owner_id == current_user.id)
+        .group_by(AISystem.compliance_status)
+        .all()
+    )
+    for status_, count in status_rows:
+        if status_:
+            compliance_status[status_.value] = count
 
     return {
         "total_systems": total_systems,
+        "average_compliance_score": round(float(average_score), 2)
+        if average_score is not None
+        else None,
         "counts": counts,
+        "compliance_status": compliance_status,
     }

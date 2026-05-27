@@ -450,16 +450,24 @@ def get_guard_stats(
         .all()
     )
 
-    daily_buckets: dict[str, int] = {}
+    daily_buckets: dict[str, dict[str, int | str]] = {}
 
     for day, decision, count in daily_rows:
         date_key = str(day)
-        daily_buckets[date_key] = daily_buckets.get(date_key, 0) + count
+        if date_key not in daily_buckets:
+            daily_buckets[date_key] = {
+                "date": date_key,
+                "count": 0,
+                "allow": 0,
+                "sanitize": 0,
+                "block": 0,
+            }
 
-    scans_per_day = [
-        {"date": date_key, "count": count}
-        for date_key, count in daily_buckets.items()
-    ]
+        if decision in {"allow", "sanitize", "block"}:
+            daily_buckets[date_key][decision] = count
+            daily_buckets[date_key]["count"] += count
+
+    scans_per_day = list(daily_buckets.values())
 
     return {
         "window": window,

@@ -234,7 +234,6 @@ def list_document_templates(
         for document_type in DOCUMENT_TEMPLATES.keys()
     ]
 
-
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(
     document_id: int,
@@ -306,7 +305,11 @@ def update_document(
     
     return document
 
-@router.post("/generate", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/generate",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def generate_document(
     request: DocumentGenerateRequest,
     db: Session = Depends(get_db),
