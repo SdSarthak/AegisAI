@@ -21,15 +21,39 @@ TODO for contributors (high priority):
 """
 
 # TODO (high priority): uncomment and implement once APScheduler is installed
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from app.core.database import SessionLocal
 from app.models.compliance_snapshot import ComplianceSnapshot
 from app.models.ai_system import AISystem, RiskAssessment
 from app.models.notification import Notification, NotificationType
-from app.api.v1.notifications import create_notification
+def create_notification(
+    db,
+    user_id,
+    notification_type,
+    title,
+    message,
+    resource_type=None,
+    resource_id=None,
+):
+    notification = Notification(
+        user_id=user_id,
+        notification_type=notification_type,
+        title=title,
+        message=message,
+        resource_type=resource_type,
+        resource_id=resource_id,
+    )
+
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
+
+    return notification
+
+
 from datetime import datetime, timedelta
 
-scheduler = AsyncIOScheduler()
+scheduler = BackgroundScheduler()
 
 
 @scheduler.scheduled_job("cron", hour=3, minute=0)
