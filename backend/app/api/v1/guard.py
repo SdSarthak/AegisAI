@@ -43,6 +43,9 @@ from app.modules.guard import guard_config
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Backward-compatible handle used by the existing test isolation fixture.
+_scan_attempts_by_user = guard_scan_rate_limiter._local_attempts_by_key
+
 
 class ScanRequest(BaseModel):
     prompt: str
