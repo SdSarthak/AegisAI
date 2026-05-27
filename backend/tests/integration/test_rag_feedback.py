@@ -1,7 +1,6 @@
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch
-import importlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -51,27 +50,41 @@ def client():
 
 def test_query_feedback_and_low_quality_flow(client):
     """Tests the query, feedback, and admin low-quality chunk extraction pipeline."""
-    import types
     import sys
+    import types
 
     # 1. Define a clean, lightweight document mock inside the test block
     class DummyDoc:
         def __init__(self, page_content):
             self.page_content = page_content
-            self.metadata = {}
+            self.metadata = {"source": page_content}
 
     fake_result = {
         "result": "Test answer", 
         "source_documents": [DummyDoc("doc1.pdf#chunk1"), DummyDoc("doc2.pdf#chunk2")]
     }
 
-    # 2. Register a clean mock module into sys.modules EXACTLY once before any requests run
-    mod = types.ModuleType("app.modules.rag.retrieval_chain")
-    mod.get_qa_chain = lambda: lambda payload: fake_result
-    sys.modules["app.modules.rag.retrieval_chain"] = mod
+    # 2. Build mock modules and inject them into sys.modules before the request.
+    #    The endpoint lazily imports both ``retrieval_chain`` and ``groundedness``
+    #    inside its ``try`` block.  ``patch.dict`` temporarily inserts them so that
+    #    Python's import machinery finds the mocks instead of loading the real
+    #    modules (which would fail due to missing external dependencies).
+    retrieval_chain_mod = types.ModuleType("app.modules.rag.retrieval_chain")
+    retrieval_chain_mod.get_qa_chain = lambda: lambda payload: fake_result
 
-    # 3. Execute the standard query flow
-    resp = client.post("/api/v1/rag/query", json={"question": "What is X?"})
+    groundedness_mod = types.ModuleType("app.modules.rag.groundedness")
+    groundedness_mod.compute_groundedness = lambda answer, chunks: 0.85
+
+    # 3. Execute the standard query flow with mocks in place
+    with patch.dict(
+        sys.modules,
+        {
+            "app.modules.rag.retrieval_chain": retrieval_chain_mod,
+            "app.modules.rag.groundedness": groundedness_mod,
+        },
+    ):
+        resp = client.post("/api/v1/rag/query", json={"question": "What is X?"})
+
     assert resp.status_code == 200
     data = resp.json()
     assert "answer" in data and data["answer"] == "Test answer"
@@ -98,7 +111,6 @@ def test_query_feedback_and_low_quality_flow(client):
     out = resp3.json()
     assert "low_quality_chunks" in out
     
-    # Extract structural records and verify mock compliance
     chunks = {c["chunk"] for c in out["low_quality_chunks"]}
     assert "doc1.pdf#chunk1" in chunks or "doc2.pdf#chunk2" in chunks
 

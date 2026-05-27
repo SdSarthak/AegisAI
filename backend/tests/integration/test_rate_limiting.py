@@ -7,17 +7,20 @@ import pytest
 
 from app.core.security import create_access_token
 from app.models.user import User
-# Injects the core rate_limiter memory tracking instance
-from app.core import rate_limiter 
 
 
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
-    """Locally purges in-memory rate-limiter caches to guarantee complete test isolation."""
-    if hasattr(rate_limiter, '_cache') and rate_limiter._cache is not None:
-        rate_limiter._cache.clear()
-    elif hasattr(rate_limiter, 'limiter') and hasattr(rate_limiter.limiter, '_cache'):
-        rate_limiter.limiter._cache.clear()
+    """Locally purges in-memory rate-limiter caches to guarantee complete test isolation.
+
+    The rate-limiter state lives in ``app.api.v1.guard._scan_attempts_by_user``.
+    Because the ``client`` fixture will load the guard module during app startup,
+    we reach into ``sys.modules`` after it has been imported rather than importing it
+    here (which could trigger real guard-module dependencies).
+    """
+    guard_mod = sys.modules.get("app.api.v1.guard")
+    if guard_mod is not None and hasattr(guard_mod, "_scan_attempts_by_user"):
+        guard_mod._scan_attempts_by_user.clear()
     yield
 
 
@@ -66,7 +69,7 @@ def test_per_user_rate_limit_blocks_61st_guard_scan_request(client, db_session):
     fake_llm_client_module = ModuleType("app.modules.llm.llm_client")
     fake_llm_client_module.LLMClient = MagicMock()
 
-    with patch.dict(
+    with patch("app.api.v1.guard.log_scan"), patch.dict(
         sys.modules,
         {
             "app.modules.guard.llm_guard": fake_guard_module,
