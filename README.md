@@ -230,7 +230,16 @@ AegisAI is licensed under **AGPL-3.0-only**.
 Copyright (C) 2024 **Sarthak Doshi** ([@SdSarthak](https://github.com/SdSarthak))
 
 ---
+## Compliance Preprocessor Utility
 
+A lightweight preprocessing utility for AI compliance-related records.
+
+Features:
+- Cleans compliance text inputs
+- Removes empty records
+- Normalizes text formatting
+- Prepares structured compliance data for further risk analysis
+---
 <div align="center">
   <sub>Built with care. If AegisAI helps you, give it a star.</sub>
 </div>
