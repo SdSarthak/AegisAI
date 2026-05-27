@@ -141,3 +141,48 @@ def get_analytics_summary(
         "counts": counts,
         "compliance_statuses": compliance_statuses,
     }
+
+
+@router.get("/audit-logs")
+def get_audit_logs(
+    page: int = 1,
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Retrieve paginated audit logs for Guard scan decisions.
+    
+    Security admins (SCALE tier) can see all logs across the organization.
+    Regular users can only see their own logs.
+    """
+    from app.models.guard_scan_log import GuardScanLog
+    from app.models.user import SubscriptionTier
+    
+    query = db.query(GuardScanLog)
+    
+    if current_user.subscription_tier != SubscriptionTier.SCALE:
+        query = query.filter(GuardScanLog.user_id == current_user.id)
+        
+    total_count = query.count()
+    
+    # Calculate pagination
+    total_pages = (total_count + limit - 1) // limit if limit > 0 else 1
+    offset = (page - 1) * limit
+    
+    logs = (
+        query.order_by(GuardScanLog.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    
+    # We serialize manually or rely on FastAPI response model.
+    # Since we didn't add PaginatedResponse generic easily, let's just return dict.
+    return {
+        "items": logs,
+        "total": total_count,
+        "page": page,
+        "limit": limit,
+        "total_pages": total_pages
+    }
+
