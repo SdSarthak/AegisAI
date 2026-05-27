@@ -1,11 +1,11 @@
 from datetime import datetime, timedelta
 
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from jose import jwt, JWTError
 from jose.exceptions import ExpiredSignatureError
 
 
 from fastapi.responses import FileResponse, StreamingResponse
-from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 from io import BytesIO
@@ -21,6 +21,7 @@ from app.schemas.document import (
     DocumentCreate,
     DocumentResponse,
     DocumentGenerateRequest,
+    DocumentShareResponse,
     DocumentUpdateRequest,
 )
 from app.schemas.pagination import PaginatedResponse
@@ -266,13 +267,22 @@ def get_shared_document(
 
     if not document:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found"
-        )
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="Document not found"
+    )
+
+    if hasattr(document, "is_deleted") and document.is_deleted:
+        raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Share link revoked"
+    )
 
     return document
 
-@router.post("/{document_id}/share")
+@router.post(
+    "/{document_id}/share",
+    response_model=DocumentShareResponse
+)
 def share_document(
     document_id: int,
     db: Session = Depends(get_db),
