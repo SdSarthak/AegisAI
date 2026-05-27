@@ -36,7 +36,7 @@ export default function AISystems() {
   const limit = 10
 
 // Fix: Track filters in the cache key array, but keep the API function strictly to known parameters
-  const { data: systemsData, isLoading } = useQuery({
+  const { data: systemsData, isLoading, error } = useQuery({
     queryKey: ['ai-systems', sortBy, order, currentPage, riskFilter, complianceFilter],
     queryFn: () =>
       aiSystemsApi.list({
@@ -55,6 +55,9 @@ export default function AISystems() {
       setShowModal(false)
       setFormData({ name: '', description: '', use_case: '', sector: '' })
     },
+    onError: (err: Error) => {
+      alert(err.message || 'Failed to create AI system.')
+    },
   })
 
   const deleteMutation = useMutation({
@@ -62,6 +65,9 @@ export default function AISystems() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-systems'] })
       setSystemToDelete(null)
+    },
+    onError: (err: Error) => {
+      alert(err.message || 'Failed to delete AI system.')
     },
   })
 
@@ -134,6 +140,19 @@ export default function AISystems() {
 
   return (
     <div className="space-y-8">
+      {error && (
+  <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center justify-between">
+    <p className="text-red-700 text-sm">
+      {error instanceof Error ? error.message : 'Failed to load AI systems.'}
+    </p>
+    <button
+      onClick={() => window.location.reload()}
+      className="text-sm text-red-600 hover:text-red-500 font-medium underline"
+    >
+      Retry
+    </button>
+  </div>
+)}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">AI Systems</h1>

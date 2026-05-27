@@ -19,13 +19,24 @@ api.interceptors.request.use((config) => {
 
 // Handle 401 errors
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Guard against empty/null payload
+    if (response.data === null || response.data === undefined) {
+      return Promise.reject(new Error('Empty response received from server.'))
+    }
+    return response
+  },
   (error) => {
     if (error.response?.status === 401) {
       useAuthStore.getState().logout()
       window.location.href = '/login'
     }
-    return Promise.reject(error)
+    // Always reject with a meaningful message
+    const message =
+      error.response?.data?.detail ||
+      error.message ||
+      'Something went wrong. Please try again.'
+    return Promise.reject(new Error(message))
   }
 )
 
@@ -151,8 +162,17 @@ export interface HealthResponse {
 }
 
 export const checkHealth = async (): Promise<HealthResponse> => {
-  const response = await axios.get<HealthResponse>("/health")
-  return response.data
+  try {
+    const response = await axios.get<HealthResponse>("/health")
+    if (!response.data) {
+      throw new Error('Empty health response from server.')
+    }
+    return response.data
+  } catch (error) {
+    throw new Error(
+      error instanceof Error ? error.message : 'Health check failed.'
+    )
+  }
 }
 
 /* ============================

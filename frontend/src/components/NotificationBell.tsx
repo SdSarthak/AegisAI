@@ -49,11 +49,14 @@ export default function NotificationBell() {
 
   // Live data via useQuery
   const queryClient = useQueryClient()
-  const { data: notifications = [] } = useQuery({
-    queryKey: ['notifications', 'unread'],
-    queryFn: () => notificationsApi.list(true),
-    refetchInterval: 60_000,
-  })
+  const { data: rawNotifications } = useQuery({
+  queryKey: ['notifications', 'unread'],
+  queryFn: () => notificationsApi.list(true),
+  refetchInterval: 60_000,
+})
+const notifications: NotificationPreview[] = Array.isArray(rawNotifications)
+  ? rawNotifications
+  : (rawNotifications as { items?: NotificationPreview[] })?.items ?? []
 
   const unreadCount = notifications.filter((n: NotificationPreview) => !n.is_read).length
 

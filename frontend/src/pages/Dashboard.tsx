@@ -5,18 +5,19 @@ import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 import BackendStatus from '../components/BackendStatus'
 
 export default function Dashboard() {
-  const { data: systemsData, isLoading: systemsLoading } = useQuery({
-    queryKey: ['ai-systems'],
-    queryFn: () => aiSystemsApi.list(),
-  })
+  const { data: systemsData, isLoading: systemsLoading, error: systemsError } = useQuery({
+  queryKey: ['ai-systems'],
+  queryFn: () => aiSystemsApi.list(),
+})
   const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 
-  const { data: documentsData, isLoading: documentsLoading } = useQuery({
+  const { data: documentsData, isLoading: documentsLoading, error: documentsError } = useQuery({
     queryKey: ['documents'],
     queryFn: documentsApi.list,
   })
   const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
   const isLoading = systemsLoading || documentsLoading
+  const error = systemsError || documentsError
 
   const stats = [
     {
@@ -47,6 +48,19 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+    {error && (
+  <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-center justify-between">
+    <p className="text-red-700 dark:text-red-400 text-sm">
+      {error instanceof Error ? error.message : 'Failed to load data.'}
+    </p>
+    <button
+      onClick={() => window.location.reload()}
+      className="text-sm text-red-600 hover:text-red-500 font-medium underline"
+    >
+      Retry
+    </button>
+  </div>
+)}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
