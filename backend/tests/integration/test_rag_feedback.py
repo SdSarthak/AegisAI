@@ -1,7 +1,5 @@
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch
-import importlib
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -12,8 +10,9 @@ from app.models.user import User, SubscriptionTier
 
 
 class DummyDoc:
-    def __init__(self, source):
+    def __init__(self, source, page_content=""):
         self.metadata = {"source": source}
+        self.page_content = page_content
 
 
 def _get_test_db():
@@ -47,6 +46,7 @@ def client():
 
     with TestClient(app) as c:
         yield c
+    app.dependency_overrides.clear()
 
 
 def test_query_feedback_and_low_quality_flow(client):

@@ -93,7 +93,6 @@ def client(db_engine):
 
 
 @pytest.fixture(autouse=True)
-<<<<<<< HEAD
 def clear_guard_rate_limits():
     """Keep in-memory guard rate limits isolated between tests."""
     from app.core.rate_limit import guard_scan_rate_limiter
@@ -101,12 +100,5 @@ def clear_guard_rate_limits():
     guard_scan_rate_limiter._local_attempts_by_key.clear()
     yield
     guard_scan_rate_limiter._local_attempts_by_key.clear()
-=======
-def clear_rate_limits():
-    """Clear LLM Guard rate limits dictionary between tests to ensure isolation."""
-    try:
-        from app.api.v1.guard import _scan_attempts_by_user
-        _scan_attempts_by_user.clear()
-    except ImportError:
-        pass
->>>>>>> 90f02bf (test: patch SessionLocal in rate limiting tests to fix sqlite table init error)
+
+
