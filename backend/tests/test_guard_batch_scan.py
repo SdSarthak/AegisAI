@@ -31,9 +31,10 @@ def _guard_result():
 
 @pytest.fixture(autouse=True)
 def clear_guard_rate_limits():
-    guard_api._scan_attempts_by_user.clear()
+    from app.core.rate_limit import guard_scan_rate_limiter
+    guard_scan_rate_limiter._local_attempts_by_key.clear()
     yield
-    guard_api._scan_attempts_by_user.clear()
+    guard_scan_rate_limiter._local_attempts_by_key.clear()
 
 
 @pytest.fixture
