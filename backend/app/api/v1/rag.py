@@ -32,7 +32,7 @@ router = APIRouter()
 
 
 class RAGQueryRequest(BaseModel):
-    question: str
+    question: str = Field(...,min_length=5, max_length=2000)
 
 
 class RAGQueryResponse(BaseModel):
