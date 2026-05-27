@@ -248,7 +248,7 @@ def scan_prompt(
                     }
                 )
             except Exception as e:
-                logger.error(f"Failed to trigger webhook payload: {str(e)}")
+                logging.error(f"Failed to trigger webhook payload: {str(e)}")
 
         return response
 
