@@ -182,7 +182,6 @@ def scan_prompt(
     http_request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """Scan a prompt for injection risks.
 
