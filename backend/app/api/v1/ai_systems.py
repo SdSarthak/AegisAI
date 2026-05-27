@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from fastapi.responses import StreamingResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 import csv
 import io
@@ -156,7 +157,14 @@ def create_ai_system(
         sector=system_data.sector,
     )
     db.add(ai_system)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"AI system with name '{system_data.name}' already exists",
+        )
     db.refresh(ai_system)
     return ai_system
 
