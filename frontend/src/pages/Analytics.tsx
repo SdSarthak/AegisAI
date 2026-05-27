@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 
-import ComplianceRiskChart from '../components/ComplianceRiskChart'
-import { analyticsApi } from '../services/api'
+import ComplianceRiskChart from "../components/ComplianceRiskChart";
+import { analyticsApi } from "../services/api";
 
 import {
   BarChart2,
@@ -9,7 +9,7 @@ import {
   AlertTriangle,
   ShieldCheck,
   Activity,
-} from 'lucide-react'
+} from "lucide-react";
 
 import {
   LineChart,
@@ -22,257 +22,241 @@ import {
   Tooltip,
   ResponsiveContainer,
   Legend,
-} from 'recharts'
+} from "recharts";
 
 const lineChartData = [
-  { name: 'Jan', score: 65 },
-  { name: 'Feb', score: 72 },
-  { name: 'Mar', score: 68 },
-  { name: 'Apr', score: 85 },
-  { name: 'May', score: 82 },
-  { name: 'Jun', score: 90 },
-]
+  { name: "Jan", score: 65 },
+  { name: "Feb", score: 72 },
+  { name: "Mar", score: 68 },
+  { name: "Apr", score: 85 },
+  { name: "May", score: 82 },
+  { name: "Jun", score: 90 },
+];
 
 const barChartData = [
-  { name: 'System A', risk: 45 },
-  { name: 'System B', risk: 80 },
-  { name: 'System C', risk: 30 },
-  { name: 'System D', risk: 65 },
-  { name: 'System E', risk: 20 },
-]
+  { name: "System A", risk: 45 },
+  { name: "System B", risk: 80 },
+  { name: "System C", risk: 30 },
+  { name: "System D", risk: 65 },
+  { name: "System E", risk: 20 },
+];
 
 const summaryStats = [
   {
-    label: 'Total Systems',
-    value: '12',
+    label: "Total Systems",
+    value: "12",
     icon: Activity,
-    color: 'text-blue-600',
-    bg: 'bg-blue-50',
+    color: "text-blue-600",
+    bg: "bg-blue-50",
   },
   {
-    label: 'Avg Score',
-    value: '84%',
+    label: "Avg Score",
+    value: "84%",
     icon: TrendingUp,
-    color: 'text-green-600',
-    bg: 'bg-green-50',
+    color: "text-green-600",
+    bg: "bg-green-50",
   },
   {
-    label: 'Compliant',
-    value: '10',
+    label: "Compliant",
+    value: "10",
     icon: ShieldCheck,
-    color: 'text-emerald-600',
-    bg: 'bg-emerald-50',
+    color: "text-emerald-600",
+    bg: "bg-emerald-50",
   },
   {
-    label: 'High Risk',
-    value: '2',
+    label: "High Risk",
+    value: "2",
     icon: AlertTriangle,
-    color: 'text-red-600',
-    bg: 'bg-red-50',
+    color: "text-red-600",
+    bg: "bg-red-50",
   },
-]
+];
 
 type RiskData = {
-  name: string
-  value: number
-}
+  name: string;
+  value: number;
+};
 
-type ThemeMode = 'light' | 'dark'
+type ThemeMode = "light" | "dark";
 
 type AnalyticsSummaryPayload = {
-  risk_distribution?: unknown
-  risk_counts?: unknown
-  count_by_risk_level?: unknown
-}
+  risk_distribution?: unknown;
+  risk_counts?: unknown;
+  count_by_risk_level?: unknown;
+};
 
 const chartTheme = {
   light: {
-    grid: 'rgb(229 231 235)',
-    axis: 'rgb(75 85 99)',
-    tooltipBackground: 'rgb(255 255 255)',
-    tooltipBorder: 'rgb(229 231 235)',
-    tooltipText: 'rgb(17 24 39)',
-    legendText: 'rgb(55 65 81)',
-    line: 'rgb(37 99 235)',
-    bar: 'rgb(225 29 72)',
+    grid: "rgb(229 231 235)",
+    axis: "rgb(75 85 99)",
+    tooltipBackground: "rgb(255 255 255)",
+    tooltipBorder: "rgb(229 231 235)",
+    tooltipText: "rgb(17 24 39)",
+    legendText: "rgb(55 65 81)",
+    line: "rgb(37 99 235)",
+    bar: "rgb(225 29 72)",
   },
   dark: {
-    grid: 'rgb(55 65 81)',
-    axis: 'rgb(209 213 219)',
-    tooltipBackground: 'rgb(31 41 55)',
-    tooltipBorder: 'rgb(75 85 99)',
-    tooltipText: 'rgb(243 244 246)',
-    legendText: 'rgb(229 231 235)',
-    line: 'rgb(96 165 250)',
-    bar: 'rgb(251 113 133)',
+    grid: "rgb(55 65 81)",
+    axis: "rgb(209 213 219)",
+    tooltipBackground: "rgb(31 41 55)",
+    tooltipBorder: "rgb(75 85 99)",
+    tooltipText: "rgb(243 244 246)",
+    legendText: "rgb(229 231 235)",
+    line: "rgb(96 165 250)",
+    bar: "rgb(251 113 133)",
   },
-} satisfies Record<ThemeMode, Record<string, string>>
+} satisfies Record<ThemeMode, Record<string, string>>;
 
 const riskCategoryOrder = [
-  'Minimal Risk',
-  'Limited Risk',
-  'High Risk',
-  'Unacceptable Risk',
-] as const
+  "Minimal Risk",
+  "Limited Risk",
+  "High Risk",
+  "Unacceptable Risk",
+] as const;
 
 const normalizeRiskName = (name: string) =>
-  name.trim().toLowerCase().replace(/[_-]+/g, ' ')
+  name.trim().toLowerCase().replace(/[_-]+/g, " ");
 
 const resolveTheme = (): ThemeMode => {
-  if (typeof document === 'undefined') {
-    return 'light'
+  if (typeof document === "undefined") {
+    return "light";
   }
 
-  return document.documentElement.classList.contains('dark')
-    ? 'dark'
-    : 'light'
-}
+  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+};
 
 function useThemeMode() {
-  const [theme, setTheme] = useState<ThemeMode>(resolveTheme)
+  const [theme, setTheme] = useState<ThemeMode>(resolveTheme);
 
   useEffect(() => {
-    const syncTheme = () => setTheme(resolveTheme())
+    const syncTheme = () => setTheme(resolveTheme());
 
-    syncTheme()
+    syncTheme();
 
-    const observer = new MutationObserver(syncTheme)
+    const observer = new MutationObserver(syncTheme);
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['class'],
-    })
+      attributeFilter: ["class"],
+    });
 
-    window.addEventListener('storage', syncTheme)
+    window.addEventListener("storage", syncTheme);
 
     return () => {
-      observer.disconnect()
-      window.removeEventListener('storage', syncTheme)
-    }
-  }, [])
+      observer.disconnect();
+      window.removeEventListener("storage", syncTheme);
+    };
+  }, []);
 
-  return theme
+  return theme;
 }
 
 const readNumericValue = (value: unknown) => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return Math.max(value, 0)
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(value, 0);
   }
 
-  if (typeof value === 'string') {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? Math.max(parsed, 0) : 0
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(parsed, 0) : 0;
   }
 
-  return 0
-}
+  return 0;
+};
 
-const pickRecordValue = (
-  record: Record<string, unknown>,
-  keys: string[]
-) => keys.map((key) => record[key]).find((value) => value != null)
+const pickRecordValue = (record: Record<string, unknown>, keys: string[]) =>
+  keys.map((key) => record[key]).find((value) => value != null);
 
-const mapRiskDistribution = (
-  source: unknown
-): RiskData[] => {
-  const counts = new Map<string, number>()
+const mapRiskDistribution = (source: unknown): RiskData[] => {
+  const counts = new Map<string, number>();
 
   if (Array.isArray(source)) {
     source.forEach((item) => {
-      if (!item || typeof item !== 'object') {
-        return
+      if (!item || typeof item !== "object") {
+        return;
       }
 
-      const record = item as Record<string, unknown>
+      const record = item as Record<string, unknown>;
       const rawName = pickRecordValue(record, [
-        'name',
-        'risk_level',
-        'category',
-        'label',
-      ])
+        "name",
+        "risk_level",
+        "category",
+        "label",
+      ]);
 
-      if (typeof rawName !== 'string') {
-        return
+      if (typeof rawName !== "string") {
+        return;
       }
 
       counts.set(
         normalizeRiskName(rawName),
-        readNumericValue(
-          pickRecordValue(record, [
-            'value',
-            'count',
-            'total',
-          ])
-        )
-      )
-    })
-  } else if (source && typeof source === 'object') {
+        readNumericValue(pickRecordValue(record, ["value", "count", "total"])),
+      );
+    });
+  } else if (source && typeof source === "object") {
     Object.entries(source as Record<string, unknown>).forEach(
       ([name, value]) => {
-        counts.set(normalizeRiskName(name), readNumericValue(value))
-      }
-    )
+        counts.set(normalizeRiskName(name), readNumericValue(value));
+      },
+    );
   }
 
   return riskCategoryOrder.map((name) => ({
     name,
     value: counts.get(normalizeRiskName(name)) ?? 0,
-  }))
-}
+  }));
+};
 
-const normalizeRiskDistribution = (
-  payload: unknown
-): RiskData[] => {
-  if (!payload || typeof payload !== 'object') {
-    return []
+const normalizeRiskDistribution = (payload: unknown): RiskData[] => {
+  if (!payload || typeof payload !== "object") {
+    return [];
   }
 
-  const summary = payload as AnalyticsSummaryPayload
+  const summary = payload as AnalyticsSummaryPayload;
   const candidate =
     summary.risk_distribution ??
     summary.risk_counts ??
-    summary.count_by_risk_level
+    summary.count_by_risk_level;
 
-  return mapRiskDistribution(candidate)
-}
+  return mapRiskDistribution(candidate);
+};
 
 export default function Analytics() {
-  const [riskPieData, setRiskPieData] =
-    useState<RiskData[]>([])
+  const [riskPieData, setRiskPieData] = useState<RiskData[]>([]);
 
-  const [loading, setLoading] = useState(true)
-  const theme = useThemeMode()
-  const activeChartTheme = chartTheme[theme]
-  const chartRemountKey = `${theme}-charts`
+  const [loading, setLoading] = useState(true);
+  const theme = useThemeMode();
+  const activeChartTheme = chartTheme[theme];
+  const chartRemountKey = `${theme}-charts`;
 
   useEffect(() => {
-    let isMounted = true
+    let isMounted = true;
 
     const fetchRiskDistribution = async () => {
       try {
-        const summary = await analyticsApi.summary()
-        const normalizedData =
-          normalizeRiskDistribution(summary)
+        const summary = await analyticsApi.summary();
+        const normalizedData = normalizeRiskDistribution(summary);
 
         if (isMounted) {
-          setRiskPieData(normalizedData)
+          setRiskPieData(normalizedData);
         }
       } catch {
         if (isMounted) {
-          setRiskPieData([])
+          setRiskPieData([]);
         }
       } finally {
         if (isMounted) {
-          setLoading(false)
+          setLoading(false);
         }
       }
-    }
+    };
 
-    fetchRiskDistribution()
+    fetchRiskDistribution();
 
     return () => {
-      isMounted = false
-    }
-  }, [])
+      isMounted = false;
+    };
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -292,12 +276,8 @@ export default function Analytics() {
             key={stat.label}
             className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 flex items-center gap-4 shadow-sm"
           >
-            <div
-              className={`shrink-0 p-3 rounded-lg ${stat.bg}`}
-            >
-              <stat.icon
-                className={`w-6 h-6 ${stat.color}`}
-              />
+            <div className={`shrink-0 p-3 rounded-lg ${stat.bg}`}>
+              <stat.icon className={`w-6 h-6 ${stat.color}`} />
             </div>
 
             <div>
@@ -355,10 +335,8 @@ export default function Analytics() {
 
                 <Tooltip
                   contentStyle={{
-                    backgroundColor:
-                      activeChartTheme.tooltipBackground,
-                    borderColor:
-                      activeChartTheme.tooltipBorder,
+                    backgroundColor: activeChartTheme.tooltipBackground,
+                    borderColor: activeChartTheme.tooltipBorder,
                     color: activeChartTheme.tooltipText,
                   }}
                   itemStyle={{
@@ -429,10 +407,8 @@ export default function Analytics() {
 
                 <Tooltip
                   contentStyle={{
-                    backgroundColor:
-                      activeChartTheme.tooltipBackground,
-                    borderColor:
-                      activeChartTheme.tooltipBorder,
+                    backgroundColor: activeChartTheme.tooltipBackground,
+                    borderColor: activeChartTheme.tooltipBorder,
                     color: activeChartTheme.tooltipText,
                   }}
                   itemStyle={{
@@ -470,5 +446,5 @@ export default function Analytics() {
         <ComplianceRiskChart data={riskPieData} theme={theme} />
       )}
     </div>
-  )
+  );
 }
