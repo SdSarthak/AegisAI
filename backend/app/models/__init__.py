@@ -7,4 +7,6 @@ from app.models.guard_scan_log import GuardScanLog
 from app.models.webhook import WebhookConfig
 from app.models.notification import Notification                      
 from app.models.compliance_snapshot import ComplianceSnapshot
-__all__ = ["User", "AISystem", "RiskAssessment", "Document", "RAGFeedback", "AISystemAuditLog", "GuardScanLog", "WebhookConfig", "Notification", "ComplianceSnapshot"]
+from app.models.ingested_document import IngestedDocument
+__all__ = ["User", "AISystem", "RiskAssessment", "Document", "RAGFeedback", "AISystemAuditLog", "GuardScanLog", "WebhookConfig", "Notification", "ComplianceSnapshot", "IngestedDocument"]
+
