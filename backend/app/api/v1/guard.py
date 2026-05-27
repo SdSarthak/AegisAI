@@ -245,10 +245,11 @@ def scan_prompt(
                         "confidence": response.confidence,
                         "matched_patterns": response.matched_patterns,
                         "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
-                    }
+                    },
+                    background_tasks=background_tasks,
                 )
             except Exception as e:
-                logging.error(f"Failed to trigger webhook payload: {str(e)}")
+                logger.error(f"Failed to trigger webhook payload: {str(e)}")
 
         return response
 
