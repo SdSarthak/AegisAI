@@ -46,7 +46,6 @@ function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/onboarding" element={<Onboarding />} />
         <Route
           path="/"
           element={
@@ -63,6 +62,7 @@ function App() {
           <Route path="rag-chat" element={<RagChat />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="rag-chat" element={<RagChat />} />
+          <Route path="onboarding" element={<Onboarding />} />
 
         </Route>
         <Route path="*" element={<NotFound />} />

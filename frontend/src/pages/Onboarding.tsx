@@ -67,9 +67,10 @@ export default function Onboarding() {
     })
   }
 
-  const handleNext = () => {
+  const handleNext = async () => {
     if (isLastStep) {
-      console.log('Onboarding Data:', formData)
+      // TODO: Replace with actual API call
+      // await aiSystemsApi.create(formData)
       navigate('/')
     } else {
       setCurrentStep((s) => s + 1)
