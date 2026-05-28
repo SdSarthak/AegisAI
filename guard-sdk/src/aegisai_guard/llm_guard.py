@@ -36,7 +36,7 @@ class LLMGuard:
         Initialize the guard with all defense layers.
         
         The classifier automatically loads the fine-tuned model trained by the notebook
-        if available, otherwise falls back to pre-trained DeBERTa.
+        if available, otherwise falls back to deterministic heuristics.
         
         Args:
             classifier_model_path: Path to fine-tuned classifier model.
@@ -49,7 +49,7 @@ class LLMGuard:
         self.regex_filter = RegexFilter()
         logger.info("[OK] Regex filter initialized")
 
-        # Layer 2: ML intent classifier (loads trained model or pre-trained fallback)
+        # Layer 2: Intent classifier (loads trained model or deterministic fallback)
         try:
             self.classifier = IntentClassifier(model_path=classifier_model_path)
             logger.info("[OK] Intent classifier initialized")

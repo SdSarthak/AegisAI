@@ -14,6 +14,21 @@ const queryClient = new QueryClient({
   },
 })
 
+// ✅ Theme initialization (safe placement)
+const initializeTheme = () => {
+  const stored = localStorage.getItem("theme")
+
+  if (stored) {
+    document.documentElement.classList.toggle("dark", stored === "dark")
+  } else {
+    const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches
+    document.documentElement.classList.toggle("dark", systemDark)
+  }
+}
+
+// ✅ Run once before render
+initializeTheme()
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
