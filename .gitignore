@@ -102,3 +102,14 @@ ehthumbs.db
 
 # Local dev tooling
 .claude/
+
+# Custom regulation rulesets
+regulations/custom/*
+!regulations/custom/.gitkeep
+
+# Generated test output artifacts
+conftest.txt
+lifecycle.txt
+error.txt
+pdf_export.txt
+rag_ingest.txt

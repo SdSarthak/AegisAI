@@ -71,6 +71,7 @@ class RiskClassificationRequest(BaseModel):
     law_enforcement: bool = False
     border_control: bool = False
     justice_system: bool = False
+    education_vocational_training: bool = False
 
     # Transparency (Article 52)
     interacts_with_humans: bool = True  # Chatbots, virtual assistants
@@ -85,6 +86,7 @@ class RiskClassificationResponse(BaseModel):
     reasons: List[str]
     requirements: List[str]
     next_steps: List[str]
+    nist_mapping: Optional[NISTMapping] = None
 
 
 class RiskAssessmentResponse(BaseModel):
@@ -121,3 +123,10 @@ class QuestionnaireRiskFactor(BaseModel):
     question: str
     article: str
     triggers_level: RiskLevel
+
+
+class NISTMapping(BaseModel):
+    primary_functions: List[str]
+    subcategories: List[str]
+    rationale: str
+    nist_risk_tier: str
