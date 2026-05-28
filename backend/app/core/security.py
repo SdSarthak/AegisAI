@@ -67,6 +67,16 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     )
     return encoded_jwt
 
+def get_credentials_exception() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+
+def decode_token(token: str) -> Dict[str, Any]:
+
 
 def decode_token(token: str) -> Dict[str, Any]:
     """Decode and verify a JWT token, returning the payload safely."""
