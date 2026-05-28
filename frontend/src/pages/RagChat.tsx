@@ -19,7 +19,6 @@ interface RagAnswer {
   answer_id?: string
 }
 
-<<<<<<< HEAD
 interface ApiError {
   response?: {
     status?: number
@@ -30,30 +29,39 @@ interface ApiError {
   message?: string
 }
 
-function isApiError(error: unknown): error is ApiError {
-  return typeof error === 'object' && error !== null
+function isApiError(
+  error: unknown
+): error is ApiError {
+  return (
+    typeof error === 'object' &&
+    error !== null
+  )
 }
 
-function buildAnswerExport(answer: RagAnswer): string {
+function buildAnswerExport(
+  answer: RagAnswer
+): string {
   return [
     'AI Response',
     answer.answer,
     '',
     'Source citations',
     ...answer.sources.map(
-      (source, index) => `${index + 1}. ${source.title}\n${source.excerpt}`
+      (source, index) =>
+        `${index + 1}. ${source.title}\n${source.excerpt}`
     ),
   ].join('\n')
 }
 
-=======
->>>>>>> b04b409 (fix: resolve lint issues in RagChat)
 export default function RagChat() {
   const [question, setQuestion] = useState('')
-  const [submittedQuestion, setSubmittedQuestion] = useState('')
-  const [answer, setAnswer] = useState<RagAnswer | null>(null)
+  const [submittedQuestion, setSubmittedQuestion] =
+    useState('')
+  const [answer, setAnswer] =
+    useState<RagAnswer | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] =
+    useState<string | null>(null)
 
   const handleAsk = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -61,7 +69,9 @@ export default function RagChat() {
     const trimmedQuestion = question.trim()
 
     if (!trimmedQuestion) {
-      setError('Please enter a question before asking.')
+      setError(
+        'Please enter a question before asking.'
+      )
       setSubmittedQuestion('')
       setAnswer(null)
       return
@@ -81,44 +91,52 @@ export default function RagChat() {
         sources: data.sources || [],
       })
     } catch (err: unknown) {
-<<<<<<< HEAD
-      // ✅ ERROR HANDLING
-      const apiError = isApiError(err) ? err : {}
+      const apiError = isApiError(err)
+        ? err
+        : {}
 
-      if (apiError.response?.status === 503) {
-        setError('Index not ready. Please try again later.')
-      } else if (apiError.response?.status === 401) {
-        setError('Unauthorized. Please login again.')
+      if (
+        apiError.response?.status === 503
+      ) {
+        setError(
+          'Index not ready. Please try again later.'
+        )
+      } else if (
+        apiError.response?.status === 401
+      ) {
+        setError(
+          'Unauthorized. Please login again.'
+        )
       } else {
         setError(
           apiError.response?.data?.detail ||
             apiError.message ||
-=======
-      const error = err as {
-        response?: {
-          status?: number
-          data?: {
-            detail?: string
-          }
-        }
-        message?: string
-      }
-
-      if (error.response?.status === 503) {
-        setError('Index not ready. Please try again later.')
-      } else if (error.response?.status === 401) {
-        setError('Unauthorized. Please login again.')
-      } else {
-        setError(
-          error.response?.data?.detail ||
-            error.message ||
->>>>>>> e9cd207 (fix: resolve lint error in RagChat)
             'Unable to generate an answer right now.'
         )
       }
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleExport = () => {
+    if (!answer) return
+
+    const blob = new Blob(
+      [buildAnswerExport(answer)],
+      {
+        type: 'text/plain;charset=utf-8',
+      }
+    )
+
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+
+    link.href = url
+    link.download = 'rag-answer.txt'
+    link.click()
+
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -135,7 +153,8 @@ export default function RagChat() {
             </h1>
 
             <p className="text-sm sm:text-base text-gray-600">
-              Ask regulatory and compliance questions with source-backed answers
+              Ask regulatory and compliance questions
+              with source-backed answers
             </p>
           </div>
         </div>
@@ -143,42 +162,51 @@ export default function RagChat() {
 
       <div className="flex-1 overflow-y-auto bg-gray-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
-          {!submittedQuestion && !answer && !isLoading && !error && (
-            <div className="min-h-[320px] sm:min-h-[420px] flex flex-col items-center justify-center text-center">
-              <div className="p-3 sm:p-4 bg-primary-50 rounded-2xl mb-5">
-                <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-primary-600" />
+          {!submittedQuestion &&
+            !answer &&
+            !isLoading &&
+            !error && (
+              <div className="min-h-[320px] sm:min-h-[420px] flex flex-col items-center justify-center text-center">
+                <div className="p-3 sm:p-4 bg-primary-50 rounded-2xl mb-5">
+                  <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-primary-600" />
+                </div>
+
+                <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">
+                  How can I help with AI compliance?
+                </h2>
+
+                <p className="text-sm sm:text-base text-gray-500 mt-2 max-w-xl">
+                  Ask about EU AI Act risk
+                  classification, compliance
+                  documentation, human oversight, or
+                  source-backed regulatory guidance.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mt-6 sm:mt-8 w-full">
+                  {[
+                    'Does my system qualify as high-risk?',
+                    'Which documents are needed for compliance?',
+                    'What does human oversight require?',
+                  ].map((example) => (
+                    <button
+                      key={example}
+                      type="button"
+                      onClick={() =>
+                        setQuestion(example)
+                      }
+                      className="text-left bg-white border border-gray-200 rounded-xl p-4 text-sm text-gray-700 hover:border-primary-200 hover:bg-primary-50 transition-colors"
+                    >
+                      {example}
+                    </button>
+                  ))}
+                </div>
               </div>
+            )}
 
-              <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">
-                How can I help with AI compliance?
-              </h2>
-
-              <p className="text-sm sm:text-base text-gray-500 mt-2 max-w-xl">
-                Ask about EU AI Act risk classification, compliance
-                documentation, human oversight, or source-backed regulatory
-                guidance.
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mt-6 sm:mt-8 w-full">
-                {[
-                  'Does my system qualify as high-risk?',
-                  'Which documents are needed for compliance?',
-                  'What does human oversight require?',
-                ].map((example) => (
-                  <button
-                    key={example}
-                    type="button"
-                    onClick={() => setQuestion(example)}
-                    className="text-left bg-white border border-gray-200 rounded-xl p-4 text-sm text-gray-700 hover:border-primary-200 hover:bg-primary-50 transition-colors"
-                  >
-                    {example}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {(submittedQuestion || answer || isLoading || error) && (
+          {(submittedQuestion ||
+            answer ||
+            isLoading ||
+            error) && (
             <div className="space-y-5 sm:space-y-6">
               {submittedQuestion && (
                 <div className="flex justify-end">
@@ -232,23 +260,33 @@ export default function RagChat() {
                       </h3>
 
                       <div className="space-y-3">
-                        {answer.sources.map((source, index) => (
-                          <div
-                            key={index}
-                            className="border border-gray-200 rounded-lg p-3 bg-gray-50"
-                          >
-                            <p className="font-medium text-sm text-gray-900">
-                              {source.title}
-                            </p>
+                        {answer.sources.map(
+                          (source, index) => (
+                            <div
+                              key={index}
+                              className="border border-gray-200 rounded-lg p-3 bg-gray-50"
+                            >
+                              <p className="font-medium text-sm text-gray-900">
+                                {source.title}
+                              </p>
 
-                            <p className="text-sm text-gray-600 mt-1">
-                              {source.excerpt}
-                            </p>
-                          </div>
-                        ))}
+                              <p className="text-sm text-gray-600 mt-1">
+                                {source.excerpt}
+                              </p>
+                            </div>
+                          )
+                        )}
                       </div>
                     </div>
                   )}
+
+                  <button
+                    type="button"
+                    onClick={handleExport}
+                    className="mt-6 inline-flex items-center rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+                  >
+                    Export answer
+                  </button>
                 </div>
               )}
             </div>
@@ -264,7 +302,9 @@ export default function RagChat() {
           <input
             type="text"
             value={question}
-            onChange={(e) => setQuestion(e.target.value)}
+            onChange={(e) =>
+              setQuestion(e.target.value)
+            }
             placeholder="Ask a compliance question..."
             className="flex-1 rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
           />

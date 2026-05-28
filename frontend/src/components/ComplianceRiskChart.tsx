@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-
 import {
   PieChart,
   Pie,
@@ -58,11 +57,7 @@ export default function ComplianceRiskChart({
   }
 
   return (
-<<<<<<< HEAD
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
-=======
     <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm transition-colors">
->>>>>>> 8f1b859 (fix: improve dark mode compatibility for analytics charts)
       <div className="flex items-center gap-2 mb-2">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
           Compliance Risk Distribution
