@@ -101,6 +101,12 @@ ehthumbs.db
 *.orig
 *.rej
 
+# Test output files
+test_*.txt
+*_output*.txt
+verify.txt
+fulltest.txt
+
 # Local dev tooling
 .claude/
 
