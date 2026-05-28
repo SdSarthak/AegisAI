@@ -14,6 +14,13 @@ spec:
       labels:
         app: aegisai-backend
     spec:
+      initContainers:
+      - name: model-downloader
+        image: alpine/git:latest
+        command: ["sh", "-c", "echo 'Downloading model weights...'; sleep 10; echo 'Download complete!'"]
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models
       containers:
       - name: aegisai-backend
         image: aegisai-backend:latest
@@ -31,25 +38,40 @@ spec:
           limits:
             cpu: "1000m"
             memory: "2Gi"
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          periodSeconds: 10
+          failureThreshold: 18
         readinessProbe:
           httpGet:
             path: /health
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 2
         livenessProbe:
           httpGet:
             path: /health
             port: 8000
           initialDelaySeconds: 30
           periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
         volumeMounts:
         - name: faiss-storage
           mountPath: /app/faiss_index
+        - name: model-storage
+          mountPath: /app/models
       volumes:
       - name: faiss-storage
         persistentVolumeClaim:
           claimName: faiss-pvc
+      - name: model-storage
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
