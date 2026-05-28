@@ -26,6 +26,12 @@ from app.schemas.pagination import PaginatedResponse
 router = APIRouter()
 
 
+class AISystemListResponse(PaginatedResponse[AISystemResponse]):
+    """Paginated AI system list response with page metadata."""
+
+    page: int
+
+
 def _read_upload_file(file: UploadFile, max_bytes: int) -> str:
     """Read a CSV upload with a hard byte cap."""
 
@@ -177,7 +183,7 @@ _SORTABLE_FIELDS = {
 }
 
 
-@router.get("/", response_model=PaginatedResponse[AISystemResponse])
+@router.get("/", response_model=AISystemListResponse)
 def list_ai_systems(
     sort_by: Optional[str] = Query("created_at", description="Sort field: name, risk_level, compliance_score, created_at"),
     order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
@@ -261,7 +267,13 @@ def list_ai_systems(
         .limit(limit)
         .all()
     )
-    return PaginatedResponse(items=systems, total=total, skip=offset, limit=limit)
+    return AISystemListResponse(
+        items=systems,
+        total=total,
+        skip=offset,
+        limit=limit,
+        page=page,
+    )
 
 
 @router.post("/import", response_model=BulkImportResponse)
