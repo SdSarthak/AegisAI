@@ -14,6 +14,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Retains both `normalized_prompt` and `user_prompt` in orchestrator response
 - Unit and integration tests for bypass payloads (`test_normalizer.py` and `test_guard.py`)
 
+### Fixed
+- **RAG Guard scan gap** — `POST /api/v1/rag/query` now runs the Guard pipeline before processing. Added `scan_input()` on `LLMGuard` (query-level scan, no LLM call) and `scan_chunk()` (regex-only chunk scan). New `query_with_guard()` in `retrieval_chain.py` filters poisoned FAISS chunks before context assembly. Prompt injection via the RAG endpoint is no longer possible (#748).
+
 ---
 
 ## [Unreleased]
