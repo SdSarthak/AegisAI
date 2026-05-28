@@ -15,20 +15,14 @@ Dependencies:
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
-<<<<<<< HEAD
-
-=======
+from fastapi.security import OAuth2PasswordRequestForm, APIKeyHeader
 import re
 import secrets
 import hashlib
+
 from pydantic import BaseModel, field_validator
->>>>>>> daf0016 (feat(auth): add API key management endpoints)
 from sqlalchemy.orm import Session
-<<<<<<< HEAD
-=======
 from datetime import timedelta, datetime
->>>>>>> 2eb86a8 (fix(auth): wire api key authentication)
 
 from app.core.database import get_db
 from app.core.security import (
@@ -42,18 +36,23 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.ai_system import AISystem, ComplianceStatus
 from app.models.document import Document
-<<<<<<< HEAD
-from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse, ChangePasswordRequest
-=======
 from app.models.api_key import ApiKey
-from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse
+
+from app.schemas.user import (
+    UserCreate,
+    UserResponse,
+    UserUpdateSchema,
+    Token,
+    UserStatsResponse,
+    ChangePasswordRequest,
+)
+
 from app.schemas.api_key import (
     ApiKeyCreate,
     ApiKeyResponse,
     ApiKeyGeneratedResponse,
     ApiKeyRevokeResponse,
 )
->>>>>>> daf0016 (feat(auth): add API key management endpoints)
 
 # Pre-computed bcrypt hash used when the looked-up user is None so that the
 # login endpoint always performs a constant-time hash comparison, closing
