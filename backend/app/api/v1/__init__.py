@@ -1,6 +1,11 @@
 from fastapi import APIRouter
 from app.api.v1 import auth, ai_systems, documents, classification, guard, badge, analytics, notifications, webhooks
 
+from app.models.user import User
+from app.models.ai_system import AISystem
+from app.models.document import Document
+from app.models.api_key import ApiKey
+
 api_router = APIRouter()
 
 api_router.include_router(auth.router, prefix="/auth", tags=["Authentication"])
