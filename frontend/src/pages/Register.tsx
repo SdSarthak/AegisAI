@@ -9,24 +9,35 @@ interface ValidationError {
   message: string
 }
 
+interface PydanticError {
+  loc?: Array<string | number>
+  msg?: string
+}
+
+interface RegisterErrorResponse {
+  detail?: string | PydanticError[]
+}
+
 /**
  * Parse Pydantic validation errors from 422 responses.
  * Format: {detail: [{loc: [...], msg: "...", type: "..."}]}
  */
-function parsePydanticErrors(errorData: any): ValidationError[] {
-  if (!errorData) return []
+function parsePydanticErrors(errorData: unknown): ValidationError[] {
+  if (!errorData || typeof errorData !== 'object') return []
+
+  const { detail } = errorData as RegisterErrorResponse
 
   // Handle array of validation errors (Pydantic format)
-  if (Array.isArray(errorData.detail)) {
-    return errorData.detail.map((error: any) => ({
-      field: error.loc?.[error.loc.length - 1] || 'unknown',
+  if (Array.isArray(detail)) {
+    return detail.map((error) => ({
+      field: String(error.loc?.[error.loc.length - 1] || 'unknown'),
       message: error.msg || 'Invalid input',
     }))
   }
 
   // Handle string detail message
-  if (typeof errorData.detail === 'string') {
-    return [{ field: 'general', message: errorData.detail }]
+  if (typeof detail === 'string') {
+    return [{ field: 'general', message: detail }]
   }
 
   return []
