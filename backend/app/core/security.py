@@ -96,17 +96,15 @@ def get_credentials_exception() -> HTTPException:
         headers={"WWW-Authenticate": "Bearer"},
     )
 
-
-def decode_token(token: str) -> Dict[str, Any]:
-
-
 def decode_token(token: str) -> Dict[str, Any]:
     """Decode and strictly validate a JWT token payload."""
+
     try:
         payload = jwt.decode(
             token,
             settings.SECRET_KEY,
             algorithms=[settings.ALGORITHM],
+
             options={
                 "verify_signature": True,
                 "verify_exp": True,
@@ -139,7 +137,7 @@ def decode_token(token: str) -> Dict[str, Any]:
         )
 
     except JWTError:
-        raise _get_credentials_exception()
+        raise get_credentials_exception()
 
 
 async def get_current_user(
