@@ -143,8 +143,17 @@ class TestListIngestedDocuments:
 
     def test_unauthenticated_returns_401(self, client):
         """Unauthenticated requests should be rejected."""
-        response = client.get("/api/v1/rag/documents")
-        assert response.status_code in (401, 403)
+        from app.core.security import get_current_user
+        from app.main import app
+        old_override = app.dependency_overrides.get(get_current_user)
+        if get_current_user in app.dependency_overrides:
+            del app.dependency_overrides[get_current_user]
+        try:
+            response = client.get("/api/v1/rag/documents")
+            assert response.status_code in (401, 403)
+        finally:
+            if old_override is not None:
+                app.dependency_overrides[get_current_user] = old_override
 
 
 # ---------------------------------------------------------------------------
