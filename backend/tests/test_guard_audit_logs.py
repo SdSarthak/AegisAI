@@ -4,7 +4,6 @@ from unittest.mock import patch
 from app.models.guard_scan_log import GuardScanLog
 from app.models.user import User, SubscriptionTier
 
-
 def test_guard_scan_audit_logging_and_analytics_endpoint(client, db_session):
     # Register and login a test user
     email = "audit_test@example.com"
@@ -118,4 +117,3 @@ def test_analytics_audit_logs_pagination_and_role_access(client, db_session):
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 2
-

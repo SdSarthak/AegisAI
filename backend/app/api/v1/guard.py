@@ -40,6 +40,7 @@ from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.pagination import PaginatedResponse
 from app.modules.guard import guard_config
 
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -134,7 +135,6 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: s
         ip_address=ip_address,
         scanned_at=datetime.utcnow(),
     )
-
 
 
 def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> None:

@@ -5,6 +5,7 @@ from datetime import datetime
 
 class GuardScanLogCreate(BaseModel):
     user_id: int
+    raw_prompt: Optional[str] = None
     prompt_hash: str = Field(..., min_length=64, max_length=64, description="SHA-256 hex digest of the scanned prompt")
     decision: str = Field(..., pattern="^(allow|sanitize|block)$")
     confidence: float = Field(..., ge=0.0, le=1.0)
@@ -15,6 +16,7 @@ class GuardScanLogCreate(BaseModel):
 class GuardScanLogResponse(BaseModel):
     id: int
     user_id: int
+    raw_prompt: Optional[str] = None
     prompt_hash: str
     decision: str
     confidence: float
