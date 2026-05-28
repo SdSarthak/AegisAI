@@ -68,8 +68,9 @@ class TestRetrievalChain:
         mock_vs.as_retriever.assert_called_once_with(search_kwargs={"k": 5})
         mock_llm.assert_called_once_with(
             model=settings.LLM_MODEL,
-            temperature=0.0,
-            api_key=settings.OPENAI_API_KEY,
+            openai_api_key=settings.LLM_API_KEY,
+            openai_api_base=settings.LLM_BASE_URL or None,
+            temperature=0,
         )
         mock_from_chain_type.assert_called_once_with(
             llm=mock_llm.return_value,
