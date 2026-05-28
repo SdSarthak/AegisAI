@@ -95,17 +95,27 @@ export default function Register() {
       await authApi.register(formData)
       navigate('/login')
     } catch (err) {
-      if (axios.isAxiosError(err)) {
-        // Try to parse Pydantic validation errors (422)
-        const parsedErrors = parsePydanticErrors(err.response?.data)
+    if (axios.isAxiosError(err)) {
+      // Try to parse Pydantic validation errors (422)
+      const parsedErrors = parsePydanticErrors(err.response?.data);
 
-        if (parsedErrors.length > 0) {
-          setErrors(parsedErrors)
-        } else if (err.response?.data?.detail) {
-          // Handle custom error messages (400, etc.)
+      if (parsedErrors && parsedErrors.length > 0) {
+        // Agar password validation fail hui hai, toh use extract karein
+        const passwordErr = parsedErrors.find(e => e.field === 'password');
+        if (passwordErr) {
           setErrors([
-            { field: 'general', message: err.response.data.detail },
-          ])
+            { field: 'general', message: passwordErr.message }
+          ]);
+        } else {
+          setErrors(parsedErrors);
+        }
+      } else if (err.response?.data?.detail) {
+        // Handle custom error messages (400, etc.)
+        setErrors([
+          { field: 'general', message: typeof err.response.data.detail === 'string' ? err.response.data.detail : "Registration failed." },
+        ])
+      }
+
         } else if (err.code === 'ERR_NETWORK') {
           setErrors([
             {
