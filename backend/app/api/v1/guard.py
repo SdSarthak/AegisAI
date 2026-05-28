@@ -108,7 +108,7 @@ def _infer_detection_type(regex_flag: bool, intent: str) -> str:
 
 
 def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> GuardScanLog:
-    """Build a GuardScanLog row capturing raw prompt and IP address."""
+    """Build a GuardScanLog row capturing prompt hash, decision details, and IP address."""
     metadata = result.get("metadata", {})
     regex_analysis = metadata.get("regex_analysis", {})
     intent_analysis = metadata.get("intent_analysis", {})
@@ -120,7 +120,6 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: s
 
     return GuardScanLog(
         user_id=user_id,
-        raw_prompt=prompt,
         prompt_hash=hashlib.sha256(prompt.encode()).hexdigest(),
         decision=result.get("decision", "allow"),
         confidence=decision_reasoning.get("confidence", 0.0),
@@ -135,6 +134,7 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: s
         ip_address=ip_address,
         scanned_at=datetime.utcnow(),
     )
+
 
 
 def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> None:
