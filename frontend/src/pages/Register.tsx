@@ -13,12 +13,12 @@ interface ValidationError {
  * Parse Pydantic validation errors from 422 responses.
  * Format: {detail: [{loc: [...], msg: "...", type: "..."}]}
  */
-function parsePydanticErrors(errorData: any): ValidationError[] {
+function parsePydanticErrors(errorData: Record<string, unknown>): ValidationError[] {
   if (!errorData) return []
 
   // Handle array of validation errors (Pydantic format)
   if (Array.isArray(errorData.detail)) {
-    return errorData.detail.map((error: any) => ({
+    return (errorData.detail as Array<Record<string, unknown>>).map((error: Record<string, unknown>) => ({
       field: error.loc?.[error.loc.length - 1] || 'unknown',
       message: error.msg || 'Invalid input',
     }))
