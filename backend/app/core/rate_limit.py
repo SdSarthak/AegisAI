@@ -129,3 +129,4 @@ return {current, ttl}
 
 
 guard_scan_rate_limiter = DistributedRateLimiter()
+badge_rate_limiter = DistributedRateLimiter()

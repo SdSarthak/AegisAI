@@ -15,38 +15,62 @@ TODO for contributors (help wanted):
     SVG badge without requiring a login.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import Response
+from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi.responses import Response, JSONResponse
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.models.ai_system import AISystem
 from app.modules.badge.badge_generator import generate_badge_svg
+from app.core.rate_limit import badge_rate_limiter
+from app.core.config import settings
 
 router = APIRouter()
 
 
-@router.get("/{system_id}", tags=["Compliance Badge"])
+@router.get("/{public_badge_id}", tags=["Compliance Badge"])
 def get_compliance_badge(
-    system_id: int,
+    public_badge_id: str,
+    request: Request,
     format: str = "svg",  # "svg" | "json"
     db: Session = Depends(get_db),
 ):
     """
     Return a public compliance badge for an AI system.
     """
-    system = db.query(AISystem).filter(AISystem.id == system_id).first()
-    if not system:
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    key = f"badge:{client_ip}"
+    
+    limited, retry_after = badge_rate_limiter.check_and_consume(
+        key=key,
+        limit=settings.BADGE_RATE_LIMIT_REQUESTS,
+        window_seconds=settings.BADGE_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    if limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Rate limit exceeded. Please try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    system = db.query(AISystem).filter(AISystem.public_badge_id == public_badge_id).first()
+    if not system or not system.public_badge_enabled:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="System not found"
         )
 
+    headers = {"Cache-Control": "public, max-age=3600"}
+
     if format == "json":
-        return {
-            "system_id": system_id,
-            "name": system.name,
-            "risk_level": system.risk_level,
-            "compliance_status": system.compliance_status,
-        }
+        return JSONResponse(
+            content={
+                "public_badge_id": system.public_badge_id,
+                "name": system.name,
+                "risk_level": system.risk_level.value if system.risk_level else None,
+                "compliance_status": system.compliance_status.value if system.compliance_status else None,
+            },
+            headers=headers,
+        )
 
     svg = generate_badge_svg(system.name, system.risk_level, system.compliance_status)
-    return Response(content=svg, media_type="image/svg+xml")
+    return Response(content=svg, media_type="image/svg+xml", headers=headers)
+
