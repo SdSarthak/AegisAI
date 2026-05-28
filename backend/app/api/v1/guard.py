@@ -208,7 +208,7 @@ def scan_prompt(
             decision=result["decision"],
             confidence=result["metadata"]["decision_reasoning"]["confidence"],
             reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
-            sanitized_prompt=None,
+            sanitized_prompt=result.get("sanitized_prompt"),
             matched_patterns=result["metadata"]["regex_analysis"].get(
                 "matched_patterns",
                 [],
@@ -595,7 +595,7 @@ def bulk_scan_prompts(
                     decision=result["decision"],
                     confidence=result["metadata"]["decision_reasoning"]["confidence"],
                     reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
-                    sanitized_prompt=None,
+                    sanitized_prompt=result.get("sanitized_prompt"),
                     matched_patterns=result["metadata"]["regex_analysis"].get(
                         "matched_patterns",
                         [],
@@ -618,4 +618,3 @@ def bulk_scan_prompts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."
         )
-    
