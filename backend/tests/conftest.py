@@ -11,6 +11,7 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
 from app.core.database import Base, SessionLocal
 from app.main import app
+from app.api.v1.guard import _scan_attempts_by_user, user_guard_configs
 
 
 @pytest.fixture(scope="session")
@@ -58,3 +59,13 @@ def client(db_engine):
     transaction.rollback()
     connection.close()
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def reset_guard_state():
+    """Keep per-test guard rate-limit and config state isolated."""
+    _scan_attempts_by_user.clear()
+    user_guard_configs.clear()
+    yield
+    _scan_attempts_by_user.clear()
+    user_guard_configs.clear()

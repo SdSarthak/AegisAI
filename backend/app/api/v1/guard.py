@@ -149,9 +149,11 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict) -> GuardScanL
     )
 
 
-def log_scan(user_id: int, prompt: str, result: dict) -> None:
+def log_scan(user_id: int, prompt: str, result: dict, db: Session | None = None) -> None:
     """Log scan details and create block notification without storing raw prompt."""
-    db = SessionLocal()
+    owns_session = db is None
+    if db is None:
+        db = SessionLocal()
 
     try:
         log = _build_guard_scan_log(user_id, prompt, result)
@@ -176,7 +178,8 @@ def log_scan(user_id: int, prompt: str, result: dict) -> None:
         db.rollback()
         raise
     finally:
-        db.close()
+        if owns_session:
+            db.close()
 
 
 @router.post("/scan", response_model=ScanResponse)
@@ -238,6 +241,7 @@ def scan_prompt(
             current_user.id,
             request.prompt,
             result,
+            db,
         )
 
         response = ScanResponse(
