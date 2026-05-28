@@ -43,7 +43,7 @@ def create_notification(
 @router.get("", response_model=PaginatedResponse[NotificationResponse])
 def list_notifications(
     unread_only: bool = False,
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    skip: int = Query(0, ge=0, description="Items to skip"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -52,7 +52,7 @@ def list_notifications(
 
     Args:
         unread_only: If true, return only unread notifications.
-        page: Page number to return, starting at 1.
+        skip: Items to skip.
         limit: Maximum number of notifications to return per page.
         current_user: Authenticated user whose notifications are requested.
         db: Database session used to query notifications.
@@ -69,7 +69,7 @@ def list_notifications(
 
     notifications = (
         query.order_by(Notification.created_at.desc())
-        .offset((page - 1) * limit)
+        .offset(skip)
         .limit(limit)
         .all()
     )
@@ -77,7 +77,7 @@ def list_notifications(
     return PaginatedResponse(
         items=notifications,
         total=total,
-        page=page,
+        skip=skip,
         limit=limit,
     )
 

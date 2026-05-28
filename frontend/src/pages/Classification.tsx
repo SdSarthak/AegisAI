@@ -171,11 +171,11 @@ export default function Classification() {
     law_enforcement: false,
     border_control: false,
     justice_system: false,
+    education_vocational_training: false,
     interacts_with_humans: true,
     generates_synthetic_content: false,
     emotion_recognition: false,
     biometric_categorization: false,
-    education_vocational_training: false,
   })
 
   const classifyMutation = useMutation({

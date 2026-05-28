@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
-
+from app.modules.compliance.nist_mapping import EU_TO_NIST_MAPPING
+from app.schemas.ai_system import NISTMapping
 from pydantic import BaseModel
 
 from app.core.database import get_db
@@ -106,6 +107,12 @@ QUESTIONNAIRE_RISK_FACTORS: List[QuestionnaireRiskFactor] = [
         id="justice_system",
         question="Is the system used to assist judicial authorities or influence legal outcomes?",
         article="Annex III point 8",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="education_vocational_training",
+        question="Is the system used to determine access to or assign natural persons to educational and vocational training institutions?",
+        article="Annex III point 3",
         triggers_level=RiskLevel.HIGH,
     ),
     QuestionnaireRiskFactor(
@@ -221,6 +228,13 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
             "AI for creditworthiness or insurance risk assessment is HIGH risk under Annex III"
         )
 
+    # Education and vocational training (Annex III, point 3)
+    if data.education_vocational_training:
+        high_risk_indicators.append("Education/vocational training AI")
+        reasons.append(
+            "AI used for determining access to education or vocational training is HIGH risk under Annex III"
+        )
+
     # Safety component
     if data.is_safety_component:
         high_risk_indicators.append("Safety component of a product")
@@ -314,12 +328,17 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
             "Document your AI governance practices",
         ]
 
+    # Lookup NIST mapping once for the determined risk level
+    nist_data = EU_TO_NIST_MAPPING.get(risk_level.value.upper())
+    nist_mapping = NISTMapping(**nist_data) if nist_data else None
+    
     return RiskClassificationResponse(
         risk_level=risk_level,
-        confidence=confidence,
+        confidence=confidence if not triggered_prohibitions else 0.99,
         reasons=reasons,
         requirements=requirements,
         next_steps=next_steps,
+        nist_mapping=nist_mapping,
     )
 
 
@@ -336,7 +355,7 @@ def classify_ai_system(
     Returns:
         RiskClassificationResponse containing the inferred risk level and guidance.
     """
-    return classify_risk(data)
+    return classify_risk(data)    
 
 
 @router.post("/classify/{system_id}", response_model=RiskClassificationResponse)

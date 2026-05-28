@@ -20,7 +20,9 @@ class PatternCount(BaseModel):
 
 class DailyBucket(BaseModel):
     date: str
-    count: int
+    allow: int
+    sanitize: int
+    block: int
 
 
 class GuardStatsResponse(BaseModel):
