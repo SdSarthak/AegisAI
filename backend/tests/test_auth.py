@@ -101,3 +101,78 @@ def test_expired_token_returns_401(client):
     )
 
     assert response.status_code == 401
+
+
+def test_register_full_name_exceeds_max_length(client):
+    """Test that full_name exceeding 100 characters returns 422"""
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "test@example.com",
+            "password": "testpassword123",
+            "full_name": "a" * 101
+        }
+    )
+
+    assert response.status_code == 422
+    error_detail = response.json()
+    assert "full_name" in str(error_detail).lower() or "max" in str(error_detail).lower()
+
+
+def test_register_company_name_exceeds_max_length(client):
+    """Test that company_name exceeding 100 characters returns 422"""
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "test@example.com",
+            "password": "testpassword123",
+            "company_name": "a" * 101
+        }
+    )
+
+    assert response.status_code == 422
+    error_detail = response.json()
+    assert "company_name" in str(error_detail).lower() or "max" in str(error_detail).lower()
+
+
+def test_register_with_valid_full_name_length(client):
+    """Test that full_name with exactly 100 characters is accepted"""
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "validname@example.com",
+            "password": "testpassword123",
+            "full_name": "a" * 100
+        }
+    )
+
+    assert response.status_code == 201
+
+
+def test_register_with_valid_company_name_length(client):
+    """Test that company_name with exactly 100 characters is accepted"""
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "validcompany@example.com",
+            "password": "testpassword123",
+            "company_name": "a" * 100
+        }
+    )
+
+    assert response.status_code == 201
+
+
+def test_register_with_both_fields_at_max_length(client):
+    """Test that both full_name and company_name at 100 characters are accepted"""
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "testboth@example.com",
+            "password": "testpassword123",
+            "full_name": "a" * 100,
+            "company_name": "b" * 100
+        }
+    )
+
+    assert response.status_code == 201

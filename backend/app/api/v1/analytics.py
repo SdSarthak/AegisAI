@@ -20,6 +20,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
+from app.models.ai_system import AISystem
+from sqlalchemy import func
 
 router = APIRouter()
 
@@ -62,7 +64,30 @@ def get_analytics_summary(
     Returns:
         Aggregate compliance statistics for the user's AI systems.
     """
-    # TODO: implement
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
-    )
+    # Aggregate risk level counts
+    risk_counts = db.query(
+        AISystem.risk_level, 
+        func.count(AISystem.id)
+    ).filter(
+        AISystem.owner_id == current_user.id
+    ).group_by(
+        AISystem.risk_level
+    ).all()
+    
+    counts = {
+        "minimal": 0,
+        "limited": 0,
+        "high": 0,
+        "unacceptable": 0
+    }
+    
+    total_systems = 0
+    for risk_level, count in risk_counts:
+        total_systems += count
+        if risk_level and risk_level.value in counts:
+            counts[risk_level.value] = count
+
+    return {
+        "total_systems": total_systems,
+        "counts": counts
+    }

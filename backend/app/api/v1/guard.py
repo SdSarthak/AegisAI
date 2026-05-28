@@ -12,8 +12,7 @@ TODO for contributors (medium difficulty):
 import hashlib
 from collections import Counter
 from datetime import datetime, timedelta, timezone
-from typing import Optional
-import logging
+
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
@@ -60,6 +59,8 @@ class BulkScanRequest(BaseModel):
     prompts: list[str]
 
     def validate_prompts(self) -> None:
+        if not self.prompts:
+            raise ValueError("At least one prompt is required per batch request.")
         if len(self.prompts) > 50:
             raise ValueError("Maximum 50 prompts allowed per batch request.")
 
@@ -71,7 +72,16 @@ class BulkScanResponse(BaseModel):
 
 
 VALID_SANITIZATION_LEVELS = {"low", "medium", "high"}
-user_guard_configs: dict[int, dict[str, float | str]] = {}
+
+
+class UserGuardConfig(TypedDict):
+    sanitization_level: str
+    malicious_threshold: float
+    suspicious_threshold: float
+
+
+# Temporary in-memory config store
+user_guard_configs: dict[int, UserGuardConfig] = {}
 
 
 def _infer_detection_type(regex_flag: bool, intent: str) -> str:
@@ -208,7 +218,7 @@ def scan_prompt(
             decision=result["decision"],
             confidence=result["metadata"]["decision_reasoning"]["confidence"],
             reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
-            sanitized_prompt=None,
+            sanitized_prompt=result.get("sanitized_prompt"),
             matched_patterns=result["metadata"]["regex_analysis"].get(
                 "matched_patterns",
                 [],
@@ -234,10 +244,7 @@ def guard_health():
     return {"module": "llm_guard", "status": "available"}
 
 
-class GuardConfigRequest(BaseModel):
-    sanitization_level: str
-    malicious_threshold: float
-    suspicious_threshold: float
+
 
 @router.get("/info", tags=["LLM Guard"])
 def guard_info():
@@ -267,7 +274,7 @@ def guard_info():
 
 @router.get("/history", response_model=PaginatedResponse[GuardScanLogResponse])
 def get_guard_history(
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    skip: int = Query(0, ge=0, description="Items to skip"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -290,12 +297,12 @@ def get_guard_history(
     total = base_query.count()
     logs = (
         base_query.order_by(GuardScanLog.created_at.desc())
-        .offset((page - 1) * limit)
+        .offset(skip)
         .limit(limit)
         .all()
     )
 
-    return PaginatedResponse(items=logs, total=total, page=page, limit=limit)
+    return PaginatedResponse(items=logs, total=total, skip=skip, limit=limit)
 
 
 @router.get("/stats", response_model=GuardStatsResponse)
@@ -414,22 +421,16 @@ def get_guard_stats(
         .all()
     )
 
-    daily_buckets: dict[str, dict[str, int | str]] = {}
+    daily_buckets: dict[str, int] = {}
 
     for day, decision, count in daily_rows:
         date_key = str(day)
-        if date_key not in daily_buckets:
-            daily_buckets[date_key] = {
-                "date": date_key,
-                "allow": 0,
-                "sanitize": 0,
-                "block": 0,
-            }
+        daily_buckets[date_key] = daily_buckets.get(date_key, 0) + count
 
-        if decision in {"allow", "sanitize", "block"}:
-            daily_buckets[date_key][decision] = count
-
-    scans_per_day = list(daily_buckets.values())
+    scans_per_day = [
+        {"date": date_key, "count": count}
+        for date_key, count in daily_buckets.items()
+    ]
 
     return {
         "window": window,
@@ -595,7 +596,7 @@ def bulk_scan_prompts(
                     decision=result["decision"],
                     confidence=result["metadata"]["decision_reasoning"]["confidence"],
                     reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
-                    sanitized_prompt=None,
+                    sanitized_prompt=result.get("sanitized_prompt"),
                     matched_patterns=result["metadata"]["regex_analysis"].get(
                         "matched_patterns",
                         [],
@@ -618,4 +619,3 @@ def bulk_scan_prompts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."
         )
-    

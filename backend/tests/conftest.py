@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 # Set test database before importing app
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+os.environ["SECRET_KEY"] = "testsecret"
 
 from app.core.database import Base, SessionLocal
 from app.main import app

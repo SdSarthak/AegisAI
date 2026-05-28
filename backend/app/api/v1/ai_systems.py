@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from fastapi.responses import StreamingResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 import csv
 import io
@@ -67,6 +68,7 @@ def _process_import_rows(
 
     errors: list[dict[str, object]] = []
     created_count = 0
+    seen_names: set[str] = set()
 
     for row_num, row in enumerate(csv_reader, start=2):
         if row_num - 1 > max_rows:
@@ -86,9 +88,14 @@ def _process_import_rows(
             errors.append({"row": row_num, "error": "name is required"})
             continue
 
+        # Check for duplicates within the same uploaded CSV first
+        if name in seen_names:
+            errors.append({"row": row_num, "error": f"duplicate name '{name}' in uploaded file"})
+            continue
+
         existing = db.query(AISystem).filter(
             AISystem.owner_id == current_user.id,
-            AISystem.name == name
+            AISystem.name == name,
         ).first()
 
         if existing:
@@ -106,6 +113,7 @@ def _process_import_rows(
             )
             db.add(ai_system)
             created_count += 1
+            seen_names.add(name)
         except Exception as e:
             errors.append({"row": row_num, "error": str(e)})
 
@@ -128,6 +136,18 @@ def create_ai_system(
     Returns:
         The created AI system serialized as AISystemResponse.
     """
+    # Enforce per-user uniqueness of AI system names to match bulk import behavior
+    existing = db.query(AISystem).filter(
+        AISystem.owner_id == current_user.id,
+        AISystem.name == system_data.name,
+    ).first()
+
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"AI system with name '{system_data.name}' already exists",
+        )
+
     ai_system = AISystem(
         owner_id=current_user.id,
         name=system_data.name,
@@ -137,7 +157,14 @@ def create_ai_system(
         sector=system_data.sector,
     )
     db.add(ai_system)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"AI system with name '{system_data.name}' already exists",
+        )
     db.refresh(ai_system)
     return ai_system
 
@@ -154,7 +181,7 @@ _SORTABLE_FIELDS = {
 def list_ai_systems(
     sort_by: Optional[str] = Query("created_at", description="Sort field: name, risk_level, compliance_score, created_at"),
     order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    skip: int = Query(0, ge=0, description="Items to skip"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -191,16 +218,15 @@ def list_ai_systems(
 
     base_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
     total = base_query.count()
-    offset = (page - 1) * limit
 
     systems = (
         base_query
         .order_by(direction)
-        .offset(offset)
+        .offset(skip)
         .limit(limit)
         .all()
     )
-    return PaginatedResponse(items=systems, total=total, page=page, limit=limit)
+    return PaginatedResponse(items=systems, total=total, skip=skip, limit=limit)
 
 
 @router.post("/import", response_model=BulkImportResponse)
@@ -339,7 +365,7 @@ def export_ai_systems(
 def get_ai_system_history(
     system_id: int,
     order: Optional[str] = Query("desc", description="Sort direction for changed_at: asc, desc"),
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    skip: int = Query(0, ge=0, description="Items to skip"),
     limit: int = Query(20, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -400,7 +426,7 @@ def get_ai_system_history(
     logs = (
         base_query
         .order_by(direction)
-        .offset((page - 1) * limit)
+        .offset(skip)
         .limit(limit)
         .all()
     )
@@ -408,7 +434,7 @@ def get_ai_system_history(
     return PaginatedResponse(
         items=logs,
         total=total,
-        page=page,
+        skip=skip,
         limit=limit,
     )
 
