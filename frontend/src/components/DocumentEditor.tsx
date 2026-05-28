@@ -3,8 +3,8 @@ import { Save, Eye, EyeOff } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import api from '../services/api'
-import { sanitizePreviewHtml } from '../utils/sanitizePreviewHtml'
 
 interface DocumentEditorProps {
   documentId: number
@@ -25,7 +25,7 @@ export default function DocumentEditor({
   const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
   const [saveError, setSaveError] = useState('')
   const previewHtml = useMemo(
-    () => sanitizePreviewHtml(marked.parse(content, { async: false }) as string),
+    () => DOMPurify.sanitize(marked.parse(content, { async: false }) as string),
     [content]
   )
 
