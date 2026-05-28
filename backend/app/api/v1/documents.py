@@ -251,6 +251,22 @@ def list_document_templates(
         )
         for document_type in DOCUMENT_TEMPLATES.keys()
     ]
+@router.get("/share/{token}", response_model=PublicDocumentResponse)
+def access_shared_document(token: str, db: Session = Depends(get_db)):
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+    except JWTError as e:
+        if "expired" in str(e).lower():
+            raise HTTPException(status_code=401, detail="Token expired")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    if payload.get("type") != "document_share":
+        raise HTTPException(status_code=400, detail="Wrong token type")
+
+    document = db.query(Document).filter(Document.id == payload["document_id"]).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
@@ -644,23 +660,4 @@ def create_share_link(
         "expires_at": expires_at.isoformat(),
         "share_url": f"/api/v1/documents/share/{token}"
     }
-
-
-@router.get("/share/{token}", response_model=DocumentResponse)
-def access_shared_document(token: str, db: Session = Depends(get_db)):
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
-    except JWTError as e:
-        if "expired" in str(e).lower():
-            raise HTTPException(status_code=401, detail="Token expired")
-        raise HTTPException(status_code=401, detail="Invalid token")
-
-    if payload.get("type") != "document_share":
-        raise HTTPException(status_code=400, detail="Wrong token type")
-
-    document = db.query(Document).filter(Document.id == payload["document_id"]).first()
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-    return document
-
 
