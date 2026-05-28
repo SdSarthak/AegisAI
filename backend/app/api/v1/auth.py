@@ -76,7 +76,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, 
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="This email is already registered. Please use a different email or try logging in."
         )
 
@@ -91,7 +91,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
         return user
-    except Exception as e:
+    except Exception:
         db.rollback()
         # Generic database error handler
         raise HTTPException(

@@ -94,8 +94,8 @@ def client(db_engine):
 @pytest.fixture(autouse=True)
 def clear_guard_rate_limits():
     """Keep in-memory guard rate limits isolated between tests."""
-    from app.api.v1.guard import _scan_attempts_by_user
+    from app.core.rate_limit import guard_scan_rate_limiter
 
-    _scan_attempts_by_user.clear()
+    guard_scan_rate_limiter._local_attempts_by_key.clear()
     yield
-    _scan_attempts_by_user.clear()
+    guard_scan_rate_limiter._local_attempts_by_key.clear()

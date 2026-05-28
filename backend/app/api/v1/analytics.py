@@ -14,7 +14,6 @@ TODO for contributors (help wanted):
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
@@ -99,4 +98,5 @@ def get_analytics_summary(
         else None,
         "counts": counts,
         "compliance_status": compliance_status,
+        "compliance_statuses": compliance_status,
     }

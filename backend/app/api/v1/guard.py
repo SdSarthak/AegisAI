@@ -9,16 +9,11 @@ TODO for contributors (medium difficulty):
   - Add a GET /guard/stats endpoint returning block/allow/sanitize counts (Completed)
 """
 
+import logging
 import hashlib
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
-from typing import Optional
-
-from app.api.v1.webhooks import deliver_webhook
-import logging
-from collections import Counter
-from datetime import datetime, timedelta, timezone
 from typing import Optional, TypedDict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -35,6 +30,7 @@ from app.core.rate_limit import guard_scan_rate_limiter
 from app.models.guard_scan_log import GuardScanLog
 from app.models.notification import NotificationType
 from app.models.user import User
+from app.api.v1.webhooks import deliver_webhook
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.pagination import PaginatedResponse
@@ -43,7 +39,7 @@ from app.modules.guard import guard_config
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-# Backward-compatible handle used by the existing test isolation fixture.
+# Backward-compatible test aliases for the shared rate limiter.
 _scan_attempts_by_user = guard_scan_rate_limiter._local_attempts_by_key
 _RATE_LIMIT_REQUESTS = settings.GUARD_RATE_LIMIT_REQUESTS
 
@@ -72,6 +68,7 @@ class BulkScanRequest(BaseModel):
     def validate_prompts(self) -> None:
         if not self.prompts:
             raise ValueError("At least one prompt is required per batch request.")
+
         if len(self.prompts) > 50:
             raise ValueError("Maximum 50 prompts allowed per batch request.")
 
