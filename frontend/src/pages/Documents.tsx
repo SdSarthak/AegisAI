@@ -1,8 +1,12 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
+
+
 import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
+import toast from 'react-hot-toast'
 import DocumentEditor from '../components/DocumentEditor'
+
 
 interface Document {
   id: number
@@ -90,16 +94,21 @@ export default function Documents() {
       console.error('Save failed:', error)
     }
   }
+
+
   const handleCopy = async (doc: Document) => {
   if (!doc.content) return
 
   try {
     await navigator.clipboard.writeText(doc.content)
+
     setCopiedId(doc.id)
+    toast.success('Copied to clipboard')
 
     setTimeout(() => {
       setCopiedId(null)
     }, 2000)
+
   } catch (error) {
     console.error('Copy failed:', error)
   }
@@ -186,6 +195,7 @@ export default function Documents() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  
                   <button
                     onClick={() => setEditingDoc(doc)}
                     className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
@@ -193,8 +203,12 @@ export default function Documents() {
                   >
                     <Edit className="w-5 h-5" />
                   </button>
+                  
+                   
+
                   <button
-                  onClick={() => handleCopy(doc)}
+                   onClick={() => handleCopy(doc)}
+
                   className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
                   title="Copy"
                 >
