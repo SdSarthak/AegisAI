@@ -9,6 +9,11 @@ from .groundedness import GroundednessConfig, HybridGroundednessChecker
 logger = logging.getLogger(__name__)
 ChatOpenAI = None
 
+try:
+    from langchain.chains import RetrievalQA
+except ImportError:
+    from langchain_classic.chains import RetrievalQA
+
 
 class GroundedRetrievalQA:
     """Callable wrapper that adds groundedness scores to RetrievalQA results."""
@@ -99,7 +104,10 @@ def get_qa_chain():
     """
     global ChatOpenAI
 
-    from langchain.chains import RetrievalQA
+    try:
+        from langchain.chains import RetrievalQA
+    except ImportError:
+        from langchain_classic.chains import RetrievalQA
 
     if ChatOpenAI is None:
         from langchain_openai import ChatOpenAI as LangChainChatOpenAI
