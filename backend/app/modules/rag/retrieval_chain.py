@@ -2,7 +2,6 @@
 
 import logging
 from typing import Any
-
 from app.core.config import settings
 
 from .groundedness import GroundednessConfig, HybridGroundednessChecker
@@ -63,6 +62,32 @@ def load_vector_store() -> Any:
 
     return loader()
 
+# Support both langchain 0.2.x (langchain.chains) and 0.3.x+
+# (langchain.chains.retrieval_qa.base). Fall back to a sentinel so the module
+# can still be imported in environments without a compatible langchain version.
+try:
+    from langchain.chains.retrieval_qa.base import RetrievalQA
+except ImportError:
+    try:
+        from langchain.chains import RetrievalQA  # type: ignore[no-redef]
+    except ImportError:
+        class RetrievalQA:  # type: ignore[no-redef]
+            """Stub used when langchain is not installed."""
+            @staticmethod
+            def from_chain_type(*args, **kwargs):
+                raise ImportError(
+                    "RetrievalQA could not be imported. "
+                    "Install langchain>=0.2,<0.4 to use the RAG chain."
+                )
+
+try:
+    from langchain_openai import ChatOpenAI
+except ImportError:
+    class ChatOpenAI:  # type: ignore[no-redef]
+        """Stub used when langchain-openai is not installed."""
+        def __init__(self, *args, **kwargs):
+            raise ImportError("langchain-openai is not installed.")
+
 
 def get_qa_chain():
     """
@@ -70,6 +95,7 @@ def get_qa_chain():
 
     Raises:
         FileNotFoundError: if the vector store has not been ingested yet
+        ImportError: if a compatible langchain version is not installed
     """
     global ChatOpenAI
 

@@ -3,7 +3,6 @@
 import pytest
 from sqlalchemy.orm import Session
 from io import BytesIO
-import pdfplumber
 
 from app.models.user import User
 from app.models.ai_system import AISystem, RiskLevel, ComplianceStatus
@@ -157,6 +156,8 @@ class TestPDFExportEndpoint:
         assert response.status_code in [401, 403]
 
     def test_pdf_export_includes_document_title(self, client, auth_headers, test_document):
+        """Test that PDF contains the document title by extracting and verifying text."""
+        pdfplumber = pytest.importorskip("pdfplumber")
         response = client.get(
             f"/api/v1/documents/{test_document.id}/pdf",
             headers=auth_headers
