@@ -12,7 +12,7 @@ class ApiKeyResponse(BaseModel):
     name: str
     created_at: datetime
     revoked: bool
-
+    revoked_at: datetime | None = None
     class Config:
         from_attributes = True
 
