@@ -100,6 +100,7 @@ ehthumbs.db
 *.bak
 *.orig
 *.rej
+backend/tmp/*
 
 # Local dev tooling
 .claude/
