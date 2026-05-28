@@ -4,9 +4,11 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+RAG_QUESTION_MAX_LENGTH = 2000
+
 
 class RAGQueryRequest(BaseModel):
-    question: str = Field(..., min_length=1, max_length=2000)
+    question: str = Field(..., min_length=1, max_length=RAG_QUESTION_MAX_LENGTH)
 
 
 class RAGQueryResponse(BaseModel):

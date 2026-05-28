@@ -25,7 +25,11 @@ from app.core.security import get_current_user
 from app.models.rag_feedback import RAGFeedback
 from app.models.rag_query import RagQuery
 from app.models.user import SubscriptionTier, User
-from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
+from app.schemas.rag import (
+    RAG_QUESTION_MAX_LENGTH,
+    RAGQueryRequest,
+    RAGQueryResponse,
+)
 
 router = APIRouter()
 
@@ -137,7 +141,28 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Ask a regulatory question and get an answer grounded in source documents."""
+    """Answer a regulatory question using the RAG knowledge base.
+
+    Args:
+        request: Query payload containing the user's question.
+        current_user: Authenticated user asking the question.
+        db: Database session used to persist the query and feedback record.
+
+    Returns:
+        RAGQueryResponse containing the generated answer and source references.
+
+    Raises:
+        HTTPException: If the RAG subsystem cannot produce an answer.
+    """
+    if len(request.question) > RAG_QUESTION_MAX_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Question is too long. Please keep it under "
+                f"{RAG_QUESTION_MAX_LENGTH} characters."
+            ),
+        )
+
     try:
         from app.core.database import Base
         from app.modules.rag.retrieval_chain import get_qa_chain

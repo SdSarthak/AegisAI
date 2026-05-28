@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from app.main import app
 from app.core.database import Base, get_db
 from app.core.security import get_current_user
+from app.api.v1.rag import RAG_QUESTION_MAX_LENGTH
 from app.models.user import User, SubscriptionTier
 
 
@@ -46,6 +47,10 @@ def client():
 
     with TestClient(app) as c:
         yield c
+
+    # Clean up dependency overrides to prevent test leakage.
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_db, None)
 
 
 def test_query_feedback_and_low_quality_flow(client):
@@ -114,6 +119,14 @@ def test_query_feedback_and_low_quality_flow(client):
     chunks = {c["chunk"] for c in out["low_quality_chunks"]}
     assert "doc1.pdf#chunk1" in chunks or "doc2.pdf#chunk2" in chunks
 
-    # 7. Clean up dependency overrides to prevent test leakage
-    if get_current_user in app.dependency_overrides:
-        del app.dependency_overrides[get_current_user]
+
+def test_query_rejects_question_over_max_length(client):
+    oversized_question = "A" * (RAG_QUESTION_MAX_LENGTH + 1)
+
+    resp = client.post("/api/v1/rag/query", json={"question": oversized_question})
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == (
+        f"Question is too long. Please keep it under "
+        f"{RAG_QUESTION_MAX_LENGTH} characters."
+    )
