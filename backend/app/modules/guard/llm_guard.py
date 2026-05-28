@@ -151,6 +151,7 @@ class LLMGuard:
             sanitized_prompt, sanitization_summary = self.sanitizer.sanitize(
                 normalized_prompt
             )
+            result["sanitized_prompt"] = sanitized_prompt  # FIX: expose sanitized text to API layer
             result["metadata"]["sanitization"] = {
                 "original_length": len(user_prompt),
                 "sanitized_length": len(sanitized_prompt),
