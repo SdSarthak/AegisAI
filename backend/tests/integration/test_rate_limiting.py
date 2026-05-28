@@ -3,23 +3,20 @@
 import sys
 from types import ModuleType
 from unittest.mock import MagicMock, patch
+
 import pytest
 
+from app.api.v1 import guard as guard_api
 from app.core.security import create_access_token
 from app.models.user import User
-# Injects the core rate_limiter memory tracking instance
-from app.core import rate_limiter 
 
 
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
-    """Locally purges in-memory rate-limiter caches to guarantee complete test isolation."""
-    if hasattr(rate_limiter, '_cache') and rate_limiter._cache is not None:
-        rate_limiter._cache.clear()
-    elif hasattr(rate_limiter, 'limiter') and hasattr(rate_limiter.limiter, '_cache'):
-        rate_limiter.limiter._cache.clear()
+    guard_mod = sys.modules.get("app.api.v1.guard")
+    if guard_mod is not None and hasattr(guard_mod, "_scan_attempts_by_user"):
+        guard_mod._scan_attempts_by_user.clear()
     yield
-    guard_api._scan_attempts_by_user.clear()
 
 
 def _guard_result():
@@ -53,7 +50,6 @@ def _authenticate_test_user(db_session):
 
 
 def test_per_user_rate_limit_blocks_61st_guard_scan_request(client, db_session):
-    """After 60 rapid requests, the 61st request should be rate limited."""
     auth_headers = _authenticate_test_user(db_session)
 
     fake_guard_module = ModuleType("app.modules.guard.llm_guard")
@@ -79,17 +75,13 @@ def test_per_user_rate_limit_blocks_61st_guard_scan_request(client, db_session):
         payload = {"prompt": "Hello, this is a harmless test prompt."}
 
         for _ in range(60):
-            response = client.post(
-                "/api/v1/guard/scan", json=payload, headers=auth_headers
-            )
+            response = client.post("/api/v1/guard/scan", json=payload, headers=auth_headers)
             status_codes.append(response.status_code)
 
-        blocked_response = client.post(
-            "/api/v1/guard/scan", json=payload, headers=auth_headers
-        )
+        blocked_response = client.post("/api/v1/guard/scan", json=payload, headers=auth_headers)
 
-    assert all(code != 429 for code in status_codes), f"Expected 60 successful requests, but got: {status_codes}"
-    assert blocked_response.status_code == 429, f"Expected 429, got {blocked_response.status_code}"
+    assert all(code != 429 for code in status_codes)
+    assert blocked_response.status_code == 429
     assert blocked_response.headers.get("Retry-After") is not None
 
     body = blocked_response.json()
@@ -100,4 +92,4 @@ def test_per_user_rate_limit_blocks_61st_guard_scan_request(client, db_session):
         or "limit" in detail
         or "too many" in detail
         or "retry" in detail
-    ), f"Expected rate limit message, got: {detail}"
+    )
