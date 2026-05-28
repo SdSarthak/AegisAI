@@ -9,22 +9,29 @@ interface ValidationError {
   message: string
 }
 
-/**
- * Parse Pydantic validation errors from 422 responses.
- * Format: {detail: [{loc: [...], msg: "...", type: "..."}]}
- */
-function parsePydanticErrors(errorData: any): ValidationError[] {
-  if (!errorData) return []
+interface PydanticValidationError {
+  loc?: Array<string | number>
+  msg?: string
+}
 
-  // Handle array of validation errors (Pydantic format)
+interface ErrorResponseData {
+  detail?: string | PydanticValidationError[]
+}
+
+function isErrorResponseData(value: unknown): value is ErrorResponseData {
+  return typeof value === 'object' && value !== null && 'detail' in value
+}
+
+function parsePydanticErrors(errorData: unknown): ValidationError[] {
+  if (!isErrorResponseData(errorData)) return []
+
   if (Array.isArray(errorData.detail)) {
-    return errorData.detail.map((error: any) => ({
-      field: error.loc?.[error.loc.length - 1] || 'unknown',
+    return errorData.detail.map((error) => ({
+      field: String(error.loc?.[error.loc.length - 1] ?? 'unknown'),
       message: error.msg || 'Invalid input',
     }))
   }
 
-  // Handle string detail message
   if (typeof errorData.detail === 'string') {
     return [{ field: 'general', message: errorData.detail }]
   }
@@ -32,10 +39,6 @@ function parsePydanticErrors(errorData: any): ValidationError[] {
   return []
 }
 
-/**
- * Check password strength requirements.
- * Returns object with individual requirement checks.
- */
 function checkPasswordStrength(password: string) {
   return {
     hasMinLength: password.length >= 8,
@@ -45,9 +48,6 @@ function checkPasswordStrength(password: string) {
   }
 }
 
-/**
- * Check if all password requirements are met.
- */
 function isPasswordValid(password: string): boolean {
   const strength = checkPasswordStrength(password)
   return (

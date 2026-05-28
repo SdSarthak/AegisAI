@@ -43,6 +43,10 @@ from app.modules.guard import guard_config
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Backward-compatible test aliases for the shared rate limiter.
+_scan_attempts_by_user = guard_scan_rate_limiter._local_attempts_by_key
+_RATE_LIMIT_REQUESTS = settings.GUARD_RATE_LIMIT_REQUESTS
+
 
 class ScanRequest(BaseModel):
     prompt: str
@@ -68,6 +72,7 @@ class BulkScanRequest(BaseModel):
     def validate_prompts(self) -> None:
         if not self.prompts:
             raise ValueError("At least one prompt is required per batch request.")
+
         if len(self.prompts) > 50:
             raise ValueError("Maximum 50 prompts allowed per batch request.")
 
@@ -451,12 +456,20 @@ def get_guard_stats(
 
     for day, decision, count in daily_rows:
         date_key = str(day)
-        daily_buckets[date_key] = daily_buckets.get(date_key, 0) + count
+        if date_key not in daily_buckets:
+            daily_buckets[date_key] = {
+                "date": date_key,
+                "count": 0,
+                "allow": 0,
+                "sanitize": 0,
+                "block": 0,
+            }
 
-    scans_per_day = [
-        {"date": date_key, "count": count}
-        for date_key, count in daily_buckets.items()
-    ]
+        if decision in {"allow", "sanitize", "block"}:
+            daily_buckets[date_key][decision] = count
+            daily_buckets[date_key]["count"] += count
+
+    scans_per_day = list(daily_buckets.values())
 
     return {
         "window": window,

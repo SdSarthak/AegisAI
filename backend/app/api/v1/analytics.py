@@ -13,11 +13,10 @@ TODO for contributors (help wanted):
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.user import User
-from app.models.ai_system import AISystem
 from app.schemas.analytics import ComplianceTimelineResponse
 
 router = APIRouter()
@@ -61,30 +60,27 @@ def get_analytics_summary(
     Returns:
         Aggregate compliance statistics for the user's AI systems.
     """
-    risk_counts = (
-        db.query(AISystem.risk_level, func.count(AISystem.id))
-        .filter(AISystem.owner_id == current_user.id)
-        .group_by(AISystem.risk_level)
-        .all()
+    systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
+
+    counts = {risk.value: 0 for risk in RiskLevel}
+    compliance_statuses = {status.value: 0 for status in ComplianceStatus}
+    scored_values: list[float] = []
+
+    for system in systems:
+        if system.risk_level:
+            counts[system.risk_level.value] += 1
+        if system.compliance_status:
+            compliance_statuses[system.compliance_status.value] += 1
+        if system.compliance_score is not None:
+            scored_values.append(float(system.compliance_score))
+
+    average_compliance_score = (
+        round(sum(scored_values) / len(scored_values), 2) if scored_values else 0.0
     )
 
-    counts = {
-        "minimal": 0,
-        "limited": 0,
-        "high": 0,
-        "unacceptable": 0,
-    }
-
-    total_systems = 0
-    for risk_level, count in risk_counts:
-        total_systems += count
-        if risk_level is None:
-            continue
-        key = risk_level.value if hasattr(risk_level, "value") else str(risk_level)
-        if key in counts:
-            counts[key] = int(count)
-
     return {
-        "total_systems": total_systems,
+        "total_systems": len(systems),
+        "average_compliance_score": average_compliance_score,
         "counts": counts,
+        "compliance_statuses": compliance_statuses,
     }
