@@ -102,6 +102,23 @@ def _baseline_delta(
     return deltas
 
 
+def _relativize_model_path(model_path: str) -> str:
+    """Return model_path relative to the repo root when possible.
+
+    Absolute paths leak the dev machine's filesystem layout into the
+    committed baseline, which then breaks CI runs on other agents. Strip
+    the absolute prefix to keep the baseline portable.
+    """
+    p = Path(model_path).resolve()
+    # Look for "backend/" in the path and take everything from there.
+    parts = p.parts
+    if "backend" in parts:
+        idx = parts.index("backend")
+        return str(Path(*parts[idx:])).replace("\\", "/")
+    # Fallback: just the last few segments
+    return str(Path(*p.parts[-4:])).replace("\\", "/")
+
+
 def evaluate(
     *,
     test_set_path: Path,
@@ -161,7 +178,7 @@ def evaluate(
         },
         "baseline_delta": _baseline_delta(metrics, baseline_path),
         "n_samples": int(len(df)),
-        "model_path": model_path or "auto",
+        "model_path": _relativize_model_path(model_path) if model_path else "auto",
         "evaluated_at": datetime.now(timezone.utc)
         .isoformat(timespec="seconds")
         .replace("+00:00", "Z"),
