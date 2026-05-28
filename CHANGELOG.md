@@ -4,7 +4,7 @@ All notable changes to AegisAI are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
-
+- Added two-layer Guard scan to RAG query endpoint to prevent prompt injection (issue #748)
 ### Added
 - **Pre-commit hooks** — Added `.pre-commit-config.yaml` with repository hygiene hooks (trailing-whitespace, end-of-file-fixer, check-merge-conflict, check-yaml, check-json) and a local ESLint hook wrapping the existing frontend lint command.
 - **LLM Guard Prompt Normalization** — Preprocessor layer (`normalizer.py`) to prevent Unicode, zero-width, and homoglyph bypasses:
@@ -15,10 +15,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Unit and integration tests for bypass payloads (`test_normalizer.py` and `test_guard.py`)
 
 ### Fixed
-- **Per-user FAISS Isolation (#920)** — Added `FAISS_INDEX_BASE_PATH` config and `_get_index_path(user_id)` helper. Vector store functions now accept a `user_id` parameter to store/load indexes under `{FAISS_INDEX_BASE_PATH}/user_{user_id}/`, preventing cross-user data leakage in RAG queries.
-- **Frontend Theme** — Fixed dark mode flash of unstyled content (FOUC), eliminated duplicate CSS, fixed React state overwrite bugs, and improved system preference synchronization.
-- **Documents API** — Validate `ai_system_id` ownership before creating documents so users cannot link documents to another user's AI system.
-- **PDF Export** — Escape user-controlled document text before ReportLab rendering and sanitize generated download filenames.
+- **RAG Guard scan gap** — `POST /api/v1/rag/query` now runs the Guard pipeline before processing. Added `scan_input()` on `LLMGuard` (query-level scan, no LLM call) and `scan_chunk()` (regex-only chunk scan). New `query_with_guard()` in `retrieval_chain.py` filters poisoned FAISS chunks before context assembly. Prompt injection via the RAG endpoint is no longer possible (#748).
 
 ---
 
@@ -27,15 +24,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 - **Compliance Engine** — Added Education & Vocational Training (Annex III point 3) risk factor to EU AI Act classification.
 - LLM Guard console with copy-to-clipboard exports for scan response payloads and raw audit metrics.
-
----
-
-## [Unreleased]
-
-- **Fixed** Guard API merge conflicts and resolved pagination inconsistencies in history endpoint
-- **Changed** Updated frontend Guard/RAG API types (removed duplicate interfaces, improved type safety)
-- **Fixed** ESLint issues in frontend services and components
-- **Changed** Improved cursor-based pagination handling for guard scan history
 
 ---
 
@@ -65,14 +53,3 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - No audit log for Guard decisions yet
 - Stripe billing wired up but not activated
 - Frontend pages for Guard and RAG not yet built
-
-## Unreleased
-
-### Added
-
-- **Notifications API**
-
-- Added `GET /api/v1/notifications/unread-count` endpoint to retrieve the current user's unread notification count.
-- Added `POST /api/v1/notifications/read-all` endpoint to mark all unread notifications as read.
-- Added `DELETE /api/v1/notifications/read` endpoint to delete all read notifications for the current user.
-- Added unit tests covering unread count retrieval, mark-all-read functionality, and bulk deletion of read notifications while preserving notification ownership boundaries.
