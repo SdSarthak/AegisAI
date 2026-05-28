@@ -631,4 +631,4 @@ node -v
 ---
 
 > 💡 Tip:
-> Restart Docker containers and backend/frontend servers after updating environment variables or dependencies.  this is i need to add keep with you whenever i ask give   this is right to add
+> Restart Docker containers and backend/frontend servers after updating environment variables or dependencies.
