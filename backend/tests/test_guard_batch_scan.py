@@ -40,7 +40,7 @@ def clear_guard_rate_limits():
 @pytest.fixture
 def auth_headers(client):
     email = f"batch-scan-{uuid4()}@example.com"
-    password = "testpassword123"
+    password = "TestPass123!"
 
     client.post(
         "/api/v1/auth/register",

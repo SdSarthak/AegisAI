@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 
 # Backward-compatible handle used by the existing test isolation fixture.
 _scan_attempts_by_user = guard_scan_rate_limiter._local_attempts_by_key
+_RATE_LIMIT_REQUESTS = settings.GUARD_RATE_LIMIT_REQUESTS
 
 
 class ScanRequest(BaseModel):
