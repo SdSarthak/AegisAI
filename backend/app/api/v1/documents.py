@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from jose import jwt, JWTError
 from app.core.config import settings
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -396,7 +396,7 @@ def generate_document(
             sector=ai_system.sector or "Not specified",
             description=ai_system.description or "No description provided",
             risk_level=ai_system.risk_level.value if ai_system.risk_level else "Not assessed",
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             company_name=current_user.company_name or "Not specified",
             classification_reasons="See risk assessment details",
             recommendations="Based on risk assessment",
@@ -633,7 +633,7 @@ def create_share_link(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    expires_at = datetime.utcnow() + timedelta(days=7)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
     token = jwt.encode(
         {"document_id": document_id, "exp": expires_at, "type": "document_share"},
         settings.SECRET_KEY,
