@@ -2,7 +2,9 @@
 
 import os
 import pytest
-pytest_plugins = ("no:langsmith",)
+def pytest_configure(config):
+    config.pluginmanager.set_blocked("langsmith")
+
 from unittest.mock import MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
