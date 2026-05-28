@@ -9,7 +9,7 @@ def get_auth_headers(user_id: int) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def register_and_login(client, email, password="testpassword123"):
+def register_and_login(client, email, password="TestPass123!"):
     client.post("/api/v1/auth/register", json={"email": email, "password": password})
     response = client.post("/api/v1/auth/login", data={"username": email, "password": password})
     token = response.json()["access_token"]

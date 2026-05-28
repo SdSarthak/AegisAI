@@ -10,9 +10,16 @@ TODO for contributors (medium difficulty):
 """
 
 import hashlib
+from collections import Counter, defaultdict, deque
+from datetime import datetime, timedelta, timezone
+from threading import Lock
+from typing import Optional
+
+from app.api.v1.webhooks import deliver_webhook
+import logging
 from collections import Counter
 from datetime import datetime, timedelta, timezone
-
+from typing import Optional, TypedDict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
@@ -39,6 +46,10 @@ from fastapi import APIRouter, Depends
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# Backward-compatible test aliases for the shared rate limiter.
+_scan_attempts_by_user = guard_scan_rate_limiter._local_attempts_by_key
+_RATE_LIMIT_REQUESTS = settings.GUARD_RATE_LIMIT_REQUESTS
+
 
 class ScanRequest(BaseModel):
     prompt: str
@@ -64,6 +75,7 @@ class BulkScanRequest(BaseModel):
     def validate_prompts(self) -> None:
         if not self.prompts:
             raise ValueError("At least one prompt is required per batch request.")
+
         if len(self.prompts) > 50:
             raise ValueError("Maximum 50 prompts allowed per batch request.")
 
@@ -229,12 +241,33 @@ def scan_prompt(
             ),
         )
 
+        if result["decision"] == "block":
+            try:
+                deliver_webhook(
+                    db=db,
+                    user_id=current_user.id,
+                    event="guard_block",
+                    payload={
+                        "decision": "block",
+                        "confidence": response.confidence,
+                        "matched_patterns": response.matched_patterns,
+                        "prompt_hash": hashlib.sha256(
+                            request.prompt.encode()
+                        ).hexdigest(),
+                    },
+                    background_tasks=background_tasks,
+                )
+            except Exception:
+                logger.exception("Failed to trigger guard_block webhook delivery")
+
+        return response
+
     except Exception as e:
         logger.exception("Guard scan failed")
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An internal error occurred while processing the Guard scan."
+            detail="An internal error occurred while processing the Guard scan.",
         )
 
 
@@ -246,8 +279,6 @@ def guard_health():
         A status payload describing the Guard module availability.
     """
     return {"module": "llm_guard", "status": "available"}
-
-
 
 
 @router.get("/info", tags=["LLM Guard"])
@@ -286,7 +317,7 @@ def get_guard_history(
     """Return the current user's Guard scan history, newest first.
 
     Args:
-        page: Page number to return, starting at 1.
+        skip: Number of items to skip for pagination.
         limit: Maximum number of scan logs to include per page.
         db: Database session used to query scan history.
         current_user: Authenticated user whose history is requested.
@@ -300,7 +331,7 @@ def get_guard_history(
 
     total = base_query.count()
     logs = (
-        base_query.order_by(GuardScanLog.created_at.desc())
+        base_query.order_by(GuardScanLog.scanned_at.desc())  # FIX: use indexed scanned_at
         .offset(skip)
         .limit(limit)
         .all()
@@ -429,12 +460,20 @@ def get_guard_stats(
 
     for day, decision, count in daily_rows:
         date_key = str(day)
-        daily_buckets[date_key] = daily_buckets.get(date_key, 0) + count
+        if date_key not in daily_buckets:
+            daily_buckets[date_key] = {
+                "date": date_key,
+                "count": 0,
+                "allow": 0,
+                "sanitize": 0,
+                "block": 0,
+            }
 
-    scans_per_day = [
-        {"date": date_key, "count": count}
-        for date_key, count in daily_buckets.items()
-    ]
+        if decision in {"allow", "sanitize", "block"}:
+            daily_buckets[date_key][decision] = count
+            daily_buckets[date_key]["count"] += count
+
+    scans_per_day = list(daily_buckets.values())
 
     return {
         "window": window,
@@ -619,7 +658,7 @@ def bulk_scan_prompts(
 
     except Exception as e:
         db.rollback()
-        logger.exception("Bulk guard scan failed")                                     
+        logger.exception("Bulk guard scan failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."

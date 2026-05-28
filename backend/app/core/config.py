@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List, Optional
 
 
 class Settings(BaseSettings):
@@ -27,16 +27,13 @@ class Settings(BaseSettings):
     # CORS
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
 
-    # LLM provider — OpenAI-compatible (works with OpenAI, Ollama, Groq, Together AI, vLLM …)
-    # Ollama (free, local): LLM_API_KEY=ollama  LLM_BASE_URL=http://localhost:11434/v1
+    # LLM provider
     LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = (
-        ""  # Leave empty for OpenAI default; set for any compatible endpoint
-    )
+    LLM_BASE_URL: str = ""
     LLM_MODEL: str = "gpt-4o-mini"
 
     # Module 2: LLM Guard
-    GUARD_SANITIZATION_LEVEL: str = "medium"  # low | medium | high
+    GUARD_SANITIZATION_LEVEL: str = "medium"
     GUARD_MAX_PROMPT_LENGTH: int = 2000
     GUARD_RATE_LIMIT_REQUESTS: int = 60
     GUARD_RATE_LIMIT_WINDOW_SECONDS: int = 60
@@ -54,6 +51,9 @@ class Settings(BaseSettings):
     RAG_CHUNK_OVERLAP: int = 200
     FAISS_INDEX_PATH: str = "faiss_index"
     MLFLOW_TRACKING_URI: str = ""
+
+    # MLflow
+    MLFLOW_TRACKING_URI: Optional[str] = None  # ← only line added
 
     class Config:
         env_file = ".env"
