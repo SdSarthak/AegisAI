@@ -208,7 +208,6 @@ export default function Documents() {
 
                   <button
                    onClick={() => handleCopy(doc)}
-
                   className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
                   title="Copy"
                 >

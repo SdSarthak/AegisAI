@@ -116,18 +116,7 @@ export default function Classification() {
     }
   }
 
-  const getRiskColor = (level: string) => {
-    switch (level) {
-      case 'unacceptable':
-        return 'bg-red-50 border-red-200'
-      case 'high':
-        return 'bg-orange-50 border-orange-200'
-      case 'limited':
-        return 'bg-yellow-50 border-yellow-200'
-      default:
-        return 'bg-green-50 border-green-200'
-    }
-  }
+  
 
   return (
     <div className="space-y-8">
