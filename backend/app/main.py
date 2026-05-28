@@ -10,6 +10,15 @@ from pathlib import Path
 from typing import Dict, Any
 
 from fastapi import FastAPI
+from fastapi.responses import Response
+from prometheus_client import (
+    Counter,
+    Histogram,
+    Gauge,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
+)
+import time
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -29,7 +38,30 @@ import app.models  # ensure all ORM models are imported so tables are created
 # CloudWatch). Honour DEBUG from settings; everything else stays at INFO.
 configure_logging(level="DEBUG" if settings.DEBUG else "INFO")
 logger = logging.getLogger("aegisai.main")
+# -------------------------------------------------------------------
+# Prometheus Metrics
+# -------------------------------------------------------------------
 
+GUARD_SCANS_TOTAL = Counter(
+    "aegisai_guard_scans_total",
+    "Total number of guard scans",
+    ["decision"]
+)
+
+RAG_QUERIES_TOTAL = Counter(
+    "aegisai_rag_queries_total",
+    "Total number of RAG queries"
+)
+
+HTTP_REQUEST_DURATION = Histogram(
+    "aegisai_http_request_duration_seconds",
+    "HTTP request duration in seconds"
+)
+
+AI_SYSTEMS_TOTAL = Gauge(
+    "aegisai_ai_systems_total",
+    "Total number of AI systems"
+)
 # -------------------------------------------------------------------
 # Lifespan Handler
 # -------------------------------------------------------------------
@@ -97,7 +129,16 @@ app.add_middleware(
 # Added last => outermost: every request (incl. CORS preflight and error
 # responses) is assigned a request id and access-logged in JSON.
 app.add_middleware(RequestContextMiddleware)
+@app.middleware("http")
+async def prometheus_http_middleware(request, call_next):
+    start_time = time.time()
 
+    response = await call_next(request)
+
+    duration = time.time() - start_time
+    HTTP_REQUEST_DURATION.observe(duration)
+
+    return response
 # -------------------------------------------------------------------
 # Routing
 # -------------------------------------------------------------------
@@ -140,3 +181,9 @@ def health_check() -> Dict[str, Any]:
         "version": app.version,
         "service": "AegisAI Backend"
     }
+@app.get("/metrics")
+def metrics():
+    return Response(
+        generate_latest(),
+        media_type=CONTENT_TYPE_LATEST
+    )
