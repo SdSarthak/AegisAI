@@ -18,8 +18,8 @@ class GuardScanLog(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
-    raw_prompt = Column(String, nullable=True)
     prompt_hash = Column(String(64), nullable=False)  # SHA-256 hex digest
+
     decision = Column(String(16), nullable=False)      # allow | sanitize | block
     confidence = Column(Float, nullable=False)
     matched_patterns = Column(JSON, default=list)

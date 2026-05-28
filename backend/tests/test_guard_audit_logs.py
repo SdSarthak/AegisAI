@@ -1,12 +1,14 @@
 import pytest
+import hashlib
 from unittest.mock import patch
 from app.models.guard_scan_log import GuardScanLog
 from app.models.user import User, SubscriptionTier
 
+
 def test_guard_scan_audit_logging_and_analytics_endpoint(client, db_session):
     # Register and login a test user
     email = "audit_test@example.com"
-    password = "password123"
+    password = "TestPass123!"
     client.post("/api/v1/auth/register", json={"email": email, "password": password, "full_name": "Audit Test User"})
     resp = client.post("/api/v1/auth/login", data={"username": email, "password": password})
     token = resp.json()["access_token"]
@@ -38,11 +40,11 @@ def test_guard_scan_audit_logging_and_analytics_endpoint(client, db_session):
         )
         assert response.status_code == 200
 
-    # Retrieve from DB to verify raw_prompt and ip_address
+    # Retrieve from DB to verify prompt_hash and ip_address
     user = db_session.query(User).filter(User.email == email).first()
     log = db_session.query(GuardScanLog).filter(GuardScanLog.user_id == user.id).first()
     assert log is not None
-    assert log.raw_prompt == prompt_text
+    assert log.prompt_hash == hashlib.sha256(prompt_text.encode()).hexdigest()
     # When using TestClient, request.client might be None or testclient host. 
     # Let's verify it's saved (it can be None or a test client host string)
     assert hasattr(log, "ip_address")
@@ -58,12 +60,12 @@ def test_guard_scan_audit_logging_and_analytics_endpoint(client, db_session):
     assert "total_pages" in data
 
     assert data["total"] == 1
-    assert data["items"][0]["raw_prompt"] == prompt_text
+    assert data["items"][0]["prompt_hash"] == hashlib.sha256(prompt_text.encode()).hexdigest()
 
 def test_analytics_audit_logs_pagination_and_role_access(client, db_session):
     # 1. Register regular user (FREE tier by default)
     user_email = "regular_user@example.com"
-    password = "password123"
+    password = "TestPass123!"
     client.post("/api/v1/auth/register", json={"email": user_email, "password": password, "full_name": "Regular User"})
     user_resp = client.post("/api/v1/auth/login", data={"username": user_email, "password": password})
     user_token = user_resp.json()["access_token"]
@@ -85,17 +87,19 @@ def test_analytics_audit_logs_pagination_and_role_access(client, db_session):
     # Add logs for both users
     regular_user_db = db_session.query(User).filter(User.email == user_email).first()
     
+    import hashlib
+    log1_hash = hashlib.sha256(b"User prompt 1").hexdigest()
+    log2_hash = hashlib.sha256(b"Admin prompt 1").hexdigest()
+
     log1 = GuardScanLog(
         user_id=regular_user_db.id,
-        raw_prompt="User prompt 1",
-        prompt_hash="hash1",
+        prompt_hash=log1_hash,
         decision="allow",
         confidence=0.9,
     )
     log2 = GuardScanLog(
         user_id=admin_user.id,
-        raw_prompt="Admin prompt 1",
-        prompt_hash="hash2",
+        prompt_hash=log2_hash,
         decision="block",
         confidence=0.95,
     )
@@ -107,10 +111,11 @@ def test_analytics_audit_logs_pagination_and_role_access(client, db_session):
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 1
-    assert data["items"][0]["raw_prompt"] == "User prompt 1"
+    assert data["items"][0]["prompt_hash"] == log1_hash
 
     # Admin user should see all logs across organization (both)
     resp = client.get("/api/v1/analytics/audit-logs", headers=admin_headers)
     assert resp.status_code == 200
     data = resp.json()
     assert data["total"] == 2
+
