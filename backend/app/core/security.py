@@ -76,15 +76,14 @@ def get_credentials_exception() -> HTTPException:
 
 
 def decode_token(token: str) -> Dict[str, Any]:
-
-
-def decode_token(token: str) -> Dict[str, Any]:
-    """Decode and verify a JWT token, returning the payload safely."""
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
         )
         return payload
+
     except ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -93,7 +92,7 @@ def decode_token(token: str) -> Dict[str, Any]:
         )
 
     except JWTError:
-        raise _get_credentials_exception()
+        raise get_credentials_exception()
 
 
 async def get_current_user(
