@@ -5,17 +5,18 @@ import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 import BackendStatus from '../components/BackendStatus'
 
 export default function Dashboard() {
-  const { data: systemsData } = useQuery({
+  const { data: systemsData, isLoading: systemsLoading } = useQuery({
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
   const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 
-  const { data: documentsData } = useQuery({
+  const { data: documentsData, isLoading: documentsLoading } = useQuery({
     queryKey: ['documents'],
-    queryFn: documentsApi.list,
+    queryFn: () => documentsApi.list(),
   })
   const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
+  const isLoading = systemsLoading || documentsLoading
 
   const stats = [
     {
@@ -48,53 +49,73 @@ export default function Dashboard() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600">Overview of your EU AI Act compliance status</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
+          <p className="text-gray-600 dark:text-gray-400">Overview of your EU AI Act compliance status</p>
         </div>
         <BackendStatus />
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
-          <div
-            key={stat.name}
-            className="bg-white rounded-xl shadow-sm border border-gray-200 p-6"
-          >
-            <div className="flex items-center gap-4">
-              <div className={`p-3 rounded-lg ${stat.color}`}>
-                <stat.icon className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-sm text-gray-600">{stat.name}</p>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+      {isLoading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, index) => (
+            <div
+              key={index}
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 animate-pulse"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-gray-200 rounded-lg"></div>
+
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                  <div className="h-7 bg-gray-200 rounded w-1/3"></div>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {stats.map((stat) => (
+            <div
+              key={stat.name}
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6"
+            >
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-lg ${stat.color}`}>
+                  <stat.icon className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{stat.name}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">{stat.value}</p>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Quick Actions */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <Link
             to="/ai-systems"
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
           >
             <Bot className="w-5 h-5 text-primary-600" />
             <span className="font-medium">Add AI System</span>
           </Link>
           <Link
             to="/classification"
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
           >
             <AlertTriangle className="w-5 h-5 text-primary-600" />
             <span className="font-medium">Risk Classification</span>
           </Link>
           <Link
             to="/documents"
-            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-primary-300 hover:bg-primary-50 transition-colors"
+            className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
           >
             <FileText className="w-5 h-5 text-primary-600" />
             <span className="font-medium">Generate Documents</span>
@@ -103,11 +124,11 @@ export default function Dashboard() {
       </div>
 
       {/* Recent AI Systems */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Your AI Systems</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Your AI Systems</h2>
         {systems.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <Bot className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
+            <Bot className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-gray-600" />
             <p>No AI systems registered yet</p>
             <Link
               to="/ai-systems"
@@ -126,25 +147,25 @@ export default function Dashboard() {
             }) => (
               <div
                 key={system.id}
-                className="flex items-center justify-between p-4 rounded-lg border border-gray-200"
+                className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700"
               >
                 <div>
-                  <p className="font-medium text-gray-900">{system.name}</p>
+                  <p className="font-medium text-gray-900 dark:text-white">{system.name}</p>
                   <div className="flex items-center gap-2 mt-1">
                     {system.risk_level && (
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full ${
                           system.risk_level === 'high'
-                            ? 'bg-red-100 text-red-700'
+                            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800'
                             : system.risk_level === 'limited'
-                            ? 'bg-yellow-100 text-yellow-700'
-                            : 'bg-green-100 text-green-700'
-                        }`}
+                            ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800'
+                            : 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800'
+                        } border`}
                       >
                         {system.risk_level} risk
                       </span>
                     )}
-                    <span className="text-xs text-gray-500 flex items-center gap-1">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
                       {system.compliance_status.replace('_', ' ')}
                     </span>

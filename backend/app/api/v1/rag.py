@@ -3,20 +3,22 @@ RAG Intelligence API — regulatory knowledge base query endpoint.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 
-Contributor note:
-  - POST /rag/ingest implemented: multipart PDF upload → document_loader → FAISS rebuild
-  - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - TODO: Integrate MLflow tracking from modules/rag/ml_flow.py
-  - TODO: Add streaming responses via SSE for long answers
+TODO for contributors (high difficulty):
+  - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
+  - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
+  - Add streaming responses via SSE for long answers
 """
+
+import time
+from fastapi import APIRouter, Depends, HTTPException, status
+
 
 import os
 import shutil
 import tempfile
 from typing import List, Optional
-
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from fastapi import UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -26,12 +28,14 @@ from app.models.rag_feedback import RAGFeedback
 from app.models.user import SubscriptionTier, User
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.vector_store import create_vector_store
+from app.models.rag_query import RagQuery
 
 router = APIRouter()
 
 
+
 class RAGQueryRequest(BaseModel):
-    question: str
+    question: str = Field(..., min_length=1, max_length=2000)
 
 
 class RAGQueryResponse(BaseModel):
@@ -61,19 +65,17 @@ def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Accept one or more PDF uploads, process them through the document loader,
-    build (or rebuild) the FAISS vector index, and persist it to
-    ``settings.FAISS_INDEX_PATH``.
+    """Ingest one or more regulatory PDFs and rebuild the FAISS index.
 
-    **Returns**
-    - ``files_processed`` – number of PDFs successfully saved and chunked
-    - ``chunks_created``  – total text chunks fed into the vector store
-    - ``index_size_bytes`` – on-disk size of the persisted FAISS index
+    Args:
+        files: One or more PDF uploads to save, chunk, and index.
+        current_user: Authenticated user requesting the ingestion.
 
-    **Errors**
-    - ``400`` if no valid PDF files are supplied
-    - ``503`` if the embedding model or FAISS build step fails
+    Returns:
+        RAGIngestResponse with file, chunk, and index size counts.
+
+    Raises:
+        HTTPException: If no valid PDFs are supplied or indexing fails.
     """
 
     # ── 1. Validate: at least one PDF ─────────────────────────────────────
@@ -142,41 +144,69 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Ask a regulatory question and get an answer grounded in source documents.
+    """Answer a regulatory question using the RAG knowledge base.
 
-    Example questions:
-    - "Does my CV-screening tool qualify as high-risk under the EU AI Act?"
-    - "What are the transparency requirements for chatbots?"
+    Args:
+        request: Query payload containing the user's question.
+        current_user: Authenticated user asking the question.
+        db: Database session used to persist the query and feedback record.
+
+    Returns:
+        RAGQueryResponse containing the generated answer and source references.
+
+    Raises:
+        HTTPException: If the RAG subsystem cannot produce an answer.
     """
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
         from app.core.database import Base
 
         qa_chain = get_qa_chain()
+
+        t_start = time.monotonic()
         result = qa_chain({"query": request.question})
+        latency_ms = (time.monotonic() - t_start) * 1000
+
         source_docs = result.get("source_documents", [])
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
+        answer = str(result.get("result", ""))
 
         # Ensure tables exist on this DB bind (useful for test DB overrides)
         try:
             Base.metadata.create_all(bind=db.get_bind())
         except Exception:
-            # best-effort: ignore if bind not available
             pass
 
-        # Persist an initial RAGFeedback row to capture the answer and contributing chunks
+        # Persist feedback row
         feedback = RAGFeedback(
             question=request.question,
-            answer=str(result.get("result", "")),
+            answer=answer,
             source_chunks=sources,
         )
         db.add(feedback)
+        rag_query = RagQuery(
+            user_id=current_user.id,
+            question=request.question,
+            answer_summary=str(result.get("result", ""))[:200],
+            source_count=len(sources),
+        )
+        db.add(rag_query)
         db.commit()
         db.refresh(feedback)
-        answer_id = feedback.id
 
-        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
+        # Log to MLflow (non-blocking — failures are swallowed inside log_query)
+        try:
+            from app.modules.rag.ml_flow import log_query
+            log_query(
+                question=request.question,
+                answer=answer,
+                sources=sources,
+                latency_ms=latency_ms,
+            )
+        except Exception:
+            pass
+
+        return RAGQueryResponse(answer=answer, sources=sources, answer_id=feedback.id)
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -191,7 +221,11 @@ def query_knowledge_base(
 
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health():
-    """Check if the RAG module is available."""
+    """Check whether the RAG module has an available index.
+
+    Returns:
+        A status payload describing whether the RAG index is available.
+    """
     from app.modules.rag.vector_store import check_index_exists
     
     index_loaded = check_index_exists()
@@ -222,7 +256,19 @@ def rag_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Record a thumbs-up or thumbs-down for a previously returned answer."""
+    """Record feedback for a previously returned RAG answer.
+
+    Args:
+        payload: Answer ID and vote direction submitted by the user.
+        current_user: Authenticated user submitting the feedback.
+        db: Database session used to update the feedback row.
+
+    Returns:
+        A confirmation payload containing the feedback status and answer ID.
+
+    Raises:
+        HTTPException: If the referenced answer does not exist.
+    """
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
@@ -242,9 +288,18 @@ def get_low_quality_chunks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Admin endpoint: aggregate feedback by source chunk and return low-quality candidates.
+    """Return source chunks whose feedback ratio exceeds the threshold.
 
-    A chunk is considered low-quality when thumbs_down / total_feedback > threshold.
+    Args:
+        threshold: Minimum thumbs-down ratio required to flag a chunk.
+        current_user: Authenticated user; must have admin access.
+        db: Database session used to aggregate feedback.
+
+    Returns:
+        A payload containing the threshold and low-quality chunk candidates.
+
+    Raises:
+        HTTPException: If the caller is not allowed to access the admin report.
     """
     # Admin-only access: restrict to system owners / scale tier
     try:
@@ -274,3 +329,46 @@ def get_low_quality_chunks(
             low_quality.append({"chunk": chunk, "thumbs_down": c["thumbs_down"], "total": c["total"], "ratio": ratio})
 
     return {"threshold": threshold, "low_quality_chunks": low_quality}
+
+
+@router.get("/history")
+def get_rag_history(
+    page: int = 1,
+    page_size: int = 10,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the current user's paginated RAG query history.
+
+    Args:
+        page: Page number to return, starting at 1.
+        page_size: Maximum number of queries to include per page.
+        current_user: Authenticated user whose query history is requested.
+        db: Database session used to query the history table.
+
+    Returns:
+        A paginated history payload containing the user's past RAG queries.
+    """
+    offset = (page - 1) * page_size
+    queries = (
+        db.query(RagQuery)
+        .filter(RagQuery.user_id == current_user.id)
+        .order_by(RagQuery.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+    return {
+        "page": page,
+        "page_size": page_size,
+        "results": [
+            {
+                "id": q.id,
+                "question": q.question,
+                "answer_summary": q.answer_summary,
+                "source_count": q.source_count,
+                "created_at": q.created_at,
+            }
+            for q in queries
+        ],
+    }
