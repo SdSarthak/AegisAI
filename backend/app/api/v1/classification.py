@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
-
+from app.modules.compliance.nist_mapping import EU_TO_NIST_MAPPING
+from app.schemas.ai_system import NISTMapping
 from pydantic import BaseModel
 
 from app.core.database import get_db
@@ -106,6 +107,12 @@ QUESTIONNAIRE_RISK_FACTORS: List[QuestionnaireRiskFactor] = [
         id="justice_system",
         question="Is the system used to assist judicial authorities or influence legal outcomes?",
         article="Annex III point 8",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="education_vocational_training",
+        question="Is the system used to determine access to or assign natural persons to educational and vocational training institutions?",
+        article="Annex III point 3",
         triggers_level=RiskLevel.HIGH,
     ),
     QuestionnaireRiskFactor(
@@ -221,6 +228,13 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
             "AI for creditworthiness or insurance risk assessment is HIGH risk under Annex III"
         )
 
+    # Education and vocational training (Annex III, point 3)
+    if data.education_vocational_training:
+        high_risk_indicators.append("Education/vocational training AI")
+        reasons.append(
+            "AI used for determining access to education or vocational training is HIGH risk under Annex III"
+        )
+
     # Safety component
     if data.is_safety_component:
         high_risk_indicators.append("Safety component of a product")
@@ -314,12 +328,17 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
             "Document your AI governance practices",
         ]
 
+    # Lookup NIST mapping once for the determined risk level
+    nist_data = EU_TO_NIST_MAPPING.get(risk_level.value.upper())
+    nist_mapping = NISTMapping(**nist_data) if nist_data else None
+    
     return RiskClassificationResponse(
         risk_level=risk_level,
-        confidence=confidence,
+        confidence=confidence if not triggered_prohibitions else 0.99,
         reasons=reasons,
         requirements=requirements,
         next_steps=next_steps,
+        nist_mapping=nist_mapping,
     )
 
 
@@ -327,11 +346,16 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
 def classify_ai_system(
     data: RiskClassificationRequest, current_user: User = Depends(get_current_user)
 ):
+    """Classify an AI system's risk level from the questionnaire payload.
+
+    Args:
+        data: Risk classification questionnaire answers for the AI system.
+        current_user: Authenticated user requesting the classification.
+
+    Returns:
+        RiskClassificationResponse containing the inferred risk level and guidance.
     """
-    Classify an AI system's risk level based on EU AI Act criteria.
-    This is a preliminary classification - full assessment requires more details.
-    """
-    return classify_risk(data)
+    return classify_risk(data)    
 
 
 @router.post("/classify/{system_id}", response_model=RiskClassificationResponse)
@@ -341,8 +365,19 @@ def classify_and_save(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Classify an AI system and save the result to the database.
+    """Classify an AI system and persist the result.
+
+    Args:
+        system_id: ID of the AI system to classify.
+        data: Risk classification questionnaire answers.
+        db: Database session used to load the system and save the assessment.
+        current_user: Authenticated user who must own the system.
+
+    Returns:
+        RiskClassificationResponse for the submitted questionnaire.
+
+    Raises:
+        HTTPException: If the system does not exist or does not belong to the user.
     """
     # Get the AI system
     system = (
@@ -388,12 +423,13 @@ def classify_and_save(
 def get_questionnaire_risk_factors(
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Return the static questionnaire metadata used by the risk classification flow.
+    """Return the static questionnaire metadata used by the classifier.
 
-    This does not query the database because these factors describe the
-    classification rules themselves, not a user's saved questionnaire answers.
-    Keep this list aligned with RiskClassificationRequest and classify_risk().
+    Args:
+        current_user: Authenticated user requesting the questionnaire metadata.
+
+    Returns:
+        The list of questionnaire risk factors used by the classification flow.
     """
     return QUESTIONNAIRE_RISK_FACTORS
 
@@ -403,9 +439,15 @@ def bulk_classify_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Classify multiple AI systems in one request.
-    Returns per-system classification results and partial failure details.
+    """Classify multiple AI systems in a single request.
+
+    Args:
+        request: Payload containing the AI system IDs to classify.
+        db: Database session used to load systems and store assessments.
+        current_user: Authenticated user who must own every system.
+
+    Returns:
+        BulkClassificationResponse containing per-system results and errors.
     """
     results: List[BulkClassificationItem] = []
 

@@ -31,6 +31,8 @@ export default function Documents() {
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
   const [copiedDocId, setCopiedDocId] = useState<number | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const limit = 10
 
   const handleCopy = async (docId: number, content: string) => {
     try {
@@ -47,8 +49,8 @@ export default function Documents() {
   }
 
   const { data: documentsData, isLoading } = useQuery({
-    queryKey: ['documents'],
-    queryFn: documentsApi.list,
+    queryKey: ['documents', currentPage],
+    queryFn: () => documentsApi.list({ skip: (currentPage - 1) * limit, limit }),
   })
   const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
   const filteredDocuments = documents.filter((doc: Document) => {
@@ -354,6 +356,29 @@ export default function Documents() {
           ))}
         </div>
       ))}
+
+      {/* Pagination Controls */}
+      <div className="flex items-center justify-between pt-4">
+        <button
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+        >
+          Previous
+        </button>
+
+        <span className="text-sm font-medium text-gray-700">
+          Page {currentPage}
+        </span>
+
+        <button
+          onClick={() => setCurrentPage((prev) => prev + 1)}
+          disabled={documents.length < limit}
+          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+        >
+          Next
+        </button>
+      </div>
 
 
       {/* Delete Confirmation Modal */}

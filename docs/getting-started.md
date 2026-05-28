@@ -13,9 +13,11 @@ This guide gets AegisAI running locally in under 10 minutes.
 - [Option B — Manual setup](#option-b--manual-setup)
 - [Option C — Ollama (free, no API key)](#option-c--ollama-free-no-api-key)
 - [LLM provider options](#llm-provider-options)
+- [Environment Variables](#️-environment-variables)
 - [First steps in the UI](#first-steps-in-the-ui)
 - [Using the API directly](#using-the-api-directly)
 - [Running tests](#running-tests)
+- [Troubleshooting](#troubleshooting)
 - [Training the Guard classifier](#training-the-guard-classifier)
 
 ---
@@ -174,6 +176,21 @@ Ollama runs separately on your machine; the backend connects to it via `LLM_BASE
 | **Groq** (cloud, free tier) | Free tier | `LLM_API_KEY=gsk_...`, `LLM_BASE_URL=https://api.groq.com/openai/v1`, `LLM_MODEL=llama-3.3-70b-versatile` |
 | **OpenAI** | Paid | `LLM_API_KEY=sk-...` (leave `LLM_BASE_URL` empty) |
 | **Together AI** | Free trial | `LLM_API_KEY=...`, `LLM_BASE_URL=https://api.together.xyz/v1` |
+
+---
+
+## Troubleshooting
+
+| Problem | Quick check | Recommended fix |
+|---|---|---|
+| Docker Compose fails to start | Run `docker compose ps` and `docker compose logs -f backend postgres frontend`. | Make sure Docker Desktop is running, then rebuild with `docker compose up --build -d`. If a container is stale, stop it with `docker compose down` first. |
+| `.env` values are missing or ignored | Confirm `backend/.env` exists and includes `SECRET_KEY`, `DATABASE_URL`, and `LLM_API_KEY`. | Copy `backend/.env.example` again, then restart the backend shell or container so it reloads the file. |
+| PostgreSQL connection or migration errors | Check the database container or local service is running, then run `alembic upgrade head` from `backend/`. | Verify `DATABASE_URL` points at `localhost:5432` for local setups and re-run migrations after the database is reachable. |
+| Port conflicts on `5173`, `8000`, or `5432` | Check what is listening on the port before starting the stack. | Stop the conflicting process or change the port mapping in Docker Compose / the frontend dev server. On Linux or macOS, use `lsof -i :8000`; on Windows PowerShell, use `Get-NetTCPConnection -LocalPort 8000`. |
+| Ollama is unreachable | Test `curl http://localhost:11434/v1/models` and confirm Ollama is running locally. | Start Ollama, keep `LLM_API_KEY=ollama`, and ensure `LLM_BASE_URL=http://localhost:11434/v1` in `backend/.env`. |
+| Python or Node installs fail on native builds | Look for errors mentioning `psycopg2`, `numpy`, `node-gyp`, or missing compiler tools. | Use Python 3.11 and Node 20+. On Linux, install build tooling such as `build-essential` and `python3-dev`; on Windows, install the Visual Studio Build Tools. |
+
+Recommended baseline versions: Python 3.11, Node.js 20, Docker Desktop or Docker Engine current release, and PostgreSQL 15.
 
 ---
 

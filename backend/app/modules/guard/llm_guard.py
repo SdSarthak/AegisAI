@@ -8,6 +8,7 @@ from typing import Dict, Optional
 from . import RegexFilter, IntentClassifier, DecisionEngine, PromptSanitizer
 from .decision_engine import Decision
 from .sanitizer import SanitizationLevel
+from .normalizer import normalize_prompt
 from ..llm.llm_client import LLMClient
 from . import guard_config as config
 
@@ -82,9 +83,13 @@ class LLMGuard:
         timestamp = datetime.now().isoformat()
         logger.info(f"Processing prompt at {timestamp}")
 
+        # Preprocess and normalize prompt to secure against Unicode bypasses
+        normalized_prompt = normalize_prompt(user_prompt)
+
         result = {
             "timestamp": timestamp,
             "user_prompt": user_prompt,
+            "normalized_prompt": normalized_prompt,
             "decision": None,
             "response": None,
             "metadata": {
@@ -97,7 +102,7 @@ class LLMGuard:
 
         # Step 1: Regex Filter (Fast First Gate)
         logger.debug("Step 1: Running regex filter...")
-        regex_result = self.regex_filter.check(user_prompt)
+        regex_result = self.regex_filter.check(normalized_prompt)
         result["metadata"]["regex_analysis"] = {
             "flag": regex_result.flag,
             "matched_patterns": regex_result.matched_patterns,
@@ -107,7 +112,7 @@ class LLMGuard:
 
         # Step 2: Intent Classification (ML Layer)
         logger.debug("Step 2: Classifying intent...")
-        intent_result = self.classifier.classify(user_prompt)
+        intent_result = self.classifier.classify(normalized_prompt)
         result["metadata"]["intent_analysis"] = {
             "intent": intent_result.intent,
             "confidence": intent_result.confidence,
@@ -144,8 +149,9 @@ class LLMGuard:
         elif decision_result.decision == Decision.SANITIZE:
             logger.info("Prompt marked for SANITIZATION")
             sanitized_prompt, sanitization_summary = self.sanitizer.sanitize(
-                user_prompt
+                normalized_prompt
             )
+            result["sanitized_prompt"] = sanitized_prompt  # FIX: expose sanitized text to API layer
             result["metadata"]["sanitization"] = {
                 "original_length": len(user_prompt),
                 "sanitized_length": len(sanitized_prompt),
@@ -174,7 +180,7 @@ class LLMGuard:
 
             if self.llm_client:
                 try:
-                    response = self.llm_client.call(user_prompt)
+                    response = self.llm_client.call(normalized_prompt)
                     result["response"] = response
                     logger.info("Response generated successfully from Gemini")
                 except Exception as e:
