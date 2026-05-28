@@ -86,7 +86,7 @@ class RiskClassificationResponse(BaseModel):
     reasons: List[str]
     requirements: List[str]
     next_steps: List[str]
-    nist_mapping: Optional[NISTMapping] = None
+    nist_mapping: Optional["NISTMapping"] = None
 
 
 class RiskAssessmentResponse(BaseModel):
