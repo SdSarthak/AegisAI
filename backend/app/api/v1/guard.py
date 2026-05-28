@@ -10,6 +10,12 @@ TODO for contributors (medium difficulty):
 """
 
 import hashlib
+from collections import Counter, defaultdict, deque
+from datetime import datetime, timedelta, timezone
+from threading import Lock
+from typing import Optional
+
+from app.api.v1.webhooks import deliver_webhook
 import logging
 from collections import Counter
 from datetime import datetime, timedelta, timezone
@@ -226,12 +232,33 @@ def scan_prompt(
             ),
         )
 
+        if result["decision"] == "block":
+            try:
+                deliver_webhook(
+                    db=db,
+                    user_id=current_user.id,
+                    event="guard_block",
+                    payload={
+                        "decision": "block",
+                        "confidence": response.confidence,
+                        "matched_patterns": response.matched_patterns,
+                        "prompt_hash": hashlib.sha256(
+                            request.prompt.encode()
+                        ).hexdigest(),
+                    },
+                    background_tasks=background_tasks,
+                )
+            except Exception:
+                logger.exception("Failed to trigger guard_block webhook delivery")
+
+        return response
+
     except Exception as e:
         logger.exception("Guard scan failed")
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An internal error occurred while processing the Guard scan."
+            detail="An internal error occurred while processing the Guard scan.",
         )
 
 
