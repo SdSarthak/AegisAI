@@ -159,11 +159,14 @@ export default function AISystems() {
       link.remove()
       window.URL.revokeObjectURL(objectUrl)
     } catch (error) {
-      toast.error('Export failed:', error)
+      toast.error(
+        `Export failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      )
     } finally {
       setIsExporting(false)
     }
-  }
 
   // FIX 3: Reset to page 1 whenever filters or sort options change,
   // so users never land on an empty page after narrowing results.
