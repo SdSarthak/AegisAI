@@ -1,0 +1,17 @@
+{
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/api/v1/:path*",
+      "destination": "https://aegis-backend-n9dk.onrender.com/api/v1/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://aegis-backend-n9dk.onrender.com/health"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
