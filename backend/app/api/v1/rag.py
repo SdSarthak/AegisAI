@@ -29,6 +29,26 @@ from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
 
 router = APIRouter()
 
+import logging
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Guard singleton - initialised once on first request, reused thereafter.
+# Loading the ML classifier is expensive; avoid doing it per request.
+# ---------------------------------------------------------------------------
+_llm_guard = None
+
+
+def _get_guard():
+    """Return a module-level LLMGuard instance (lazy initialisation)."""
+    global _llm_guard
+    if _llm_guard is None:
+        from app.modules.guard.llm_guard import LLMGuard
+
+        _llm_guard = LLMGuard()
+    return _llm_guard
+
 
 def load_documents_from_paths(saved_paths: list[str]):
     """Lazy wrapper around the RAG document loader."""
@@ -138,14 +158,35 @@ def query_knowledge_base(
     db: Session = Depends(get_db),
 ):
     """Ask a regulatory question and get an answer grounded in source documents."""
+    # Layer 1: Guard scan on the incoming question.
+    # This must run BEFORE the try/except so that a 400 is not swallowed
+    # by the generic Exception handler and turned into a 503.
+    guard = _get_guard()
+    guard_result = guard.scan_input(request.question)
+
+    if guard_result["decision"] == "block":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Query blocked by Guard pipeline: "
+                "potential prompt injection detected."
+            ),
+        )
+
+    safe_question = (
+        guard_result["sanitized_prompt"]
+        if guard_result["decision"] == "sanitize"
+        and guard_result["sanitized_prompt"]
+        else request.question
+    )
+
     try:
         from app.core.database import Base
-        from app.modules.rag.retrieval_chain import get_qa_chain
+        from app.modules.rag.retrieval_chain import query_with_guard
 
-        qa_chain = get_qa_chain()
-
+        # Layer 2: retrieve + chunk-scan + generate.
         t_start = time.monotonic()
-        result = qa_chain({"query": request.question})
+        result = query_with_guard(safe_question, guard)
         latency_ms = (time.monotonic() - t_start) * 1000
 
         source_docs = result.get("source_documents", [])
