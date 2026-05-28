@@ -13,6 +13,7 @@ import GuardConsole from './pages/GuardConsole'
 import NotFound from './pages/NotFound'
 import { Toaster } from 'react-hot-toast'
 import RagChat from './pages/RagChat'
+import Onboarding from './pages/Onboarding'
 
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
@@ -63,6 +64,7 @@ function App() {
           <Route path="rag-chat" element={<RagChat />} />
           <Route path="notifications" element={<Notifications />} />
           <Route path="rag-chat" element={<RagChat />} />
+          <Route path="onboarding" element={<Onboarding />} />
 
         </Route>
         <Route path="*" element={<NotFound />} />
