@@ -14,7 +14,7 @@ def test_user(client):
     """Register and return a test user with auth token."""
     response = client.post("/api/v1/auth/register", json={
         "email": "test@example.com",
-        "password": "Test1234",
+        "password": "Test1234!",
         "full_name": "Test User",
         "company_name": "Test Corp"
     })
@@ -22,7 +22,7 @@ def test_user(client):
     
     login = client.post("/api/v1/auth/login", data={
         "username": "test@example.com",
-        "password": "Test1234"
+        "password": "Test1234!"
     })
     token = login.json()["access_token"]
     return {"headers": {"Authorization": f"Bearer {token}"}}
@@ -107,13 +107,13 @@ def test_share_other_users_document_denied(client, test_user, test_document):
     """User2 should not be able to share User1's document."""
     client.post("/api/v1/auth/register", json={
         "email": "user2@example.com",
-        "password": "Test1234",
+        "password": "Test1234!",
         "full_name": "User Two",
         "company_name": "Corp2"
     })
     login2 = client.post("/api/v1/auth/login", data={
         "username": "user2@example.com",
-        "password": "Test1234"
+        "password": "Test1234!"
     })
     token2 = login2.json()["access_token"]
 
