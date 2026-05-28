@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
-import ComplianceRiskChart from "../components/ComplianceRiskChart";
-import { analyticsApi } from "../services/api";
+import ComplianceRiskChart from '../components/ComplianceRiskChart'
+import { getChartTheme } from '../utils/chartTheme'
 
 import {
   BarChart2,
@@ -46,29 +46,29 @@ const summaryStats = [
     label: "Total Systems",
     value: "12",
     icon: Activity,
-    color: "text-blue-600",
-    bg: "bg-blue-50",
+    color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-50 dark:bg-blue-500/10',
   },
   {
     label: "Avg Score",
     value: "84%",
     icon: TrendingUp,
-    color: "text-green-600",
-    bg: "bg-green-50",
+    color: 'text-green-600 dark:text-green-400',
+    bg: 'bg-green-50 dark:bg-green-500/10',
   },
   {
     label: "Compliant",
     value: "10",
     icon: ShieldCheck,
-    color: "text-emerald-600",
-    bg: "bg-emerald-50",
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bg: 'bg-emerald-50 dark:bg-emerald-500/10',
   },
   {
     label: "High Risk",
     value: "2",
     icon: AlertTriangle,
-    color: "text-red-600",
-    bg: "bg-red-50",
+    color: 'text-red-600 dark:text-red-400',
+    bg: 'bg-red-50 dark:bg-red-500/10',
   },
 ];
 
@@ -188,68 +188,100 @@ const extractRiskDistribution = (payload: unknown): RiskData[] => {
 };
 
 export default function Analytics() {
-  const [riskPieData, setRiskPieData] = useState<RiskData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [theme, setTheme] = useState<"light" | "dark">("light");
-  const chartTheme = getChartTheme(theme === "dark");
-  const activeChartTheme = chartTheme;
-  const chartRemountKey = `${theme}-charts`;
+  const [riskPieData, setRiskPieData] =
+    useState<RiskData[]>([])
+  const [loading, setLoading] = useState(true)
+  const [isDark, setIsDark] = useState(false)
 
   useEffect(() => {
-    const syncTheme = () => {
-      if (typeof document === "undefined") {
-        return;
-      }
+    fetchRiskDistribution()
+  }, [])
 
-      setTheme(
-        document.documentElement.classList.contains("dark") ? "dark" : "light",
-      );
-    };
+  useEffect(() => {
+    const checkTheme = () => {
+      setIsDark(
+        document.documentElement.classList.contains(
+          'dark'
+        )
+      )
+    }
 
-    syncTheme();
+    checkTheme()
 
-    const observer = new MutationObserver(syncTheme);
+    const observer = new MutationObserver(checkTheme)
+
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["class"],
-    });
+      attributeFilter: ['class'],
+    })
 
-    window.addEventListener("storage", syncTheme);
+    return () => observer.disconnect()
+  }, [])
 
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("storage", syncTheme);
-    };
-  }, []);
+  const chartTheme = getChartTheme(isDark)
 
-  useEffect(() => {
-    let isMounted = true;
+  const fetchRiskDistribution = async () => {
+    try {
+      const res = await fetch(
+        '/api/v1/analytics/summary'
+      )
 
-    const fetchRiskDistribution = async () => {
-      try {
-        const summary = await analyticsApi.summary();
-        const normalizedData = extractRiskDistribution(summary);
+      if (res.ok) {
+        const json = await res.json()
 
-        if (isMounted) {
-          setRiskPieData(normalizedData);
-        }
-      } catch {
-        if (isMounted) {
-          setRiskPieData([]);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-        }
+        const mapped: RiskData[] = [
+          {
+            name: 'Minimal Risk',
+            value: json.counts?.minimal || 0,
+          },
+          {
+            name: 'Limited Risk',
+            value: json.counts?.limited || 0,
+          },
+          {
+            name: 'High Risk',
+            value: json.counts?.high || 0,
+          },
+          {
+            name: 'Unacceptable Risk',
+            value:
+              json.counts?.unacceptable || 0,
+          },
+        ]
+
+        setRiskPieData(mapped)
+      } else {
+        const mockData: RiskData[] = [
+          { name: 'Minimal Risk', value: 4 },
+          { name: 'Limited Risk', value: 3 },
+          { name: 'High Risk', value: 2 },
+          {
+            name: 'Unacceptable Risk',
+            value: 1,
+          },
+        ]
+
+        setRiskPieData(mockData)
       }
-    };
+    } catch (error) {
+      console.error(
+        'Failed to fetch risk distribution:',
+        error
+      )
 
-    fetchRiskDistribution();
-
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+      setRiskPieData([
+        { name: 'Minimal Risk', value: 4 },
+        { name: 'Limited Risk', value: 3 },
+        { name: 'High Risk', value: 2 },
+        {
+          name: 'Unacceptable Risk',
+          value: 1,
+        },
+      ])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -267,7 +299,7 @@ export default function Analytics() {
         {summaryStats.map((stat) => (
           <div
             key={stat.label}
-            className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 flex items-center gap-4 shadow-sm"
+            className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 flex items-center gap-4 shadow-sm transition-colors duration-300"
           >
             <div className={`shrink-0 p-3 rounded-lg ${stat.bg}`}>
               <stat.icon className={`w-6 h-6 ${stat.color}`} />
@@ -287,8 +319,7 @@ export default function Analytics() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Line Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm min-w-0">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm min-w-0 transition-colors duration-300">
           <div className="flex items-center gap-2 mb-6">
             <TrendingUp className="w-5 h-5 text-primary-600" />
 
@@ -307,43 +338,44 @@ export default function Analytics() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke={activeChartTheme.grid}
+                  stroke={chartTheme.grid}
                 />
 
                 <XAxis
                   dataKey="name"
-                  stroke={activeChartTheme.axis}
-                  fontSize={12}
-                  tick={{ fill: activeChartTheme.axis }}
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
                   tickLine={false}
                   axisLine={false}
                 />
 
                 <YAxis
-                  stroke={activeChartTheme.axis}
-                  fontSize={12}
-                  tick={{ fill: activeChartTheme.axis }}
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
                   tickLine={false}
                   axisLine={false}
                 />
 
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: activeChartTheme.tooltipBackground,
-                    borderColor: activeChartTheme.tooltipBorder,
-                    color: activeChartTheme.tooltipText,
-                  }}
-                  itemStyle={{
-                    color: activeChartTheme.tooltipText,
+                    backgroundColor:
+                      chartTheme.tooltipBg,
+                    border: `1px solid ${chartTheme.tooltipBorder}`,
+                    borderRadius: '8px',
+                    color: chartTheme.text,
                   }}
                   labelStyle={{
-                    color: activeChartTheme.tooltipText,
+                    color: chartTheme.text,
                   }}
                 />
 
                 <Legend
                   wrapperStyle={{
-                    color: activeChartTheme.legendText,
+                    color: chartTheme.text,
                   }}
                 />
 
@@ -360,8 +392,7 @@ export default function Analytics() {
           </div>
         </div>
 
-        {/* Bar Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm min-w-0">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm min-w-0 transition-colors duration-300">
           <div className="flex items-center gap-2 mb-6">
             <BarChart2 className="w-5 h-5 text-primary-600" />
 
@@ -380,43 +411,44 @@ export default function Analytics() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke={activeChartTheme.grid}
+                  stroke={chartTheme.grid}
                 />
 
                 <XAxis
                   dataKey="name"
-                  stroke={activeChartTheme.axis}
-                  fontSize={12}
-                  tick={{ fill: activeChartTheme.axis }}
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
                   tickLine={false}
                   axisLine={false}
                 />
 
                 <YAxis
-                  stroke={activeChartTheme.axis}
-                  fontSize={12}
-                  tick={{ fill: activeChartTheme.axis }}
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
                   tickLine={false}
                   axisLine={false}
                 />
 
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: activeChartTheme.tooltipBackground,
-                    borderColor: activeChartTheme.tooltipBorder,
-                    color: activeChartTheme.tooltipText,
-                  }}
-                  itemStyle={{
-                    color: activeChartTheme.tooltipText,
+                    backgroundColor:
+                      chartTheme.tooltipBg,
+                    border: `1px solid ${chartTheme.tooltipBorder}`,
+                    borderRadius: '8px',
+                    color: chartTheme.text,
                   }}
                   labelStyle={{
-                    color: activeChartTheme.tooltipText,
+                    color: chartTheme.text,
                   }}
                 />
 
                 <Legend
                   wrapperStyle={{
-                    color: activeChartTheme.legendText,
+                    color: chartTheme.text,
                   }}
                 />
 
@@ -434,11 +466,11 @@ export default function Analytics() {
       </div>
 
       {loading ? (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors duration-300">
           Loading risk distribution...
         </div>
       ) : riskPieData.length === 0 ? (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors duration-300">
           No analytics data available.
         </div>
       ) : (

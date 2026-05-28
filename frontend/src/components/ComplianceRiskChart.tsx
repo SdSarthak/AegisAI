@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   PieChart,
   Pie,
@@ -21,8 +22,40 @@ export default function ComplianceRiskChart({ data, theme }: Props) {
   const hasRiskData = visibleData.length > 0;
   const riskLabel = renderRiskLabel(themedTokens.labelText);
 
+export default function ComplianceRiskChart({
+  data,
+}: Props) {
+  const [isDark, setIsDark] = useState(false)
+
+  useEffect(() => {
+    const checkTheme = () => {
+      setIsDark(
+        document.documentElement.classList.contains(
+          'dark'
+        )
+      )
+    }
+
+    checkTheme()
+
+    const observer = new MutationObserver(checkTheme)
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
+
+    return () => observer.disconnect()
+  }, [])
+
+  const chartTheme = {
+    text: isDark ? '#e5e7eb' : '#374151',
+    tooltipBg: isDark ? '#111827' : '#ffffff',
+    tooltipBorder: isDark ? '#4b5563' : '#d1d5db',
+  }
+
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm transition-colors">
       <div className="flex items-center gap-2 mb-2">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
           Compliance Risk Distribution
@@ -34,66 +67,53 @@ export default function ComplianceRiskChart({ data, theme }: Props) {
       </p>
 
       <div className="w-full h-[350px]">
-        {!hasRiskData ? (
-          <div className="h-full rounded-lg border border-dashed border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-900/40 flex flex-col items-center justify-center px-6 text-center">
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-200">
-              No risk distribution data available
-            </p>
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              cx="50%"
+              cy="50%"
+              innerRadius={70}
+              outerRadius={110}
+              paddingAngle={3}
+              label={({ name, percent }) =>
+                `${name}: ${(
+                  (percent ?? 0) * 100
+                ).toFixed(0)}%`
+              }
+              labelLine={false}
+            >
+              {data.map((_, index) => (
+                <Cell
+                  key={index}
+                  fill={
+                    COLORS[index % COLORS.length]
+                  }
+                />
+              ))}
+            </Pie>
 
-            <p className="mt-2 max-w-md text-sm text-gray-500 dark:text-gray-400">
-              Once systems are classified, this chart will show Minimal,
-              Limited, High, and Unacceptable Risk distribution.
-            </p>
-          </div>
-        ) : (
-          <ResponsiveContainer
-            key={`${theme}-risk-distribution`}
-            width="100%"
-            height="100%"
-          >
-            <PieChart>
-              <Pie
-                data={visibleData}
-                dataKey="value"
-                cx="50%"
-                cy="50%"
-                innerRadius={70}
-                outerRadius={110}
-                paddingAngle={3}
-                labelLine={false}
-                label={riskLabel}
-                fill={themedTokens.labelText}
-              >
-                {visibleData.map((item) => (
-                  <Cell
-                    key={item.name}
-                    fill={riskCategoryTheme[item.name].fill}
-                  />
-                ))}
-              </Pie>
+            <Tooltip
+              contentStyle={{
+                backgroundColor:
+                  chartTheme.tooltipBg,
+                border: `1px solid ${chartTheme.tooltipBorder}`,
+                borderRadius: '8px',
+                color: chartTheme.text,
+              }}
+              labelStyle={{
+                color: chartTheme.text,
+              }}
+            />
 
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: themedTokens.tooltipBackground,
-                  borderColor: themedTokens.tooltipBorder,
-                  color: themedTokens.tooltipText,
-                }}
-                itemStyle={{
-                  color: themedTokens.tooltipText,
-                }}
-                labelStyle={{
-                  color: themedTokens.tooltipText,
-                }}
-              />
-
-              <Legend
-                wrapperStyle={{
-                  color: themedTokens.legendText,
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        )}
+            <Legend
+              wrapperStyle={{
+                color: chartTheme.text,
+              }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );

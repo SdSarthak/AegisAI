@@ -29,6 +29,26 @@ api.interceptors.response.use(
   }
 )
 
+function ensureListResponse<T>(
+  data: unknown,
+  resourceName: string
+): T[] | { items: T[]; total?: number; page?: number; limit?: number } {
+  if (Array.isArray(data)) {
+    return data
+  }
+
+  if (
+    data &&
+    typeof data === 'object' &&
+    'items' in data &&
+    Array.isArray((data as { items?: unknown }).items)
+  ) {
+    return data as { items: T[]; total?: number; page?: number; limit?: number }
+  }
+
+  throw new Error(`${resourceName} response was empty or invalid.`)
+}
+
 // Auth API
 export const authApi = {
   login: async (email: string, password: string) => {
@@ -60,23 +80,11 @@ export const aiSystemsApi = {
   list: async (params?: {
     sort_by?: string
     order?: string
-    page?: number
+    skip?: number
     limit?: number
   }) => {
-    // Fix for Issue #631: Transform frontend 'page' into the backend-expected 'skip' query offset parameter
-    const limit = params?.limit ?? 10
-    const page = params?.page ?? 1
-    const skip = (page - 1) * limit
-
-    const queryParams = {
-      sort_by: params?.sort_by,
-      order: params?.order,
-      skip: skip,
-      limit: limit,
-    }
-
-    const { data } = await api.get('/ai-systems/', { params: queryParams })
-    return data
+    const { data } = await api.get('/ai-systems/', { params })
+    return ensureListResponse(data, 'AI systems')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/ai-systems/${id}`)
@@ -114,9 +122,9 @@ export const classificationApi = {
 
 // Documents API
 export const documentsApi = {
-  list: async () => {
-    const { data } = await api.get('/documents/')
-    return data
+  list: async (params?: { skip?: number; limit?: number }) => {
+    const { data } = await api.get('/documents/', { params })
+    return ensureListResponse(data, 'Documents')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/documents/${id}`)
@@ -198,4 +206,3 @@ export const analyticsApi = {
 }
 
 export default api
-
