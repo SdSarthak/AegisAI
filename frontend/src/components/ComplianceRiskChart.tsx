@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import {
   PieChart,
   Pie,
@@ -26,15 +27,44 @@ const COLORS = [
 export default function ComplianceRiskChart({
   data,
 }: Props) {
+  const [isDark, setIsDark] = useState(false)
+
+  useEffect(() => {
+    const checkTheme = () => {
+      setIsDark(
+        document.documentElement.classList.contains(
+          'dark'
+        )
+      )
+    }
+
+    checkTheme()
+
+    const observer = new MutationObserver(checkTheme)
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
+
+    return () => observer.disconnect()
+  }, [])
+
+  const chartTheme = {
+    text: isDark ? '#e5e7eb' : '#374151',
+    tooltipBg: isDark ? '#111827' : '#ffffff',
+    tooltipBorder: isDark ? '#4b5563' : '#d1d5db',
+  }
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+    <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm transition-colors">
       <div className="flex items-center gap-2 mb-2">
-        <h2 className="text-xl font-semibold text-gray-900">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
           Compliance Risk Distribution
         </h2>
       </div>
 
-      <p className="text-sm text-gray-500 mb-6">
+      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
         Distribution of AI systems across EU AI Act
         risk categories.
       </p>
@@ -55,6 +85,7 @@ export default function ComplianceRiskChart({
                   (percent ?? 0) * 100
                 ).toFixed(0)}%`
               }
+              labelLine={false}
             >
               {data.map((_, index) => (
                 <Cell
@@ -66,9 +97,24 @@ export default function ComplianceRiskChart({
               ))}
             </Pie>
 
-            <Tooltip />
+            <Tooltip
+              contentStyle={{
+                backgroundColor:
+                  chartTheme.tooltipBg,
+                border: `1px solid ${chartTheme.tooltipBorder}`,
+                borderRadius: '8px',
+                color: chartTheme.text,
+              }}
+              labelStyle={{
+                color: chartTheme.text,
+              }}
+            />
 
-            <Legend />
+            <Legend
+              wrapperStyle={{
+                color: chartTheme.text,
+              }}
+            />
           </PieChart>
         </ResponsiveContainer>
       </div>

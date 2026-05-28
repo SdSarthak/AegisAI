@@ -3,11 +3,23 @@
 All notable changes to AegisAI are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+- **Pre-commit hooks** — Added `.pre-commit-config.yaml` with repository hygiene hooks (trailing-whitespace, end-of-file-fixer, check-merge-conflict, check-yaml, check-json) and a local ESLint hook wrapping the existing frontend lint command.
+- **LLM Guard Prompt Normalization** — Preprocessor layer (`normalizer.py`) to prevent Unicode, zero-width, and homoglyph bypasses:
+  - Strips invisible format characters in Unicode `Cf` category (e.g. zero-width space, non-joiner, joiner)
+  - Normalizes stylized font variations using NFKC compatibility normalization
+  - Resolves Cyrillic and Greek homoglyphs to standard Latin equivalents via static mapping
+  - Retains both `normalized_prompt` and `user_prompt` in orchestrator response
+- Unit and integration tests for bypass payloads (`test_normalizer.py` and `test_guard.py`)
+
 ---
 
 ## [Unreleased]
 
 ### Added
+- **Compliance Engine** — Added Education & Vocational Training (Annex III point 3) risk factor to EU AI Act classification.
 - LLM Guard console with copy-to-clipboard exports for scan response payloads and raw audit metrics.
 
 ---

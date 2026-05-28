@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, ForeignKey, JSON, Float
+from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, ForeignKey, JSON, Float, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -22,6 +22,9 @@ class ComplianceStatus(str, enum.Enum):
 
 class AISystem(Base):
     __tablename__ = "ai_systems"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "name", name="uq_ai_system_owner_name"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)

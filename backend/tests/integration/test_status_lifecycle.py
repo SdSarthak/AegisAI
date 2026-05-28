@@ -13,7 +13,11 @@ def test_full_status_lifecycle(client: TestClient):
     5-7. Update and verify status transitions
     8. Cross-user isolation
     """
-    
+    # Remove global auth mock so real JWT validation runs for this test
+    from app.core.security import get_current_user
+    from app.main import app
+    app.dependency_overrides.pop(get_current_user, None)
+
     # 1. Register a new user
     register_resp = client.post(
         "/api/v1/auth/register",
@@ -68,7 +72,7 @@ def test_full_status_lifecycle(client: TestClient):
     assert get_resp_2.json()["compliance_status"] == "in_progress"
 
     # 7. Repeats step 5->6 for the full lifecycle: in_progress -> under_review -> compliant
-    
+
     # -> under_review
     patch_resp_2 = client.patch(
         f"/api/v1/ai-systems/{system_id}/status",
@@ -76,11 +80,11 @@ def test_full_status_lifecycle(client: TestClient):
         json={"compliance_status": "under_review"}
     )
     assert patch_resp_2.status_code == 200
-    
+
     get_resp_3 = client.get(f"/api/v1/ai-systems/{system_id}", headers=headers)
     assert get_resp_3.status_code == 200
     assert get_resp_3.json()["compliance_status"] == "under_review"
-    
+
     # -> compliant
     patch_resp_3 = client.patch(
         f"/api/v1/ai-systems/{system_id}/status",
@@ -88,13 +92,12 @@ def test_full_status_lifecycle(client: TestClient):
         json={"compliance_status": "compliant"}
     )
     assert patch_resp_3.status_code == 200
-    
+
     get_resp_4 = client.get(f"/api/v1/ai-systems/{system_id}", headers=headers)
     assert get_resp_4.status_code == 200
     assert get_resp_4.json()["compliance_status"] == "compliant"
 
     # 8. Verifies that a second user cannot PATCH the first user's system (expect 404)
-    # Register second user
     client.post(
         "/api/v1/auth/register",
         json={
@@ -103,7 +106,6 @@ def test_full_status_lifecycle(client: TestClient):
             "full_name": "Hacker Tester"
         }
     )
-    # Login second user
     hacker_login_resp = client.post(
         "/api/v1/auth/login",
         data={
@@ -113,8 +115,7 @@ def test_full_status_lifecycle(client: TestClient):
     )
     hacker_token = hacker_login_resp.json()["access_token"]
     hacker_headers = {"Authorization": f"Bearer {hacker_token}"}
-    
-    # Try to patch first user's system
+
     patch_resp_hacker = client.patch(
         f"/api/v1/ai-systems/{system_id}/status",
         headers=hacker_headers,

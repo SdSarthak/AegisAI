@@ -4,15 +4,16 @@ Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
-from pydantic import BaseModel, HttpUrl
-from typing import Optional
 from datetime import datetime
+from typing import Optional
+
+from pydantic import BaseModel, Field, HttpUrl
 
 
 class WebhookCreate(BaseModel):
     url: HttpUrl
     secret: Optional[str] = None
-    events: list[str] = []  # e.g. ["guard_block", "compliance_drift"]
+    events: list[str] = Field(default_factory=list)
 
 
 class WebhookResponse(BaseModel):
