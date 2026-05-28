@@ -8,65 +8,65 @@
     ],
     "matrix": [
       [
-        5,
+        10,
         0,
         0
       ],
       [
-        3,
-        0,
-        0
+        8,
+        1,
+        1
       ],
       [
         4,
-        0,
-        0
+        2,
+        4
       ]
     ]
   },
-  "evaluated_at": "2026-05-24T11:25:45Z",
+  "evaluated_at": "2026-05-28T18:58:43Z",
   "metrics": {
-    "accuracy": 0.4166666666666667,
+    "accuracy": 0.5,
     "classification_report": {
-      "accuracy": 0.4166666666666667,
+      "accuracy": 0.5,
       "benign": {
-        "f1-score": 0.5882352941176471,
-        "precision": 0.4166666666666667,
+        "f1-score": 0.625,
+        "precision": 0.45454545454545453,
         "recall": 1.0,
-        "support": 5.0
+        "support": 10.0
       },
       "macro avg": {
-        "f1-score": 0.19607843137254902,
-        "precision": 0.1388888888888889,
-        "recall": 0.3333333333333333,
-        "support": 12.0
+        "f1-score": 0.43739316239316234,
+        "precision": 0.5292929292929293,
+        "recall": 0.5,
+        "support": 30.0
       },
       "malicious": {
-        "f1-score": 0.0,
-        "precision": 0.0,
-        "recall": 0.0,
-        "support": 4.0
+        "f1-score": 0.5333333333333333,
+        "precision": 0.8,
+        "recall": 0.4,
+        "support": 10.0
       },
       "suspicious": {
-        "f1-score": 0.0,
-        "precision": 0.0,
-        "recall": 0.0,
-        "support": 3.0
+        "f1-score": 0.15384615384615383,
+        "precision": 0.3333333333333333,
+        "recall": 0.1,
+        "support": 10.0
       },
       "weighted avg": {
-        "f1-score": 0.2450980392156863,
-        "precision": 0.17361111111111113,
-        "recall": 0.4166666666666667,
-        "support": 12.0
+        "f1-score": 0.43739316239316234,
+        "precision": 0.5292929292929293,
+        "recall": 0.5,
+        "support": 30.0
       }
     },
-    "macro_f1": 0.19607843137254902,
-    "weighted_f1": 0.2450980392156863
+    "macro_f1": 0.43739316239316234,
+    "weighted_f1": 0.43739316239316234
   },
-  "model_path": "/app/app/modules/guard/models/classifier",
-  "n_samples": 12,
+  "model_path": "modules/guard/models/classifier",
+  "n_samples": 30,
   "threshold": {
-    "actual": 0.2450980392156863,
+    "actual": 0.43739316239316234,
     "metric": "weighted_f1",
     "passed": true,
     "value": 0.0
