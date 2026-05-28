@@ -77,15 +77,7 @@ type RiskData = {
   value: number;
 };
 
-type ThemeMode = "light" | "dark";
-
-type AnalyticsSummaryPayload = {
-  risk_distribution?: unknown;
-  risk_counts?: unknown;
-  count_by_risk_level?: unknown;
-};
-
-const chartTheme = {
+const chartThemes = {
   light: {
     grid: "rgb(229 231 235)",
     axis: "rgb(75 85 99)",
@@ -106,31 +98,113 @@ const chartTheme = {
     line: "rgb(96 165 250)",
     bar: "rgb(251 113 133)",
   },
-} satisfies Record<ThemeMode, Record<string, string>>;
+};
 
-const riskCategoryOrder = [
+const getChartTheme = (isDark: boolean) =>
+  isDark ? chartThemes.dark : chartThemes.light;
+
+const orderedRiskCategories = [
   "Minimal Risk",
   "Limited Risk",
   "High Risk",
   "Unacceptable Risk",
 ] as const;
 
-const normalizeRiskName = (name: string) =>
+const normalizeRiskCategory = (name: string) =>
   name.trim().toLowerCase().replace(/[_-]+/g, " ");
 
-const resolveTheme = (): ThemeMode => {
-  if (typeof document === "undefined") {
-    return "light";
+const parseNumericValue = (value: unknown) => {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.max(value, 0);
   }
 
-  return document.documentElement.classList.contains("dark") ? "dark" : "light";
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? Math.max(parsed, 0) : 0;
+  }
+
+  return 0;
 };
 
-function useThemeMode() {
-  const [theme, setTheme] = useState<ThemeMode>(resolveTheme);
+const pickFirstDefinedValue = (
+  record: Record<string, unknown>,
+  keys: string[],
+) => keys.map((key) => record[key]).find((value) => value != null);
+
+const buildRiskDistribution = (source: unknown): RiskData[] => {
+  const counts = new Map<string, number>();
+
+  if (Array.isArray(source)) {
+    source.forEach((item) => {
+      if (!item || typeof item !== "object") {
+        return;
+      }
+
+      const record = item as Record<string, unknown>;
+      const rawName = pickFirstDefinedValue(record, [
+        "name",
+        "risk_level",
+        "category",
+        "label",
+      ]);
+
+      if (typeof rawName !== "string") {
+        return;
+      }
+
+      counts.set(
+        normalizeRiskCategory(rawName),
+        parseNumericValue(
+          pickFirstDefinedValue(record, ["value", "count", "total"]),
+        ),
+      );
+    });
+  } else if (source && typeof source === "object") {
+    Object.entries(source as Record<string, unknown>).forEach(
+      ([name, value]) => {
+        counts.set(normalizeRiskCategory(name), parseNumericValue(value));
+      },
+    );
+  }
+
+  return orderedRiskCategories.map((name) => ({
+    name,
+    value: counts.get(normalizeRiskCategory(name)) ?? 0,
+  }));
+};
+
+const extractRiskDistribution = (payload: unknown): RiskData[] => {
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+
+  const summary = payload as Record<string, unknown>;
+  const candidate =
+    summary.risk_distribution ??
+    summary.risk_counts ??
+    summary.count_by_risk_level;
+
+  return buildRiskDistribution(candidate);
+};
+
+export default function Analytics() {
+  const [riskPieData, setRiskPieData] = useState<RiskData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const chartTheme = getChartTheme(theme === "dark");
+  const activeChartTheme = chartTheme;
+  const chartRemountKey = `${theme}-charts`;
 
   useEffect(() => {
-    const syncTheme = () => setTheme(resolveTheme());
+    const syncTheme = () => {
+      if (typeof document === "undefined") {
+        return;
+      }
+
+      setTheme(
+        document.documentElement.classList.contains("dark") ? "dark" : "light",
+      );
+    };
 
     syncTheme();
 
@@ -148,94 +222,13 @@ function useThemeMode() {
     };
   }, []);
 
-  return theme;
-}
-
-const readNumericValue = (value: unknown) => {
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return Math.max(value, 0);
-  }
-
-  if (typeof value === "string") {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? Math.max(parsed, 0) : 0;
-  }
-
-  return 0;
-};
-
-const pickRecordValue = (record: Record<string, unknown>, keys: string[]) =>
-  keys.map((key) => record[key]).find((value) => value != null);
-
-const mapRiskDistribution = (source: unknown): RiskData[] => {
-  const counts = new Map<string, number>();
-
-  if (Array.isArray(source)) {
-    source.forEach((item) => {
-      if (!item || typeof item !== "object") {
-        return;
-      }
-
-      const record = item as Record<string, unknown>;
-      const rawName = pickRecordValue(record, [
-        "name",
-        "risk_level",
-        "category",
-        "label",
-      ]);
-
-      if (typeof rawName !== "string") {
-        return;
-      }
-
-      counts.set(
-        normalizeRiskName(rawName),
-        readNumericValue(pickRecordValue(record, ["value", "count", "total"])),
-      );
-    });
-  } else if (source && typeof source === "object") {
-    Object.entries(source as Record<string, unknown>).forEach(
-      ([name, value]) => {
-        counts.set(normalizeRiskName(name), readNumericValue(value));
-      },
-    );
-  }
-
-  return riskCategoryOrder.map((name) => ({
-    name,
-    value: counts.get(normalizeRiskName(name)) ?? 0,
-  }));
-};
-
-const normalizeRiskDistribution = (payload: unknown): RiskData[] => {
-  if (!payload || typeof payload !== "object") {
-    return [];
-  }
-
-  const summary = payload as AnalyticsSummaryPayload;
-  const candidate =
-    summary.risk_distribution ??
-    summary.risk_counts ??
-    summary.count_by_risk_level;
-
-  return mapRiskDistribution(candidate);
-};
-
-export default function Analytics() {
-  const [riskPieData, setRiskPieData] = useState<RiskData[]>([]);
-
-  const [loading, setLoading] = useState(true);
-  const theme = useThemeMode();
-  const activeChartTheme = chartTheme[theme];
-  const chartRemountKey = `${theme}-charts`;
-
   useEffect(() => {
     let isMounted = true;
 
     const fetchRiskDistribution = async () => {
       try {
         const summary = await analyticsApi.summary();
-        const normalizedData = normalizeRiskDistribution(summary);
+        const normalizedData = extractRiskDistribution(summary);
 
         if (isMounted) {
           setRiskPieData(normalizedData);
