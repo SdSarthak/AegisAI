@@ -5,19 +5,27 @@ import re
 from jose import ExpiredSignatureError, JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.context import user_id_ctx
 from app.core.database import get_db
 
+from fastapi.security import OAuth2PasswordBearer
+from fastapi import Header
+from app.models.api_key import ApiKey
+from app.models.user import User
+from app.core.security import hash_api_key
+
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/auth/login",
+    auto_error=False
+)
+
 if TYPE_CHECKING:
     from app.models.user import User  # Prevent circular imports during runtime
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_PREFIX}/auth/login")
-
 
 def _get_credentials_exception() -> HTTPException:
     """Helper to return a standardized 401 Unauthorized exception."""
@@ -126,31 +134,57 @@ def decode_token(token: str) -> Dict[str, Any]:
 
 
 async def get_current_user(
-    token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
+    token: str = Depends(oauth2_scheme),
+    x_api_key: str | None = Header(default=None),
+    db: Session = Depends(get_db),
 ) -> "User":
-    """Dependency to get the current authenticated user from a JWT."""
-    from app.models.user import User  # Local import to avoid circular dependencies
+    """Get authenticated user from JWT or API key."""
+
+    from app.models.user import User
+
+    # API KEY AUTH
+    if x_api_key:
+        api_key = (
+            db.query(ApiKey)
+            .filter(
+                ApiKey.key_hash == hash_api_key(x_api_key),
+                ApiKey.revoked == False,
+            )
+            .first()
+        )
+
+        if not api_key:
+            raise get_credentials_exception()
+
+        user = db.query(User).filter(User.id == api_key.user_id).first()
+
+        if not user:
+            raise get_credentials_exception()
+
+        user_id_ctx.set(user.id)
+        return user
+
+    # JWT AUTH
+    if not token:
+        raise get_credentials_exception()
 
     payload = decode_token(token)
     user_id_str: Optional[str] = payload.get("sub")
 
     if not user_id_str:
-        raise _get_credentials_exception()
+        raise get_credentials_exception()
 
-    # Defensively handle malformed or non-integer 'sub' claims
     try:
         user_id = int(user_id_str)
+
     except (ValueError, TypeError):
-        raise _get_credentials_exception()
+        raise get_credentials_exception()
 
     user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        # Standardized to 401 generic failure instead of a distinct "User not found" 401
-        # to prevent user enumeration attacks via valid-but-orphaned tokens.
-        raise _get_credentials_exception()
 
-    # Bind to the request context so every downstream log line (and the
-    # access log emitted by RequestContextMiddleware) carries user_id.
+    if not user:
+        raise get_credentials_exception()
+
     user_id_ctx.set(user.id)
 
     return user

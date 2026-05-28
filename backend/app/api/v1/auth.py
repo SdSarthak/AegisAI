@@ -25,6 +25,10 @@ import hashlib
 from pydantic import BaseModel, field_validator
 >>>>>>> daf0016 (feat(auth): add API key management endpoints)
 from sqlalchemy.orm import Session
+<<<<<<< HEAD
+=======
+from datetime import timedelta, datetime
+>>>>>>> 2eb86a8 (fix(auth): wire api key authentication)
 
 from app.core.database import get_db
 from app.core.security import (
@@ -229,8 +233,6 @@ def get_current_user_stats(
         risk_breakdown=risk_breakdown,
         compliant_systems=compliant_systems,
     )
-<<<<<<< HEAD
-=======
 
 
 @router.post(
@@ -309,9 +311,11 @@ def revoke_api_key(
         )
 
     api_key.revoked = True
+    api_key.revoked_at = datetime.utcnow()
+
     db.commit()
+    db.refresh(api_key)
 
     return ApiKeyRevokeResponse(
         message="API key revoked successfully"
     )
->>>>>>> daf0016 (feat(auth): add API key management endpoints)
