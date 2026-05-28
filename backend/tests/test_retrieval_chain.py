@@ -50,25 +50,28 @@ class TestRetrievalChain:
         """3. get_qa_chain() should return a chain when the index exists."""
         # Setup: Mock vector store and its retriever
         mock_vs = MagicMock()
+        mock_load_vs.return_value = mock_vs
         mock_retriever = MagicMock()
         mock_vs.as_retriever.return_value = mock_retriever
-        mock_load_vs.return_value = mock_vs
         
-        # Mock the chain instance
-        mock_chain = MagicMock()
-        mock_from_chain_type.return_value = mock_chain
-        
-        # Execute
+        # Call the function
         chain = get_qa_chain()
         
         # Assertions
-        assert chain == mock_chain
-        mock_from_chain_type.assert_called_once()
-        
-        # Verify it was built with return_source_documents=True
-        # This checks that we are following the project's requirement for source extraction
-        args, kwargs = mock_from_chain_type.call_args
-        assert kwargs["return_source_documents"] is True
+        assert chain is not None
+        mock_load_vs.assert_called_once()
+        mock_vs.as_retriever.assert_called_once_with(search_kwargs={"k": 5})
+        mock_llm.assert_called_once_with(
+            model=settings.LLM_MODEL,
+            temperature=0.0,
+            api_key=settings.OPENAI_API_KEY,
+        )
+        mock_from_chain_type.assert_called_once_with(
+            llm=mock_llm.return_value,
+            chain_type="stuff",
+            retriever=mock_retriever,
+            return_source_documents=True,
+        )
 
     @patch("app.modules.rag.retrieval_chain.load_vector_store")
     @patch("app.modules.rag.retrieval_chain.ChatOpenAI")
