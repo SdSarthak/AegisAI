@@ -19,7 +19,7 @@ import secrets
 import hashlib
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 from app.core.database import get_db
 from app.core.security import (
@@ -284,7 +284,10 @@ def revoke_api_key(
         )
 
     api_key.revoked = True
+    api_key.revoked_at = datetime.utcnow()
+
     db.commit()
+    db.refresh(api_key)
 
     return ApiKeyRevokeResponse(
         message="API key revoked successfully"
