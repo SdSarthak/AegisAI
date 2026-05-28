@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { FileText, Download, Trash2, Plus, Edit, Copy } from 'lucide-react'
+import toast from 'react-hot-toast'
 import DocumentEditor from '../components/DocumentEditor'
 
 interface Document {
@@ -93,7 +94,7 @@ export default function Documents() {
   const handleCopy = async (content: string) => {
   try {
     await navigator.clipboard.writeText(content)
-    alert('Copied to clipboard!')
+    toast.success('Copied to clipboard')
   } catch (error) {
     console.error('Copy failed:', error)
   }
