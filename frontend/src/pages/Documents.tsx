@@ -1,9 +1,13 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
+
+
 import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
+import toast from 'react-hot-toast'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
+
 
 interface Document {
   id: number
@@ -30,9 +34,7 @@ export default function Documents() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
-  const [copiedDocId, setCopiedDocId] = useState<number | null>(null)
-  const [currentPage, setCurrentPage] = useState(1)
-  const limit = 10
+  const [copiedId, setCopiedId] = useState<number | null>(null)
 
   const handleCopy = async (docId: number, content: string) => {
     try {
@@ -126,6 +128,25 @@ export default function Documents() {
     }
   }
 
+
+  const handleCopy = async (doc: Document) => {
+  if (!doc.content) return
+
+  try {
+    await navigator.clipboard.writeText(doc.content)
+
+    setCopiedId(doc.id)
+    toast.success('Copied to clipboard')
+
+    setTimeout(() => {
+      setCopiedId(null)
+    }, 2000)
+
+  } catch (error) {
+    console.error('Copy failed:', error)
+  }
+}
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'approved':
@@ -156,6 +177,7 @@ export default function Documents() {
           <Plus className="w-5 h-5" />
           Generate Document
         </button>
+        
       </div>
 
       <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -289,15 +311,7 @@ export default function Documents() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {doc.content && (
-                    <CopyButton
-                      text={doc.content}
-                      label="Copy"
-                      copiedLabel="Copied!"
-                      successMessage="Document copied!"
-                      iconOnly
-                    />
-                  )}
+                  
                   <button
                     onClick={() => setEditingDoc(doc)}
                     className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
@@ -305,19 +319,21 @@ export default function Documents() {
                   >
                     <Edit className="w-5 h-5" />
                   </button>
+                  
+                   
 
                   <button
-                    onClick={() => handleCopy(doc.id, doc.content || '')}
-                    className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
-                    title={copiedDocId === doc.id ? 'Copied!' : 'Copy Markdown'}
-                  >
-                    {copiedDocId === doc.id ? (
-                      <Check className="w-5 h-5" />
-                    ) : (
-                      <Copy className="w-5 h-5" />
-                    )}
-                  </button>
+                   onClick={() => handleCopy(doc)}
 
+                  className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
+                  title="Copy"
+                >
+                  {copiedId === doc.id ? (
+                    <Check className="w-5 h-5" />
+                  ) : (
+                    <Copy className="w-5 h-5" />
+                  )}
+                </button>
                   <button
                     onClick={() => {
                       // Download as text file
