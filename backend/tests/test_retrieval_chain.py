@@ -6,6 +6,7 @@ try:
     from langchain.chains import RetrievalQA
 except ImportError:
     from langchain_classic.chains import RetrievalQA
+from app.core.config import settings
 from app.modules.rag.retrieval_chain import get_qa_chain
 from app.modules.rag.vector_store import load_vector_store
 
