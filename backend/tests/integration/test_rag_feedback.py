@@ -11,6 +11,7 @@ from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.core.database import Base, get_db
 from app.core.security import get_current_user
+from app.api.v1.rag import RAG_QUESTION_MAX_LENGTH
 from app.models.user import User, SubscriptionTier
 
 
@@ -79,6 +80,10 @@ def client():
     # 4. Cleanup
     db.close()
     app.dependency_overrides.clear()
+
+    # Clean up dependency overrides to prevent test leakage.
+    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture
@@ -164,3 +169,15 @@ def test_feedback_rejects_invalid_vote_value(client, mock_rag_modules):
     resp3 = client.get("/api/v1/rag/low-quality-chunks?threshold=0.0")
     assert resp3.status_code == 200
     assert resp3.json()["low_quality_chunks"] == []
+
+
+def test_query_rejects_question_over_max_length(client):
+    oversized_question = "A" * (RAG_QUESTION_MAX_LENGTH + 1)
+
+    resp = client.post("/api/v1/rag/query", json={"question": oversized_question})
+
+    assert resp.status_code == 400
+    assert resp.json()["detail"] == (
+        f"Question is too long. Please keep it under "
+        f"{RAG_QUESTION_MAX_LENGTH} characters."
+    )

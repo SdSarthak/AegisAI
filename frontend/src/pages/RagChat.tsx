@@ -12,6 +12,8 @@ import {
 
 import { useRagStream } from '../hooks/useRagStream'
 
+const RAG_QUESTION_MAX_LENGTH = 2000
+
 export default function RagChat() {
   const [question, setQuestion] = useState('')
   const [submittedQuestion, setSubmittedQuestion] = useState('')
@@ -35,12 +37,23 @@ export default function RagChat() {
 
   const handleAsk = (e: React.FormEvent) => {
     e.preventDefault()
+
     const trimmed = question.trim()
+
     if (!trimmed) {
       setValidationError('Please enter a question before asking.')
       setSubmittedQuestion('')
       return
     }
+
+    if (trimmed.length > RAG_QUESTION_MAX_LENGTH) {
+      setValidationError(
+        `Question is too long. Please keep it under ${RAG_QUESTION_MAX_LENGTH} characters.`
+      )
+      setSubmittedQuestion('')
+      return
+    }
+
     setValidationError(null)
     setSubmittedQuestion(trimmed)
     setQuestion('')
@@ -228,9 +241,11 @@ export default function RagChat() {
                                   <p className="font-medium text-sm text-gray-900">
                                     {citation.source}
                                   </p>
-                                  <p className="text-sm text-gray-600 mt-1">
-                                    {citation.excerpt}
-                                  </p>
+                                  {citation.excerpt && (
+                                    <p className="text-sm text-gray-600 mt-1">
+                                      {citation.excerpt}
+                                    </p>
+                                  )}
                                 </div>
                               ))}
                             </div>
@@ -257,6 +272,7 @@ export default function RagChat() {
               id="rag-question"
               value={question}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setQuestion(e.target.value)}
+              maxLength={RAG_QUESTION_MAX_LENGTH + 1}
               placeholder="Ask a compliance question..."
               rows={1}
               disabled={isStreaming}
@@ -286,11 +302,11 @@ export default function RagChat() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 mt-2">
             <p className="text-xs text-gray-500">
               {isStreaming
-                ? 'Streaming answer — click stop to cancel.'
+                ? 'Streaming answer - click stop to cancel.'
                 : 'Answers stream token-by-token as they are generated.'}
             </p>
             <p className="text-xs text-gray-400">
-              Use this assistant to explore risk, documentation, and governance obligations.
+              {question.trim().length}/{RAG_QUESTION_MAX_LENGTH} characters
             </p>
           </div>
         </form>
