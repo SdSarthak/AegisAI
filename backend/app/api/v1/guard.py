@@ -32,7 +32,10 @@ from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.pagination import PaginatedResponse
 from app.modules.guard import guard_config
-
+from app.core.metrics import GUARD_SCANS_TOTAL
+import logging
+from typing import List, Optional, Dict, TypedDict
+from fastapi import APIRouter, Depends
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -206,6 +209,7 @@ def scan_prompt(
 
         guard = LLMGuard(sanitization_level=san_level)
         result = guard.guard(request.prompt)
+        GUARD_SCANS_TOTAL.labels(decision=result["decision"]).inc()
 
         background_tasks.add_task(
             log_scan,
@@ -575,6 +579,7 @@ def bulk_scan_prompts(
 
         for prompt in request.prompts:
             result = guard.guard(prompt)
+            GUARD_SCANS_TOTAL.labels(decision=result["decision"]).inc()
             log = _build_guard_scan_log(current_user.id, prompt, result)
 
             db.add(log)

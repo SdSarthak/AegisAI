@@ -9,6 +9,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Any
 
+from fastapi import Depends, HTTPException
+from app.models.user import User
+
 from fastapi import FastAPI
 from fastapi.responses import Response
 from prometheus_client import (
@@ -30,6 +33,8 @@ from app.core.middleware import RequestContextMiddleware
 from app.api.v1 import api_router, badge
 from app.plugins.regulation_loader import init_registry
 import app.models  # ensure all ORM models are imported so tables are created
+from fastapi import Depends
+from app.core.security import get_current_user
 
 # -------------------------------------------------------------------
 # Logging Setup
@@ -40,28 +45,13 @@ configure_logging(level="DEBUG" if settings.DEBUG else "INFO")
 logger = logging.getLogger("aegisai.main")
 # -------------------------------------------------------------------
 # Prometheus Metrics
+from app.core.metrics import (
+    GUARD_SCANS_TOTAL,
+    RAG_QUERIES_TOTAL,
+    HTTP_REQUEST_DURATION,
+    AI_SYSTEMS_TOTAL
+)
 # -------------------------------------------------------------------
-
-GUARD_SCANS_TOTAL = Counter(
-    "aegisai_guard_scans_total",
-    "Total number of guard scans",
-    ["decision"]
-)
-
-RAG_QUERIES_TOTAL = Counter(
-    "aegisai_rag_queries_total",
-    "Total number of RAG queries"
-)
-
-HTTP_REQUEST_DURATION = Histogram(
-    "aegisai_http_request_duration_seconds",
-    "HTTP request duration in seconds"
-)
-
-AI_SYSTEMS_TOTAL = Gauge(
-    "aegisai_ai_systems_total",
-    "Total number of AI systems"
-)
 # -------------------------------------------------------------------
 # Lifespan Handler
 # -------------------------------------------------------------------
@@ -182,7 +172,10 @@ def health_check() -> Dict[str, Any]:
         "service": "AegisAI Backend"
     }
 @app.get("/metrics")
-def metrics():
+def metrics(current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+
     return Response(
         generate_latest(),
         media_type=CONTENT_TYPE_LATEST

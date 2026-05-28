@@ -29,7 +29,7 @@ from app.models.user import SubscriptionTier, User
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.vector_store import create_vector_store
 from app.models.rag_query import RagQuery
-
+from app.core.metrics import RAG_QUERIES_TOTAL
 router = APIRouter()
 
 
@@ -165,6 +165,7 @@ def query_knowledge_base(
 
         t_start = time.monotonic()
         result = qa_chain({"query": request.question})
+        RAG_QUERIES_TOTAL.inc()
         latency_ms = (time.monotonic() - t_start) * 1000
 
         source_docs = result.get("source_documents", [])
