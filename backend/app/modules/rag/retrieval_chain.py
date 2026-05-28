@@ -1,122 +1,51 @@
-"""LangChain retrieval-augmented generation chain for regulatory queries.
-
-Changed: Added regex-only retrieved chunk scanning before context assembly.
-Why: Retrieved documents can contain prompt injection text independent of the user query.
-Addresses: Indirect prompt injection from poisoned FAISS chunks and prevents LLM calls when all context is unsafe.
-"""
+"""LangChain retrieval-augmented generation chain for regulatory queries."""
 
 import logging
-from importlib import import_module
 from typing import Any
 
 from app.core.config import settings
-from app.core.telemetry import instrument_rag
 
-from .grounding import GroundingChecker
+from .groundedness import GroundednessConfig, HybridGroundednessChecker
 
 logger = logging.getLogger(__name__)
 ChatOpenAI = None
-_CHUNK_GUARD: Any | None = None
-
-SAFE_CONTEXT_FALLBACK = (
-    "Retrieved context could not be verified as safe. "
-    "Please rephrase your question or contact support."
-)
-
-
-class _RetrievalQAShim:
-    """Fallback patch target when local LangChain RetrievalQA imports are broken."""
-
-    @classmethod
-    def from_chain_type(cls, *args: Any, **kwargs: Any) -> Any:
-        """Raise a clear error if code tries to use the shim in production."""
-        raise ImportError("LangChain RetrievalQA is unavailable in this environment")
-
-
-try:
-    _chains_module = import_module("langchain.chains")
-    _chains_module.__dict__.setdefault("RetrievalQA", _RetrievalQAShim)
-except Exception:
-    pass
+load_qa_chain = None
 
 
 class GroundedRetrievalQA:
-    """Callable wrapper that filters retrieved chunks and scores grounding."""
+    """Callable wrapper that adds groundedness scores to RetrievalQA results."""
 
-    def __init__(
-        self,
-        qa_chain: Any,
-        embeddings_fn: Any,
-        guard: Any | None = None,
-    ) -> None:
-        """Store the underlying chain, embedding callable, and chunk guard."""
+    def __init__(self, qa_chain: Any, embeddings_fn: Any) -> None:
+        """Store the underlying chain and embedding callable."""
         self.qa_chain = qa_chain
         self.embeddings_fn = embeddings_fn
-        self.guard = guard
 
-    @instrument_rag
     def __call__(self, payload: Any) -> dict[str, Any]:
-        """Run retrieval with chunk filtering and append grounding metadata."""
+        """Run the QA chain and append groundedness fields to the result dict."""
+        result = self.qa_chain(payload)
         query = _extract_query(payload)
-        retrieved_documents = _get_relevant_documents(self.qa_chain, query)
-        chunks_total = len(retrieved_documents)
-        safe_documents: list[Any] = []
-        chunks_dropped = 0
-
-        for document in retrieved_documents:
-            scan = _get_chunk_guard(self.guard).scan_chunk(str(document.page_content))
-            severity = str(scan.get("severity", "low")).lower()
-            if severity == "high":
-                chunks_dropped += 1
-                continue
-            if severity == "medium":
-                logger.warning(
-                    "Medium-severity prompt injection pattern found in retrieved RAG chunk: %s",
-                    scan.get("matched_patterns", []),
-                )
-            safe_documents.append(document)
-
-        logger.info(
-            "RAG chunk safety scan completed: total=%s dropped=%s",
-            chunks_total,
-            chunks_dropped,
-        )
-
-        if chunks_total > 0 and not safe_documents:
-            return {
-                "result": SAFE_CONTEXT_FALLBACK,
-                "source_documents": [],
-                "chunks_total": chunks_total,
-                "chunks_dropped": chunks_dropped,
-                "llm_skipped": True,
-                "grounding_score": 0.0,
-                "grounding_confidence": "LOW",
-                "warning": "No retrieved context passed the chunk safety scan.",
-            }
-
-        result = _run_chain_with_documents(self.qa_chain, query, safe_documents, payload)
-        if chunks_total > 0:
-            result["source_documents"] = safe_documents
-        result_source_documents = result.get("source_documents", safe_documents)
-        result["chunks_total"] = chunks_total or len(result_source_documents)
-        result["chunks_dropped"] = chunks_dropped
-
         answer = str(result.get("result", ""))
-        chunks = [doc.page_content for doc in result_source_documents]
+        source_documents = result.get("source_documents", [])
+        chunks = [doc.page_content for doc in source_documents]
 
         try:
-            grounding = GroundingChecker(embeddings_fn=self.embeddings_fn).check(
-                answer=answer,
-                chunks=chunks,
+            checker = HybridGroundednessChecker(
+                embeddings_fn=self.embeddings_fn,
+                config=GroundednessConfig(),
             )
-            result["grounding_score"] = grounding.score
-            result["grounding_confidence"] = grounding.confidence
-            result["warning"] = grounding.warning
+            groundedness = checker.check(answer=answer, chunks=chunks, query=query)
+            result["groundedness_score"] = groundedness.groundedness_score
+            result["low_confidence"] = groundedness.low_confidence
+            result["confidence_tier"] = groundedness.confidence_tier
+            result["per_verifier_scores"] = groundedness.per_verifier_scores
+            result["flagged_reason"] = groundedness.flagged_reason
         except Exception:
-            logger.exception("Grounding check failed for RAG response")
-            result["grounding_score"] = 0.0
-            result["grounding_confidence"] = "LOW"
-            result["warning"] = "Grounding check failed."
+            logger.exception("Groundedness check failed for RAG response")
+            result["groundedness_score"] = 0.0
+            result["low_confidence"] = True
+            result["confidence_tier"] = "unknown"
+            result["per_verifier_scores"] = {}
+            result["flagged_reason"] = "Groundedness check failed."
 
         return result
 
@@ -189,62 +118,100 @@ def _extract_query(payload: Any) -> str:
     return str(payload)
 
 
-def _get_chunk_guard(guard: Any | None = None) -> Any:
-    """Return the module-level chunk guard singleton."""
-    global _CHUNK_GUARD
-    if guard is not None:
-        return guard
-    if _CHUNK_GUARD is None:
-        from app.modules.guard.llm_guard import LLMGuard
+def query_with_guard(question: str, guard: Any) -> dict[str, Any]:
+    """
+    Retrieve document chunks, filter them through the Guard pipeline,
+    and generate a grounded answer from the safe subset only.
 
-        _CHUNK_GUARD = LLMGuard()
-    return _CHUNK_GUARD
+    Implements Layer 2 protection (chunk-level scanning) for issue #748.
+    Layer 1 (query-level scanning) is performed by the RAG endpoint
+    before this function is called.
 
+    Args:
+        question: The (possibly sanitized) user question.
+        guard: An ``LLMGuard`` instance used to scan each retrieved chunk.
 
-def _get_relevant_documents(qa_chain: Any, query: str) -> list[Any]:
-    """Retrieve source documents from the wrapped LangChain QA chain."""
-    retriever = getattr(qa_chain, "retriever", None)
-    if retriever is None:
-        return []
-    if hasattr(retriever, "invoke"):
-        return list(retriever.invoke(query))
-    if hasattr(retriever, "get_relevant_documents"):
-        return list(retriever.get_relevant_documents(query))
-    return []
+    Returns:
+        dict matching the shape returned by ``GroundedRetrievalQA.__call__``:
+        ``result``, ``source_documents``, ``groundedness_score``,
+        ``low_confidence``, ``confidence_tier``, ``per_verifier_scores``,
+        ``flagged_reason``.
 
+    Raises:
+        FileNotFoundError: if the FAISS index has not been built yet.
+    """
+    global ChatOpenAI, load_qa_chain
 
-def _run_chain_with_documents(
-    qa_chain: Any,
-    query: str,
-    documents: list[Any],
-    original_payload: Any,
-) -> dict[str, Any]:
-    """Run the LLM over already-filtered documents when LangChain supports it."""
-    if not documents:
-        result = qa_chain(original_payload)
-        if not isinstance(result, dict):
-            return {"result": str(result), "source_documents": documents}
-        return result
+    if load_qa_chain is None:
+        from langchain.chains.question_answering import load_qa_chain as chain_loader
 
-    combine_chain = getattr(qa_chain, "combine_documents_chain", None)
-    if combine_chain is not None:
-        if hasattr(combine_chain, "run"):
-            answer = combine_chain.run(input_documents=documents, question=query)
-        else:
-            combined = combine_chain(
-                {"input_documents": documents, "question": query},
-            )
-            answer = (
-                combined.get("output_text", combined)
-                if isinstance(combined, dict)
-                else combined
-            )
-        return {"result": str(answer), "source_documents": documents}
+        load_qa_chain = chain_loader
 
-    logger.warning(
-        "Falling back to unfiltered QA chain execution; combine chain unavailable"
+    if ChatOpenAI is None:
+        from langchain_openai import ChatOpenAI as LangChainChatOpenAI
+
+        ChatOpenAI = LangChainChatOpenAI
+
+    vector_store = load_vector_store()
+    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+    embeddings_fn = _get_embeddings_fn(vector_store)
+
+    raw_docs = retriever.get_relevant_documents(question)
+
+    safe_docs = [
+        doc for doc in raw_docs if guard.scan_chunk(doc.page_content) != "block"
+    ]
+
+    if not safe_docs:
+        logger.warning("query_with_guard: all retrieved chunks blocked by Guard")
+        return {
+            "result": (
+                "Your question could not be answered safely. "
+                "All retrieved context was flagged by the security pipeline."
+            ),
+            "source_documents": [],
+            "groundedness_score": 0.0,
+            "low_confidence": True,
+            "confidence_tier": "unsafe",
+            "per_verifier_scores": {},
+            "flagged_reason": "All retrieved chunks were blocked by the Guard pipeline.",
+        }
+
+    llm = ChatOpenAI(
+        model=settings.LLM_MODEL,
+        openai_api_key=settings.LLM_API_KEY,
+        openai_api_base=settings.LLM_BASE_URL or None,
+        temperature=0,
     )
-    result = qa_chain(original_payload)
-    if not isinstance(result, dict):
-        return {"result": str(result), "source_documents": documents}
-    return result
+
+    qa_chain = load_qa_chain(llm, chain_type="stuff")
+    raw_result = qa_chain.invoke({"input_documents": safe_docs, "question": question})
+    answer = raw_result.get("output_text", raw_result.get("result", ""))
+    chunks = [doc.page_content for doc in safe_docs]
+
+    try:
+        checker = HybridGroundednessChecker(
+            embeddings_fn=embeddings_fn,
+            config=GroundednessConfig(),
+        )
+        groundedness = checker.check(answer=answer, chunks=chunks, query=question)
+        return {
+            "result": answer,
+            "source_documents": safe_docs,
+            "groundedness_score": groundedness.groundedness_score,
+            "low_confidence": groundedness.low_confidence,
+            "confidence_tier": groundedness.confidence_tier,
+            "per_verifier_scores": groundedness.per_verifier_scores,
+            "flagged_reason": groundedness.flagged_reason,
+        }
+    except Exception:
+        logger.exception("Groundedness check failed in query_with_guard")
+        return {
+            "result": answer,
+            "source_documents": safe_docs,
+            "groundedness_score": 0.0,
+            "low_confidence": True,
+            "confidence_tier": "unknown",
+            "per_verifier_scores": {},
+            "flagged_reason": "Groundedness check failed.",
+        }
