@@ -49,6 +49,8 @@ class Settings(BaseSettings):
     S3_BUCKET_NAME: str = ""
     RAG_CHUNK_SIZE: int = 1000
     RAG_CHUNK_OVERLAP: int = 200
+    RAG_INGEST_MAX_FILES: int = 5
+    RAG_INGEST_MAX_FILE_BYTES: int = 10 * 1024 * 1024
     FAISS_INDEX_PATH: str = "faiss_index"
     MLFLOW_TRACKING_URI: str = ""
 

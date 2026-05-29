@@ -30,6 +30,37 @@ from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
 router = APIRouter()
 
 
+def _format_size_limit(max_bytes: int) -> str:
+    if max_bytes >= 1024 * 1024:
+        return f"{max_bytes // (1024 * 1024)}MB"
+    return f"{max_bytes} bytes"
+
+
+def _copy_upload_with_limit(upload: UploadFile, dest: str, max_bytes: int) -> None:
+    """Copy an uploaded file to disk while enforcing a hard byte cap."""
+
+    upload.file.seek(0)
+    total_bytes = 0
+
+    with open(dest, "wb") as buf:
+        while True:
+            chunk = upload.file.read(min(1024 * 1024, max_bytes + 1 - total_bytes))
+            if not chunk:
+                break
+
+            total_bytes += len(chunk)
+            if total_bytes > max_bytes:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=(
+                        "PDF upload exceeds the maximum size of "
+                        f"{_format_size_limit(max_bytes)} per file."
+                    ),
+                )
+
+            buf.write(chunk)
+
+
 def load_documents_from_paths(saved_paths: list[str]):
     """Lazy wrapper around the RAG document loader."""
     from app.modules.rag.document_loader import load_documents_from_paths as loader
@@ -86,6 +117,14 @@ def ingest_documents(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No valid PDF files supplied. Please upload files with a .pdf extension.",
         )
+    if len(pdf_files) > settings.RAG_INGEST_MAX_FILES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                "Too many PDF files supplied. "
+                f"Upload at most {settings.RAG_INGEST_MAX_FILES} files at a time."
+            ),
+        )
 
     tmp_dir = tempfile.mkdtemp(prefix="aegis_ingest_")
     saved_paths: list[str] = []
@@ -93,8 +132,11 @@ def ingest_documents(
     try:
         for upload in pdf_files:
             dest = os.path.join(tmp_dir, os.path.basename(upload.filename))
-            with open(dest, "wb") as buf:
-                shutil.copyfileobj(upload.file, buf)
+            _copy_upload_with_limit(
+                upload,
+                dest,
+                settings.RAG_INGEST_MAX_FILE_BYTES,
+            )
             saved_paths.append(dest)
 
         chunks = load_documents_from_paths(saved_paths)

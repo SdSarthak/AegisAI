@@ -9,6 +9,7 @@ run without an OpenAI key, a running DB, or any real PDFs on disk.
 import io
 import pytest
 from unittest.mock import MagicMock, patch
+from app.api.v1 import rag
 from app.core.security import get_current_user
 from app.main import app
 
@@ -146,6 +147,55 @@ class TestRagIngest:
         assert response.status_code == 400
         assert "pdf" in response.json()["detail"].lower()
         # Loader and FAISS builder must NOT have been called
+        mock_load.assert_not_called()
+        mock_create.assert_not_called()
+
+    @patch(PATCH_CREATE_VS)
+    @patch(PATCH_LOAD_DOCS)
+    def test_too_many_pdf_files_returns_413(self, mock_load, mock_create, client, mock_rag_user):
+        """
+        Reject uploads that exceed the configured RAG ingest file count limit.
+        """
+        with (
+            patch(PATCH_AUTH, return_value=_mock_current_user()),
+            patch.object(rag.settings, "RAG_INGEST_MAX_FILES", 2),
+        ):
+            response = client.post(
+                "/api/v1/rag/ingest",
+                files=[
+                    ("files", _make_pdf_upload("doc1.pdf")),
+                    ("files", _make_pdf_upload("doc2.pdf")),
+                    ("files", _make_pdf_upload("doc3.pdf")),
+                ],
+            )
+
+        assert response.status_code == 413
+        assert "too many" in response.json()["detail"].lower()
+        mock_load.assert_not_called()
+        mock_create.assert_not_called()
+
+    @patch(PATCH_CREATE_VS)
+    @patch(PATCH_LOAD_DOCS)
+    def test_oversized_pdf_file_returns_413(self, mock_load, mock_create, client, mock_rag_user):
+        """
+        Reject a PDF before parsing/indexing when it exceeds the byte limit.
+        """
+        with (
+            patch(PATCH_AUTH, return_value=_mock_current_user()),
+            patch.object(rag.settings, "RAG_INGEST_MAX_FILE_BYTES", 12),
+        ):
+            response = client.post(
+                "/api/v1/rag/ingest",
+                files={
+                    "files": _make_pdf_upload(
+                        "large.pdf",
+                        b"%PDF-1.4 larger than cap",
+                    )
+                },
+            )
+
+        assert response.status_code == 413
+        assert "maximum size" in response.json()["detail"].lower()
         mock_load.assert_not_called()
         mock_create.assert_not_called()
 
