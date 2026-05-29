@@ -170,6 +170,7 @@ def scan_prompt(
     request: ScanRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),              # added this for fixing nameerror crash
 ):
     """Scan a prompt for injection risks.
 
