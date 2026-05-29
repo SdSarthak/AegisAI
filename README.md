@@ -281,3 +281,27 @@ Copyright (C) 2024 **Sarthak Doshi** ([@SdSarthak](https://github.com/SdSarthak)
 <div align="center">
   <sub>Built with care. If AegisAI helps you, give it a star.</sub>
 </div>
+## Troubleshooting
+
+### npm install fails
+Try clearing the npm cache and reinstalling dependencies:
+
+```bash
+npm cache clean --force
+npm install 
+```
+### Module not found error
+Delete the node_modules folder and reinstall dependencies:
+
+```bash
+rm -rf node_modules
+npm install
+```
+### Port already in use
+Stop the process using the current port or change the port number.
+
+### Environment variables not loading
+Ensure the .env file exists and contains all required variables.
+
+### Application fails to start
+Make sure all dependencies are installed and the correct Node.js version is being used.
