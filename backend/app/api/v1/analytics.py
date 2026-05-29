@@ -12,7 +12,6 @@ TODO for contributors (help wanted):
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -61,42 +60,27 @@ def get_analytics_summary(
     Returns:
         Aggregate compliance statistics for the user's AI systems.
     """
-    systems_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
-    total_systems = systems_query.count()
-    average_score = (
-        db.query(func.avg(AISystem.compliance_score))
-        .filter(AISystem.owner_id == current_user.id)
-        .scalar()
-    )
+    systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
 
     counts = {risk.value: 0 for risk in RiskLevel}
-    risk_rows = (
-        db.query(AISystem.risk_level, func.count(AISystem.id))
-        .filter(AISystem.owner_id == current_user.id)
-        .group_by(AISystem.risk_level)
-        .all()
-    )
-    for risk_level, count in risk_rows:
-        if risk_level:
-            counts[risk_level.value] = count
+    compliance_statuses = {status.value: 0 for status in ComplianceStatus}
+    scored_values: list[float] = []
 
-    compliance_status = {status_.value: 0 for status_ in ComplianceStatus}
-    status_rows = (
-        db.query(AISystem.compliance_status, func.count(AISystem.id))
-        .filter(AISystem.owner_id == current_user.id)
-        .group_by(AISystem.compliance_status)
-        .all()
+    for system in systems:
+        if system.risk_level:
+            counts[system.risk_level.value] += 1
+        if system.compliance_status:
+            compliance_statuses[system.compliance_status.value] += 1
+        if system.compliance_score is not None:
+            scored_values.append(float(system.compliance_score))
+
+    average_compliance_score = (
+        round(sum(scored_values) / len(scored_values), 2) if scored_values else 0.0
     )
-    for status_, count in status_rows:
-        if status_:
-            compliance_status[status_.value] = count
 
     return {
-        "total_systems": total_systems,
-        "average_compliance_score": round(float(average_score), 2)
-        if average_score is not None
-        else None,
+        "total_systems": len(systems),
+        "average_compliance_score": average_compliance_score,
         "counts": counts,
-        "compliance_status": compliance_status,
-        "compliance_statuses": compliance_status,
+        "compliance_statuses": compliance_statuses,
     }

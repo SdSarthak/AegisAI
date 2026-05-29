@@ -9,11 +9,16 @@ TODO for contributors (medium difficulty):
   - Add a GET /guard/stats endpoint returning block/allow/sanitize counts (Completed)
 """
 
-import logging
 import hashlib
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
+from typing import Optional
+
+from app.api.v1.webhooks import deliver_webhook
+import logging
+from collections import Counter
+from datetime import datetime, timedelta, timezone
 from typing import Optional, TypedDict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -30,7 +35,6 @@ from app.core.rate_limit import guard_scan_rate_limiter
 from app.models.guard_scan_log import GuardScanLog
 from app.models.notification import NotificationType
 from app.models.user import User
-from app.api.v1.webhooks import deliver_webhook
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.pagination import PaginatedResponse
@@ -448,7 +452,7 @@ def get_guard_stats(
         .all()
     )
 
-    daily_buckets: dict[str, dict[str, int | str]] = {}
+    daily_buckets: dict[str, int] = {}
 
     for day, decision, count in daily_rows:
         date_key = str(day)

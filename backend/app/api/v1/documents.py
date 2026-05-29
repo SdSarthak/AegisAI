@@ -234,6 +234,7 @@ def list_document_templates(
         for document_type in DOCUMENT_TEMPLATES.keys()
     ]
 
+
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(
     document_id: int,
