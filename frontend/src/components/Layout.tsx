@@ -33,6 +33,11 @@ export default function Layout() {
   const displayName = user?.full_name || user?.email || 'Demo User'
   const companyName = user?.company_name || 'Free Plan'
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const pathnames = location.pathname.split('/').filter(Boolean)
+  const formatBreadcrumb = (value: string) =>
+  value
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase())
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-black dark:text-white">
@@ -131,13 +136,44 @@ export default function Layout() {
       >
         {/* Header */}
         <header className="sticky top-0 z-30 flex items-center justify-end gap-3 px-8 py-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200/60 dark:border-gray-700">
-          <NotificationBell />
+          <NotificationBell /> 
 
           {/* ✅ FINAL THEME BUTTON (clean placement) */}
           <ThemeToggle />
         </header>
 
         {/* Content */}
+        <div className="px-8 py-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+  <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+    <Link to="/" className="hover:text-primary-600">
+      Dashboard
+    </Link>
+
+    {pathnames.map((value, index) => {
+      const to = `/${pathnames.slice(0, index + 1).join('/')}`
+      const isLast = index === pathnames.length - 1
+
+      return (
+        <div key={to} className="flex items-center gap-2">
+          <ChevronRight className="w-4 h-4" />
+
+          {isLast ? (
+            <span className="font-medium text-gray-900 dark:text-white capitalize">
+              {formatBreadcrumb(value)}
+            </span>
+          ) : (
+            <Link
+              to={to}
+              className="hover:text-primary-600 capitalize"
+            >
+              {formatBreadcrumb(value)}
+            </Link>
+          )}
+        </div>
+      )
+    })}
+  </div>
+</div>
         <main className="p-8 min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
           <Outlet />
         </main>
