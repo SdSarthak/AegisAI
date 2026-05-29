@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from fastapi import status
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
+from app.models.guard_audit_log import GuardAuditLog
 from app.models.guard_scan_log import GuardScanLog
 from app.api.v1.guard import user_guard_configs
 
@@ -227,3 +229,55 @@ def test_get_guard_history(authenticated_client: TestClient, db_session: Session
     data = response.json()
     assert data["total"] == 1
     assert data["items"][0]["decision"] == "allow"
+
+
+def test_scan_prompt_records_audit_log(authenticated_client: TestClient, db_session: Session, test_user: User):
+    mock_guard = MagicMock()
+    mock_guard.guard.return_value = {
+        "decision": "block",
+        "metadata": {
+            "decision_reasoning": {"confidence": 0.8, "reasoning": "Dangerous prompt"},
+            "regex_analysis": {"matched_patterns": ["danger"]},
+            "intent_analysis": {"intent": "malicious", "confidence": 0.92},
+        },
+    }
+
+    with patch("app.modules.guard.llm_guard.LLMGuard", return_value=mock_guard):
+        response = authenticated_client.post("/api/v1/guard/scan", json={"prompt": "dangerous content"})
+
+    assert response.status_code == 200
+
+    audit_entry = db_session.query(GuardAuditLog).filter(GuardAuditLog.user_id == test_user.id).first()
+    assert audit_entry is not None
+    assert audit_entry.decision == "block"
+    assert audit_entry.threat_type == "malicious"
+    assert audit_entry.confidence_score == 0.8
+
+
+def test_get_guard_audit_log_filters(authenticated_client: TestClient, db_session: Session, test_user: User):
+    valid_hash = "0" * 64
+    log1 = GuardAuditLog(
+        user_id=test_user.id,
+        prompt_hash=valid_hash,
+        decision="allow",
+        threat_type="benign",
+        confidence_score=0.1,
+        timestamp=datetime.utcnow(),
+    )
+    log2 = GuardAuditLog(
+        user_id=test_user.id,
+        prompt_hash=valid_hash,
+        decision="block",
+        threat_type="malicious",
+        confidence_score=0.9,
+        timestamp=datetime.utcnow(),
+    )
+    db_session.add_all([log1, log2])
+    db_session.commit()
+
+    response = authenticated_client.get("/api/v1/guard/audit-log", params={"decision": "block"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["items"][0]["decision"] == "block"
+    assert data["items"][0]["threat_type"] == "malicious"
