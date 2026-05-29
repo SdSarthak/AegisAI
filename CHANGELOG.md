@@ -16,6 +16,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - **Documents API** — Validate `ai_system_id` ownership before creating documents so users cannot link documents to another user's AI system.
+- **RAG FAISS index rebuilds** — Stage, validate, and swap rebuilt indexes under thread/process locking so concurrent ingests cannot write directly into the shared live index.
 
 ---
 
