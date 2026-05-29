@@ -99,13 +99,13 @@ export default function GuardConsole() {
     try {
       const data = await guardApi.scan(trimmedPrompt)
 
-if (!data || typeof data !== 'object' || !data.decision) {
-  setError('The server returned an empty or invalid response. Please try again.')
-  return
-}
+      if (!data || typeof data !== 'object' || !data.decision) {
+        setError('The server returned an empty or invalid response. Please try again.')
+        return
+      }
 
-setResult(data)
-setScannedAt(new Date().toISOString())
+      setResult(data)
+      setScannedAt(new Date().toISOString())
     } catch (scanError: unknown) {
       const message = scanError instanceof Error
         ? scanError.message
