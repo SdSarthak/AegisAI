@@ -1,0 +1,43 @@
+# Version control
+.git
+.github
+
+# Environment variables
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg
+*.egg-info/
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Logs
+*.log
+
+# Frontend
+node_modules/
+dist/
+build/
+
+# Test & coverage
+tests/
+coverage/
+htmlcov/
+
+# Documentation
+*.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db

@@ -419,7 +419,7 @@ AegisAI/
 Both Guard and RAG use a single `LLMClient` speaking the OpenAI chat-completions API. Provider is swappable with a single `.env` change — OpenAI, Ollama, Groq, Together AI, vLLM all work without code changes.
 
 ### 2. Four-layer Guard pipeline
-Each layer has a distinct cost/coverage tradeoff. The pipeline is fail-safe: if the DeBERTa model fails to load, it falls back to the pre-trained base rather than disabling the Guard entirely.
+Each layer has a distinct cost/coverage tradeoff. The pipeline is fail-safe: if a fine-tuned DeBERTa checkpoint is unavailable or fails to load, it falls back to deterministic heuristics rather than disabling the Guard or using random classifier weights.
 
 ### 3. Per-user rate limiting on Guard scan
 Prevents abuse without authentication bypass. The limit is configurable via environment variables.

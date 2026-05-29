@@ -34,6 +34,13 @@ These documents are ingested into the FAISS vector store for RAG-based regulator
   https://learn.microsoft.com/en-us/compliance/regulatory/offering-iso-42001
 - Retrieved on: 2026-05-12
 
+### 4. India Digital Personal Data Protection (DPDP) Act 2023
+
+- File: `dpdp_act_2023.pdf`
+- Source:
+  https://www.meity.gov.in/data-protection-framework
+- Retrieved on: 2026-05-28
+
 ## Notes
 
 - GDPR and NIST AI RMF documents were obtained from official public sources.
