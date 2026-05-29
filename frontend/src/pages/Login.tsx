@@ -18,23 +18,36 @@ export default function Login() {
     setError('')
     setLoading(true)
 
-    try {
-      const tokenData = await authApi.login(email, password)
-      setAuth(tokenData.access_token, null)  
-      const user = await authApi.getMe()     
-      setAuth(tokenData.access_token, user)  
-      navigate('/')
-    } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.data?.detail) {
-        setError(err.response.data.detail)
-      } else {
-        setError('Unable to sign in. Please check your credentials and try again.')
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
+   try {
+  const tokenData = await authApi.login(email, password)
+  setAuth(tokenData.access_token, null)
 
+  const user = await authApi.getMe()
+  setAuth(tokenData.access_token, user)
+
+  navigate('/')
+} catch (err) {
+  if (axios.isAxiosError(err)) {
+    const status = err.response?.status
+
+    if (status === 401 || status === 403) {
+      setError('Invalid email or password.')
+    } else if (status && status >= 500) {
+      setError('Server error, please try again later.')
+    } else if (!err.response) {
+      setError('Unable to connect to server.')
+    } else if (err.response?.data?.detail) {
+      setError(err.response.data.detail)
+    } else {
+      setError('Unable to sign in. Please try again.')
+    }
+  } else {
+    setError('Unable to sign in. Please try again.')
+  }
+} finally {
+  setLoading(false)
+}
+  }
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
