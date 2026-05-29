@@ -69,17 +69,6 @@ def test_query_feedback_and_low_quality_flow(client):
         ],
     }
 
-    # 1. Define a clean, lightweight document mock inside the test block
-    class DummyDoc:
-        def __init__(self, page_content):
-            self.page_content = page_content
-            self.metadata = {"source": page_content}
-
-    fake_result = {
-        "result": "Test answer", 
-        "source_documents": [DummyDoc("doc1.pdf#chunk1"), DummyDoc("doc2.pdf#chunk2")]
-    }
-
     # 2. Build mock modules and inject them into sys.modules before the request.
     #    The endpoint lazily imports both ``retrieval_chain`` and ``groundedness``
     #    inside its ``try`` block.  ``patch.dict`` temporarily inserts them so that
