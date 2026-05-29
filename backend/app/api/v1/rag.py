@@ -15,6 +15,7 @@ import os
 import shutil
 import tempfile
 from typing import List, Literal, Optional
+import mimetypes
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
@@ -25,6 +26,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.rag_feedback import RAGFeedback
+from app.models.rag_query import RagQuery
 from app.models.user import SubscriptionTier, User
 from app.modules.llm.llm_client import LLMClient
 from app.modules.rag.document_loader import load_documents_from_paths
@@ -87,8 +89,7 @@ def ingest_documents(
 
     pdf_files = [
         f for f in files
-        if f.filename and f.filename.lower().endswith(".pdf")
-        and f.content_type in ("application/pdf", "binary/octet-stream", None)
+        if f.filename and mimetypes.guess_type(f.filename)[0] in ("application/pdf", "binary/octet-stream", None)
     ]
     if not pdf_files:
         raise HTTPException(
@@ -126,17 +127,24 @@ def ingest_documents(
             saved_paths.append(dest)
 
         # ── 3. Chunk documents (gives us the accurate chunk count) ────────
-        chunks = load_documents_from_paths(saved_paths)
+        raw_chunks = load_documents_from_paths(saved_paths)
+        
+        # Filter out chunks with empty or whitespace-only page_content
+        chunks = [
+            chunk for chunk in raw_chunks 
+            if chunk.page_content and chunk.page_content.strip()
+        ]
+
         if not chunks:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Could not extract any text from the supplied PDFs. "
+                detail="Could not extract any valid text from the supplied PDFs. "
                        "Ensure the files are not scanned images or password-protected.",
             )
 
         # ── 4. Build / rebuild FAISS index and persist to disk ────────────
         try:
-            create_vector_store(saved_paths)
+            create_vector_store(chunks) # Pass the extracted Document objects!
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -367,3 +375,35 @@ def get_low_quality_chunks(
             low_quality.append({"chunk": chunk, "thumbs_down": c["thumbs_down"], "total": c["total"], "ratio": ratio})
 
     return {"threshold": threshold, "low_quality_chunks": low_quality}
+
+@router.get("/history")
+def get_rag_history(
+    page: int = 1,
+    page_size: int = 10,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the current user's paginated RAG query history."""
+    offset = (page - 1) * page_size
+    queries = (
+        db.query(RagQuery)
+        .filter(RagQuery.user_id == current_user.id)
+        .order_by(RagQuery.created_at.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+    return {
+        "page": page,
+        "page_size": page_size,
+        "results": [
+            {
+                "id": q.id,
+                "question": q.question,
+                "answer_summary": q.answer_summary,
+                "source_count": q.source_count,
+                "created_at": q.created_at,
+            }
+            for q in queries
+        ],
+    }

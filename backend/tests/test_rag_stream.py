@@ -7,7 +7,7 @@ without an OpenAI key, a running DB, or a real FAISS index.
 """
 
 from __future__ import annotations
-
+from app.core.config import settings
 import json
 from dataclasses import dataclass, field
 from typing import Iterator
@@ -110,7 +110,7 @@ class TestStreamRagAnswer:
             retriever=retriever,
             llm=llm,
             db=db_session,
-            model_name="llama3.2",
+            model_name=settings.LLM_MODEL,
         ):
             events.extend(_parse_sse(frame))
 
@@ -149,6 +149,7 @@ class TestStreamRagAnswer:
             retriever=_Broken(),
             llm=_FakeLLM(["unused"]),
             db=db_session,
+            model_name=settings.LLM_MODEL
         ):
             events.extend(_parse_sse(frame))
 
@@ -170,6 +171,7 @@ class TestStreamRagAnswer:
             retriever=retriever,
             llm=llm,
             db=db_session,
+            model_name=settings.LLM_MODEL
         ):
             events.extend(_parse_sse(frame))
 
@@ -195,6 +197,7 @@ class TestStreamRagAnswer:
             retriever=retriever,
             llm=llm,
             db=db_session,
+            model_name=settings.LLM_MODEL
         ):
             events.extend(_parse_sse(frame))
 
@@ -211,7 +214,7 @@ class TestStreamRagAnswer:
         llm = _FakeLLM(["one ", "two ", "three ", "four ", "five"])
 
         gen = streaming.stream_rag_answer(
-            question="q", retriever=retriever, llm=llm, db=db_session
+            question="q", retriever=retriever, llm=llm, db=db_session, model_name=settings.LLM_MODEL
         )
 
         # Consume the meta event and one token, then close as if the
