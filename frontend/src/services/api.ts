@@ -55,6 +55,26 @@ export const authApi = {
   },
 }
 
+function ensureListResponse<T>(
+  data: unknown,
+  resourceName: string
+): T[] | { items: T[]; total?: number; page?: number; limit?: number } {
+  if (Array.isArray(data)) {
+    return data
+  }
+
+  if (
+    data &&
+    typeof data === 'object' &&
+    'items' in data &&
+    Array.isArray((data as { items?: unknown }).items)
+  ) {
+    return data as { items: T[]; total?: number; page?: number; limit?: number }
+  }
+
+  throw new Error(`${resourceName} response was empty or invalid.`)
+}
+
 // AI Systems API
 export const aiSystemsApi = {
   list: async (params?: {
@@ -116,8 +136,8 @@ export const classificationApi = {
 
 // Documents API
 export const documentsApi = {
-  list: async () => {
-    const { data } = await api.get('/documents/')
+  list: async (params?: { skip?: number; limit?: number }) => {
+    const { data } = await api.get('/documents/', { params })
     return data
   },
   get: async (id: number) => {
