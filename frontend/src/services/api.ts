@@ -1,6 +1,17 @@
 import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
+// Fix for Issue #664: Validate API response is not empty
+function assertNonEmpty<T>(data: T, endpoint: string): T {
+  if (data === null || data === undefined) {
+    throw new Error(`Empty response received from ${endpoint}`)
+  }
+  if (typeof data === 'object' && Object.keys(data).length === 0) {
+    throw new Error(`Empty response received from ${endpoint}`)
+  }
+  return data
+}
+
 const api = axios.create({
   baseURL: '/api/v1',
   headers: {
@@ -104,11 +115,13 @@ export const aiSystemsApi = {
 export const classificationApi = {
   classify: async (data: Record<string, unknown>) => {
     const response = await api.post('/classification/classify', data)
-    return response.data
+        return assertNonEmpty(response.data, '/classification/classify')
+
   },
   classifyAndSave: async (systemId: number, data: Record<string, unknown>) => {
     const response = await api.post(`/classification/classify/${systemId}`, data)
-    return response.data
+        return assertNonEmpty(response.data, `/classification/classify/${systemId}`)
+
   },
 }
 
@@ -164,7 +177,8 @@ export const ragApi = {
     const { data } = await api.post('/rag/query', {
       question,
     })
-    return data
+        return assertNonEmpty(data, '/rag/query')
+
   },
   feedback: async (payload: { answer_id: string; vote: 'up' | 'down' }) => {
     const { data } = await api.post('/rag/feedback', {
@@ -186,7 +200,7 @@ export interface GuardScanResponse {
 export const guardApi = {
   scan: async (prompt: string): Promise<GuardScanResponse> => {
     const { data } = await api.post('/guard/scan', { prompt })
-    return data
+    return assertNonEmpty(data, '/guard/scan')
   },
 }
 
