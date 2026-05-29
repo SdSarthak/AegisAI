@@ -9,13 +9,19 @@ import numpy as np
 
 import torch
 from torch.utils.data import DataLoader, Dataset
-from transformers import (
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
-    AdamW,
-    get_linear_schedule_with_warmup,
-)
-from sklearn.metrics import classification_report, confusion_matrix, f1_score
+
+try:
+    from transformers import AdamW, get_linear_schedule_with_warmup
+except ImportError:
+    AdamW = None
+    get_linear_schedule_with_warmup = None
+
+try:
+    from sklearn.metrics import f1_score
+except ImportError:
+    def f1_score(*args, **kwargs):
+        """Fallback F1 scorer used when sklearn is not installed."""
+        return 0.0
 
 from . import guard_config as config
 from .regex_rules import RegexFilter
@@ -305,6 +311,11 @@ class IntentClassifier:
         Returns:
             Dictionary with training metrics
         """
+        if AdamW is None or get_linear_schedule_with_warmup is None:
+            raise RuntimeError(
+                "Training requires transformers. Install project training dependencies."
+            )
+
         if self.uses_heuristic_fallback:
             self._load_pretrained()
             self.model.to(self.device)
