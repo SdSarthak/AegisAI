@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.core.config import settings
 from app.core.rate_limit import guard_scan_rate_limiter
 
 
@@ -86,6 +87,26 @@ def test_batch_scan_rejects_payload_exceeding_validate_prompts_limit(
     assert response.json() == {
         "detail": "Maximum 50 prompts allowed per batch request."
     }
+
+
+def test_batch_scan_rejects_prompt_over_configured_length(client, auth_headers):
+    oversized_prompt = "x" * (settings.GUARD_MAX_PROMPT_LENGTH + 1)
+
+    with patch("app.modules.guard.llm_guard.LLMGuard") as mock_guard_class:
+        response = client.post(
+            "/api/v1/guard/scan/batch",
+            json={"prompts": ["normal prompt", oversized_prompt]},
+            headers=auth_headers,
+        )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": (
+            "Prompt at index 1 must be between 1 and "
+            f"{settings.GUARD_MAX_PROMPT_LENGTH} characters."
+        )
+    }
+    mock_guard_class.assert_not_called()
 
 
 @pytest.mark.parametrize(
