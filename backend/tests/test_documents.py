@@ -9,7 +9,7 @@ def get_auth_headers(user_id: int) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def register_and_login(client, email, password="testpassword123"):
+def register_and_login(client, email, password="TestPass123!"):
     client.post("/api/v1/auth/register", json={"email": email, "password": password})
     response = client.post("/api/v1/auth/login", data={"username": email, "password": password})
     token = response.json()["access_token"]
@@ -23,6 +23,32 @@ def create_ai_system(client, headers):
         headers=headers
     )
     return response.json()["id"]
+
+def test_list_document_templates(client):
+    headers = register_and_login(client, "templates@example.com")
+
+    response = client.get(
+        "/api/v1/documents/templates",
+        headers=headers
+    )
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert isinstance(data, list)
+    assert len(data) == 3
+
+    template_types = {template["type"] for template in data}
+    assert "technical_documentation" in template_types
+    assert "risk_assessment" in template_types
+    assert "conformity_declaration" in template_types
+
+    for template in data:
+        assert "type" in template
+        assert "name" in template
+        assert "description" in template
+        assert template["name"]
+        assert template["description"]
 
 
 # ✅ Test 1: Generate Technical Documentation → 201

@@ -5,6 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 """
 
 from datetime import datetime
+import enum
 
 from sqlalchemy import Column, Integer, DateTime, ForeignKey, JSON, event
 from sqlalchemy.orm import relationship
@@ -23,6 +24,18 @@ TRACKED_FIELDS = [
     "compliance_status",
     "compliance_score",
 ]
+
+
+def _json_safe_value(value):
+    if isinstance(value, enum.Enum):
+        return value.value
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _json_safe_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe_value(item) for item in value]
+    return value
 
 
 class AISystemAuditLog(Base):
@@ -52,10 +65,10 @@ def after_ai_system_update(mapper, connection, target):
         history = get_history(target, field)
 
         if history.has_changes():
-            old_values[field] = (
+            old_values[field] = _json_safe_value(
                 history.deleted[0] if history.deleted else None
             )
-            new_values[field] = (
+            new_values[field] = _json_safe_value(
                 history.added[0] if history.added else getattr(target, field)
             )
     changed_by_id = getattr(target, "_changed_by_id", None)
@@ -64,8 +77,8 @@ def after_ai_system_update(mapper, connection, target):
             AISystemAuditLog.__table__.insert().values(
                 ai_system_id=target.id,
                 changed_by_id=changed_by_id,
-                old_values=old_values,
-                new_values=new_values,
+                old_values=_json_safe_value(old_values),
+                new_values=_json_safe_value(new_values),
                 changed_at=datetime.utcnow(),
             )
         )

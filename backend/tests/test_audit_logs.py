@@ -1,7 +1,6 @@
 """Tests for AI system audit logging and history endpoint."""
 
 import os
-from urllib import response
 import pytest
 
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
@@ -16,6 +15,7 @@ from app.main import app
 
 from app.models.user import User
 from app.models.ai_system import AISystem
+from app.models.ai_system import ComplianceStatus
 
 
 @pytest.fixture(scope="module")
@@ -117,7 +117,7 @@ class TestAuditLogs:
 
     def test_history_endpoint_returns_paginated_response(self, client):
         response = client.get(
-        "/api/v1/ai-systems/1/history?page=1&limit=10"
+        "/api/v1/ai-systems/1/history?skip=0&limit=10"
         )
 
         assert response.status_code == 200
@@ -126,5 +126,32 @@ class TestAuditLogs:
 
         assert "items" in data
         assert "total" in data
-        assert "page" in data
+        assert "skip" in data
         assert "limit" in data
+
+    def test_status_update_records_json_safe_audit_log(self, client):
+        response = client.patch(
+            "/api/v1/ai-systems/1/status",
+            json={"compliance_status": ComplianceStatus.COMPLIANT.value},
+        )
+
+        assert response.status_code == 200
+
+        history_response = client.get("/api/v1/ai-systems/1/history")
+
+        assert history_response.status_code == 200
+
+        data = history_response.json()
+
+        assert data["total"] == 1
+
+        log = data["items"][0]
+
+        assert (
+            log["old_values"]["compliance_status"]
+            == ComplianceStatus.NOT_STARTED.value
+        )
+        assert (
+            log["new_values"]["compliance_status"]
+            == ComplianceStatus.COMPLIANT.value
+        )
