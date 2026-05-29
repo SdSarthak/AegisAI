@@ -1,14 +1,19 @@
-"""FAISS vector store creation and persistence."""
+"""FAISS vector store creation and persistence.
+
+Changed: Kept LangChain FAISS/OpenAI embedding imports lazy.
+Why: Tests and lightweight app startup should not require provider packages until vector operations run.
+Addresses: Import-time failures in environments that mock vector store behavior.
+"""
 
 import os
-from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
 from app.core.config import settings
 from .document_loader import load_documents_from_paths
 
 
 def get_embeddings():
     """Return the configured embeddings model."""
+    from langchain_openai import OpenAIEmbeddings
+
     return OpenAIEmbeddings(
         openai_api_key=settings.LLM_API_KEY,
         openai_api_base=settings.LLM_BASE_URL or None,
@@ -25,6 +30,8 @@ def create_vector_store(file_paths: list[str]):
     Returns:
         The populated FAISS vector store
     """
+    from langchain_community.vectorstores import FAISS
+
     documents = load_documents_from_paths(file_paths)
     embeddings = get_embeddings()
     vector_store = FAISS.from_documents(documents, embeddings)
@@ -46,6 +53,8 @@ def load_vector_store():
             "The RAG module requires regulatory documents to be ingested first. "
             "Please contact your administrator or check the documentation for setup instructions."
         )
+    from langchain_community.vectorstores import FAISS
+
     embeddings = get_embeddings()
     return FAISS.load_local(
         index_path, embeddings, allow_dangerous_deserialization=True
