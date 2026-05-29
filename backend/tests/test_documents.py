@@ -51,6 +51,47 @@ def test_list_document_templates(client):
         assert template["description"]
 
 
+def test_create_document_with_owned_ai_system(client):
+    headers = register_and_login(client, "create_owned_doc@example.com")
+    system_id = create_ai_system(client, headers)
+
+    response = client.post(
+        "/api/v1/documents/",
+        json={
+            "title": "Owned system document",
+            "document_type": "technical_documentation",
+            "ai_system_id": system_id,
+            "content": "# Owned system document",
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["ai_system_id"] == system_id
+    assert data["title"] == "Owned system document"
+
+
+def test_create_document_rejects_another_users_ai_system(client):
+    headers_user1 = register_and_login(client, "doc_owner@example.com")
+    system_id = create_ai_system(client, headers_user1)
+
+    headers_user2 = register_and_login(client, "doc_attacker@example.com")
+    response = client.post(
+        "/api/v1/documents/",
+        json={
+            "title": "Cross-user document",
+            "document_type": "technical_documentation",
+            "ai_system_id": system_id,
+            "content": "# Cross-user document",
+        },
+        headers=headers_user2,
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "AI system not found"
+
+
 # ✅ Test 1: Generate Technical Documentation → 201
 def test_generate_technical_documentation(client):
     headers = register_and_login(client, "tech_doc@example.com")

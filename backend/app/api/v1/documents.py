@@ -176,6 +176,21 @@ def create_document(
     Returns:
         The created document serialized as DocumentResponse.
     """
+    if doc_data.ai_system_id is not None:
+        ai_system = (
+            db.query(AISystem)
+            .filter(
+                AISystem.id == doc_data.ai_system_id,
+                AISystem.owner_id == current_user.id,
+            )
+            .first()
+        )
+        if not ai_system:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="AI system not found",
+            )
+
     document = Document(
         owner_id=current_user.id,
         title=doc_data.title,
