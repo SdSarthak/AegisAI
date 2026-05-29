@@ -35,11 +35,14 @@ export const authApi = {
     const formData = new URLSearchParams()
     formData.append('username', email)
     formData.append('password', password)
+
     const { data } = await api.post('/auth/login', formData, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
+
     return data
   },
+
   register: async (userData: {
     email: string
     password: string
@@ -49,6 +52,7 @@ export const authApi = {
     const { data } = await api.post('/auth/register', userData)
     return data
   },
+
   getMe: async () => {
     const { data } = await api.get('/auth/me')
     return data
@@ -58,18 +62,20 @@ export const authApi = {
 // AI Systems API
 export const aiSystemsApi = {
   list: async (params?: {
-  sort_by?: string
-  order?: string
-  skip?: number
-  limit?: number
+    sort_by?: string
+    order?: string
+    skip?: number
+    limit?: number
   }) => {
-  const { data } = await api.get('/ai-systems/', { params })
-  return data
+    const { data } = await api.get('/ai-systems/', { params })
+    return data
   },
+
   get: async (id: number) => {
     const { data } = await api.get(`/ai-systems/${id}`)
     return data
   },
+
   create: async (system: {
     name: string
     description?: string
@@ -79,10 +85,12 @@ export const aiSystemsApi = {
     const { data } = await api.post('/ai-systems/', system)
     return data
   },
+
   update: async (id: number, system: Record<string, unknown>) => {
     const { data } = await api.put(`/ai-systems/${id}`, system)
     return data
   },
+
   delete: async (id: number) => {
     await api.delete(`/ai-systems/${id}`)
   },
@@ -94,6 +102,7 @@ export const classificationApi = {
     const response = await api.post('/classification/classify', data)
     return response.data
   },
+
   classifyAndSave: async (systemId: number, data: Record<string, unknown>) => {
     const response = await api.post(`/classification/classify/${systemId}`, data)
     return response.data
@@ -102,14 +111,16 @@ export const classificationApi = {
 
 // Documents API
 export const documentsApi = {
-  list: async () => {
-    const { data } = await api.get('/documents/')
+  list: async (params?: { skip?: number; limit?: number }) => {
+    const { data } = await api.get('/documents/', { params })
     return data
   },
+
   get: async (id: number) => {
     const { data } = await api.get(`/documents/${id}`)
     return data
   },
+
   generate: async (request: {
     document_type: string
     ai_system_id: number
@@ -117,6 +128,12 @@ export const documentsApi = {
     const { data } = await api.post('/documents/generate', request)
     return data
   },
+
+  update: async (id: number, document: { content: string }) => {
+    const { data } = await api.put(`/documents/${id}`, document)
+    return data
+  },
+
   delete: async (id: number) => {
     await api.delete(`/documents/${id}`)
   },
@@ -126,33 +143,52 @@ export const documentsApi = {
 export const notificationsApi = {
   list: (unreadOnly = false) =>
     api.get(`/notifications?unread_only=${unreadOnly}`).then((r) => r.data),
-  markRead: (ids: number[]) =>
-    api.post('/notifications/read', { ids }),
+
+  markRead: (ids: number[]) => api.post('/notifications/read', { ids }),
 }
 
 // Health API — uses root URL, not /api/v1
 export interface HealthResponse {
-  status: "healthy" | "degraded";
-  database: "connected" | "disconnected";
-  version: string;
-  service: string;
+  status: 'healthy' | 'degraded'
+  database: 'connected' | 'disconnected'
+  version: string
+  service: string
 }
 
 export const checkHealth = async (): Promise<HealthResponse> => {
-  const response = await axios.get<HealthResponse>("/health")
+  const response = await axios.get<HealthResponse>('/health')
   return response.data
 }
 
-/* ============================
-   ✅ RAG API (ADD THIS ONLY)
-   ============================ */
-
+// RAG API
 export const ragApi = {
   query: async (question: string) => {
     const { data } = await api.post('/rag/query', {
       question,
     })
+    return data
+  },
 
+  feedback: async (payload: { answer_id: string; vote: 'up' | 'down' }) => {
+    const { data } = await api.post('/rag/feedback', {
+      answer_id: payload.answer_id,
+      vote: payload.vote,
+    })
+    return data
+  },
+}
+
+export interface GuardScanResponse {
+  decision: 'allow' | 'sanitize' | 'block' | string
+  confidence: number
+  reasoning: string
+  sanitized_prompt?: string | null
+  matched_patterns?: string[]
+}
+
+export const guardApi = {
+  scan: async (prompt: string): Promise<GuardScanResponse> => {
+    const { data } = await api.post('/guard/scan', { prompt })
     return data
   },
 }
