@@ -35,19 +35,19 @@ export default function AISystems() {
 
   const limit = 10
 
-// Fix: Track filters in the cache key array, but keep the API function strictly to known parameters
+  // Fix: Track filters in the cache key array, but keep the API function strictly to known parameters
   const { data: systemsData, isLoading } = useQuery({
     queryKey: ['ai-systems', sortBy, order, currentPage, searchTerm, riskFilter, complianceFilter],
     queryFn: () =>
-  aiSystemsApi.list({
-    sort_by: sortBy,
-    order,
-    page: currentPage,
-    limit,
-    search: searchTerm || undefined,
-    risk_level: riskFilter || undefined,
-    compliance_status: complianceFilter || undefined,
-  }),
+      aiSystemsApi.list({
+        sort_by: sortBy,
+        order,
+        page: currentPage,
+        limit,
+        search: searchTerm || undefined,
+        risk_level: riskFilter || undefined,
+        compliance_status: complianceFilter || undefined,
+      }),
   })
   const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 
@@ -67,8 +67,6 @@ export default function AISystems() {
       setSystemToDelete(null)
     },
   })
-
-  
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -260,12 +258,12 @@ export default function AISystems() {
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-medium text-gray-900">
-            {searchTerm || riskFilter || complianceFilter 
-              ? 'No matching AI systems' 
+            {searchTerm || riskFilter || complianceFilter
+              ? 'No matching AI systems'
               : 'No AI systems yet'}
           </h3>
           <p className="text-gray-500 mt-1">
-            {searchTerm || riskFilter || complianceFilter 
+            {searchTerm || riskFilter || complianceFilter
               ? 'Try adjusting your filters or search term'
               : 'Add your first AI system to start tracking compliance'}
           </p>
@@ -302,7 +300,7 @@ export default function AISystems() {
                           addSuffix: true,
                         })}
                       </p>
-                    )}    
+                    )}
                     <div className="flex items-center gap-3 mt-2">
                       {system.sector && (
                         <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
@@ -336,7 +334,7 @@ export default function AISystems() {
                   </button>
                 </div>
               </div>
-              
+
               {/* Compliance Progress */}
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <div className="flex items-center justify-between text-sm">
@@ -500,4 +498,3 @@ export default function AISystems() {
     </div>
   )
 }
-
