@@ -10,6 +10,7 @@ TODO for contributors (high difficulty):
 """
 
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -25,9 +26,39 @@ from app.core.security import get_current_user
 from app.models.rag_feedback import RAGFeedback
 from app.models.rag_query import RagQuery
 from app.models.user import SubscriptionTier, User
-from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
+from app.schemas.rag import RAGQueryRequest, RAGQueryResponse, RAGSourceCitation
 
 router = APIRouter()
+
+def _extract_article(text: str) -> str | None:
+    match = re.search(r"\bArticle\s+\d+[A-Za-z]?\b", text)
+    return match.group(0) if match else None
+
+
+def _extract_paragraph(text: str) -> int | None:
+    match = re.search(r"\bparagraph\s+(\d+)\b", text, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+
+    match = re.search(r"\((\d+)\)", text)
+    if match:
+        return int(match.group(1))
+
+    return None
+
+
+def _build_source_citation(doc) -> RAGSourceCitation:
+    source = str(doc.metadata.get("source", ""))
+    source_path = source.split("#", 1)[0]
+    filename = os.path.basename(source_path) if source_path else "unknown"
+
+    text = getattr(doc, "page_content", "") or ""
+
+    return RAGSourceCitation(
+        filename=filename,
+        article=_extract_article(text),
+        paragraph=_extract_paragraph(text),
+    )
 
 
 def load_documents_from_paths(saved_paths: list[str]):
@@ -149,7 +180,8 @@ def query_knowledge_base(
         latency_ms = (time.monotonic() - t_start) * 1000
 
         source_docs = result.get("source_documents", [])
-        sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
+        sources = [_build_source_citation(doc) for doc in source_docs]
+        source_chunk_refs = [str(doc.metadata.get("source", "")) for doc in source_docs]
         answer = str(result.get("result", ""))
 
         try:
@@ -160,7 +192,7 @@ def query_knowledge_base(
         feedback = RAGFeedback(
             question=request.question,
             answer=answer,
-            source_chunks=sources,
+            source_chunks=source_chunk_refs,
         )
         db.add(feedback)
         rag_query = RagQuery(
@@ -179,7 +211,7 @@ def query_knowledge_base(
             log_query(
                 question=request.question,
                 answer=answer,
-                sources=sources,
+                sources=source_chunk_refs,
                 latency_ms=latency_ms,
             )
         except Exception:

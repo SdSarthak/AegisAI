@@ -11,8 +11,9 @@ from app.models.user import User, SubscriptionTier
 
 
 class DummyDoc:
-    def __init__(self, source):
+    def __init__(self, source, page_content=""):
         self.metadata = {"source": source}
+        self.page_content = page_content
 
 
 def _get_test_db():
@@ -53,6 +54,21 @@ def test_query_feedback_and_low_quality_flow(client):
     import sys
     import types
 
+    # Mock the QA chain to return controlled result and sources
+    fake_result = {
+        "result": "Test answer",
+        "source_documents": [
+            DummyDoc(
+                "doc1.pdf#chunk1",
+                "According to Article 10 paragraph 2, testing is required.",
+            ),
+            DummyDoc(
+                "doc2.pdf#chunk2",
+                "See Article 14 paragraph 1 for human oversight.",
+            ),
+        ],
+    }
+
     # 1. Define a clean, lightweight document mock inside the test block
     class DummyDoc:
         def __init__(self, page_content):
@@ -87,6 +103,14 @@ def test_query_feedback_and_low_quality_flow(client):
 
     assert resp.status_code == 200
     data = resp.json()
+    assert "sources" in data
+    assert isinstance(data["sources"], list)
+    assert len(data["sources"]) == 2
+
+    first = data["sources"][0]
+    assert first["filename"] == "doc1.pdf"
+    assert first["article"] == "Article 10"
+    assert first["paragraph"] == 2
     assert "answer" in data and data["answer"] == "Test answer"
     assert "answer_id" in data
     answer_id = data["answer_id"]
