@@ -5,6 +5,7 @@ import pytest
 from unittest.mock import MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
+from fastapi import Header
 from fastapi.testclient import TestClient
 
 # Set test database before importing app
@@ -12,8 +13,8 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SECRET_KEY"] = "testsecret"
 
 from app.core.database import Base, SessionLocal
-from app.core.security import get_current_user
-from app.models.user import SubscriptionTier
+from app.core.security import decode_token, get_current_user
+from app.models.user import SubscriptionTier, User
 from app.main import app
 
 
@@ -55,16 +56,28 @@ def db_session(db_engine) -> Session:
 def client(db_engine):
     """Create test client with test database."""
     from app.core.database import get_db
+    from app.core.rate_limit import guard_scan_rate_limiter
 
     connection = db_engine.connect()
     transaction = connection.begin()
     session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+    guard_scan_rate_limiter._local_attempts_by_key.clear()
 
     def override_get_db():
         yield session
 
+    def override_current_user(authorization: str | None = Header(default=None)):
+        if authorization and authorization.lower().startswith("bearer "):
+            token = authorization.split(" ", 1)[1]
+            payload = decode_token(token)
+            user_id = int(payload["sub"])
+            user = session.query(User).filter(User.id == user_id).first()
+            if user is not None:
+                return user
+        return _mock_current_user()
+
     app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_current_user] = _mock_current_user
+    app.dependency_overrides[get_current_user] = override_current_user
 
     client = TestClient(app)
     yield client
