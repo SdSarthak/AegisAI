@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from jose import jwt, JWTError
@@ -38,7 +38,7 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER
 router = APIRouter()
 
 def create_share_token(document_id: int):
-    expire = datetime.utcnow() + timedelta(
+    expire = datetime.now(timezone.utc) + timedelta(
         days=settings.DOCUMENT_SHARE_EXPIRE_DAYS
     )
 
@@ -288,15 +288,15 @@ def get_shared_document(
 
     if not document:
         raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="Document not found"
-    )
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
 
     if hasattr(document, "is_deleted") and document.is_deleted:
         raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Share link revoked"
-    )
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Share link revoked"
+        )
 
     return document
 
@@ -496,7 +496,7 @@ def generate_document(
             sector=ai_system.sector or "Not specified",
             description=ai_system.description or "No description provided",
             risk_level=ai_system.risk_level.value if ai_system.risk_level else "Not assessed",
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             company_name=current_user.company_name or "Not specified",
             classification_reasons="See risk assessment details",
             recommendations="Based on risk assessment",
