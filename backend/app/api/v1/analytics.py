@@ -93,22 +93,12 @@ def get_analytics_summary(
         "compliance_statuses": compliance_statuses,
     }
 
-    for risk, cnt in counts:
-      if risk is None:
-        continue
-      # risk is an enum member (RiskLevel) or its value; normalize by string.
-      key = risk.value if hasattr(risk, "value") else str(risk)
-      if key in result["counts"]:
-        result["counts"][key] = int(cnt)
 
-    return result
-@router.get("/audit-logs", response_model=PaginatedResponse[GuardScanLogResponse])
+@router.get('/audit-logs')
 def get_audit_logs(
-    page: int = Query(1, ge=1),
-    limit: int = Query(20, ge=1, le=100),
-    decision: Optional[str] = Query(None),
-    start_date: Optional[datetime] = Query(None),
-    end_date: Optional[datetime] = Query(None),
+    page: int = 1,
+    page_size: int = 20,
+    decision: str = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -116,54 +106,43 @@ def get_audit_logs(
 
     Args:
         page: Page number, 1-indexed (default: 1).
-        limit: Number of items per page, max 100 (default: 20).
-        decision: Optional filter - allow, sanitize, or block.
-        start_date: Optional start of date range filter.
-        end_date: Optional end of date range filter.
+        page_size: Number of results per page (default: 20).
+        decision: Optional filter by decision (allow/sanitize/block).
         current_user: The authenticated user extracted from the JWT token.
         db: Database session dependency.
 
     Returns:
-        PaginatedResponse[GuardScanLogResponse]: Paginated audit log entries.
-
-    Raises:
-        HTTPException: 400 if start_date is after end_date or decision is invalid.
+        dict: Paginated list of guard scan log entries.
     """
-    VALID_DECISIONS = {"allow", "sanitize", "block"}
+    from app.models.guard_scan_log import GuardScanLog
 
-    if decision and decision.strip().lower() not in VALID_DECISIONS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid decision filter. Must be allow, sanitize, or block.",
-        )
-
-    if start_date and end_date and start_date > end_date:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="start_date cannot be after end_date.",
-        )
-
-    filters = [GuardScanLog.user_id == current_user.id]
+    query = db.query(GuardScanLog).filter(GuardScanLog.user_id == current_user.id)
 
     if decision:
-        filters.append(GuardScanLog.decision == decision.strip().lower())
-    if start_date:
-        filters.append(GuardScanLog.scanned_at >= start_date)
-    if end_date:
-        filters.append(GuardScanLog.scanned_at <= end_date)
+        query = query.filter(GuardScanLog.decision == decision)
 
-    query = db.query(GuardScanLog).filter(*filters)
     total = query.count()
     logs = (
         query.order_by(GuardScanLog.scanned_at.desc())
-        .offset((page - 1) * limit)
-        .limit(limit)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
         .all()
     )
 
-    return PaginatedResponse(
-        items=logs,
-        total=total,
-        page=page,
-        limit=limit,
-    )
+    return {
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "logs": [
+            {
+                "id": log.id,
+                "decision": log.decision,
+                "confidence": log.confidence,
+                "intent": log.intent,
+                "detection_type": log.detection_type,
+                "prompt_length": log.prompt_length,
+                "scanned_at": log.scanned_at,
+            }
+            for log in logs
+        ],
+    }
