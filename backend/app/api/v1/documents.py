@@ -3,9 +3,9 @@ from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
 from io import BytesIO
+from html import escape as html_escape
+from urllib.parse import quote
 import re
-import html
-import urllib.parse
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -29,6 +29,29 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
 router = APIRouter()
+
+
+def _escape_pdf_text(value: str) -> str:
+    """Escape user-controlled text before ReportLab Paragraph parses it."""
+    return html_escape(value, quote=False)
+
+
+def _render_inline_markdown(value: str) -> str:
+    """Render the small markdown subset supported by PDF export safely."""
+    escaped = _escape_pdf_text(value.strip())
+    return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', escaped)
+
+
+def _safe_pdf_filename(title: str) -> str:
+    """Return a header-safe PDF filename derived from a document title."""
+    filename = re.sub(r"[\x00-\x1f\x7f]", "", title or "").strip()
+    filename = re.sub(r'[/\\:*?"<>|]+', "_", filename)
+    filename = re.sub(r"\s+", " ", filename).strip(" ._")
+
+    if not filename:
+        filename = "document"
+
+    return f"{filename[:120]}.pdf"
 
 
 # Document templates for generation
@@ -526,7 +549,7 @@ def export_document_pdf(
     )
     
     # Add title
-    story.append(Paragraph(html.escape(document.title), title_style))
+    story.append(Paragraph(_escape_pdf_text(document.title), title_style))
     story.append(Spacer(1, 0.2*inch))
     
     # Add metadata
@@ -557,7 +580,7 @@ def export_document_pdf(
                 spaceAfter=12,
                 spaceBefore=12,
             )
-            story.append(Paragraph(html.escape(line.replace('# ', '')), heading_style))
+            story.append(Paragraph(_escape_pdf_text(line[2:]), heading_style))
         elif line.startswith('## '):
             # Heading 2
             heading_style = ParagraphStyle(
@@ -568,7 +591,7 @@ def export_document_pdf(
                 spaceAfter=10,
                 spaceBefore=10,
             )
-            story.append(Paragraph(html.escape(line.replace('## ', '')), heading_style))
+            story.append(Paragraph(_escape_pdf_text(line[3:]), heading_style))
         elif line.startswith('### '):
             # Heading 3
             heading_style = ParagraphStyle(
@@ -579,15 +602,12 @@ def export_document_pdf(
                 spaceAfter=8,
                 spaceBefore=8,
             )
-            story.append(Paragraph(html.escape(line.replace('### ', '')), heading_style))
+            story.append(Paragraph(_escape_pdf_text(line[4:]), heading_style))
         elif line.startswith('- '):
             # Bullet point
-            story.append(Paragraph('• ' + html.escape(line.replace('- ', '')), body_style))
+            story.append(Paragraph('• ' + _escape_pdf_text(line[2:]), body_style))
         else:
-            # Handle inline bold with regex after escaping user input
-            escaped_line = html.escape(line.strip())
-            processed_line = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', escaped_line)
-            story.append(Paragraph(processed_line, body_style))
+            story.append(Paragraph(_render_inline_markdown(line), body_style))
     
     # Build PDF
     doc.build(story)
@@ -609,17 +629,15 @@ def export_document_pdf(
             detail="PDF generation failed - PDF too small"
         )
     
-    # Generate RFC 5987/6266 safe filename formatting
-    encoded_filename = urllib.parse.quote(f"{document.title}.pdf")
-    safe_title = "".join(c for c in document.title if c.isalnum() or c in "._- ")
-    if not safe_title.strip():
-        safe_title = "document"
-    safe_filename = f"{safe_title}.pdf"
-    content_disposition = f'attachment; filename="{safe_filename}"; filename*=UTF-8\'\'{encoded_filename}'
-    
     # Return PDF response
+    filename = _safe_pdf_filename(document.title)
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": content_disposition}
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{filename}"; '
+                f"filename*=UTF-8''{quote(filename)}"
+            )
+        }
     )
