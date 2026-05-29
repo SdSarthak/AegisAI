@@ -9,13 +9,15 @@ TODO for contributors (medium difficulty):
   - Add a GET /guard/stats endpoint returning block/allow/sanitize counts (Completed)
 """
 
-import hashlib
 import logging
-from collections import Counter
+import hashlib
+from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
+from threading import Lock
 from typing import Optional, TypedDict
 
 from app.api.v1.webhooks import deliver_webhook
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
