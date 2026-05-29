@@ -66,6 +66,12 @@ class AISystem(Base):
         cascade="all, delete-orphan",
     )
 
+    compliance_snapshots = relationship(
+        "ComplianceSnapshot", 
+        back_populates="ai_system",
+        cascade="all, delete-orphan"
+    )
+
 
 class RiskAssessment(Base):
     __tablename__ = "risk_assessments"
