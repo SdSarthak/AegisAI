@@ -80,6 +80,13 @@ class RiskClassificationRequest(BaseModel):
     biometric_categorization: bool = False
 
 
+class NISTMapping(BaseModel):
+    primary_functions: List[str]
+    subcategories: List[str]
+    rationale: str
+    nist_risk_tier: str
+
+
 class RiskClassificationResponse(BaseModel):
     risk_level: RiskLevel
     confidence: float  # 0-1
@@ -123,10 +130,3 @@ class QuestionnaireRiskFactor(BaseModel):
     question: str
     article: str
     triggers_level: RiskLevel
-
-
-class NISTMapping(BaseModel):
-    primary_functions: List[str]
-    subcategories: List[str]
-    rationale: str
-    nist_risk_tier: str

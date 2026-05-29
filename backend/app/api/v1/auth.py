@@ -71,25 +71,33 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         The created user serialized as UserResponse.
 
     Raises:
-        HTTPException: If the email is already registered.
+        HTTPException: If the email is already registered or registration fails.
     """
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This email is already registered. Please use a different email or try logging in."
         )
 
-    user = User(
-        email=user_data.email,
-        hashed_password=get_password_hash(user_data.password),
-        full_name=user_data.full_name,
-        company_name=user_data.company_name,
-    )
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    return user
+    try:
+        user = User(
+            email=user_data.email,
+            hashed_password=get_password_hash(user_data.password),
+            full_name=user_data.full_name,
+            company_name=user_data.company_name,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        return user
+    except Exception:
+        db.rollback()
+        # Generic database error handler
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred during registration. Please try again."
+        )
 
 
 @router.post("/login", response_model=Token)
