@@ -110,10 +110,29 @@ def test_query_feedback_and_low_quality_flow(client):
     assert resp3.status_code == 200
     out = resp3.json()
     assert "low_quality_chunks" in out
-    
+
     chunks = {c["chunk"] for c in out["low_quality_chunks"]}
     assert "doc1.pdf#chunk1" in chunks or "doc2.pdf#chunk2" in chunks
 
     # 7. Clean up dependency overrides to prevent test leakage
+    if get_current_user in app.dependency_overrides:
+        del app.dependency_overrides[get_current_user]
+
+
+@pytest.mark.parametrize("threshold", ["-0.1", "1.1"])
+def test_low_quality_chunks_rejects_out_of_range_threshold(client, threshold):
+    def _admin_user():
+        u = User()
+        u.id = 2
+        u.email = "admin@example.com"
+        u.subscription_tier = SubscriptionTier.SCALE
+        return u
+
+    app.dependency_overrides[get_current_user] = _admin_user
+
+    response = client.get(f"/api/v1/rag/low-quality-chunks?threshold={threshold}")
+
+    assert response.status_code == 422
+
     if get_current_user in app.dependency_overrides:
         del app.dependency_overrides[get_current_user]

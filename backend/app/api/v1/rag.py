@@ -15,7 +15,7 @@ import tempfile
 import time
 from typing import List
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -258,7 +258,7 @@ def rag_feedback(
 
 @router.get("/low-quality-chunks")
 def get_low_quality_chunks(
-    threshold: float = 0.3,
+    threshold: float = Query(0.3, ge=0.0, le=1.0),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

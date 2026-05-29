@@ -19,6 +19,8 @@ interface RagAnswer {
   answer_id?: string
 }
 
+type ApiRagSource = string | RagSource
+
 interface ApiError {
   response?: {
     status?: number
@@ -35,6 +37,19 @@ function isApiError(
   return (
     typeof error === 'object' &&
     error !== null
+  )
+}
+
+function normalizeSources(
+  sources: ApiRagSource[] = []
+): RagSource[] {
+  return sources.map((source, index) =>
+    typeof source === 'string'
+      ? {
+          title: `Source ${index + 1}`,
+          excerpt: source,
+        }
+      : source
   )
 }
 
@@ -88,7 +103,9 @@ export default function RagChat() {
 
       setAnswer({
         answer: data.answer,
-        sources: data.sources || [],
+        sources: normalizeSources(
+          data.sources
+        ),
         answer_id: data.answer_id,
       })
     } catch (err: unknown) {
