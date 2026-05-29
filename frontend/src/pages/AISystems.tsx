@@ -1,8 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
-import { useAuthStore } from '../stores/authStore'
-import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Download } from 'lucide-react'
+import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 interface AISystem {
@@ -33,39 +32,11 @@ export default function AISystems() {
   const [order, setOrder] = useState('desc')
   const [systemToDelete, setSystemToDelete] = useState<AISystem | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
-  const [exporting, setExporting] = useState(false)
-
-  const handleExport = async () => {
-    setExporting(true)
-    try {
-      // Guarantee the loading state is visible for at least 1 second
-      const minDelay = new Promise((r) => setTimeout(r, 1000))
-      const fetchExport = async () => {
-        const token = useAuthStore.getState().token
-        const response = await fetch('/api/v1/ai-systems/export', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        return response.blob()
-      }
-      const [blob] = await Promise.all([fetchExport(), minDelay])
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = 'ai_systems.csv'
-      a.click()
-      URL.revokeObjectURL(url)
-    } catch (error) {
-      console.error('Export failed:', error)
-    } finally {
-      setExporting(false)
-    }
-  }
-
 
   const limit = 10
 
   // Fix: Track filters in the cache key array, but keep the API function strictly to known parameters
-  const { data: systemsData, isLoading } = useQuery({
+  const { data: systemsData, isLoading, isError } = useQuery({
     queryKey: ['ai-systems', sortBy, order, currentPage, searchTerm, riskFilter, complianceFilter],
     queryFn: () =>
       aiSystemsApi.list({
@@ -78,9 +49,7 @@ export default function AISystems() {
         compliance_status: complianceFilter || undefined,
       }),
   })
-  const systems = (
-    Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
-  ) as AISystem[]
+  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
 
   const createMutation = useMutation({
     mutationFn: aiSystemsApi.create,
@@ -162,23 +131,13 @@ export default function AISystems() {
           <h1 className="text-2xl font-bold text-gray-900">AI Systems</h1>
           <p className="text-gray-600">Manage your AI systems for compliance tracking</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="w-5 h-5" />
-            {exporting ? 'Exporting...' : 'Export CSV'}
-          </button>
-          <button
-            onClick={() => setShowModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-          >
-            <Plus className="w-5 h-5" />
-            Add AI System
-          </button>
-        </div>
+        <button
+          onClick={() => setShowModal(true)}
+          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+        >
+          <Plus className="w-5 h-5" />
+          Add AI System
+        </button>
       </div>
 
       {/* Search and Filters */}
@@ -274,6 +233,13 @@ export default function AISystems() {
         </div>
       </div>
 
+      {isError && (
+        <div className="text-center py-12 bg-white rounded-xl border border-red-200">
+          <p className="text-red-600 font-medium">Unable to load AI systems</p>
+          <p className="text-gray-500 mt-1 text-sm">Please try again or refresh the page.</p>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="grid gap-4">
           {[...Array(4)].map((_, index) => (
@@ -309,23 +275,12 @@ export default function AISystems() {
               : 'Add your first AI system to start tracking compliance'}
           </p>
           {!searchTerm && !riskFilter && !complianceFilter && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleExport}
-                disabled={exporting}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Download className="w-5 h-5" />
-                {exporting ? 'Exporting...' : 'Export CSV'}
-              </button>
-              <button
-                onClick={() => setShowModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-              >
-                <Plus className="w-5 h-5" />
-                Add AI System
-              </button>
-            </div>
+            <button
+              onClick={() => setShowModal(true)}
+              className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+            >
+              Add AI System
+            </button>
           )}
         </div>
       ) : (
@@ -395,12 +350,13 @@ export default function AISystems() {
                 </div>
                 <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full ${system.compliance_score >= 80
+                    className={`h-full rounded-full ${
+                      system.compliance_score >= 80
                         ? 'bg-green-500'
                         : system.compliance_score >= 50
-                          ? 'bg-yellow-500'
-                          : 'bg-red-500'
-                      }`}
+                        ? 'bg-yellow-500'
+                        : 'bg-red-500'
+                    }`}
                     style={{ width: `${system.compliance_score}%` }}
                   />
                 </div>
