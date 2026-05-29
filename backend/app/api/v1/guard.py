@@ -10,17 +10,12 @@ TODO for contributors (medium difficulty):
 """
 
 import hashlib
-from collections import Counter, defaultdict, deque
-from datetime import datetime, timedelta, timezone
-from threading import Lock
-from typing import Optional
-
-from app.api.v1.webhooks import deliver_webhook
 import logging
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Optional, TypedDict
 
+from app.api.v1.webhooks import deliver_webhook
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
