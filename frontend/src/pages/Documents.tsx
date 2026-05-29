@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import toast from 'react-hot-toast'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
@@ -38,6 +37,7 @@ export default function Documents() {
   const handleCopy = async (docId: number, content: string) => {
     try {
       await navigator.clipboard.writeText(content)
+
       setCopiedDocId(docId)
 
       setTimeout(() => {
@@ -45,7 +45,6 @@ export default function Documents() {
       }, 2000)
     } catch (error) {
       console.error('Failed to copy content:', error)
-      toast.error('Failed to copy document')
     }
   }
 
@@ -59,11 +58,9 @@ export default function Documents() {
     queryKey: ['documents', currentPage],
     queryFn: () => documentsApi.list({ skip: (currentPage - 1) * limit, limit }),
   })
-
   const documents = (
     Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
   ) as Document[]
-
   const filteredDocuments = documents.filter((doc: Document) => {
     const matchesSearch =
       doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -85,29 +82,21 @@ export default function Documents() {
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
-
   const systems = (
     Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
   ) as AISystem[]
-
   const isLoading = documentsLoading || systemsLoading
   const hasError = documentsError || systemsError
-
   const errorMessage =
     (documentsErrorDetail instanceof Error && documentsErrorDetail.message) ||
     (systemsErrorDetail instanceof Error && systemsErrorDetail.message) ||
     'Unable to load documents.'
-
+  
   const generateMutation = useMutation({
     mutationFn: documentsApi.generate,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       setShowModal(false)
-      toast.success('Document generated successfully')
-    },
-    onError: (error) => {
-      console.error('Generate failed:', error)
-      toast.error('Failed to generate document')
     },
   })
 
@@ -116,25 +105,6 @@ export default function Documents() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       setDocumentToDelete(null)
-      toast.success('Document deleted successfully')
-    },
-    onError: (error) => {
-      console.error('Delete failed:', error)
-      toast.error('Failed to delete document')
-    },
-  })
-
-  const saveMutation = useMutation({
-    mutationFn: ({ id, content }: { id: number; content: string }) =>
-      documentsApi.update(id, { content }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
-      setEditingDoc(null)
-      toast.success('Document saved successfully')
-    },
-    onError: (error) => {
-      console.error('Save failed:', error)
-      toast.error('Failed to save document')
     },
   })
 
@@ -149,20 +119,30 @@ export default function Documents() {
 
   const handleGenerate = () => {
     if (!selectedSystem) return
-
     generateMutation.mutate({
       document_type: selectedType,
       ai_system_id: selectedSystem,
     })
   }
 
-  const handleSaveDocument = (content: string) => {
-    if (!editingDoc || saveMutation.isPending) return
+  const handleSaveDocument = async (content: string) => {
+    if (!editingDoc) return
 
-    saveMutation.mutate({
-      id: editingDoc.id,
-      content,
-    })
+    try {
+      const response = await fetch(`/api/v1/documents/${editingDoc.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content })
+      })
+
+      if (response.ok) {
+        queryClient.invalidateQueries({ queryKey: ['documents'] })
+      }
+    } catch (error) {
+      console.error('Save failed:', error)
+    }
   }
 
   const getStatusColor = (status: string) => {
@@ -187,7 +167,6 @@ export default function Documents() {
             Generate and manage compliance documentation
           </p>
         </div>
-
         <button
           onClick={() => setShowModal(true)}
           disabled={systems.length === 0}
@@ -214,6 +193,7 @@ export default function Documents() {
             className="px-4 py-2 border border-gray-300 rounded-lg"
           >
             <option value="all">All Types</option>
+
             {documentTypes.map((type) => (
               <option key={type.value} value={type.value}>
                 {type.label}
@@ -250,8 +230,10 @@ export default function Documents() {
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4 flex-1">
                   <div className="w-12 h-12 bg-gray-200 rounded-lg"></div>
+
                   <div className="flex-1 space-y-3">
                     <div className="h-5 bg-gray-200 rounded w-1/3"></div>
+
                     <div className="flex gap-2">
                       <div className="h-5 bg-gray-200 rounded w-20"></div>
                       <div className="h-5 bg-gray-200 rounded w-16"></div>
@@ -259,12 +241,14 @@ export default function Documents() {
                     </div>
                   </div>
                 </div>
+
                 <div className="flex gap-2">
                   <div className="w-9 h-9 bg-gray-200 rounded-lg"></div>
                   <div className="w-9 h-9 bg-gray-200 rounded-lg"></div>
                   <div className="w-9 h-9 bg-gray-200 rounded-lg"></div>
                 </div>
               </div>
+
               <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
                 <div className="h-3 bg-gray-200 rounded w-full"></div>
                 <div className="h-3 bg-gray-200 rounded w-5/6"></div>
@@ -276,9 +260,7 @@ export default function Documents() {
       ) : hasError ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <FileText className="w-16 h-16 mx-auto mb-4 text-red-200" />
-          <h3 className="text-lg font-medium text-gray-900">
-            Unable to load documents
-          </h3>
+          <h3 className="text-lg font-medium text-gray-900">Unable to load documents</h3>
           <p className="text-gray-500 mt-1">{errorMessage}</p>
           <button
             onClick={() => {
@@ -298,7 +280,8 @@ export default function Documents() {
             Generate your first compliance document
           </p>
         </div>
-      ) : filteredDocuments.length === 0 ? (
+      ) : (
+        filteredDocuments.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <h3 className="text-lg font-medium text-gray-900">
             No matching documents
@@ -338,7 +321,6 @@ export default function Documents() {
                     </div>
                   </div>
                 </div>
-
                 <div className="flex items-center gap-2">
                   {doc.content && (
                     <CopyButton
@@ -349,7 +331,6 @@ export default function Documents() {
                       iconOnly
                     />
                   )}
-
                   <button
                     onClick={() => setEditingDoc(doc)}
                     className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
@@ -372,6 +353,7 @@ export default function Documents() {
 
                   <button
                     onClick={() => {
+                      // Download as text file
                       const blob = new Blob([doc.content || ''], {
                         type: 'text/markdown',
                       })
@@ -380,10 +362,8 @@ export default function Documents() {
                       a.href = url
                       a.download = `${doc.title}.md`
                       a.click()
-                      URL.revokeObjectURL(url)
                     }}
                     className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
-                    title="Download"
                   >
                     <Download className="w-5 h-5" />
                   </button>
@@ -391,13 +371,13 @@ export default function Documents() {
                   <button
                     onClick={() => setDocumentToDelete(doc)}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
-                    title="Delete"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
               </div>
 
+              {/* Preview */}
               {doc.content && (
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <pre className="text-xs text-gray-600 bg-gray-50 p-3 rounded-lg overflow-auto max-h-32">
@@ -408,8 +388,9 @@ export default function Documents() {
             </div>
           ))}
         </div>
-      )}
+      ))}
 
+      {/* Pagination Controls */}
       <div className="flex items-center justify-between pt-4">
         <button
           onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
@@ -432,6 +413,8 @@ export default function Documents() {
         </button>
       </div>
 
+
+      {/* Delete Confirmation Modal */}
       {documentToDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md">
@@ -439,8 +422,7 @@ export default function Documents() {
               Delete Document
             </h2>
             <p className="text-gray-600">
-              Are you sure you want to delete {documentToDelete.title}? This
-              cannot be undone.
+              Are you sure you want to delete {documentToDelete.title}? This cannot be undone.
             </p>
             <div className="flex justify-end gap-3 pt-6">
               <button
@@ -456,13 +438,14 @@ export default function Documents() {
                 disabled={deleteMutation.isPending}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
-                {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
+                Delete
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Generate Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-xl p-6 w-full max-w-md">
@@ -487,7 +470,6 @@ export default function Documents() {
                   ))}
                 </select>
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   Document Type
@@ -504,7 +486,6 @@ export default function Documents() {
                   ))}
                 </select>
               </div>
-
               <div className="flex justify-end gap-3 pt-4">
                 <button
                   type="button"
@@ -526,6 +507,7 @@ export default function Documents() {
         </div>
       )}
 
+      {/* Editor Modal */}
       {editingDoc && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl w-full max-w-6xl h-[90vh]">

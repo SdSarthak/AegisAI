@@ -2,6 +2,7 @@
 
 import os
 import json
+import re
 from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,12 +17,21 @@ from transformers import (
     get_linear_schedule_with_warmup,
 )
 
+from .regex_rules import RegexFilter
+
 # ---------------------------------------------------------------------------
 # Constants (inlined from backend guard_config to keep SDK self-contained)
 # ---------------------------------------------------------------------------
 INTENT_CLASSES = ["benign", "suspicious", "malicious"]
 INTENT_TO_ID = {"benign": 0, "suspicious": 1, "malicious": 2}
 ID_TO_INTENT = {v: k for k, v in INTENT_TO_ID.items()}
+
+
+def _has_model_weights(path: str) -> bool:
+    return any(
+        os.path.exists(os.path.join(path, filename))
+        for filename in ("pytorch_model.bin", "model.safetensors")
+    )
 
 
 def _detect_model_path() -> str:
@@ -33,8 +43,8 @@ def _detect_model_path() -> str:
       2. ``./models/intent_classifier`` relative to this file
       3. ``./intent_classifier`` in the current working directory
 
-    Returns the first path that contains ``pytorch_model.bin``, or the
-    env-var path (which will trigger a pre-trained fallback later).
+    Returns the first path that contains saved model weights, or the
+    env-var path (which will trigger deterministic fallback later).
     """
     env_path = os.getenv("CLASSIFIER_MODEL_PATH", "")
     if env_path and os.path.exists(env_path):
@@ -45,7 +55,7 @@ def _detect_model_path() -> str:
         "./intent_classifier",
     ]
     for path in candidates:
-        if os.path.exists(path) and os.path.exists(os.path.join(path, "pytorch_model.bin")):
+        if os.path.exists(path) and _has_model_weights(path):
             return path
 
     return env_path or str(Path(__file__).parent / "models" / "intent_classifier")
@@ -93,11 +103,32 @@ class PromptDataset(Dataset):
 class IntentClassifier:
     """Fine-tuned DeBERTa classifier for prompt injection intent detection."""
 
+    EXTRA_MALICIOUS_PATTERNS = [
+        r"\bdo\s+anything\s+now\b",
+        r"\bdan\s+mode\b",
+        r"\bignore\s+(your|the)\s+(rules|guidelines|policy|policies|safety)\b",
+        r"\breveal\s+(your|the)\s+(hidden|developer|system)\s+(instructions|prompt)\b",
+        r"\bprint\s+(your|the)\s+(hidden|developer|system)\s+(instructions|prompt)\b",
+        r"\bdo\s+not\s+(refuse|deny|decline)\b",
+        r"\bwithout\s+(ethical|safety|policy)\s+(limits|limitations|restrictions)\b",
+    ]
+
+    EXTRA_SUSPICIOUS_PATTERNS = [
+        r"\bhidden\s+instructions\b",
+        r"\bdeveloper\s+instructions\b",
+        r"\bconfidential\s+instructions\b",
+        r"\bprompt\s+leak\b",
+        r"\bsafety\s+filters?\b",
+        r"\bcontent\s+filters?\b",
+    ]
+
     def __init__(self, model_path: Optional[str] = None, device: Optional[str] = None):
         """
-        Initialize classifier with fine-tuned or pre-trained model.
+        Initialize classifier with a fine-tuned model or deterministic fallback.
         
-        Tries to load fine-tuned model first, falls back to pre-trained DeBERTa-v3-small.
+        Tries to load a fine-tuned model first. If none is available, uses
+        deterministic heuristics instead of a base DeBERTa model with random
+        classification head weights.
         
         Args:
             model_path: Path to trained model directory. If None, auto-detects.
@@ -117,37 +148,101 @@ class IntentClassifier:
         if model_path is None:
             model_path = _detect_model_path()
         
-        # Load tokenizer from model directory
-        tokenizer_path = model_path
-        
         # Load model
         model_exists = model_path and os.path.exists(model_path)
-        has_weights = model_exists and os.path.exists(os.path.join(model_path, "pytorch_model.bin"))
+        has_weights = model_exists and self._has_trained_weights(model_path)
         
         if model_exists and has_weights:
             print(f"[OK] Loading fine-tuned model from {model_path}")
             try:
-                self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_path)
+                self.tokenizer = AutoTokenizer.from_pretrained(model_path)
                 self.model = AutoModelForSequenceClassification.from_pretrained(model_path)
+                self.uses_heuristic_fallback = False
                 print(f"[OK] Model and tokenizer loaded successfully")
             except Exception as e:
-                print(f"[WARNING] Failed to load model: {e}. Falling back to pre-trained.")
-                self._load_pretrained()
+                print(f"[WARNING] Failed to load model: {e}. Falling back to deterministic rules.")
+                self._load_heuristic_fallback()
         else:
             print(f"[WARNING] Fine-tuned model not found at {model_path}")
-            print(f"  Using pre-trained DeBERTa (train with notebook for better results)")
-            self._load_pretrained()
+            print(
+                "  Using deterministic heuristic fallback. Train or provide a fine-tuned "
+                "classifier for semantic coverage."
+            )
+            self._load_heuristic_fallback()
         
-        self.model.to(self.device)
-        self.model.eval()
+        if self.model is not None:
+            self.model.to(self.device)
+            self.model.eval()
+
+    @staticmethod
+    def _has_trained_weights(model_path: str) -> bool:
+        """Return True when a model directory contains saved fine-tuned weights."""
+        return _has_model_weights(model_path)
+
+    def _load_heuristic_fallback(self):
+        """Use deterministic rules instead of a randomly initialized classifier head."""
+        self.tokenizer = None
+        self.model = None
+        self.regex_filter = RegexFilter()
+        self._extra_malicious = [
+            re.compile(pattern, re.IGNORECASE) for pattern in self.EXTRA_MALICIOUS_PATTERNS
+        ]
+        self._extra_suspicious = [
+            re.compile(pattern, re.IGNORECASE) for pattern in self.EXTRA_SUSPICIOUS_PATTERNS
+        ]
+        self.uses_heuristic_fallback = True
     
     def _load_pretrained(self):
-        """Load pre-trained DeBERTa model."""
+        """Load pre-trained DeBERTa model for explicit fine-tuning only."""
         print("Loading pre-trained DeBERTa v3 small...")
         model_name = "microsoft/deberta-v3-small"
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
         self.model = AutoModelForSequenceClassification.from_pretrained(
             model_name, num_labels=3
+        )
+        self.uses_heuristic_fallback = False
+
+    def _classify_with_heuristics(self, prompt: str) -> ClassificationResult:
+        """Classify prompts deterministically when no fine-tuned model is installed."""
+        regex_result = self.regex_filter.check(prompt)
+        malicious_hits = [p.pattern for p in self._extra_malicious if p.search(prompt)]
+        suspicious_hits = [p.pattern for p in self._extra_suspicious if p.search(prompt)]
+
+        if regex_result.score >= 0.8 or malicious_hits:
+            confidence = 0.95 if regex_result.score >= 0.8 else 0.9
+            return ClassificationResult(
+                intent="malicious",
+                confidence=confidence,
+                class_scores={
+                    "benign": 1.0 - confidence,
+                    "suspicious": 0.0,
+                    "malicious": confidence,
+                },
+            )
+
+        if regex_result.score >= 0.5 or suspicious_hits:
+            confidence = 0.85 if regex_result.score >= 0.5 else 0.7
+            return ClassificationResult(
+                intent="suspicious",
+                confidence=confidence,
+                class_scores={
+                    "benign": 1.0 - confidence,
+                    "suspicious": confidence,
+                    "malicious": 0.0,
+                },
+            )
+
+        if regex_result.score > 0.0:
+            return ClassificationResult(
+                intent="suspicious",
+                confidence=0.55,
+                class_scores={"benign": 0.45, "suspicious": 0.55, "malicious": 0.0},
+            )
+
+        return ClassificationResult(
+            intent="benign",
+            confidence=0.9,
+            class_scores={"benign": 0.9, "suspicious": 0.07, "malicious": 0.03},
         )
 
     def classify(self, prompt: str) -> ClassificationResult:
@@ -160,6 +255,9 @@ class IntentClassifier:
         Returns:
             ClassificationResult with intent, confidence, and class scores
         """
+        if self.uses_heuristic_fallback:
+            return self._classify_with_heuristics(prompt)
+
         inputs = self.tokenizer(
             prompt,
             max_length=128,
@@ -232,6 +330,10 @@ class IntentClassifier:
             Dictionary with training metrics
         """
         from sklearn.metrics import f1_score  # optional dep, only needed for training
+
+        if self.uses_heuristic_fallback:
+            self._load_pretrained()
+            self.model.to(self.device)
 
         # Convert labels to ids
         train_label_ids = [self.intent_to_id[label] for label in train_labels]
