@@ -55,6 +55,7 @@ python-json-logger==2.0.7
 # ── Scheduling & Retries ──────────────────────────────────────────────────────
 APScheduler==3.10.4
 tenacity==8.2.3
+respx
 
 # ── PDF Utilities ────────────────────────────────────────────────────────────────
 pdfplumber==0.10.3
