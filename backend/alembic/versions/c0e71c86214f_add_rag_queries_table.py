@@ -1,7 +1,7 @@
 """add_rag_queries_table
 
 Revision ID: c0e71c86214f
-Revises: 
+Revises: c3d9f1b2a4e6
 Create Date: 2026-05-24 19:51:58.566264
 
 """
