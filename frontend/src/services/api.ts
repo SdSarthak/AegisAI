@@ -67,8 +67,7 @@ export const authApi = {
 
     const { data } = await api.post('/auth/login', formData, {
       headers: {
-        'Content-Type':
-          'application/x-www-form-urlencoded',
+        'Content-Type': 'application/x-www-form-urlencoded',
       },
     })
 
@@ -81,11 +80,7 @@ export const authApi = {
     full_name?: string
     company_name?: string
   }) => {
-    const { data } = await api.post(
-      '/auth/register',
-      userData
-    )
-
+    const { data } = await api.post('/auth/register', userData)
     return data
   },
 
@@ -103,22 +98,13 @@ export const aiSystemsApi = {
     skip?: number
     limit?: number
   }) => {
-    const { data } = await api.get(
-      '/ai-systems/',
-      { params }
-    )
+    const { data } = await api.get('/ai-systems/', { params })
 
-    return ensureListResponse(
-      data,
-      'AI systems'
-    )
+    return ensureListResponse(data, 'AI systems')
   },
 
   get: async (id: number) => {
-    const { data } = await api.get(
-      `/ai-systems/${id}`
-    )
-
+    const { data } = await api.get(`/ai-systems/${id}`)
     return data
   },
 
@@ -128,11 +114,7 @@ export const aiSystemsApi = {
     use_case?: string
     sector?: string
   }) => {
-    const { data } = await api.post(
-      '/ai-systems/',
-      system
-    )
-
+    const { data } = await api.post('/ai-systems/', system)
     return data
   },
 
@@ -185,22 +167,13 @@ export const documentsApi = {
     skip?: number
     limit?: number
   }) => {
-    const { data } = await api.get(
-      '/documents/',
-      { params }
-    )
+    const { data } = await api.get('/documents/', { params })
 
-    return ensureListResponse(
-      data,
-      'Documents'
-    )
+    return ensureListResponse(data, 'Documents')
   },
 
   get: async (id: number) => {
-    const { data } = await api.get(
-      `/documents/${id}`
-    )
-
+    const { data } = await api.get(`/documents/${id}`)
     return data
   },
 
@@ -216,7 +189,7 @@ export const documentsApi = {
     return data
   },
 
-  // ✅ REQUIRED FIX FOR ISSUE #751
+  // Fix for Issue #751
   update: async (
     id: number,
     document: { content: string }
@@ -238,9 +211,7 @@ export const documentsApi = {
 export const notificationsApi = {
   list: (unreadOnly = false) =>
     api
-      .get(
-        `/notifications?unread_only=${unreadOnly}`
-      )
+      .get(`/notifications?unread_only=${unreadOnly}`)
       .then((r) => r.data),
 
   markRead: (ids: number[]) =>
@@ -252,18 +223,14 @@ export const notificationsApi = {
 // Health API — uses root URL, not /api/v1
 export interface HealthResponse {
   status: 'healthy' | 'degraded'
-  database:
-    | 'connected'
-    | 'disconnected'
+  database: 'connected' | 'disconnected'
   version: string
   service: string
 }
 
 export const checkHealth = async (): Promise<HealthResponse> => {
   const response =
-    await axios.get<HealthResponse>(
-      '/health'
-    )
+    await axios.get<HealthResponse>('/health')
 
   return response.data
 }
@@ -271,12 +238,9 @@ export const checkHealth = async (): Promise<HealthResponse> => {
 // RAG API
 export const ragApi = {
   query: async (question: string) => {
-    const { data } = await api.post(
-      '/rag/query',
-      {
-        question,
-      }
-    )
+    const { data } = await api.post('/rag/query', {
+      question,
+    })
 
     return data
   },
@@ -285,13 +249,10 @@ export const ragApi = {
     answer_id: string
     vote: 'up' | 'down'
   }) => {
-    const { data } = await api.post(
-      '/rag/feedback',
-      {
-        answer_id: payload.answer_id,
-        vote: payload.vote,
-      }
-    )
+    const { data } = await api.post('/rag/feedback', {
+      answer_id: payload.answer_id,
+      vote: payload.vote,
+    })
 
     return data
   },
