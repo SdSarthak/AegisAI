@@ -29,6 +29,26 @@ api.interceptors.response.use(
   }
 )
 
+function ensureListResponse<T>(
+  data: unknown,
+  resourceName: string
+): T[] | { items: T[]; total?: number; page?: number; limit?: number } {
+  if (Array.isArray(data)) {
+    return data
+  }
+
+  if (
+    data &&
+    typeof data === 'object' &&
+    'items' in data &&
+    Array.isArray((data as { items?: unknown }).items)
+  ) {
+    return data as { items: T[]; total?: number; page?: number; limit?: number }
+  }
+
+  throw new Error(`${resourceName} response was empty or invalid.`)
+}
+
 // Auth API
 export const authApi = {
   login: async (email: string, password: string) => {
@@ -68,7 +88,7 @@ export const aiSystemsApi = {
     limit?: number
   }) => {
     const { data } = await api.get('/ai-systems/', { params })
-    return data
+    return ensureListResponse(data, 'AI systems')
   },
 
   get: async (id: number) => {
@@ -113,7 +133,7 @@ export const classificationApi = {
 export const documentsApi = {
   list: async (params?: { skip?: number; limit?: number }) => {
     const { data } = await api.get('/documents/', { params })
-    return data
+    return ensureListResponse(data, 'Documents')
   },
 
   get: async (id: number) => {
