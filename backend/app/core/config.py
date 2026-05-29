@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/aegisai_db"
 
     # JWT
-    SECRET_KEY: str = "change-this-in-production"
+    SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
@@ -29,11 +29,9 @@ class Settings(BaseSettings):
 
     # LLM provider — OpenAI-compatible (works with OpenAI, Ollama, Groq, Together AI, vLLM …)
     # Ollama (free, local): LLM_API_KEY=ollama  LLM_BASE_URL=http://localhost:11434/v1
-    LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = (
-        ""  # Leave empty for OpenAI default; set for any compatible endpoint
-    )
-    LLM_MODEL: str = "gpt-4o-mini"  # Model name understood by your chosen provider
+    LLM_API_KEY: str = "ollama"
+    LLM_BASE_URL: str = "http://localhost:11434/v1"
+    LLM_MODEL: str = "llama3.2"  # Model name understood by your chosen provider
 
     # Compliance drift monitor (issue #82). Standard 5-field crontab.
     # Set to an empty string to disable the scheduled job (manual triggers
