@@ -138,7 +138,7 @@ export const classificationApi = {
 export const documentsApi = {
   list: async (params?: { skip?: number; limit?: number }) => {
     const { data } = await api.get('/documents/', { params })
-    return data
+    return ensureListResponse(data, 'Documents')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/documents/${id}`)

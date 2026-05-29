@@ -36,7 +36,7 @@ export default function AISystems() {
   const limit = 10
 
   // Fix: Track filters in the cache key array, but keep the API function strictly to known parameters
-  const { data: systemsData, isLoading, isError } = useQuery({
+  const { data: systemsData, isLoading, isError, refetch, } = useQuery({
     queryKey: ['ai-systems', sortBy, order, currentPage, searchTerm, riskFilter, complianceFilter],
     queryFn: () =>
       aiSystemsApi.list({
@@ -237,6 +237,12 @@ export default function AISystems() {
         <div className="text-center py-12 bg-white rounded-xl border border-red-200">
           <p className="text-red-600 font-medium">Unable to load AI systems</p>
           <p className="text-gray-500 mt-1 text-sm">Please try again or refresh the page.</p>
+          <button
+            onClick={() => refetch()}
+            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            Retry
+          </button>
         </div>
       )}
 
