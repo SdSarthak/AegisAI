@@ -49,7 +49,7 @@ export default function AISystems() {
         compliance_status: complianceFilter || undefined,
       }),
   })
-  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
+  const systems = (Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])) as AISystem[]
 
   const createMutation = useMutation({
     mutationFn: aiSystemsApi.create,
