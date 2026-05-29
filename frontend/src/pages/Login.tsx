@@ -20,9 +20,20 @@ export default function Login() {
 
     try {
       const tokenData = await authApi.login(email, password)
-      setAuth(tokenData.access_token, null)  
-      const user = await authApi.getMe()     
-      setAuth(tokenData.access_token, user)  
+
+      // 1. Immediately store token
+      setAuth(tokenData.access_token, null)
+
+      // 2. FORCE attach token for immediate next request
+      axios.defaults.headers.common[
+        'Authorization'
+      ] = `Bearer ${tokenData.access_token}`
+
+      // 3. Now safely call getMe
+      const user = await authApi.getMe()
+
+      setAuth(tokenData.access_token, user)
+
       navigate('/')
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.detail) {
