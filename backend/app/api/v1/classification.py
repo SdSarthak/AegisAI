@@ -173,7 +173,6 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
     risk_level = RiskLevel.MINIMAL
     confidence = 0.9
 
-<<<<<<< HEAD
     # ----------------------------------------------------------------
     # Article 5 — Prohibited practices (UNACCEPTABLE risk)
     # These must be checked first — they override all other categories
@@ -209,10 +208,8 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
                 "Review whether any Article 5 exceptions apply to your use case.",
             ],
         )
-    
+
     # Check for HIGH risk (Article 6 + Annex III)
-=======
->>>>>>> 19e1a08 (feat: register /explain endpoint in classification router)
     high_risk_indicators = []
 
     # HR and recruitment AI (Annex III, point 4)
@@ -266,8 +263,7 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
             "Use in law enforcement, border control, or justice is HIGH risk"
         )
 
-<<<<<<< HEAD
-    # Biometric data usage (Annex III)           
+    # Biometric data usage (Annex III)
     if data.uses_biometric_data:
         high_risk_indicators.append("Uses biometric data")
         reasons.append(
@@ -279,11 +275,9 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
         high_risk_indicators.append("Automated decisions without human review")
         reasons.append(
             "System makes automated decisions without meaningful human oversight (Article 6)"
-        )    
+        )
 
     # Determine if HIGH risk
-=======
->>>>>>> 19e1a08 (feat: register /explain endpoint in classification router)
     if high_risk_indicators:
         risk_level = RiskLevel.HIGH
 
@@ -429,7 +423,6 @@ def classify_and_save(
 def get_questionnaire_risk_factors(
     current_user: User = Depends(get_current_user),
 ):
-<<<<<<< HEAD
     """Return the static questionnaire metadata used by the classifier.
 
     Args:
@@ -437,10 +430,6 @@ def get_questionnaire_risk_factors(
 
     Returns:
         The list of questionnaire risk factors used by the classification flow.
-=======
-    """
-    Return the static questionnaire metadata used by the risk classification flow.
->>>>>>> 19e1a08 (feat: register /explain endpoint in classification router)
     """
     return QUESTIONNAIRE_RISK_FACTORS
 
@@ -451,7 +440,6 @@ def bulk_classify_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-<<<<<<< HEAD
     """Classify multiple AI systems in a single request.
 
     Args:
@@ -461,10 +449,6 @@ def bulk_classify_systems(
 
     Returns:
         BulkClassificationResponse containing per-system results and errors.
-=======
-    """
-    Classify multiple AI systems in one request.
->>>>>>> 19e1a08 (feat: register /explain endpoint in classification router)
     """
     results: List[BulkClassificationItem] = []
 
@@ -529,8 +513,6 @@ def bulk_classify_systems(
     return BulkClassificationResponse(results=results)
 
 
-<<<<<<< HEAD
-=======
 @router.post("/explain", response_model=ExplainResponse)
 def explain_ai_system_risk(
     data: ExplainRequest,
@@ -543,4 +525,3 @@ def explain_ai_system_risk(
     factors, relevant legal articles, and concrete compliance recommendations.
     """
     return explain_risk(data)
->>>>>>> 19e1a08 (feat: register /explain endpoint in classification router)

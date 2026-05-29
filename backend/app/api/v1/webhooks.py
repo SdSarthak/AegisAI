@@ -115,10 +115,6 @@ def create_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-
-    """
-    Register a new webhook endpoint for the current user.
-=======
     """Register a new webhook endpoint for the current user.
 
     Args:
@@ -149,10 +145,6 @@ def list_webhooks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-
-    """
-    List all webhook configs for the current user.
-
     """List all webhook configurations for the current user.
 
     Args:
@@ -175,10 +167,6 @@ def delete_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-
-    """
-    Delete a webhook config (must belong to current user).
-
     """Delete a webhook configuration owned by the current user.
 
     Args:
