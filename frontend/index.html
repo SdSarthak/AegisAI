@@ -6,47 +6,53 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
     <title>EU AI Act Compliance Tool</title>
-<script>
-  (() => {
-    try {
-      const theme = localStorage.getItem("theme");
-      const prefersDark = window.matchMedia(
-        "(prefers-color-scheme: dark)"
-      ).matches;
 
-      if (theme === "dark" || (!theme && prefersDark)) {
-        document.documentElement.classList.add("dark");
-      } else {
-        document.documentElement.classList.remove("dark");
+    <!-- Prevent flicker -->
+    <style>
+      html { visibility: hidden; }
+    </style>
+
+    <!-- Theme initialization BEFORE React loads -->
+    <script>
+      (() => {
+        try {
+          const stored = localStorage.getItem("theme");
+          const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+          const isDark = stored === "dark" || (!stored && systemDark);
+
+          document.documentElement.classList.toggle("dark", isDark);
+        } catch (e) {
+          console.error("Theme init error:", e);
+        } finally {
+          document.documentElement.style.visibility = "visible";
+        }
+      })();
+    </script>
+
+    <!-- Base styles -->
+    <style>
+      html {
+        background: #f9fafb;
+        color-scheme: light;
       }
-    } catch (e) {
-      console.error("Theme initialization failed:", e);
-    }
-  })();
-</script>
 
-<style>
-  html {
-    background: #f9fafb;
-    color-scheme: light;
-  }
+      html.dark {
+        background: #111827;
+        color-scheme: dark;
+      }
 
-  html.dark {
-    background: #111827;
-    color-scheme: dark;
-  }
+      body {
+        margin: 0;
+        background: #f9fafb;
+        color: #111827;
+      }
 
-  body {
-    margin: 0;
-    background: #f9fafb;
-    color: #111827;
-  }
-
-  html.dark body {
-    background: #111827;
-    color: #f3f4f6;
-  }
-</style>
+      html.dark body {
+        background: #111827;
+        color: #f3f4f6;
+      }
+    </style>
   </head>
 
   <body>
