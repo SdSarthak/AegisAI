@@ -29,26 +29,6 @@ api.interceptors.response.use(
   }
 )
 
-function ensureListResponse<T>(
-  data: unknown,
-  resourceName: string
-): T[] | { items: T[]; total?: number; page?: number; limit?: number } {
-  if (Array.isArray(data)) {
-    return data
-  }
-
-  if (
-    data &&
-    typeof data === 'object' &&
-    'items' in data &&
-    Array.isArray((data as { items?: unknown }).items)
-  ) {
-    return data as { items: T[]; total?: number; page?: number; limit?: number }
-  }
-
-  throw new Error(`${resourceName} response was empty or invalid.`)
-}
-
 // Auth API
 export const authApi = {
   login: async (email: string, password: string) => {
@@ -75,6 +55,26 @@ export const authApi = {
   },
 }
 
+function ensureListResponse<T>(
+  data: unknown,
+  resourceName: string
+): T[] | { items: T[]; total?: number; page?: number; limit?: number } {
+  if (Array.isArray(data)) {
+    return data
+  }
+
+  if (
+    data &&
+    typeof data === 'object' &&
+    'items' in data &&
+    Array.isArray((data as { items?: unknown }).items)
+  ) {
+    return data as { items: T[]; total?: number; page?: number; limit?: number }
+  }
+
+  throw new Error(`${resourceName} response was empty or invalid.`)
+}
+
 // AI Systems API
 export const aiSystemsApi = {
   list: async (params?: {
@@ -82,8 +82,22 @@ export const aiSystemsApi = {
     order?: string
     skip?: number
     limit?: number
+    search?: string
+    risk_level?: string
+    compliance_status?: string
   }) => {
-    const { data } = await api.get('/ai-systems/', { params })
+    // Fix for Issue #631: 'skip' is the backend-expected query offset parameter
+    const queryParams = {
+      sort_by: params?.sort_by,
+      order: params?.order,
+      skip: params?.skip ?? 0,
+      limit: params?.limit ?? 10,
+      search: params?.search || undefined,
+      risk_level: params?.risk_level || undefined,
+      compliance_status: params?.compliance_status || undefined,
+    }
+
+    const { data } = await api.get('/ai-systems/', { params: queryParams })
     return ensureListResponse(data, 'AI systems')
   },
   get: async (id: number) => {
