@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { aiSystemsApi, documentsApi } from '../services/api'
+import toast from 'react-hot-toast'
+import api, { aiSystemsApi, documentsApi } from '../services/api'
 import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
@@ -129,19 +130,10 @@ export default function Documents() {
     if (!editingDoc) return
 
     try {
-      const response = await fetch(`/api/v1/documents/${editingDoc.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content })
-      })
-
-      if (response.ok) {
-        queryClient.invalidateQueries({ queryKey: ['documents'] })
-      }
-    } catch (error) {
-      console.error('Save failed:', error)
+      await api.put(`/documents/${editingDoc.id}`, { content })
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
+    } catch {
+      toast.error('Save failed')
     }
   }
 
