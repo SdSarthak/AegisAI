@@ -6,14 +6,14 @@ class Settings(BaseSettings):
     DOCUMENT_SHARE_EXPIRE_DAYS: int = 7
     # App
     APP_NAME: str = "AegisAI"
-    DEBUG: bool = False
+    DEBUG: bool = True
     API_V1_PREFIX: str = "/api/v1"
 
     # Database
-    DATABASE_URL: str
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/aegisai_db"
 
     # JWT
-    SECRET_KEY: str
+    SECRET_KEY: str = "change-this-in-production"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
@@ -33,9 +33,10 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "http://localhost:11434/v1"
     LLM_MODEL: str = "llama3.2"
     LLM_TIMEOUT: float = 30.0
+    COMPLIANCE_MONITOR_CRON: str = "0 2 * * *"
 
     # Module 2: LLM Guard
-    GUARD_SANITIZATION_LEVEL: str = "medium"
+    GUARD_SANITIZATION_LEVEL: str = "medium"  # low | medium | high
     GUARD_MAX_PROMPT_LENGTH: int = 2000
     GUARD_RATE_LIMIT_REQUESTS: int = 60
     GUARD_RATE_LIMIT_WINDOW_SECONDS: int = 60
@@ -71,7 +72,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
-        extra = "ignore"
 
 
 settings = Settings()
