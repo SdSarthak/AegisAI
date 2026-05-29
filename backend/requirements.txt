@@ -57,7 +57,7 @@ opentelemetry-sdk==1.22.0
 prometheus-fastapi-instrumentator==6.1.0
 
 # ── Scheduling & Retries ──────────────────────────────────────────────────────
-APScheduler==3.10.4
+apscheduler==3.10.4
 tenacity==8.2.3
 respx
 

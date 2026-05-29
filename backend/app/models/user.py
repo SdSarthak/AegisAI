@@ -41,3 +41,6 @@ class User(Base):
     notifications = relationship(
         "Notification", back_populates="user", cascade="all, delete-orphan"
     )
+    webhook_configs = relationship(
+        "WebhookConfig", back_populates="user", cascade="all, delete-orphan"
+    )

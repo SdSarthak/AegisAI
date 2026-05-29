@@ -63,6 +63,12 @@ class AISystem(Base):
     drift_events = relationship("ComplianceDriftEvent", back_populates="ai_system", cascade="all, delete-orphan")
     audit_logs = relationship("AISystemAuditLog", back_populates="ai_system", cascade="all, delete-orphan")
 
+    compliance_snapshots = relationship(
+        "ComplianceSnapshot", 
+        back_populates="ai_system",
+        cascade="all, delete-orphan"
+    )
+
 
 class RiskAssessment(Base):
     __tablename__ = "risk_assessments"

@@ -17,17 +17,16 @@ os.environ["REDIS_URL"] = ""
 from app.core.database import Base, SessionLocal
 from app.core.security import decode_token, get_current_user
 from app.models.user import SubscriptionTier
-from app.models.user import User
 from app.main import app
 from uuid import uuid4
 
 def _mock_current_user():
     user = MagicMock()
-    user.id = 1                                # ✅ integer
+    user.id = 1
     user.email = "test@example.com"
-    user.full_name = "Test User"               # ✅ string
+    user.full_name = "Test User"
     user.company_name = "Test Company"
-    user.subscription_tier = SubscriptionTier.FREE  # ✅ proper enum
+    user.subscription_tier = SubscriptionTier.FREE
     user.is_active = True
     user.is_verified = True
     return user
@@ -101,6 +100,7 @@ def client(db_engine):
                 detail="Invalid token"
             )
 
+        from app.models.user import User
         user = session.query(User).filter(User.id == int(user_id)).first()
         return user or _mock_current_user()
 
@@ -153,6 +153,43 @@ def other_user_auth_headers(client, db_session):
         headers={"Content-Type": "application/x-www-form-urlencoded"}
     )
     token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def test_user(db_session) -> MagicMock:
+    """Create a mock test user to avoid circular model dependencies."""
+    user = MagicMock()
+    user.id = 1
+    user.email = "test@example.com"
+    user.full_name = "Test User"
+    user.company_name = "Test Company"
+    user.subscription_tier = SubscriptionTier.FREE
+    user.is_active = True
+    user.is_verified = True
+    return user
+
+
+@pytest.fixture
+def other_user(db_session) -> MagicMock:
+    """Create another mock test user to avoid circular model dependencies."""
+    user = MagicMock()
+    user.id = 2
+    user.email = "other@example.com"
+    user.full_name = "Other User"
+    user.company_name = "Other Company"
+    user.subscription_tier = SubscriptionTier.FREE
+    user.is_active = True
+    user.is_verified = True
+    return user
+
+
+@pytest.fixture
+def auth_headers(test_user) -> dict:
+    """Create authorization headers for a test user."""
+    from app.core.security import create_access_token
+
+    token = create_access_token(data={"sub": str(test_user.id)})
     return {"Authorization": f"Bearer {token}"}
 
 
