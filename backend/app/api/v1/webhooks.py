@@ -14,6 +14,8 @@ import hmac
 import json
 import logging
 from typing import Any, List
+from urllib.parse import urlparse
+import ipaddress
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -27,6 +29,55 @@ from app.schemas.webhook import WebhookCreate, WebhookResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def _validate_webhook_url(url: str) -> None:
+    """Validate webhook URL to prevent SSRF attacks at delivery time."""
+    parsed = urlparse(url)
+
+    # Only allow http/https schemes
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("Only http and https URLs are allowed")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Invalid URL hostname")
+
+    # Check if hostname is an IP address
+    try:
+        ip = ipaddress.ip_address(hostname)
+        # Block private, link-local, loopback, and other special-use IPs
+        if ip.is_private:
+            raise ValueError("Private IP addresses are not allowed")
+        if ip.is_link_local:
+            raise ValueError("Link-local IP addresses are not allowed")
+        if ip.is_loopback:
+            raise ValueError("Loopback IP addresses are not allowed")
+        if ip.is_reserved:
+            raise ValueError("Reserved IP addresses are not allowed")
+        if ip.is_multicast:
+            raise ValueError("Multicast IP addresses are not allowed")
+        # Block cloud metadata endpoints (169.254.169.254)
+        if str(ip) == "169.254.169.254":
+            raise ValueError("Cloud metadata endpoints are not allowed")
+    except ValueError as e:
+        # Re-raise our own validation errors
+        if "not allowed" in str(e):
+            raise
+        # If it's not an IP address, it's a hostname - continue validation
+
+    # Block common internal hostnames
+    internal_hostnames = [
+        "localhost",
+        "metadata.google.internal",
+        "169.254.169.254",
+    ]
+    if hostname.lower() in internal_hostnames:
+        raise ValueError(f"Hostname '{hostname}' is not allowed")
+
+    # Block any hostname that resolves to internal networks
+    if hostname.endswith(".internal") or hostname.endswith(".local"):
+        raise ValueError("Internal domain names are not allowed")
 
 
 def _build_signature(secret: str, payload_body: bytes) -> str:
@@ -46,6 +97,9 @@ async def _post_webhook(
 ) -> None:
     """Post a webhook payload to a configured endpoint."""
     try:
+        # Validate URL before making request
+        _validate_webhook_url(url)
+
         payload_body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {"X-AegisAI-Event": event}
 
@@ -111,11 +165,12 @@ def list_webhooks(
     db: Session = Depends(get_db),
 ) -> list[WebhookConfig]:
     """List all webhook configurations for the current user."""
-    return (
-        db.query(WebhookConfig)
-        .filter(WebhookConfig.user_id == current_user.id)
-        .all()
+    # Fetch webhooks strictly scoped to the authenticated user
+    webhooks = (
+        db.query(WebhookConfig).filter(WebhookConfig.user_id == current_user.id).all()
     )
+
+    return webhooks
 
 
 @router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -125,21 +180,21 @@ def delete_webhook(
     db: Session = Depends(get_db),
 ) -> None:
     """Delete a webhook configuration owned by the current user."""
+    # Query checking BOTH the webhook ID and the user ID
     db_webhook = (
         db.query(WebhookConfig)
         .filter(
-            WebhookConfig.id == webhook_id,
-            WebhookConfig.user_id == current_user.id,
+            WebhookConfig.id == webhook_id, WebhookConfig.user_id == current_user.id
         )
         .first()
     )
 
     if not db_webhook:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Webhook not found",
+            status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found"
         )
 
     db.delete(db_webhook)
     db.commit()
+
     return None

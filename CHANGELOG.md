@@ -18,6 +18,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Frontend Theme** — Fixed dark mode flash of unstyled content (FOUC), eliminated duplicate CSS, fixed React state overwrite bugs, and improved system preference synchronization.
 - **Documents API** — Validate `ai_system_id` ownership before creating documents so users cannot link documents to another user's AI system.
 - **PDF Export** — Escape user-controlled document text before ReportLab rendering and sanitize generated download filenames.
+- **SSRF Prevention** — Added URL validation to webhook endpoints to prevent Server-Side Request Forgery (SSRF) attacks:
+  - Blocks private, link-local, loopback, reserved, and multicast IP addresses
+  - Blocks cloud metadata endpoints (169.254.169.254)
+  - Blocks internal hostnames (localhost, *.internal, *.local)
+  - Only allows http and https schemes
+  - Validation applied both at webhook creation time (Pydantic schema) and delivery time (background task)
 
 ---
 
