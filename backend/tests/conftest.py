@@ -68,10 +68,10 @@ def client(db_engine):
     def override_current_user(request: Request):
         auth_header = request.headers.get("authorization", "")
         if not auth_header.lower().startswith("bearer "):
-            # Block unauthenticated requests!
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
-                detail="Not authenticated"
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
         token = auth_header.split(" ", 1)[1]
@@ -79,12 +79,19 @@ def client(db_engine):
         user_id = payload.get("sub")
         if user_id is None:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
-                detail="Invalid token"
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token",
+                headers={"WWW-Authenticate": "Bearer"},
             )
 
         user = session.query(User).filter(User.id == int(user_id)).first()
-        return user or _mock_current_user()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return user
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
