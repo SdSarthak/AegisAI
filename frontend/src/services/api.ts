@@ -142,6 +142,24 @@ export const documentsApi = {
   },
 }
 
+// Analytics API
+export const analyticsApi = {
+  summary: async () => {
+    const { data } = await api.get('/analytics/summary')
+    return data
+  },
+  complianceTimeline: async (params: {
+    system_id?: number
+    days?: number
+  }) => {
+    const { data } = await api.get(
+      '/analytics/compliance-timeline',
+      { params }
+    )
+    return data
+  },
+}
+
 // Notifications API
 export const notificationsApi = {
   list: (unreadOnly = false) =>
