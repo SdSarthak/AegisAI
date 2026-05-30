@@ -6,9 +6,6 @@ SPDX-License-Identifier: AGPL-3.0-only
 TODO for contributors (help wanted):
   - Implement GET /analytics/compliance-timeline?system_id={id}&days=30
     Return the last N daily ComplianceSnapshot rows for one AI system.
-  - Implement GET /analytics/summary — return overall stats:
-    total systems, average compliance score, count by risk level,
-    count by compliance status.
   - Acceptance criteria: after the daily snapshot scheduler runs (see
     backend/app/tasks/scheduler.py), the timeline endpoint returns at
     least one data point per system.
