@@ -60,25 +60,25 @@ export default function DocumentEditor({
   }, [content, handleSave, initialContent, saveTimeout])
 
   return (
-    <div className="flex flex-col h-full border border-gray-200 rounded-xl overflow-hidden">
+    <div className="flex flex-col h-full border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 rounded-xl overflow-hidden">
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
         <button
           type="button"
           onClick={() => setShowPreview((p) => !p)}
-          className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+          className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white"
         >
           {showPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
           {showPreview ? 'Edit' : 'Preview'}
         </button>
         <div className="flex items-center gap-3">
          {saveError && (
-            <span className="text-sm text-red-500">
+            <span className="text-sm text-red-500 dark:text-red-400">
               {saveError}
             </span>
           )}
           {isSaving && (
-            <span className="text-sm text-gray-500">
+            <span className="text-sm text-gray-500 dark:text-gray-400">
               Saving...
             </span>
           )} 
@@ -86,7 +86,7 @@ export default function DocumentEditor({
             type="button"
             onClick={handleSave}
             disabled={isSaving}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary-600 dark:bg-primary-700 text-white rounded-lg hover:bg-primary-700 dark:hover:bg-primary-600 disabled:opacity-50"
           >
             <Save className="w-4 h-4" />
             {isSaving ? 'Saving…' : 'Save'}
@@ -94,7 +94,7 @@ export default function DocumentEditor({
           {onClose && (
             <button
               onClick={onClose}
-              className="text-gray-500 hover:text-gray-700"
+              className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-white"
             >
               ✕
             </button>
@@ -103,9 +103,9 @@ export default function DocumentEditor({
       </div>
 
       {/* Editor / Preview area */}
-      <div className="flex-1 overflow-auto">
+      <div className="flex-1 overflow-auto bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100">
         {showPreview ? (
-          <div className="prose max-w-none p-6">
+          <div className="prose dark:prose-invert max-w-none p-6">
             <div dangerouslySetInnerHTML={{ __html: sanitizedPreview }} />
           </div>
         ) : (

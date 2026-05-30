@@ -202,23 +202,23 @@ export default function Classification() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Risk Classification</h1>
-        <p className="text-gray-600">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Risk Classification</h1>
+        <p className="text-gray-600 dark:text-gray-400">
           Determine your AI system's risk level under EU AI Act
         </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Questionnaire */}
-        <div className="bg-white rounded-xl border border-gray-200 p-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Classification Questionnaire
           </h2>
 
           <form className="space-y-6">
             {/* Use Case Category */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Primary Use Case
               </label>
               <select
@@ -226,7 +226,7 @@ export default function Classification() {
                 onChange={(e) =>
                   setFormData({ ...formData, use_case_category: e.target.value })
                 }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                className="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
               >
                 <option value="hr_recruitment">HR / Recruitment</option>
                 <option value="credit_scoring">Credit Scoring</option>
@@ -239,7 +239,7 @@ export default function Classification() {
 
             {/* High-Risk Indicators */}
             <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-3">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
                 High-Risk Indicators (Annex III)
               </h3>
               <div className="space-y-3">
@@ -252,7 +252,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>CV Screening / Candidate Ranking</strong>
                     <br />
                     AI filters CVs or ranks candidates for recruitment
@@ -268,7 +268,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Promotion / Termination Decisions</strong>
                     <br />
                     AI influences employment status decisions
@@ -284,7 +284,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Credit Worthiness Assessment</strong>
                     <br />
                     AI evaluates creditworthiness or credit scoring
@@ -300,7 +300,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Insurance Risk Assessment</strong>
                     <br />
                     AI evaluates risk for insurance pricing or eligibility
@@ -316,7 +316,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Law Enforcement Use</strong>
                     <br />
                     Used by police or judicial authorities for decisions
@@ -332,7 +332,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Border Control / Migration</strong>
                     <br />
                     Used for visa, asylum, or border management decisions
@@ -348,7 +348,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Justice System / Legal Aid</strong>
                     <br />
                     Assists courts or legal processes with decisions
@@ -364,7 +364,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Safety-Critical Component</strong>
                     <br />
                     Part of a product regulated under EU safety legislation
@@ -380,7 +380,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Uses Biometric Data</strong>
                     <br />
                     Processes fingerprints, face scans, or other biometrics
@@ -396,7 +396,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Biometric Categorization</strong>
                     <br />
                     Categorizes people by race, gender, or political views from biometrics
@@ -412,7 +412,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Affects Fundamental Rights</strong>
                     <br />
                     Impacts employment, education, or essential services
@@ -428,7 +428,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Automated Decision Making</strong>
                     <br />
                     Makes decisions without meaningful human review
@@ -447,7 +447,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Education & Vocational Training</strong>
                     <br />
                     AI determines access to or assigns persons to educational institutions
@@ -458,7 +458,7 @@ export default function Classification() {
 
             {/* Transparency Requirements */}
             <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-3">
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white mb-3">
                 Transparency Indicators (Article 52)
               </h3>
               <div className="space-y-3">
@@ -474,7 +474,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Direct Human Interaction</strong>
                     <br />
                     System interacts directly with users (chatbot, assistant)
@@ -493,7 +493,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Emotion Recognition</strong>
                     <br />
                     System detects or analyzes emotions
@@ -512,7 +512,7 @@ export default function Classification() {
                     }
                     className="mt-1"
                   />
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-gray-300">
                     <strong>Synthetic Content Generation</strong>
                     <br />
                     Generates deepfakes, AI images, or synthetic media
@@ -530,12 +530,10 @@ export default function Classification() {
               {classifyMutation.isPending ? 'Classifying...' : 'Classify Risk Level'}
             </button>
           </form>
-        </div>
-
-        {/* Results */}
+        </div>        {/* Results */}
         <div className="relative">
           {result ? (
-            <div className={`rounded-2xl border-0 p-8 glass animate-in overflow-hidden relative group`}>
+            <div className={`rounded-2xl border-0 p-8 bg-white dark:bg-gray-800 glass dark:glass-dark animate-in overflow-hidden relative group`}>
               {/* Background Accent Gradient */}
               <div className={`absolute -right-20 -top-20 w-64 h-64 rounded-full blur-3xl opacity-20 transition-colors duration-500 ${
                 result.risk_level === 'unacceptable' ? 'bg-red-500' :
@@ -547,27 +545,27 @@ export default function Classification() {
                 <div className="flex items-start justify-between gap-4 mb-8">
                   <div className="flex items-center gap-5">
                     <div className={`p-4 rounded-2xl shadow-inner ${
-                      result.risk_level === 'unacceptable' ? 'bg-red-100' :
-                      result.risk_level === 'high' ? 'bg-orange-100' :
-                      result.risk_level === 'limited' ? 'bg-yellow-100' : 'bg-green-100'
+                      result.risk_level === 'unacceptable' ? 'bg-red-105 dark:bg-red-950/40' :
+                      result.risk_level === 'high' ? 'bg-orange-105 dark:bg-orange-950/40' :
+                      result.risk_level === 'limited' ? 'bg-yellow-105 dark:bg-yellow-950/40' : 'bg-green-105 dark:bg-green-950/40'
                     }`}>
                       {getRiskIcon(result.risk_level)}
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h2 className="text-2xl font-black text-gray-900 capitalize tracking-tight">
+                        <h2 className="text-2xl font-black text-gray-900 dark:text-white capitalize tracking-tight">
                           {result.risk_level} Risk
                         </h2>
                         <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          result.risk_level === 'unacceptable' ? 'bg-red-200 text-red-800' :
-                          result.risk_level === 'high' ? 'bg-orange-200 text-orange-800' :
-                          result.risk_level === 'limited' ? 'bg-yellow-200 text-yellow-800' : 'bg-green-200 text-green-800'
+                          result.risk_level === 'unacceptable' ? 'bg-red-200 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                          result.risk_level === 'high' ? 'bg-orange-200 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' :
+                          result.risk_level === 'limited' ? 'bg-yellow-200 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' : 'bg-green-200 text-green-800 dark:bg-green-900/30 dark:text-green-400'
                         }`}>
                           AI Act Classified
                         </span>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
-                        <div className="w-32 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div className="w-32 h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
                           <div 
                             className={`h-full rounded-full transition-all duration-1000 ease-out ${
                               result.confidence > 0.8 ? 'bg-green-500' : 'bg-yellow-500'
@@ -575,7 +573,7 @@ export default function Classification() {
                             style={{ width: `${result.confidence * 100}%` }}
                           />
                         </div>
-                        <p className="text-xs font-semibold text-gray-500 uppercase">
+                        <p className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase">
                           {Math.round(result.confidence * 100)}% Confidence
                         </p>
                       </div>
@@ -594,13 +592,13 @@ export default function Classification() {
                   {/* Left Column: Reasons & Requirements */}
                   <div className="space-y-8">
                     <div>
-                      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-widest mb-4 flex items-center gap-2">
                         <span className="w-1.5 h-4 bg-primary-500 rounded-full"></span>
                         Why this classification?
                       </h3>
                       <ul className="space-y-3">
                         {result.reasons.map((reason, i) => (
-                          <li key={i} className="text-sm text-gray-600 flex items-start gap-3 group/item">
+                          <li key={i} className="text-sm text-gray-600 dark:text-gray-300 flex items-start gap-3 group/item">
                             <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary-400 group-hover/item:scale-125 transition-transform" />
                             <span className="leading-relaxed">{reason}</span>
                           </li>
@@ -609,14 +607,14 @@ export default function Classification() {
                     </div>
 
                     <div>
-                      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-widest mb-4 flex items-center gap-2">
                         <span className="w-1.5 h-4 bg-primary-500 rounded-full"></span>
                         Legal Requirements
                       </h3>
-                      <div className="bg-gray-50/50 rounded-xl p-4 border border-gray-100">
+                      <div className="bg-gray-50/50 dark:bg-gray-900/50 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
                         <ul className="space-y-3">
                           {result.requirements.map((req, i) => (
-                            <li key={i} className="text-sm text-gray-700 flex items-start gap-3">
+                            <li key={i} className="text-sm text-gray-700 dark:text-gray-300 flex items-start gap-3">
                               <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
                               <span className="font-medium">{req}</span>
                             </li>
@@ -629,7 +627,7 @@ export default function Classification() {
                   {/* Right Column: Next Steps & Checklist */}
                   <div className="space-y-8">
                     <div>
-                      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <h3 className="text-sm font-bold text-gray-900 dark:text-white uppercase tracking-widest mb-4 flex items-center gap-2">
                         <span className="w-1.5 h-4 bg-primary-500 rounded-full"></span>
                         Action Plan
                       </h3>
@@ -637,14 +635,14 @@ export default function Classification() {
                         {result.next_steps.map((step, i) => (
                           <div key={i} className="flex gap-4 group/step">
                             <div className="flex flex-col items-center">
-                              <div className="w-8 h-8 rounded-full bg-white border-2 border-primary-100 text-primary-700 flex items-center justify-center text-xs font-bold shadow-sm group-hover/step:border-primary-500 group-hover/step:bg-primary-500 group-hover/step:text-white transition-all">
+                              <div className="w-8 h-8 rounded-full bg-white dark:bg-gray-800 border-2 border-primary-100 dark:border-primary-900 text-primary-700 dark:text-primary-400 flex items-center justify-center text-xs font-bold shadow-sm group-hover/step:border-primary-500 group-hover/step:bg-primary-500 group-hover/step:text-white transition-all">
                                 {i + 1}
                               </div>
                               {i < result.next_steps.length - 1 && (
-                                <div className="w-0.5 h-full bg-primary-50 my-1" />
+                                <div className="w-0.5 h-full bg-primary-50 dark:bg-primary-950/40 my-1" />
                               )}
                             </div>
-                            <p className="text-sm text-gray-600 pt-1.5 leading-relaxed">{step}</p>
+                            <p className="text-sm text-gray-600 dark:text-gray-300 pt-1.5 leading-relaxed">{step}</p>
                           </div>
                         ))}
                       </div>
@@ -654,12 +652,12 @@ export default function Classification() {
 
                 {/* Compliance Checklist Footer */}
                 {result.risk_level !== 'unacceptable' && (
-                  <div className="mt-10 pt-8 border-t border-gray-100">
+                  <div className="mt-10 pt-8 border-t border-gray-100 dark:border-gray-700">
                     <div className="flex items-center justify-between mb-6">
-                      <h3 className="text-lg font-bold text-gray-900">
+                      <h3 className="text-lg font-bold text-gray-900 dark:text-white">
                         Interactive Compliance Checklist
                       </h3>
-                      <span className="text-xs font-medium text-gray-400 bg-gray-50 px-2 py-1 rounded">
+                      <span className="text-xs font-medium text-gray-400 dark:text-gray-500 bg-gray-50 dark:bg-gray-900 px-2 py-1 rounded">
                         {CHECKLIST_ITEMS[result.risk_level]?.length || 0} ITEMS REQUIRED
                       </span>
                     </div>
@@ -677,7 +675,7 @@ export default function Classification() {
                         items={CHECKLIST_ITEMS[result.risk_level] || []}
                       />
                     ) : (
-                      <p className="text-sm text-gray-400 italic">
+                      <p className="text-sm text-gray-400 dark:text-gray-500 italic">
                         Save this AI system first to track checklist progress.
                       </p>
                     )}
@@ -687,35 +685,35 @@ export default function Classification() {
             </div>
           ) : hasInteracted && liveRiskLevel ? (
             // Live preview panel — shown when checkboxes are ticked but API hasn't been called yet
-            <div className="bg-white rounded-2xl border border-gray-100 p-8 shadow-sm animate-in">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-8 shadow-sm animate-in">
               <div className="flex items-center gap-3 mb-6">
                 {getRiskIcon(liveRiskLevel)}
                 <div>
                   <div className="flex items-center gap-2">
-                    <h2 className="text-2xl font-black text-gray-900 capitalize tracking-tight">
+                    <h2 className="text-2xl font-black text-gray-900 dark:text-white capitalize tracking-tight">
                       {liveRiskLevel} Risk
                     </h2>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-100 text-gray-500">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
                       Preview
                     </span>
                   </div>
-                  <p className="text-sm text-gray-400 mt-0.5">
+                  <p className="text-sm text-gray-450 dark:text-gray-400 mt-0.5">
                     Submit the form for full analysis and compliance roadmap
                   </p>
                 </div>
               </div>
 
               <div className={`rounded-xl p-4 mb-6 ${
-                liveRiskLevel === 'unacceptable' ? 'bg-red-50 border border-red-100' :
-                liveRiskLevel === 'high' ? 'bg-orange-50 border border-orange-100' :
-                liveRiskLevel === 'limited' ? 'bg-yellow-50 border border-yellow-100' :
-                'bg-green-50 border border-green-100'
+                liveRiskLevel === 'unacceptable' ? 'bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/50' :
+                liveRiskLevel === 'high' ? 'bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/50' :
+                liveRiskLevel === 'limited' ? 'bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-100 dark:border-yellow-900/50' :
+                'bg-green-50 dark:bg-green-950/20 border border-green-100 dark:border-green-900/50'
               }`}>
                 <p className={`text-sm font-medium ${
-                  liveRiskLevel === 'unacceptable' ? 'text-red-800' :
-                  liveRiskLevel === 'high' ? 'text-orange-800' :
-                  liveRiskLevel === 'limited' ? 'text-yellow-800' :
-                  'text-green-800'
+                  liveRiskLevel === 'unacceptable' ? 'text-red-800 dark:text-red-400' :
+                  liveRiskLevel === 'high' ? 'text-orange-800 dark:text-orange-400' :
+                  liveRiskLevel === 'limited' ? 'text-yellow-800 dark:text-yellow-400' :
+                  'text-green-800 dark:text-green-400'
                 }`}>
                   {liveRiskLevel === 'unacceptable' && 'This system may be prohibited under EU AI Act Article 5. Review immediately.'}
                   {liveRiskLevel === 'high' && 'High-risk systems require technical documentation, conformity assessment, and human oversight (Annex III).'}
@@ -724,19 +722,19 @@ export default function Classification() {
                 </p>
               </div>
 
-              <p className="text-xs text-gray-400 text-center">
+              <p className="text-xs text-gray-400 dark:text-gray-500 text-center">
                 This is a real-time estimate based on your selections. Click <strong>Classify Risk Level</strong> for the full AI Act analysis.
               </p>
             </div>
           ) : (
-            <div className="bg-white rounded-2xl border border-gray-100 p-12 text-center shadow-sm">
-              <div className="w-20 h-20 bg-gray-50 rounded-3xl flex items-center justify-center mx-auto mb-6">
-                <AlertTriangle className="w-10 h-10 text-gray-300" />
+            <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-12 text-center shadow-sm">
+              <div className="w-20 h-20 bg-gray-50 dark:bg-gray-900 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                <AlertTriangle className="w-10 h-10 text-gray-300 dark:text-gray-600" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-2">
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
                 Ready for Classification
               </h3>
-              <p className="text-gray-500 max-w-sm mx-auto leading-relaxed">
+              <p className="text-gray-500 dark:text-gray-400 max-w-sm mx-auto leading-relaxed">
                 Complete the questionnaire to generate your AI Act risk profile and compliance roadmap.
               </p>
               <div className="mt-8 flex justify-center gap-2">

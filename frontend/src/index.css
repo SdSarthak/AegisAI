@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 body {
-  @apply bg-gray-50 text-gray-900;
+  @apply bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-white;
 }
 
 @layer components {
@@ -13,6 +13,16 @@ body {
   
   .glass-dark {
     @apply bg-gray-900/70 backdrop-blur-md border border-white/10 shadow-xl;
+  }
+
+  .recharts-default-tooltip {
+    @apply !bg-white dark:!bg-gray-800 !border-gray-200 dark:!border-gray-700 !rounded-xl !shadow-md;
+  }
+  .recharts-tooltip-label {
+    @apply dark:!text-white;
+  }
+  .recharts-tooltip-item {
+    @apply dark:!text-gray-200;
   }
 
   .animate-in {

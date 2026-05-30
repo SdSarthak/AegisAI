@@ -45,29 +45,29 @@ const summaryStats = [
     label: 'Total Systems',
     value: '12',
     icon: Activity,
-    color: 'text-blue-600',
-    bg: 'bg-blue-50',
+    color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-50 dark:bg-blue-950/40',
   },
   {
     label: 'Avg Score',
     value: '84%',
     icon: TrendingUp,
-    color: 'text-green-600',
-    bg: 'bg-green-50',
+    color: 'text-green-600 dark:text-green-400',
+    bg: 'bg-green-50 dark:bg-green-950/40',
   },
   {
     label: 'Compliant',
     value: '10',
     icon: ShieldCheck,
-    color: 'text-emerald-600',
-    bg: 'bg-emerald-50',
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
   },
   {
     label: 'High Risk',
     value: '2',
     icon: AlertTriangle,
-    color: 'text-red-600',
-    bg: 'bg-red-50',
+    color: 'text-red-600 dark:text-red-400',
+    bg: 'bg-red-50 dark:bg-red-950/40',
   },
 ]
 
@@ -188,7 +188,7 @@ export default function Analytics() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke="#e5e7eb"
+                  stroke={document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'}
                 />
 
                 <XAxis
@@ -242,7 +242,7 @@ export default function Analytics() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke="#e5e7eb"
+                  stroke={document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'}
                 />
 
                 <XAxis
