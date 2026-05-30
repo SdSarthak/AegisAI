@@ -272,7 +272,7 @@ def scan_prompt(
 
 
 # ---------------------------------------------------------------------------
-# POST /guard/explain — SHAP/LIME explainability (issue #77)
+# POST /guard/explain - SHAP/LIME explainability (issue #77)
 # ---------------------------------------------------------------------------
 
 
@@ -305,6 +305,7 @@ class _ExplainRateLimitConfig:
 )
 async def explain_prompt(
     request: ExplainRequestModel,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Return per-token attribution scores for the Guard's verdict.

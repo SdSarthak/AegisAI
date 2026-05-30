@@ -123,8 +123,8 @@ class TestUnavailable:
 # Endpoint tests
 # ---------------------------------------------------------------------------
 
-
 class TestExplainEndpoint:
+    @pytest.mark.usefixtures("auth_headers")
     def test_explain_returns_attributions(
         self, client, auth_headers, stub_explainer
     ):
@@ -148,6 +148,7 @@ class TestExplainEndpoint:
         )
         assert resp.status_code == 401
 
+    @pytest.mark.usefixtures("auth_headers")
     def test_validates_text_length(self, client, auth_headers, stub_explainer):
         resp = client.post(
             "/api/v1/guard/explain",
@@ -157,6 +158,7 @@ class TestExplainEndpoint:
         assert resp.status_code == 422
         assert "text" in resp.text.lower()
 
+    @pytest.mark.usefixtures("auth_headers")
     def test_rate_limit_kicks_in(self, client, auth_headers, stub_explainer):
         # 10/min — fire 11 and expect the 11th to 429.
         for _ in range(10):
@@ -175,6 +177,7 @@ class TestExplainEndpoint:
         assert r.status_code == 429
         assert "Retry-After" in r.headers
 
+    @pytest.mark.usefixtures("auth_headers")
     def test_timeout_returns_504(self, client, auth_headers, monkeypatch):
         slow = _StubExplainer(delay=20.0)
         monkeypatch.setattr(
@@ -197,6 +200,7 @@ class TestExplainEndpoint:
         assert "timeout" in resp.json()["detail"].lower() or "exceed" in resp.json()["detail"].lower()
         explainer_module.reset_explainer()
 
+    @pytest.mark.usefixtures("auth_headers")
     def test_503_when_no_model(self, client, auth_headers, monkeypatch):
         def raise_unavailable():
             raise ExplainerUnavailable("no model in test")
@@ -217,6 +221,7 @@ class TestExplainEndpoint:
         assert "no model" in resp.json()["detail"].lower()
         explainer_module.reset_explainer()
 
+    @pytest.mark.usefixtures("auth_headers")
     def test_lime_method_passes_through(
         self, client, auth_headers, stub_explainer
     ):
