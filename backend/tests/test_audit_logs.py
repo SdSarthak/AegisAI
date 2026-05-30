@@ -117,7 +117,7 @@ class TestAuditLogs:
 
     def test_history_endpoint_returns_paginated_response(self, client):
         response = client.get(
-        "/api/v1/ai-systems/1/history?page=1&limit=10"
+        "/api/v1/ai-systems/1/history?skip=0&limit=10"
         )
 
         assert response.status_code == 200
@@ -126,7 +126,7 @@ class TestAuditLogs:
 
         assert "items" in data
         assert "total" in data
-        assert "page" in data
+        assert "skip" in data
         assert "limit" in data
 
     def test_status_update_records_json_safe_audit_log(self, client):

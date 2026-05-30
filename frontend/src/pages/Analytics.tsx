@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import ComplianceRiskChart from '../components/ComplianceRiskChart'
+import { getChartTheme } from '../utils/chartTheme'
 
 import {
   BarChart2,
@@ -47,6 +48,7 @@ const summaryStats = [
     icon: Activity,
     color: 'text-blue-600 dark:text-blue-400',
     bg: 'bg-blue-50 dark:bg-blue-950/40',
+    bg: 'bg-blue-50 dark:bg-blue-500/10',
   },
   {
     label: 'Avg Score',
@@ -54,6 +56,7 @@ const summaryStats = [
     icon: TrendingUp,
     color: 'text-green-600 dark:text-green-400',
     bg: 'bg-green-50 dark:bg-green-950/40',
+    bg: 'bg-green-50 dark:bg-green-500/10',
   },
   {
     label: 'Compliant',
@@ -61,6 +64,7 @@ const summaryStats = [
     icon: ShieldCheck,
     color: 'text-emerald-600 dark:text-emerald-400',
     bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    bg: 'bg-emerald-50 dark:bg-emerald-500/10',
   },
   {
     label: 'High Risk',
@@ -68,6 +72,7 @@ const summaryStats = [
     icon: AlertTriangle,
     color: 'text-red-600 dark:text-red-400',
     bg: 'bg-red-50 dark:bg-red-950/40',
+    bg: 'bg-red-50 dark:bg-red-500/10',
   },
 ]
 
@@ -79,39 +84,75 @@ type RiskData = {
 export default function Analytics() {
   const [riskPieData, setRiskPieData] =
     useState<RiskData[]>([])
-
   const [loading, setLoading] = useState(true)
+  const [isDark, setIsDark] = useState(false)
 
   useEffect(() => {
     fetchRiskDistribution()
   }, [])
 
+  useEffect(() => {
+    const checkTheme = () => {
+      setIsDark(
+        document.documentElement.classList.contains(
+          'dark'
+        )
+      )
+    }
+
+    checkTheme()
+
+    const observer = new MutationObserver(checkTheme)
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    })
+
+    return () => observer.disconnect()
+  }, [])
+
+  const chartTheme = getChartTheme(isDark)
+
   const fetchRiskDistribution = async () => {
     try {
-      // Try fetching from backend analytics summary endpoint. If it's
-      // not implemented or returns an error, fall back to mock data.
-      const res = await fetch('/api/v1/analytics/summary')
+      const res = await fetch(
+        '/api/v1/analytics/summary'
+      )
 
       if (res.ok) {
         const json = await res.json()
 
-        // Expecting a summary object with counts per risk level. If the
-        // backend later returns a different shape, adjust mapping here.
         const mapped: RiskData[] = [
-          { name: 'Minimal Risk', value: json.counts?.minimal || 0 },
-          { name: 'Limited Risk', value: json.counts?.limited || 0 },
-          { name: 'High Risk', value: json.counts?.high || 0 },
-          { name: 'Unacceptable Risk', value: json.counts?.unacceptable || 0 },
+          {
+            name: 'Minimal Risk',
+            value: json.counts?.minimal || 0,
+          },
+          {
+            name: 'Limited Risk',
+            value: json.counts?.limited || 0,
+          },
+          {
+            name: 'High Risk',
+            value: json.counts?.high || 0,
+          },
+          {
+            name: 'Unacceptable Risk',
+            value:
+              json.counts?.unacceptable || 0,
+          },
         ]
 
         setRiskPieData(mapped)
       } else {
-        // Backend endpoint not available yet; use mock data.
         const mockData: RiskData[] = [
           { name: 'Minimal Risk', value: 4 },
           { name: 'Limited Risk', value: 3 },
           { name: 'High Risk', value: 2 },
-          { name: 'Unacceptable Risk', value: 1 },
+          {
+            name: 'Unacceptable Risk',
+            value: 1,
+          },
         ]
 
         setRiskPieData(mockData)
@@ -121,6 +162,16 @@ export default function Analytics() {
         'Failed to fetch risk distribution:',
         error
       )
+
+      setRiskPieData([
+        { name: 'Minimal Risk', value: 4 },
+        { name: 'Limited Risk', value: 3 },
+        { name: 'High Risk', value: 2 },
+        {
+          name: 'Unacceptable Risk',
+          value: 1,
+        },
+      ])
     } finally {
       setLoading(false)
     }
@@ -128,7 +179,6 @@ export default function Analytics() {
 
   return (
     <div className="space-y-8">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
           Analytics
@@ -139,12 +189,11 @@ export default function Analytics() {
         </p>
       </div>
 
-      {/* Summary Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {summaryStats.map((stat) => (
           <div
             key={stat.label}
-            className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 flex items-center gap-4 shadow-sm"
+            className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 flex items-center gap-4 shadow-sm transition-colors duration-300"
           >
             <div
               className={`shrink-0 p-3 rounded-lg ${stat.bg}`}
@@ -167,10 +216,8 @@ export default function Analytics() {
         ))}
       </div>
 
-      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Line Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm min-w-0">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm min-w-0 transition-colors duration-300">
           <div className="flex items-center gap-2 mb-6">
             <TrendingUp className="w-5 h-5 text-primary-600" />
 
@@ -189,26 +236,46 @@ export default function Analytics() {
                   strokeDasharray="3 3"
                   vertical={false}
                   stroke={document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'}
+                  stroke={chartTheme.grid}
                 />
 
                 <XAxis
                   dataKey="name"
-                  stroke="#6b7280"
-                  fontSize={12}
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
                   tickLine={false}
                   axisLine={false}
                 />
 
                 <YAxis
-                  stroke="#6b7280"
-                  fontSize={12}
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
                   tickLine={false}
                   axisLine={false}
                 />
 
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor:
+                      chartTheme.tooltipBg,
+                    border: `1px solid ${chartTheme.tooltipBorder}`,
+                    borderRadius: '8px',
+                    color: chartTheme.text,
+                  }}
+                  labelStyle={{
+                    color: chartTheme.text,
+                  }}
+                />
 
-                <Legend />
+                <Legend
+                  wrapperStyle={{
+                    color: chartTheme.text,
+                  }}
+                />
 
                 <Line
                   type="monotone"
@@ -223,8 +290,7 @@ export default function Analytics() {
           </div>
         </div>
 
-        {/* Bar Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm min-w-0">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm min-w-0 transition-colors duration-300">
           <div className="flex items-center gap-2 mb-6">
             <BarChart2 className="w-5 h-5 text-primary-600" />
 
@@ -243,26 +309,46 @@ export default function Analytics() {
                   strokeDasharray="3 3"
                   vertical={false}
                   stroke={document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'}
+                  stroke={chartTheme.grid}
                 />
 
                 <XAxis
                   dataKey="name"
-                  stroke="#6b7280"
-                  fontSize={12}
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
                   tickLine={false}
                   axisLine={false}
                 />
 
                 <YAxis
-                  stroke="#6b7280"
-                  fontSize={12}
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
                   tickLine={false}
                   axisLine={false}
                 />
 
-                <Tooltip />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor:
+                      chartTheme.tooltipBg,
+                    border: `1px solid ${chartTheme.tooltipBorder}`,
+                    borderRadius: '8px',
+                    color: chartTheme.text,
+                  }}
+                  labelStyle={{
+                    color: chartTheme.text,
+                  }}
+                />
 
-                <Legend />
+                <Legend
+                  wrapperStyle={{
+                    color: chartTheme.text,
+                  }}
+                />
 
                 <Bar
                   dataKey="risk"
@@ -277,13 +363,12 @@ export default function Analytics() {
         </div>
       </div>
 
-      {/* Compliance Risk Distribution Chart */}
       {loading ? (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors duration-300">
           Loading risk distribution...
         </div>
       ) : riskPieData.length === 0 ? (
-        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors duration-300">
           No analytics data available.
         </div>
       ) : (

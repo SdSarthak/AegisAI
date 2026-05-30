@@ -92,9 +92,6 @@ The compliance documents are strictly linked to AI System entities in the relati
 TODO for contributors (help wanted):
   - Implement GET /analytics/compliance-timeline?system_id={id}&days=30
     Return the last N daily ComplianceSnapshot rows for one AI system.
-  - Implement GET /analytics/summary — return overall stats:
-    total systems, average compliance score, count by risk level,
-    count by compliance status.
   - Acceptance criteria: after the daily snapshot scheduler runs (see
     backend/app/tasks/scheduler.py), the timeline endpoint returns at
     least one data point per system.
@@ -104,10 +101,9 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
-from sqlalchemy import func
-from app.models.ai_system import AISystem, RiskLevel
 
 router = APIRouter()
 
@@ -119,21 +115,16 @@ def get_compliance_timeline(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return daily compliance snapshots for a given AI system.
+    """Return daily compliance snapshots for a single AI system.
 
     Args:
-        system_id: The unique identifier of the AI system to query.
-        days: Number of past days to include in the timeline (default: 30).
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
+        system_id: ID of the AI system to inspect.
+        days: Number of days of history to return.
+        current_user: Authenticated user requesting the timeline.
+        db: Database session used to query compliance snapshots.
 
     Returns:
-        ComplianceTimelineResponse: A list of daily compliance snapshot
-            data points for the specified AI system.
-
-    Raises:
-        HTTPException: 501 if the endpoint is not yet implemented.
-        HTTPException: 403 if the system does not belong to current_user.
+        ComplianceTimelineResponse containing the system's daily compliance data.
     """
     # TODO: implement — replace with real DB query
     raise HTTPException(
@@ -146,44 +137,36 @@ def get_analytics_summary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return aggregate compliance statistics for the current user's systems.
+    """Return aggregate compliance statistics for the current user.
 
     Args:
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
+        current_user: Authenticated user whose systems are being summarized.
+        db: Database session used to aggregate compliance metrics.
 
     Returns:
-        dict: Aggregated stats including total systems, average compliance
-            score, count by risk level, and count by compliance status.
-
-    Raises:
-        HTTPException: 501 if the endpoint is not yet implemented.
+        Aggregate compliance statistics for the user's AI systems.
     """
-    # Return aggregate counts by risk level for the current user's AI systems.
-    # Keep this implementation minimal: counts for minimal/limited/high/unacceptable.
-    counts = (
-      db.query(AISystem.risk_level, func.count(AISystem.id))
-      .filter(AISystem.owner_id == current_user.id)
-      .group_by(AISystem.risk_level)
-      .all()
+    systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
+
+    counts = {risk.value: 0 for risk in RiskLevel}
+    compliance_statuses = {status.value: 0 for status in ComplianceStatus}
+    scored_values: list[float] = []
+
+    for system in systems:
+        if system.risk_level:
+            counts[system.risk_level.value] += 1
+        if system.compliance_status:
+            compliance_statuses[system.compliance_status.value] += 1
+        if system.compliance_score is not None:
+            scored_values.append(float(system.compliance_score))
+
+    average_compliance_score = (
+        round(sum(scored_values) / len(scored_values), 2) if scored_values else 0.0
     )
 
-    # Map results into a predictable shape for the frontend.
-    result = {
-      "counts": {
-        "minimal": 0,
-        "limited": 0,
-        "high": 0,
-        "unacceptable": 0,
-      }
+    return {
+        "total_systems": len(systems),
+        "average_compliance_score": average_compliance_score,
+        "counts": counts,
+        "compliance_statuses": compliance_statuses,
     }
-
-    for risk, cnt in counts:
-      if risk is None:
-        continue
-      # risk is an enum member (RiskLevel) or its value; normalize by string.
-      key = risk.value if hasattr(risk, "value") else str(risk)
-      if key in result["counts"]:
-        result["counts"][key] = int(cnt)
-
-    return result

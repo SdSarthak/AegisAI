@@ -6,6 +6,7 @@ from io import BytesIO
 import textwrap
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from app.core.config import settings
 from app.core.database import Base, get_db
 from app.core.security import get_current_user
 from app.main import app
@@ -196,3 +197,43 @@ class TestBulkImport:
         assert "errors" in data
         assert isinstance(data["created"], int)
         assert isinstance(data["errors"], list)
+
+    def test_oversized_csv_is_rejected(self, client):
+        """Files larger than the configured cap are rejected before processing."""
+        test_client, _ = client
+
+        header = b"name,description,use_case,sector,version\n"
+        row = b"Big Import,Test description,Test,Test,1.0\n"
+        chunks = [header]
+        total_size = len(header)
+
+        while total_size <= settings.AI_SYSTEM_BULK_IMPORT_MAX_BYTES:
+            chunks.append(row)
+            total_size += len(row)
+
+        response = test_client.post(
+            "/api/v1/ai-systems/import",
+            files={"file": ("big.csv", BytesIO(b"".join(chunks)), "text/csv")}
+        )
+
+        assert response.status_code == 413
+        assert "maximum size" in response.json()["detail"].lower()
+
+    def test_row_limit_is_rejected(self, client):
+        """Files exceeding the configured row limit are rejected."""
+        test_client, _ = client
+
+        header = "name,description,use_case,sector,version\n"
+        row_template = "System {index},Description,Use case,Sector,1.0\n"
+        rows = [header]
+
+        for index in range(settings.AI_SYSTEM_BULK_IMPORT_MAX_ROWS + 1):
+            rows.append(row_template.format(index=index))
+
+        response = test_client.post(
+            "/api/v1/ai-systems/import",
+            files={"file": ("rows.csv", BytesIO("".join(rows).encode("utf-8")), "text/csv")}
+        )
+
+        assert response.status_code == 413
+        assert "row count" in response.json()["detail"].lower()
