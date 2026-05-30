@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -26,6 +26,16 @@ class User(Base):
     stripe_customer_id = Column(String(255), nullable=True)
     stripe_subscription_id = Column(String(255), nullable=True)
 
+    # Organisation membership (nullable — users without an org are still valid)
+    # use_alter=True defers the FK constraint so create_all() can handle the
+    # circular reference: users.org_id → organisations.id ↔ organisations.owner_id → users.id
+    org_id = Column(
+        Integer,
+        ForeignKey("organisations.id", use_alter=True, name="fk_users_org_id"),
+        nullable=True,
+        index=True,
+    )
+
     # Status
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
@@ -39,4 +49,12 @@ class User(Base):
     ai_systems = relationship("AISystem", back_populates="owner")
     documents = relationship("Document", back_populates="owner")
     webhook_configs = relationship("WebhookConfig", back_populates="user")
-    notifications    = relationship("Notification",    back_populates="user")
+    notifications = relationship("Notification", back_populates="user")
+    # Organisation relationships
+    owned_org = relationship(
+        "Organisation",
+        foreign_keys="Organisation.owner_id",
+        back_populates="owner",
+        uselist=False,
+    )
+    org_memberships = relationship("OrganisationMember", back_populates="user", cascade="all, delete-orphan")
