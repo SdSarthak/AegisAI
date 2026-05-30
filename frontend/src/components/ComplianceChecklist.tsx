@@ -46,14 +46,14 @@ export default function ComplianceChecklist({
     <div className="space-y-4">
       {/* Progress Bar */}
       <div>
-        <div className="flex justify-between text-sm text-gray-600 mb-1">
+        <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
           <span>
             {checked.size} / {items.length} completed
           </span>
           <span>{progress}%</span>
         </div>
 
-        <div className="w-full h-2 bg-gray-100 rounded-full overflow-hidden">
+        <div className="w-full h-2 bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
           <div
             className={`h-full rounded-full transition-all duration-300 ${
               progress === 100
@@ -75,14 +75,14 @@ export default function ComplianceChecklist({
               key={item.id}
               type="button"
               onClick={() => toggle(item.id)}
-              className="w-full flex items-start gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50 text-left transition-colors"
+              className="w-full flex items-start gap-3 p-3 rounded-lg border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 text-left transition-colors"
             >
               {/* Checkbox Icon */}
               <div className="mt-0.5 flex-shrink-0">
                 {isChecked ? (
-                  <CheckSquare className="w-5 h-5 text-primary-600" />
+                  <CheckSquare className="w-5 h-5 text-primary-600 dark:text-primary-400" />
                 ) : (
-                  <Square className="w-5 h-5 text-gray-300" />
+                  <Square className="w-5 h-5 text-gray-300 dark:text-gray-600" />
                 )}
               </div>
 
@@ -92,21 +92,21 @@ export default function ComplianceChecklist({
                   <span
                     className={`text-sm font-medium ${
                       isChecked
-                        ? 'line-through text-gray-400'
-                        : 'text-gray-900'
+                        ? 'line-through text-gray-400 dark:text-gray-500'
+                        : 'text-gray-900 dark:text-white'
                     }`}
                   >
                     {item.label}
                   </span>
 
                   {item.article && (
-                    <span className="text-xs text-primary-600">
+                    <span className="text-xs text-primary-600 dark:text-primary-400">
                       {item.article}
                     </span>
                   )}
 
                   {!item.required && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">
                       Recommended
                     </span>
                   )}

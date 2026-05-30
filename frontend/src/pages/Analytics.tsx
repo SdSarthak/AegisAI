@@ -47,6 +47,7 @@ const summaryStats = [
     value: '12',
     icon: Activity,
     color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-50 dark:bg-blue-950/40',
     bg: 'bg-blue-50 dark:bg-blue-500/10',
   },
   {
@@ -54,6 +55,7 @@ const summaryStats = [
     value: '84%',
     icon: TrendingUp,
     color: 'text-green-600 dark:text-green-400',
+    bg: 'bg-green-50 dark:bg-green-950/40',
     bg: 'bg-green-50 dark:bg-green-500/10',
   },
   {
@@ -61,6 +63,7 @@ const summaryStats = [
     value: '10',
     icon: ShieldCheck,
     color: 'text-emerald-600 dark:text-emerald-400',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
     bg: 'bg-emerald-50 dark:bg-emerald-500/10',
   },
   {
@@ -68,6 +71,7 @@ const summaryStats = [
     value: '2',
     icon: AlertTriangle,
     color: 'text-red-600 dark:text-red-400',
+    bg: 'bg-red-50 dark:bg-red-950/40',
     bg: 'bg-red-50 dark:bg-red-500/10',
   },
 ]
@@ -231,6 +235,7 @@ export default function Analytics() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
+                  stroke={document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'}
                   stroke={chartTheme.grid}
                 />
 
@@ -303,6 +308,7 @@ export default function Analytics() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
+                  stroke={document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'}
                   stroke={chartTheme.grid}
                 />
 

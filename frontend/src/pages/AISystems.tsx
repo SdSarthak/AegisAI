@@ -172,8 +172,8 @@ export default function AISystems() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">AI Systems</h1>
-          <p className="text-gray-600">Manage your AI systems for compliance tracking</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Systems</h1>
+          <p className="text-gray-600 dark:text-gray-400">Manage your AI systems for compliance tracking</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -195,7 +195,7 @@ export default function AISystems() {
       </div>
 
       {/* Search and Filters */}
-      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+      <div className="flex flex-col md:flex-row gap-4 bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
@@ -206,7 +206,7 @@ export default function AISystems() {
               setSearchTerm(e.target.value)
               setCurrentPage(1) // Reset pagination on search input
             }}
-            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
+            className="w-full pl-10 pr-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder:text-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-transparent outline-none transition-all"
           />
         </div>
         <div className="flex flex-wrap gap-3">
@@ -218,7 +218,7 @@ export default function AISystems() {
                 setRiskFilter(e.target.value)
                 setCurrentPage(1) // Fix for Issue #632: Reset page context on filter change
               }}
-              className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
+              className="pl-9 pr-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="">All Risk Levels</option>
               <option value="unacceptable">Unacceptable Risk</option>
@@ -235,7 +235,7 @@ export default function AISystems() {
                 setComplianceFilter(e.target.value)
                 setCurrentPage(1) // Fix for Issue #632: Reset page context on filter change
               }}
-              className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
+              className="pl-9 pr-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="">All Statuses</option>
               <option value="not_started">Not Started</option>
@@ -251,7 +251,7 @@ export default function AISystems() {
               id="sort-by-select"
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value)}
-              className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
+              className="pl-9 pr-4 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="created_at">Sort by Date</option>
               <option value="name">Sort by Name</option>
@@ -264,7 +264,7 @@ export default function AISystems() {
               id="sort-order-select"
               value={order}
               onChange={(e) => setOrder(e.target.value)}
-              className="px-3 py-2 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
+              className="px-3 py-2 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500 outline-none transition-all appearance-none cursor-pointer"
             >
               <option value="desc">Descending</option>
               <option value="asc">Ascending</option>
@@ -278,7 +278,7 @@ export default function AISystems() {
                 setComplianceFilter('')
                 setCurrentPage(1) // Clear state back to page 1
               }}
-              className="flex items-center gap-1 px-3 py-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all text-sm font-medium"
+              className="flex items-center gap-1 px-3 py-2 text-gray-500 hover:text-red-600 dark:text-gray-450 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-all text-sm font-medium"
             >
               <X className="w-4 h-4" />
               Clear
@@ -292,18 +292,18 @@ export default function AISystems() {
           {[...Array(4)].map((_, index) => (
             <div
               key={index}
-              className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse"
+              className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 animate-pulse"
             >
               <div className="flex justify-between items-start">
                 <div className="space-y-3 flex-1">
-                  <div className="h-5 bg-gray-200 rounded w-1/3"></div>
-                  <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                  <div className="h-5 bg-gray-200 dark:bg-gray-700 rounded w-1/3"></div>
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-2/3"></div>
                   <div className="flex gap-2">
-                    <div className="h-5 w-20 bg-gray-200 rounded"></div>
-                    <div className="h-5 w-24 bg-gray-200 rounded"></div>
+                    <div className="h-5 w-20 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                    <div className="h-5 w-24 bg-gray-200 dark:bg-gray-700 rounded"></div>
                   </div>
                 </div>
-                <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
+                <div className="w-10 h-10 bg-gray-200 dark:bg-gray-700 rounded-lg"></div>
               </div>
             </div>
           ))}
@@ -323,6 +323,15 @@ export default function AISystems() {
           </button>
         </div>
       ) : filteredSystems.length === 0 ? (
+        <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700">
+          <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-650" />
+          <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+            {searchTerm || riskFilter || complianceFilter 
+              ? 'No matching AI systems' 
+              : 'No AI systems yet'}
+          </h3>
+          <p className="text-gray-500 dark:text-gray-400 mt-1">
+            {searchTerm || riskFilter || complianceFilter 
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-medium text-gray-900">
@@ -360,20 +369,20 @@ export default function AISystems() {
           {filteredSystems.map((system: AISystem) => (
             <div
               key={system.id}
-              className="bg-white rounded-xl border border-gray-200 p-6"
+              className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6"
             >
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4">
-                  <div className="p-3 bg-primary-50 rounded-lg">
-                    <Bot className="w-6 h-6 text-primary-600" />
+                  <div className="p-3 bg-primary-50 dark:bg-primary-950/40 rounded-lg">
+                    <Bot className="w-6 h-6 text-primary-600 dark:text-primary-400" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">{system.name}</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">{system.name}</h3>
                     {system.description && (
-                      <p className="text-gray-600 text-sm mt-1">{system.description}</p>
+                      <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">{system.description}</p>
                     )}
                     {system.updated_at && (
-                      <p className="text-xs text-gray-400 mt-2">
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">
                         Updated{' '}
                         {formatDistanceToNow(new Date(system.updated_at), {
                           addSuffix: true,
@@ -382,12 +391,12 @@ export default function AISystems() {
                     )}
                     <div className="flex items-center gap-3 mt-2">
                       {system.sector && (
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                        <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded">
                           {system.sector}
                         </span>
                       )}
                       {system.use_case && (
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                        <span className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded">
                           {system.use_case}
                         </span>
                       )}
@@ -402,12 +411,12 @@ export default function AISystems() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
+                  <button className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700">
                     <Edit className="w-5 h-5" />
                   </button>
                   <button
                     onClick={() => setSystemToDelete(system)}
-                    className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
+                    className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
@@ -415,12 +424,12 @@ export default function AISystems() {
               </div>
 
               {/* Compliance Progress */}
-              <div className="mt-4 pt-4 border-t border-gray-100">
+              <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-600">Compliance Score</span>
-                  <span className="font-medium">{system.compliance_score}%</span>
+                  <span className="text-gray-600 dark:text-gray-400">Compliance Score</span>
+                  <span className="font-medium text-gray-900 dark:text-white">{system.compliance_score}%</span>
                 </div>
-                <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
+                <div className="mt-2 h-2 bg-gray-100 dark:bg-gray-750 rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full ${system.compliance_score >= 80
                         ? 'bg-green-500'
@@ -441,19 +450,19 @@ export default function AISystems() {
         <button
           onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
           disabled={currentPage === 1}
-          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+          className="px-4 py-2 border border-gray-300 dark:border-gray-700 dark:text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-800"
         >
           Previous
         </button>
 
-        <span className="text-sm font-medium text-gray-700">
+        <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
           Page {currentPage}
         </span>
 
         <button
           onClick={() => setCurrentPage((prev) => prev + 1)}
           disabled={systems.length < limit}
-          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+          className="px-4 py-2 border border-gray-300 dark:border-gray-700 dark:text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-800"
         >
           Next
         </button>
@@ -462,18 +471,18 @@ export default function AISystems() {
       {/* Delete Confirmation Modal */}
       {systemToDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md border border-gray-200 dark:border-gray-700 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
               Delete AI System
             </h2>
-            <p className="text-gray-600">
+            <p className="text-gray-600 dark:text-gray-400">
               Are you sure you want to delete {systemToDelete.name}? This cannot be undone.
             </p>
             <div className="flex justify-end gap-3 pt-6">
               <button
                 type="button"
                 onClick={() => setSystemToDelete(null)}
-                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className="px-4 py-2 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-705"
               >
                 Cancel
               </button>
@@ -493,13 +502,13 @@ export default function AISystems() {
       {/* Add Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md border border-gray-200 dark:border-gray-700 shadow-xl">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
               Add AI System
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   System Name *
                 </label>
                 <input
@@ -507,49 +516,49 @@ export default function AISystems() {
                   required
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-primary-500 focus:border-primary-500 outline-none"
                   placeholder="e.g., CV Screening AI"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Description
                 </label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-primary-500 focus:border-primary-500 outline-none"
                   rows={3}
                   placeholder="Brief description of what your AI system does"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Sector
                 </label>
                 <select
                   value={formData.sector}
                   onChange={(e) => setFormData({ ...formData, sector: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-primary-500 focus:border-primary-500 outline-none"
                 >
-                  <option value="">Select sector...</option>
+                  <option value="" className="bg-white dark:bg-gray-800">Select sector...</option>
                   {sectors.map((s) => (
-                    <option key={s} value={s}>{s}</option>
+                    <option key={s} value={s} className="bg-white dark:bg-gray-800">{s}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Use Case
                 </label>
                 <select
                   value={formData.use_case}
                   onChange={(e) => setFormData({ ...formData, use_case: e.target.value })}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-primary-500 focus:border-primary-500 outline-none"
                 >
-                  <option value="">Select use case...</option>
+                  <option value="" className="bg-white dark:bg-gray-800">Select use case...</option>
                   {useCases.map((u) => (
-                    <option key={u} value={u}>{u}</option>
+                    <option key={u} value={u} className="bg-white dark:bg-gray-800">{u}</option>
                   ))}
                 </select>
               </div>
@@ -557,7 +566,7 @@ export default function AISystems() {
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                  className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
                 >
                   Cancel
                 </button>

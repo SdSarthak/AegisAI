@@ -64,12 +64,12 @@ export default function Onboarding() {
   const StepIcon = STEPS[currentStep].icon
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
-      <div className="bg-white rounded-2xl border border-gray-200 p-8 w-full max-w-lg">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-8">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 w-full max-w-lg">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          <Shield className="w-8 h-8 text-primary-600" />
-          <h1 className="text-xl font-semibold text-gray-900">Welcome to AegisAI</h1>
+          <Shield className="w-8 h-8 text-primary-600 dark:text-primary-400" />
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Welcome to AegisAI</h1>
         </div>
 
         {/* Step indicators */}
@@ -81,15 +81,15 @@ export default function Onboarding() {
                   idx < currentStep
                     ? 'bg-primary-600 text-white'
                     : idx === currentStep
-                    ? 'border-2 border-primary-600 text-primary-600'
-                    : 'bg-gray-100 text-gray-400'
+                    ? 'border-2 border-primary-600 dark:border-primary-400 text-primary-600 dark:text-primary-400'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-505'
                 }`}
               >
                 {idx + 1}
               </div>
               {idx < STEPS.length - 1 && (
                 <div
-                  className={`h-0.5 flex-1 ${idx < currentStep ? 'bg-primary-600' : 'bg-gray-200'}`}
+                  className={`h-0.5 flex-1 ${idx < currentStep ? 'bg-primary-600' : 'bg-gray-200 dark:bg-gray-700'}`}
                 />
               )}
             </div>
@@ -99,15 +99,15 @@ export default function Onboarding() {
         {/* Step content */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <StepIcon className="w-6 h-6 text-primary-600" />
-            <h2 className="text-lg font-semibold text-gray-900">
+            <StepIcon className="w-6 h-6 text-primary-600 dark:text-primary-400" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
               {STEPS[currentStep].label}
             </h2>
           </div>
-          <p className="text-gray-600 text-sm">{STEPS[currentStep].description}</p>
+          <p className="text-gray-600 dark:text-gray-400 text-sm">{STEPS[currentStep].description}</p>
 
           {/* TODO (good first issue): add step-specific form fields here */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center text-sm text-gray-400">
+          <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 text-center text-sm text-gray-400 dark:text-gray-500">
             Step {currentStep + 1} form fields — implement me
           </div>
         </div>
@@ -118,7 +118,7 @@ export default function Onboarding() {
             type="button"
             onClick={handleBack}
             disabled={currentStep === 0}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Back
           </button>
