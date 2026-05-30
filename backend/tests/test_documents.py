@@ -1,141 +1,386 @@
-"""Unit tests for document generation — all 3 template types."""
+"""
+Unit tests for document generation — all 3 template types.
+Refactored with pytest fixtures, parametrization, and edge-case coverage.
+"""
 
 import pytest
-from app.core.security import create_access_token
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import sessionmaker
+from app.core.security import get_current_user, get_password_hash, create_access_token
+from app.core.database import get_db
+from app.main import app
+from app.models.user import User, SubscriptionTier
 
 
-def get_auth_headers(user_id: int) -> dict:
-    token = create_access_token(data={"sub": str(user_id)})
-    return {"Authorization": f"Bearer {token}"}
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def shared_session(db_engine):
+    """Single shared session for the whole test."""
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+
+    # Override DB for all requests
+    def override_get_db():
+        yield session
+
+    app.dependency_overrides[get_db] = override_get_db
+    yield session
+
+    session.close()
+    transaction.rollback()
+    connection.close()
+    app.dependency_overrides.pop(get_db, None)
 
 
-def register_and_login(client, email, password="testpassword123"):
-    client.post("/api/v1/auth/register", json={"email": email, "password": password})
-    response = client.post("/api/v1/auth/login", data={"username": email, "password": password})
-    token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+@pytest.fixture
+def api_client(shared_session):
+    """A single TestClient that uses the shared session."""
+    return TestClient(app, raise_server_exceptions=False)
 
 
-def create_ai_system(client, headers):
-    response = client.post(
+@pytest.fixture
+def user1(shared_session):
+    """Create user1 in DB and return (user, auth_headers)."""
+    u = User(
+        email="docuser1@example.com",
+        hashed_password=get_password_hash("pass123"),
+        full_name="Doc User 1",
+        company_name="Company 1",
+        subscription_tier=SubscriptionTier.FREE,
+        is_active=True,
+        is_verified=True,
+    )
+    shared_session.add(u)
+    shared_session.flush()
+
+    # Override auth to return this user
+    app.dependency_overrides[get_current_user] = lambda: u
+    token = create_access_token(data={"sub": str(u.id)})
+    headers = {"Authorization": f"Bearer {token}"}
+    return u, headers
+
+
+@pytest.fixture
+def user2(shared_session, user1):
+    """Create user2 in DB and return (user, auth_headers)."""
+    u = User(
+        email="docuser2@example.com",
+        hashed_password=get_password_hash("pass123"),
+        full_name="Doc User 2",
+        company_name="Company 2",
+        subscription_tier=SubscriptionTier.FREE,
+        is_active=True,
+        is_verified=True,
+    )
+    shared_session.add(u)
+    shared_session.flush()
+    token = create_access_token(data={"sub": str(u.id)})
+    headers = {"Authorization": f"Bearer {token}"}
+    return u, headers
+
+
+@pytest.fixture
+def ai_system(api_client, user1, shared_session):
+    """Create AI system as user1."""
+    u1, headers1 = user1
+    app.dependency_overrides[get_current_user] = lambda: u1
+    response = api_client.post(
         "/api/v1/ai-systems/",
         json={"name": "Test AI System", "description": "A test system"},
-        headers=headers
+        headers=headers1
     )
+    assert response.status_code == 201
     return response.json()["id"]
 
-def test_list_document_templates(client):
-    headers = register_and_login(client, "templates@example.com")
 
-    response = client.get(
-        "/api/v1/documents/templates",
-        headers=headers
+@pytest.fixture
+def generated_document(api_client, user1, ai_system, shared_session):
+    """Generate a document as user1."""
+    u1, headers1 = user1
+    app.dependency_overrides[get_current_user] = lambda: u1
+    response = api_client.post(
+        "/api/v1/documents/generate",
+        json={"ai_system_id": ai_system, "document_type": "technical_documentation"},
+        headers=headers1
     )
+    assert response.status_code == 201
+    return response.json()
 
+
+# ---------------------------------------------------------------------------
+# Helper to switch active user
+# ---------------------------------------------------------------------------
+
+def as_user(user_obj):
+    """Switch the current user override."""
+    app.dependency_overrides[get_current_user] = lambda: user_obj
+
+
+# ---------------------------------------------------------------------------
+# Template listing
+# ---------------------------------------------------------------------------
+
+def test_list_document_templates(api_client, user1):
+    u1, h1 = user1
+    as_user(u1)
+    response = api_client.get("/api/v1/documents/templates", headers=h1)
     assert response.status_code == 200
-
     data = response.json()
     assert isinstance(data, list)
     assert len(data) == 3
-
-    template_types = {template["type"] for template in data}
+    template_types = {t["type"] for t in data}
     assert "technical_documentation" in template_types
     assert "risk_assessment" in template_types
     assert "conformity_declaration" in template_types
-
     for template in data:
-        assert "type" in template
-        assert "name" in template
-        assert "description" in template
         assert template["name"]
         assert template["description"]
 
 
-# ✅ Test 1: Generate Technical Documentation → 201
-def test_generate_technical_documentation(client):
-    headers = register_and_login(client, "tech_doc@example.com")
-    system_id = create_ai_system(client, headers)
+def test_list_templates_requires_auth(api_client, shared_session):
+    """Templates endpoint must reject unauthenticated requests."""
+    app.dependency_overrides.pop(get_current_user, None)
+    response = api_client.get("/api/v1/documents/templates")
+    assert response.status_code == 401
 
-    response = client.post(
+
+# ---------------------------------------------------------------------------
+# Document generation — parametrized over all 3 types
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("doc_type", [
+    "technical_documentation",
+    "risk_assessment",
+    "conformity_declaration",
+])
+def test_generate_document_all_types(api_client, user1, ai_system, doc_type):
+    u1, h1 = user1
+    as_user(u1)
+    response = api_client.post(
         "/api/v1/documents/generate",
-        json={
-            "ai_system_id": system_id,
-            "document_type": "technical_documentation"
-        },
-        headers=headers
+        json={"ai_system_id": ai_system, "document_type": doc_type},
+        headers=h1
     )
-
     assert response.status_code == 201
-    assert response.json() is not None
+    data = response.json()
+    assert data["document_type"] == doc_type
+    assert data["content"] is not None
+    assert len(data["content"]) > 0
+    assert "id" in data
+    assert "title" in data
 
 
-# ✅ Test 2: Generate Risk Assessment → 201
-def test_generate_risk_assessment(client):
-    headers = register_and_login(client, "risk@example.com")
-    system_id = create_ai_system(client, headers)
+# ---------------------------------------------------------------------------
+# Edge cases — invalid inputs
+# ---------------------------------------------------------------------------
 
-    response = client.post(
+def test_generate_invalid_document_type(api_client, user1, ai_system):
+    u1, h1 = user1
+    as_user(u1)
+    response = api_client.post(
         "/api/v1/documents/generate",
-        json={
-            "ai_system_id": system_id,
-            "document_type": "risk_assessment"
-        },
-        headers=headers
+        json={"ai_system_id": ai_system, "document_type": "invalid_type"},
+        headers=h1
     )
-
-    assert response.status_code == 201
-    assert response.json() is not None
+    assert response.status_code == 422
 
 
-# ✅ Test 3: Generate Conformity Declaration → 201
-def test_generate_conformity_declaration(client):
-    headers = register_and_login(client, "conformity@example.com")
-    system_id = create_ai_system(client, headers)
-
-    response = client.post(
+def test_generate_missing_ai_system_id(api_client, user1):
+    u1, h1 = user1
+    as_user(u1)
+    response = api_client.post(
         "/api/v1/documents/generate",
-        json={
-            "ai_system_id": system_id,
-            "document_type": "conformity_declaration"
-        },
-        headers=headers
+        json={"document_type": "technical_documentation"},
+        headers=h1
     )
-
-    assert response.status_code == 201
-    assert response.json() is not None
+    assert response.status_code == 422
 
 
-# ❌ Test 4: Non-existent system → 404
-def test_generate_for_nonexistent_system(client):
-    headers = register_and_login(client, "notsystem@example.com")
-
-    response = client.post(
+def test_generate_missing_document_type(api_client, user1, ai_system):
+    u1, h1 = user1
+    as_user(u1)
+    response = api_client.post(
         "/api/v1/documents/generate",
-        json={
-            "ai_system_id": 99999,
-            "document_type": "technical_documentation"
-        },
-        headers=headers
+        json={"ai_system_id": ai_system},
+        headers=h1
     )
+    assert response.status_code == 422
 
+
+def test_generate_empty_payload(api_client, user1):
+    u1, h1 = user1
+    as_user(u1)
+    response = api_client.post("/api/v1/documents/generate", json={}, headers=h1)
+    assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Edge cases — authentication
+# ---------------------------------------------------------------------------
+
+def test_generate_document_requires_auth(api_client, shared_session):
+    app.dependency_overrides.pop(get_current_user, None)
+    response = api_client.post(
+        "/api/v1/documents/generate",
+        json={"ai_system_id": 1, "document_type": "technical_documentation"}
+    )
+    assert response.status_code == 401
+
+
+def test_generate_document_invalid_token(api_client, shared_session):
+    app.dependency_overrides.pop(get_current_user, None)
+    response = api_client.post(
+        "/api/v1/documents/generate",
+        json={"ai_system_id": 1, "document_type": "technical_documentation"},
+        headers={"Authorization": "Bearer invalidtoken123"}
+    )
+    assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Edge cases — authorization (wrong user)
+# ---------------------------------------------------------------------------
+
+def test_generate_for_nonexistent_system(api_client, user1):
+    u1, h1 = user1
+    as_user(u1)
+    response = api_client.post(
+        "/api/v1/documents/generate",
+        json={"ai_system_id": 99999, "document_type": "technical_documentation"},
+        headers=h1
+    )
     assert response.status_code == 404
 
 
-# ❌ Test 5: Another user's system → 404
-def test_generate_for_another_users_system(client):
-    # User 1 creates a system
-    headers_user1 = register_and_login(client, "user1@example.com")
-    system_id = create_ai_system(client, headers_user1)
-
-    # User 2 tries to generate doc for User 1's system
-    headers_user2 = register_and_login(client, "user2@example.com")
-    response = client.post(
+def test_generate_for_another_users_system(api_client, user1, user2, ai_system):
+    u1, h1 = user1
+    u2, h2 = user2
+    # Switch to user2
+    as_user(u2)
+    response = api_client.post(
         "/api/v1/documents/generate",
-        json={
-            "ai_system_id": system_id,
-            "document_type": "technical_documentation"
-        },
-        headers=headers_user2
+        json={"ai_system_id": ai_system, "document_type": "technical_documentation"},
+        headers=h2
     )
-
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# CRUD — create, read, update, delete
+# ---------------------------------------------------------------------------
+
+def test_create_document(api_client, user1, ai_system):
+    u1, h1 = user1
+    as_user(u1)
+    response = api_client.post(
+        "/api/v1/documents/",
+        json={
+            "title": "My Test Doc",
+            "document_type": "technical_documentation",
+            "ai_system_id": ai_system,
+            "content": "Some content here"
+        },
+        headers=h1
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["title"] == "My Test Doc"
+    assert data["content"] == "Some content here"
+
+
+def test_list_documents(api_client, user1, generated_document):
+    u1, h1 = user1
+    as_user(u1)
+    response = api_client.get("/api/v1/documents/", headers=h1)
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert data["total"] >= 1
+
+
+def test_get_document_by_id(api_client, user1, generated_document):
+    u1, h1 = user1
+    as_user(u1)
+    doc_id = generated_document["id"]
+    response = api_client.get(f"/api/v1/documents/{doc_id}", headers=h1)
+    assert response.status_code == 200
+    assert response.json()["id"] == doc_id
+
+
+def test_get_document_not_found(api_client, user1):
+    u1, h1 = user1
+    as_user(u1)
+    response = api_client.get("/api/v1/documents/99999", headers=h1)
+    assert response.status_code == 404
+
+
+def test_get_document_wrong_user(api_client, user1, user2, generated_document):
+    u1, h1 = user1
+    u2, h2 = user2
+    doc_id = generated_document["id"]
+    # Switch to user2
+    as_user(u2)
+    response = api_client.get(f"/api/v1/documents/{doc_id}", headers=h2)
+    assert response.status_code == 404
+
+
+def test_update_document(api_client, user1, generated_document):
+    u1, h1 = user1
+    as_user(u1)
+    doc_id = generated_document["id"]
+    response = api_client.put(
+        f"/api/v1/documents/{doc_id}",
+        json={"content": "Updated content"},
+        headers=h1
+    )
+    assert response.status_code == 200
+    assert response.json()["content"] == "Updated content"
+
+
+def test_update_document_wrong_user(api_client, user1, user2, generated_document):
+    u1, h1 = user1
+    u2, h2 = user2
+    doc_id = generated_document["id"]
+    # Switch to user2
+    as_user(u2)
+    response = api_client.put(
+        f"/api/v1/documents/{doc_id}",
+        json={"content": "Hacked content"},
+        headers=h2
+    )
+    assert response.status_code == 404
+
+
+def test_delete_document(api_client, user1, ai_system):
+    u1, h1 = user1
+    as_user(u1)
+    create_resp = api_client.post(
+        "/api/v1/documents/generate",
+        json={"ai_system_id": ai_system, "document_type": "technical_documentation"},
+        headers=h1
+    )
+    doc_id = create_resp.json()["id"]
+    delete_resp = api_client.delete(f"/api/v1/documents/{doc_id}", headers=h1)
+    assert delete_resp.status_code == 204
+    get_resp = api_client.get(f"/api/v1/documents/{doc_id}", headers=h1)
+    assert get_resp.status_code == 404
+
+
+def test_delete_document_wrong_user(api_client, user1, user2, generated_document):
+    u1, h1 = user1
+    u2, h2 = user2
+    doc_id = generated_document["id"]
+    # Switch to user2
+    as_user(u2)
+    response = api_client.delete(f"/api/v1/documents/{doc_id}", headers=h2)
+    assert response.status_code == 404
+
+
+def test_list_documents_requires_auth(api_client, shared_session):
+    app.dependency_overrides.pop(get_current_user, None)
+    response = api_client.get("/api/v1/documents/")
+    assert response.status_code == 401
