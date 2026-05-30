@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import ComplianceRiskChart from '../components/ComplianceRiskChart'
+import ComplianceTimeline from '../components/ComplianceTimeline'
 import { getChartTheme } from '../utils/chartTheme'
 
 import {
@@ -356,6 +357,8 @@ export default function Analytics() {
           </div>
         </div>
       </div>
+
+      <ComplianceTimeline isDark={isDark} />
 
       {loading ? (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-6 shadow-sm h-80 flex items-center justify-center text-gray-500 dark:text-gray-400 transition-colors duration-300">
