@@ -76,4 +76,3 @@ def test_scan_prompts_passes_clean_prompt(tmp_path, monkeypatch):
     
     kwargs = client.post.call_args.kwargs
     assert "Summarize the policy in three bullets." in str(kwargs)
-        
