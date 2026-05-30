@@ -12,10 +12,6 @@ from app.main import app
 from app.models.user import User, SubscriptionTier
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 @pytest.fixture
 def shared_session(db_engine):
     """Single shared session for the whole test."""
@@ -110,19 +106,9 @@ def generated_document(api_client, user1, ai_system, shared_session):
     assert response.status_code == 201
     return response.json()
 
-
-# ---------------------------------------------------------------------------
-# Helper to switch active user
-# ---------------------------------------------------------------------------
-
 def as_user(user_obj):
     """Switch the current user override."""
     app.dependency_overrides[get_current_user] = lambda: user_obj
-
-
-# ---------------------------------------------------------------------------
-# Template listing
-# ---------------------------------------------------------------------------
 
 def test_list_document_templates(api_client, user1):
     u1, h1 = user1
@@ -148,10 +134,6 @@ def test_list_templates_requires_auth(api_client, shared_session):
     assert response.status_code == 401
 
 
-# ---------------------------------------------------------------------------
-# Document generation — parametrized over all 3 types
-# ---------------------------------------------------------------------------
-
 @pytest.mark.parametrize("doc_type", [
     "technical_documentation",
     "risk_assessment",
@@ -173,10 +155,6 @@ def test_generate_document_all_types(api_client, user1, ai_system, doc_type):
     assert "id" in data
     assert "title" in data
 
-
-# ---------------------------------------------------------------------------
-# Edge cases — invalid inputs
-# ---------------------------------------------------------------------------
 
 def test_generate_invalid_document_type(api_client, user1, ai_system):
     u1, h1 = user1
@@ -218,10 +196,6 @@ def test_generate_empty_payload(api_client, user1):
     assert response.status_code == 422
 
 
-# ---------------------------------------------------------------------------
-# Edge cases — authentication
-# ---------------------------------------------------------------------------
-
 def test_generate_document_requires_auth(api_client, shared_session):
     app.dependency_overrides.pop(get_current_user, None)
     response = api_client.post(
@@ -240,10 +214,6 @@ def test_generate_document_invalid_token(api_client, shared_session):
     )
     assert response.status_code == 401
 
-
-# ---------------------------------------------------------------------------
-# Edge cases — authorization (wrong user)
-# ---------------------------------------------------------------------------
 
 def test_generate_for_nonexistent_system(api_client, user1):
     u1, h1 = user1
@@ -269,9 +239,6 @@ def test_generate_for_another_users_system(api_client, user1, user2, ai_system):
     assert response.status_code == 404
 
 
-# ---------------------------------------------------------------------------
-# CRUD — create, read, update, delete
-# ---------------------------------------------------------------------------
 
 def test_create_document(api_client, user1, ai_system):
     u1, h1 = user1
