@@ -29,6 +29,14 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER
 router = APIRouter()
 
 
+def _doc_scope_filter(current_user: User):
+    """Return a SQLAlchemy filter for document queries scoped to org or user."""
+    if current_user.org_id is not None:
+        return Document.org_id == current_user.org_id
+    return Document.owner_id == current_user.id
+
+
+
 # Document templates for generation
 DOCUMENT_TEMPLATES = {
     DocumentType.TECHNICAL_DOCUMENTATION: """
@@ -193,6 +201,7 @@ def create_document(
 
     document = Document(
         owner_id=current_user.id,
+        org_id=current_user.org_id,  # Automatically scoped to the user's org
         title=doc_data.title,
         document_type=doc_data.document_type,
         ai_system_id=doc_data.ai_system_id,
@@ -222,7 +231,7 @@ def list_documents(
     Returns:
         PaginatedResponse containing the user's documents.
     """
-    base_query = db.query(Document).filter(Document.owner_id == current_user.id)
+    base_query = db.query(Document).filter(_doc_scope_filter(current_user))
     total = base_query.count()
 
     documents = base_query.offset(skip).limit(limit).all()
@@ -271,7 +280,7 @@ def get_document(
     """
     document = (
         db.query(Document)
-        .filter(Document.id == document_id, Document.owner_id == current_user.id)
+        .filter(Document.id == document_id, _doc_scope_filter(current_user))
         .first()
     )
 
@@ -305,7 +314,7 @@ def update_document(
     # Fetch document
     document = db.query(Document).filter(
         Document.id == document_id,
-        Document.owner_id == current_user.id
+        _doc_scope_filter(current_user)
     ).first()
     
     if not document:
@@ -348,7 +357,8 @@ def generate_document(
     ai_system = (
         db.query(AISystem)
         .filter(
-            AISystem.id == request.ai_system_id, AISystem.owner_id == current_user.id
+            AISystem.id == request.ai_system_id,
+            AISystem.owner_id == current_user.id,
         )
         .first()
     )
@@ -404,6 +414,7 @@ def generate_document(
     # Create document
     document = Document(
         owner_id=current_user.id,
+        org_id=current_user.org_id,  # Automatically scoped to the user's org
         ai_system_id=ai_system.id,
         title=f"{request.document_type.value.replace('_', ' ').title()} - {ai_system.name}",
         document_type=request.document_type,
@@ -438,7 +449,7 @@ def delete_document(
     """
     document = (
         db.query(Document)
-        .filter(Document.id == document_id, Document.owner_id == current_user.id)
+        .filter(Document.id == document_id, _doc_scope_filter(current_user))
         .first()
     )
 
@@ -473,7 +484,7 @@ def export_document_pdf(
     # Retrieve the document
     document = db.query(Document).filter(
         Document.id == document_id,
-        Document.owner_id == current_user.id
+        _doc_scope_filter(current_user)
     ).first()
     
     if not document:
