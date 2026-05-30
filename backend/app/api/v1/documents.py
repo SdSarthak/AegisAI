@@ -14,8 +14,8 @@ from app.schemas.document import (
     DocumentCreate,
     DocumentResponse,
     DocumentGenerateRequest,
-    DocumentUpdateRequest,
     DocumentTemplateResponse,
+    DocumentUpdateRequest,
 )
 from app.schemas.pagination import PaginatedResponse
 
@@ -199,7 +199,7 @@ def list_documents(
     """List the current user's documents with pagination.
 
     Args:
-        page: Page number to return, starting at 1.
+        skip: Number of documents to skip.
         limit: Maximum number of documents to return per page.
         db: Database session used to query documents.
         current_user: Authenticated user whose documents are being listed.
@@ -306,7 +306,11 @@ def update_document(
     
     return document
 
-@router.post("/generate", response_model=DocumentResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/generate",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
 def generate_document(
     request: DocumentGenerateRequest,
     db: Session = Depends(get_db),
