@@ -2,6 +2,11 @@
 
 import pytest
 from unittest.mock import patch, MagicMock
+try:
+    from langchain.chains import RetrievalQA
+except ImportError:
+    from langchain_classic.chains import RetrievalQA
+from app.core.config import settings
 from app.modules.rag.retrieval_chain import get_qa_chain
 from app.modules.rag.vector_store import load_vector_store
 
@@ -45,30 +50,34 @@ class TestRetrievalChain:
 
     @patch("app.modules.rag.retrieval_chain.load_vector_store")
     @patch("app.modules.rag.retrieval_chain.ChatOpenAI")
-    @patch("langchain.chains.RetrievalQA.from_chain_type")
+    @patch("app.modules.rag.retrieval_chain.RetrievalQA.from_chain_type")
     def test_get_qa_chain_returns_chain(self, mock_from_chain_type, mock_llm, mock_load_vs):
         """3. get_qa_chain() should return a chain when the index exists."""
         # Setup: Mock vector store and its retriever
         mock_vs = MagicMock()
+        mock_load_vs.return_value = mock_vs
         mock_retriever = MagicMock()
         mock_vs.as_retriever.return_value = mock_retriever
-        mock_load_vs.return_value = mock_vs
         
-        # Mock the chain instance
-        mock_chain = MagicMock()
-        mock_from_chain_type.return_value = mock_chain
-        
-        # Execute
+        # Call the function
         chain = get_qa_chain()
         
         # Assertions
-        assert chain == mock_chain
-        mock_from_chain_type.assert_called_once()
-        
-        # Verify it was built with return_source_documents=True
-        # This checks that we are following the project's requirement for source extraction
-        args, kwargs = mock_from_chain_type.call_args
-        assert kwargs["return_source_documents"] is True
+        assert chain is not None
+        mock_load_vs.assert_called_once()
+        mock_vs.as_retriever.assert_called_once_with(search_kwargs={"k": 5})
+        mock_llm.assert_called_once_with(
+            model=settings.LLM_MODEL,
+            openai_api_key=settings.LLM_API_KEY,
+            openai_api_base=settings.LLM_BASE_URL or None,
+            temperature=0,
+        )
+        mock_from_chain_type.assert_called_once_with(
+            llm=mock_llm.return_value,
+            chain_type="stuff",
+            retriever=mock_retriever,
+            return_source_documents=True,
+        )
 
     @patch("app.modules.rag.retrieval_chain.load_vector_store")
     @patch("app.modules.rag.retrieval_chain.ChatOpenAI")
@@ -95,7 +104,7 @@ class TestRetrievalChain:
         mock_chain.return_value = expected_response
         
         # We patch RetrievalQA.from_chain_type locally to return our mock_chain
-        with patch("langchain.chains.RetrievalQA.from_chain_type", return_value=mock_chain):
+        with patch("app.modules.rag.retrieval_chain.RetrievalQA.from_chain_type", return_value=mock_chain):
             chain = get_qa_chain()
             
             # Simulate asking a question
