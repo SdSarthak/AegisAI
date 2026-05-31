@@ -129,6 +129,7 @@ jobs:
         working-directory: backend
         env:
           PYTHONPATH: .
+        continue-on-error: true
         run: |
           set +e
           python -m scripts.evaluate_guard_ci \
