@@ -74,6 +74,12 @@ def ingest_documents(
     Raises:
         HTTPException: If no valid PDFs are supplied or indexing fails.
     """
+    if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Too many files. Maximum allowed is {settings.RAG_MAX_FILES_PER_REQUEST}.",
+        )
+
     pdf_files = [
         f
         for f in files
@@ -85,6 +91,25 @@ def ingest_documents(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No valid PDF files supplied. Please upload files with a .pdf extension.",
+        )
+
+    total_size = 0
+    for upload in pdf_files:
+        upload.file.seek(0, 2)
+        file_size = upload.file.tell()
+        upload.file.seek(0)
+
+        if file_size > settings.RAG_MAX_FILE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File {upload.filename} exceeds the maximum size of {settings.RAG_MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB.",
+            )
+        total_size += file_size
+
+    if total_size > settings.RAG_TOTAL_BUDGET_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Total upload size exceeds the maximum budget of {settings.RAG_TOTAL_BUDGET_BYTES // (1024 * 1024)}MB.",
         )
 
     tmp_dir = tempfile.mkdtemp(prefix="aegis_ingest_")
