@@ -259,3 +259,53 @@ def test_cli_exit_code_fail(holdout_csv, tmp_path, monkeypatch):
     )
     assert code == 1
     assert json.loads(json_out.read_text())["threshold"]["passed"] is False
+
+def test_relativize_strips_absolute_prefix():
+    """Regression test for reviewer feedback on PR #79: the committed
+    baseline must never contain absolute filesystem paths from the
+    developer's machine.
+    
+    Note: We can only meaningfully test the platform's *own* absolute
+    path format. Windows paths can't be resolved on Linux and vice
+    versa — pathlib refuses to interpret a foreign-platform absolute
+    path as absolute.
+    """
+    import os
+    
+    if os.name == "nt":
+        # Windows runner — test Windows-style absolute paths
+        abs_path = "C:\\Users\\dev\\Documents\\AegisAI\\backend\\app\\modules\\guard\\models\\classifier"
+    else:
+        # Linux/macOS runner — test POSIX-style absolute paths
+        abs_path = "/home/runner/work/AegisAI/AegisAI/backend/app/modules/guard/models/classifier"
+    
+    result = ci._relativize_model_path(abs_path)
+    assert result == "backend/app/modules/guard/models/classifier", (
+        f"Expected relative path, got: {result}"
+    )
+    
+    # Already-relative paths should pass through (normalized to forward slashes).
+    assert ci._relativize_model_path(
+        "modules/guard/models/classifier"
+    ) == "modules/guard/models/classifier"
+
+def test_evaluate_writes_repo_relative_model_path(holdout_csv, tmp_path):
+    """End-to-end check: the value baked into the result dict has no
+    absolute prefixes regardless of where the script ran."""
+    df = pd.read_csv(holdout_csv)
+    lookup = dict(zip(df["prompt"], df["label"]))
+
+    abs_path = "/home/runner/work/AegisAI/AegisAI/backend/app/modules/guard/models/classifier"
+    result = ci.evaluate(
+        test_set_path=holdout_csv,
+        threshold=0.9,
+        threshold_metric="weighted_f1",
+        model_path=abs_path,
+        baseline_path=None,
+        classifier_factory=_stub_factory(lookup),
+    )
+
+    assert ":" not in result["model_path"]   # no Windows drive letter
+    assert not result["model_path"].startswith("/")  # no absolute unix path
+    assert "Users" not in result["model_path"]
+    assert "runner/work" not in result["model_path"]

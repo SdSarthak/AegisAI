@@ -355,11 +355,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
 
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
-    args.output_json.write_text(json.dumps(result, indent=2, sort_keys=True))
+    args.output_json.write_text(json.dumps(result, indent=2), encoding="utf-8")
 
     markdown = render_markdown(result)
     args.output_md.parent.mkdir(parents=True, exist_ok=True)
-    args.output_md.write_text(markdown)
+    args.output_md.write_text(markdown, encoding="utf-8")
 
     threshold = result["threshold"]
     logger.info(
