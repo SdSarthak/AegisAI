@@ -308,6 +308,7 @@ def query_knowledge_base(
     """Ask a regulatory question and get an answer grounded in source documents."""
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
+        from app.modules.rag.groundedness import compute_groundedness
         from app.core.database import Base
 
         qa_chain = get_qa_chain()
