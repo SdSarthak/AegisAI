@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.modules.compliance.nist_mapping import EU_TO_NIST_MAPPING
@@ -7,7 +7,11 @@ from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.encryption import decrypt
 from app.models.user import User
+from app.models.integration import UserIntegration, IntegrationType
+from app.modules.integrations.jira_client import JiraClient
+from app.modules.integrations.linear_client import LinearClient
 from app.models.ai_system import AISystem, RiskLevel, RiskAssessment, ComplianceStatus
 from app.schemas.ai_system import (
     RiskClassificationRequest,
@@ -369,6 +373,7 @@ def classify_ai_system(
 def classify_and_save(
     system_id: int,
     data: RiskClassificationRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -418,6 +423,35 @@ def classify_and_save(
         overall_score=70 if result.risk_level == RiskLevel.MINIMAL else 30,
     )
     db.add(assessment)
+    # Auto-create tickets if HIGH or UNACCEPTABLE
+    if result.risk_level in (RiskLevel.HIGH, RiskLevel.UNACCEPTABLE):
+        gaps = result.requirements
+        integrations_list = db.query(UserIntegration).filter_by(user_id=current_user.id).all()
+
+        for integration in integrations_list:
+            for gap in gaps:
+                title = f"[AegisAI] {system.name}: {gap[:80]}"
+                description = (
+                    f"System: {system.name}\n"
+                    f"Risk Level: {result.risk_level.value.upper()}\n"
+                    f"Compliance Gap: {gap}\n"
+                    f"EU AI Act Reference: See AegisAI dashboard for full details."
+                )
+                if integration.integration_type == IntegrationType.jira:
+                    client = JiraClient(
+                        base_url=integration.base_url,
+                        email=integration.email,
+                        api_token=decrypt(integration.api_token),
+                        project_key=integration.project_key,
+                    )
+                elif integration.integration_type == IntegrationType.linear:
+                    client = LinearClient(
+                        api_key=decrypt(integration.api_token),
+                        team_id=integration.project_key,
+                    )
+                else:
+                    continue
+                background_tasks.add_task(client.create_issue, title, description)
 
     db.commit()
     db.refresh(system)
