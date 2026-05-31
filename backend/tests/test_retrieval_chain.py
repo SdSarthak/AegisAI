@@ -1,11 +1,24 @@
-"""Tests for the RAG retrieval chain module with mocked FAISS and LLM."""
+import sys
+from unittest.mock import MagicMock
+# Create mock modules to prevent import and attribute errors
+mock_lc = MagicMock()
+mock_lc_chains = MagicMock()
+mock_lc_chains.RetrievalQA = MagicMock()
+mock_lc.chains = mock_lc_chains
+sys.modules["langchain"] = mock_lc
+sys.modules["langchain.chains"] = mock_lc_chains
+
+mock_lcc = MagicMock()
+mock_lcc_vs = MagicMock()
+mock_lcc.vectorstores = mock_lcc_vs
+sys.modules["langchain_community"] = mock_lcc
+sys.modules["langchain_community.vectorstores"] = mock_lcc_vs
+sys.modules["langchain_community.document_loaders"] = MagicMock()
+sys.modules["langchain_text_splitters"] = MagicMock()
+sys.modules["langchain_openai"] = MagicMock()
 
 import pytest
-from unittest.mock import patch, MagicMock
-try:
-    from langchain.chains import RetrievalQA
-except ImportError:
-    from langchain_classic.chains import RetrievalQA
+from unittest.mock import patch
 from app.core.config import settings
 from app.modules.rag.retrieval_chain import get_qa_chain
 from app.modules.rag.vector_store import load_vector_store
@@ -50,7 +63,7 @@ class TestRetrievalChain:
 
     @patch("app.modules.rag.retrieval_chain.load_vector_store")
     @patch("app.modules.rag.retrieval_chain.ChatOpenAI")
-    @patch("app.modules.rag.retrieval_chain.RetrievalQA.from_chain_type")
+    @patch("langchain.chains.RetrievalQA.from_chain_type")
     def test_get_qa_chain_returns_chain(self, mock_from_chain_type, mock_llm, mock_load_vs):
         """3. get_qa_chain() should return a chain when the index exists."""
         # Setup: Mock vector store and its retriever
@@ -104,7 +117,7 @@ class TestRetrievalChain:
         mock_chain.return_value = expected_response
         
         # We patch RetrievalQA.from_chain_type locally to return our mock_chain
-        with patch("app.modules.rag.retrieval_chain.RetrievalQA.from_chain_type", return_value=mock_chain):
+        with patch("langchain.chains.RetrievalQA.from_chain_type", return_value=mock_chain):
             chain = get_qa_chain()
             
             # Simulate asking a question
