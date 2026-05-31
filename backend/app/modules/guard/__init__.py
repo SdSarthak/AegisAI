@@ -1,6 +1,16 @@
 """LLM Guard package for prompt injection detection and mitigation."""
 
-__all__ = ["RegexFilter", "IntentClassifier", "DecisionEngine", "PromptSanitizer"]
+from importlib import import_module
+from types import ModuleType
+import sys
+
+__all__ = [
+    "RegexFilter",
+    "IntentClassifier",
+    "DecisionEngine",
+    "PromptSanitizer",
+    "llm_guard",
+]
 
 
 def __getattr__(name):
@@ -21,4 +31,23 @@ def __getattr__(name):
         from .sanitizer import PromptSanitizer
 
         return PromptSanitizer
+    if name == "llm_guard":
+        try:
+            return import_module(".llm_guard", __name__)
+        except ModuleNotFoundError as exc:
+            if exc.name != "torch":
+                raise
+
+            module_name = f"{__name__}.llm_guard"
+            fallback = ModuleType(module_name)
+
+            class LLMGuard:
+                def __init__(self, *args, **kwargs):
+                    raise ModuleNotFoundError(
+                        "No module named 'torch'"
+                    )
+
+            fallback.LLMGuard = LLMGuard
+            sys.modules[module_name] = fallback
+            return fallback
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

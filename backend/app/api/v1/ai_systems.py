@@ -11,7 +11,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.config import settings
 from app.models.user import User
-from app.models.ai_system import AISystem
+from app.models.ai_system import AISystem, ComplianceStatus
 from app.models.audit_log import AISystemAuditLog
 from app.schemas.ai_system import (
     AISystemCreate,
@@ -469,6 +469,40 @@ def get_ai_system(
             status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
         )
     return system
+
+
+@router.post("/{system_id}/clone", response_model=AISystemResponse, status_code=status.HTTP_201_CREATED)
+def clone_ai_system(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """clone an existing AI system with '(copy)' appended to name and compliance reset"""
+    original = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id
+    ).first()
+
+    if not original:
+        raise HTTPException(
+            status_code = status.HTTP_404_NOT_FOUND,
+            detail="AI system not found"
+        )
+
+    cloned = AISystem(
+        owner_id=current_user.id,
+        name=f"{original.name} (copy)",
+        description=original.description,
+        version=original.version,
+        use_case=original.use_case,
+        sector=original.sector,
+        compliance_status=ComplianceStatus.NOT_STARTED,
+    )
+
+    db.add(cloned)
+    db.commit()
+    db.refresh(cloned)
+    return cloned
 
 
 @router.put("/{system_id}", response_model=AISystemResponse)

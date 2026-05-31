@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useAuthStore } from './stores/authStore'
 import Layout from './components/Layout'
 import Login from './pages/Login'
@@ -14,13 +15,26 @@ import NotFound from './pages/NotFound'
 import { Toaster } from 'react-hot-toast'
 import RagChat from './pages/RagChat'
 
-
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />
 }
 
 function App() {
+  // ✅ Sync with system theme (only if no manual preference)
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)")
+
+    const handler = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem("theme")) {
+        document.documentElement.classList.toggle("dark", e.matches)
+      }
+    }
+
+    media.addEventListener("change", handler)
+    return () => media.removeEventListener("change", handler)
+  }, [])
+
   return (
     <>
       <Toaster
@@ -43,9 +57,11 @@ function App() {
           },
         }}
       />
+
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+
         <Route
           path="/"
           element={
@@ -62,9 +78,8 @@ function App() {
           <Route path="guard" element={<GuardConsole />} />
           <Route path="rag-chat" element={<RagChat />} />
           <Route path="notifications" element={<Notifications />} />
-          <Route path="rag-chat" element={<RagChat />} />
-
         </Route>
+
         <Route path="*" element={<NotFound />} />
       </Routes>
     </>

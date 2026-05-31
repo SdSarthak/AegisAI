@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.api.v1 import guard as guard_api
+from app.core.rate_limit import guard_scan_rate_limiter
 
 
 def _guard_result():
@@ -31,7 +31,6 @@ def _guard_result():
 
 @pytest.fixture(autouse=True)
 def clear_guard_rate_limits():
-    from app.core.rate_limit import guard_scan_rate_limiter
     guard_scan_rate_limiter._local_attempts_by_key.clear()
     yield
     guard_scan_rate_limiter._local_attempts_by_key.clear()
@@ -40,7 +39,7 @@ def clear_guard_rate_limits():
 @pytest.fixture
 def auth_headers(client):
     email = f"batch-scan-{uuid4()}@example.com"
-    password = "testpassword123"
+    password = "TestPass123!"
 
     client.post(
         "/api/v1/auth/register",

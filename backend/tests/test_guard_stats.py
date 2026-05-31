@@ -7,7 +7,7 @@ from app.models.user import User
 @pytest.fixture
 def auth_headers(client):
     email = "test_stats@example.com"
-    password = "testpassword123"
+    password = "TestPass123!"
     client.post("/api/v1/auth/register", json={"email": email, "password": password, "full_name": "Test User"})
     response = client.post("/api/v1/auth/login", data={"username": email, "password": password})
     token = response.json()["access_token"]
@@ -16,7 +16,7 @@ def auth_headers(client):
 @pytest.fixture
 def other_user_auth_headers(client):
     email = "other@example.com"
-    password = "testpassword123"
+    password = "TestPass123!"
     client.post("/api/v1/auth/register", json={"email": email, "password": password, "full_name": "Other User"})
     response = client.post("/api/v1/auth/login", data={"username": email, "password": password})
     token = response.json()["access_token"]
@@ -134,17 +134,18 @@ def test_unauthorized_user_access(client, auth_headers, other_user_auth_headers,
 
 def test_admin_access(client, db_session):
     # Create regular user
-    client.post("/api/v1/auth/register", json={"email": "user@example.com", "password": "password", "full_name": "Regular User"})
+    password = "TestPass123!"
+    client.post("/api/v1/auth/register", json={"email": "user@example.com", "password": password, "full_name": "Regular User"})
     user = db_session.query(User).filter(User.email == "user@example.com").first()
     
     # Create admin user
-    client.post("/api/v1/auth/register", json={"email": "admin@example.com", "password": "password", "full_name": "Admin User"})
+    client.post("/api/v1/auth/register", json={"email": "admin@example.com", "password": password, "full_name": "Admin User"})
     
     # We need to mock the 'role' property on the User instance that get_current_user returns.
     # We can patch the model class or the dependency.
     
     with patch("app.models.user.User.role", "admin", create=True):
-        response = client.post("/api/v1/auth/login", data={"username": "admin@example.com", "password": "password"})
+        response = client.post("/api/v1/auth/login", data={"username": "admin@example.com", "password": password})
         admin_token = response.json()["access_token"]
         
         response = client.get(

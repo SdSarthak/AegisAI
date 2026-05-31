@@ -2,7 +2,61 @@ import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
 import { authApi } from '../services/api'
-import { Shield } from 'lucide-react'
+import { Shield, AlertCircle, CheckCircle, XCircle } from 'lucide-react'
+
+interface ValidationError {
+  field: string
+  message: string
+}
+
+interface PydanticValidationError {
+  loc?: Array<string | number>
+  msg?: string
+}
+
+interface ErrorResponseData {
+  detail?: string | PydanticValidationError[]
+}
+
+function isErrorResponseData(value: unknown): value is ErrorResponseData {
+  return typeof value === 'object' && value !== null && 'detail' in value
+}
+
+function parsePydanticErrors(errorData: unknown): ValidationError[] {
+  if (!isErrorResponseData(errorData)) return []
+
+  if (Array.isArray(errorData.detail)) {
+    return errorData.detail.map((error) => ({
+      field: String(error.loc?.[error.loc.length - 1] ?? 'unknown'),
+      message: error.msg || 'Invalid input',
+    }))
+  }
+
+  if (typeof errorData.detail === 'string') {
+    return [{ field: 'general', message: errorData.detail }]
+  }
+
+  return []
+}
+
+function checkPasswordStrength(password: string) {
+  return {
+    hasMinLength: password.length >= 8,
+    hasUppercase: /[A-Z]/.test(password),
+    hasDigit: /\d/.test(password),
+    hasSpecialChar: /[!@#$%^&*]/.test(password),
+  }
+}
+
+function isPasswordValid(password: string): boolean {
+  const strength = checkPasswordStrength(password)
+  return (
+    strength.hasMinLength &&
+    strength.hasUppercase &&
+    strength.hasDigit &&
+    strength.hasSpecialChar
+  )
+}
 
 export default function Register() {
   const navigate = useNavigate()
@@ -12,22 +66,69 @@ export default function Register() {
     full_name: '',
     company_name: '',
   })
-  const [error, setError] = useState('')
+  const [errors, setErrors] = useState<ValidationError[]>([])
   const [loading, setLoading] = useState(false)
+  const [showPasswordRequirements, setShowPasswordRequirements] = useState(false)
+
+  const passwordStrength = checkPasswordStrength(formData.password)
+  const isPasswordFieldValid = isPasswordValid(formData.password)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
+    setErrors([])
     setLoading(true)
+
+    // Frontend validation
+    if (!isPasswordValid(formData.password)) {
+      setErrors([
+        {
+          field: 'password',
+          message:
+            'Password must contain: at least 8 characters, at least one uppercase letter, at least one digit, at least one special character (!@#$%^&*)',
+        },
+      ])
+      setLoading(false)
+      return
+    }
 
     try {
       await authApi.register(formData)
       navigate('/login')
     } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.data?.detail) {
-        setError(err.response.data.detail)
+      if (axios.isAxiosError(err)) {
+        // Try to parse Pydantic validation errors (422)
+        const parsedErrors = parsePydanticErrors(err.response?.data)
+
+        if (parsedErrors.length > 0) {
+          setErrors(parsedErrors)
+        } else if (err.response?.data?.detail) {
+          // Handle custom error messages (400, etc.)
+          setErrors([
+            { field: 'general', message: err.response.data.detail },
+          ])
+        } else if (err.code === 'ERR_NETWORK') {
+          setErrors([
+            {
+              field: 'general',
+              message:
+                'Network error. Please check your connection and try again.',
+            },
+          ])
+        } else {
+          setErrors([
+            {
+              field: 'general',
+              message: 'Registration failed. Please try again.',
+            },
+          ])
+        }
       } else {
-        setError('Registration failed. Please try again.')
+        setErrors([
+          {
+            field: 'general',
+            message: 'An unexpected error occurred. Please try again.',
+          },
+        ])
       }
     } finally {
       setLoading(false)
@@ -48,9 +149,13 @@ export default function Register() {
         </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-lg">
-              {error}
+          {/* General error message */}
+          {errors.some((e) => e.field === 'general') && (
+            <div className="p-3 flex items-start gap-3 text-sm bg-red-50 rounded-lg border border-red-200">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="text-red-700">
+                {errors.find((e) => e.field === 'general')?.message}
+              </div>
             </div>
           )}
 
@@ -64,8 +169,17 @@ export default function Register() {
               required
               value={formData.email}
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
+                errors.some((e) => e.field === 'email')
+                  ? 'border-red-300 bg-red-50'
+                  : 'border-gray-300'
+              }`}
             />
+            {errors.some((e) => e.field === 'email') && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.find((e) => e.field === 'email')?.message}
+              </p>
+            )}
           </div>
 
           <div>
@@ -76,11 +190,49 @@ export default function Register() {
               id="password"
               type="password"
               required
-              minLength={8}
               value={formData.password}
               onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              onFocus={() => setShowPasswordRequirements(true)}
+              onBlur={() => setShowPasswordRequirements(false)}
+              className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
+                formData.password && !isPasswordFieldValid
+                  ? 'border-red-300 bg-red-50'
+                  : 'border-gray-300'
+              }`}
             />
+
+            {/* Password strength requirements feedback */}
+            {(showPasswordRequirements || formData.password) && (
+              <div className="mt-3 space-y-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-xs font-semibold text-gray-700">
+                  Password requirements:
+                </p>
+                <div className="space-y-1">
+                  <PasswordRequirement
+                    met={passwordStrength.hasMinLength}
+                    text="At least 8 characters"
+                  />
+                  <PasswordRequirement
+                    met={passwordStrength.hasUppercase}
+                    text="At least one uppercase letter (A-Z)"
+                  />
+                  <PasswordRequirement
+                    met={passwordStrength.hasDigit}
+                    text="At least one digit (0-9)"
+                  />
+                  <PasswordRequirement
+                    met={passwordStrength.hasSpecialChar}
+                    text="At least one special character (!@#$%^&*)"
+                  />
+                </div>
+              </div>
+            )}
+
+            {errors.some((e) => e.field === 'password') && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.find((e) => e.field === 'password')?.message}
+              </p>
+            )}
           </div>
 
           <div>
@@ -93,8 +245,17 @@ export default function Register() {
               required
               value={formData.full_name}
               onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
+                errors.some((e) => e.field === 'full_name')
+                  ? 'border-red-300 bg-red-50'
+                  : 'border-gray-300'
+              }`}
             />
+            {errors.some((e) => e.field === 'full_name') && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.find((e) => e.field === 'full_name')?.message}
+              </p>
+            )}
           </div>
 
           <div>
@@ -107,14 +268,23 @@ export default function Register() {
               required
               value={formData.company_name}
               onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
+                errors.some((e) => e.field === 'company_name')
+                  ? 'border-red-300 bg-red-50'
+                  : 'border-gray-300'
+              }`}
             />
+            {errors.some((e) => e.field === 'company_name') && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.find((e) => e.field === 'company_name')?.message}
+              </p>
+            )}
           </div>
 
           <button
             type="submit"
-            disabled={loading}
-            className="w-full py-2 px-4 border border-transparent rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+            disabled={loading || !isPasswordFieldValid}
+            className="w-full py-2 px-4 border border-transparent rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Creating account...' : 'Create account'}
           </button>
@@ -127,6 +297,22 @@ export default function Register() {
           </Link>
         </p>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Component to display individual password requirement with checkmark or X.
+ */
+function PasswordRequirement({ met, text }: { met: boolean; text: string }) {
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      {met ? (
+        <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+      ) : (
+        <XCircle className="w-4 h-4 text-gray-300 flex-shrink-0" />
+      )}
+      <span className={met ? 'text-green-700' : 'text-gray-600'}>{text}</span>
     </div>
   )
 }

@@ -5,7 +5,7 @@ import pytest
 from unittest.mock import MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from fastapi import Header
+from fastapi import Request
 from fastapi.testclient import TestClient
 
 # Set test database before importing app
@@ -15,7 +15,8 @@ os.environ["REDIS_URL"] = ""
 
 from app.core.database import Base, SessionLocal
 from app.core.security import decode_token, get_current_user
-from app.models.user import SubscriptionTier, User
+from app.models.user import SubscriptionTier
+from app.models.user import User
 from app.main import app
 
 
@@ -67,15 +68,19 @@ def client(db_engine):
     def override_get_db():
         yield session
 
-    def override_current_user(authorization: str | None = Header(default=None)):
-        if authorization and authorization.lower().startswith("bearer "):
-            token = authorization.split(" ", 1)[1]
-            payload = decode_token(token)
-            user_id = int(payload["sub"])
-            user = session.query(User).filter(User.id == user_id).first()
-            if user is not None:
-                return user
-        return _mock_current_user()
+    def override_current_user(request: Request):
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header.lower().startswith("bearer "):
+            return _mock_current_user()
+
+        token = auth_header.split(" ", 1)[1]
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        if user_id is None:
+            return _mock_current_user()
+
+        user = session.query(User).filter(User.id == int(user_id)).first()
+        return user or _mock_current_user()
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
@@ -87,3 +92,13 @@ def client(db_engine):
     transaction.rollback()
     connection.close()
     app.dependency_overrides.clear()
+
+
+@pytest.fixture(autouse=True)
+def clear_guard_rate_limits():
+    """Keep in-memory guard rate limits isolated between tests."""
+    from app.core.rate_limit import guard_scan_rate_limiter
+
+    guard_scan_rate_limiter._local_attempts_by_key.clear()
+    yield
+    guard_scan_rate_limiter._local_attempts_by_key.clear()
