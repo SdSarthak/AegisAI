@@ -28,9 +28,11 @@ from app.core.database import SessionLocal, get_db
 from app.core.security import get_current_user
 from app.core.rate_limit import guard_scan_rate_limiter
 from app.models.guard_scan_log import GuardScanLog
+from app.models.guard_audit_log import GuardAuditLog
 from app.models.notification import NotificationType
 from app.models.user import User
 from app.schemas.guard_scan_log import GuardScanLogResponse
+from app.schemas.guard_audit_log import GuardAuditLogResponse
 from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.guard_explain import (
     ExplainRequest as ExplainRequestModel,
@@ -134,14 +136,36 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict) -> GuardScanL
     )
 
 
+def _build_guard_audit_log(user_id: int, prompt: str, result: dict) -> GuardAuditLog:
+    metadata = result.get("metadata", {})
+    decision_reasoning = metadata.get("decision_reasoning", {})
+    regex_analysis = metadata.get("regex_analysis", {})
+    intent_analysis = metadata.get("intent_analysis", {})
+
+    regex_flag = regex_analysis.get("flag", False)
+    intent = intent_analysis.get("intent", "benign")
+    detection_type = _infer_detection_type(regex_flag, intent)
+
+    return GuardAuditLog(
+        user_id=user_id,
+        prompt_hash=hashlib.sha256(prompt.encode()).hexdigest(),
+        decision=result.get("decision", "allow"),
+        threat_type=detection_type,
+        confidence_score=decision_reasoning.get("confidence", 0.0),
+        timestamp=datetime.utcnow(),
+    )
+
+
 def log_scan(user_id: int, prompt: str, result: dict) -> None:
     """Log scan details and create block notification without storing raw prompt."""
     db = SessionLocal()
 
     try:
         log = _build_guard_scan_log(user_id, prompt, result)
+        audit_log = _build_guard_audit_log(user_id, prompt, result)
 
         db.add(log)
+        db.add(audit_log)
         db.commit()
         db.refresh(log)
 
@@ -734,8 +758,10 @@ def bulk_scan_prompts(
         for prompt in request.prompts:
             result = guard.guard(prompt)
             log = _build_guard_scan_log(current_user.id, prompt, result)
+            audit_log = _build_guard_audit_log(current_user.id, prompt, result)
 
             db.add(log)
+            db.add(audit_log)
             db.flush()
 
             if log.decision == "block":
@@ -1117,8 +1143,10 @@ def bulk_scan_prompts(
         for prompt in request.prompts:
             result = guard.guard(prompt)
             log = _build_guard_scan_log(current_user.id, prompt, result)
+            audit_log = _build_guard_audit_log(current_user.id, prompt, result)
 
             db.add(log)
+            db.add(audit_log)
             db.flush()
 
             if log.decision == "block":
@@ -1500,8 +1528,10 @@ def bulk_scan_prompts(
         for prompt in request.prompts:
             result = guard.guard(prompt)
             log = _build_guard_scan_log(current_user.id, prompt, result)
+            audit_log = _build_guard_audit_log(current_user.id, prompt, result)
 
             db.add(log)
+            db.add(audit_log)
             db.flush()
 
             if log.decision == "block":
@@ -1543,3 +1573,66 @@ def bulk_scan_prompts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."
         )
+
+@router.get("/audit-log", response_model=PaginatedResponse[GuardAuditLogResponse])
+def get_guard_audit_log(
+    skip: int = Query(0, ge=0, description="Items to skip"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    decision: Optional[str] = Query(None, pattern="^(allow|sanitize|block)$"),
+    date_from: Optional[str] = Query(None, description="Start date (ISO format, e.g. 2024-01-01)"),
+    date_to: Optional[str] = Query(None, description="End date (ISO format, e.g. 2024-12-31)"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the current user's Guard audit log entries, newest first.
+
+    Supports optional filtering by decision, date_from, and date_to.
+
+    Args:
+        skip: Number of items to skip for pagination.
+        limit: Maximum number of audit log entries per page.
+        decision: Optional filter by decision (allow, sanitize, block).
+        date_from: Optional start date filter (ISO format YYYY-MM-DD).
+        date_to: Optional end date filter (ISO format YYYY-MM-DD).
+        db: Database session used to query audit logs.
+        current_user: Authenticated user whose audit logs are requested.
+
+    Returns:
+        PaginatedResponse containing the user's audit log entries.
+    """
+    base_query = db.query(GuardAuditLog).filter(
+        GuardAuditLog.user_id == current_user.id,
+    )
+
+    if decision:
+        base_query = base_query.filter(GuardAuditLog.decision == decision)
+
+    if date_from:
+        try:
+            dt_from = datetime.strptime(date_from, "%Y-%m-%d")
+            base_query = base_query.filter(GuardAuditLog.timestamp >= dt_from)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid date_from format. Use YYYY-MM-DD.",
+            )
+
+    if date_to:
+        try:
+            dt_to = datetime.strptime(date_to, "%Y-%m-%d") + timedelta(days=1)
+            base_query = base_query.filter(GuardAuditLog.timestamp < dt_to)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid date_to format. Use YYYY-MM-DD.",
+            )
+
+    total = base_query.count()
+    logs = (
+        base_query.order_by(GuardAuditLog.timestamp.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    return PaginatedResponse(items=logs, total=total, skip=skip, limit=limit)
