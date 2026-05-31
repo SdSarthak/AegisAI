@@ -29,6 +29,21 @@ interface ApiError {
   message?: string
 }
 
+function normalizeRagSources(
+  sources: Array<string | RagSource> = []
+): RagSource[] {
+  return sources.map((source, index) => {
+    if (typeof source === 'string') {
+      return {
+        title: `Source ${index + 1}`,
+        excerpt: source,
+      }
+    }
+
+    return source
+  })
+}
+
 function isApiError(
   error: unknown
 ): error is ApiError {
@@ -88,7 +103,7 @@ export default function RagChat() {
 
       setAnswer({
         answer: data.answer,
-        sources: data.sources || [],
+        sources: normalizeRagSources(data.sources),
         answer_id: data.answer_id,
       })
     } catch (err: unknown) {
