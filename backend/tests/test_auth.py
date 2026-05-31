@@ -10,14 +10,15 @@ from app.main import app
 VALID_TEST_PASSWORD = "TestPass123!"
 ANOTHER_VALID_PASSWORD = "CorrectPass123!"
 
+from jose import jwt
+from app.core.config import settings
+
+
 def test_register_success(client):
     """Test successful registration with valid password."""
     response = client.post(
         "/api/v1/auth/register",
-        json={
-            "email": "test@example.com",
-            "password": VALID_TEST_PASSWORD
-        }
+        json={"email": "test@example.com", "password": VALID_TEST_PASSWORD},
     )
     assert response.status_code == 201
 
@@ -49,7 +50,8 @@ def test_register_duplicate_email(client):
     client.post("/api/v1/auth/register", json=user_data)
     response = client.post("/api/v1/auth/register", json=user_data)
     assert response.status_code == 400
-    assert "already registered" in response.json()["detail"]
+assert "already registered" in response.json()["detail"]
+
 def test_login_success(client):
     """Test successful login after registration."""
     register_data = {
@@ -61,8 +63,8 @@ def test_login_success(client):
         "/api/v1/auth/login",
         data={
             "username": register_data["email"],
-            "password": register_data["password"]
-        }
+            "password": register_data["password"],
+        },
     )
     assert response.status_code == 200
     response_data = response.json()
@@ -79,10 +81,7 @@ def test_login_wrong_password(client):
     client.post("/api/v1/auth/register", json=register_data)
     response = client.post(
         "/api/v1/auth/login",
-        data={
-            "username": register_data["email"],
-            "password": "wrongpassword"
-        }
+        data={"username": register_data["email"], "password": "wrongpassword"},
     )
     assert response.status_code == 401
 
@@ -186,3 +185,4 @@ def test_register_with_both_fields_at_max_length(client):
     )
 
     assert response.status_code == 201
+

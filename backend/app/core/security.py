@@ -46,15 +46,21 @@ def get_password_hash(password: str) -> str:
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """Create a JWT access token with an expiration payload."""
     to_encode = data.copy()
-    
+
     # Use timezone-aware UTC datetime to prevent standard library deprecation warnings
     now = datetime.now(timezone.utc)
     if expires_delta:
         expire = now + expires_delta
     else:
         expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-        
-    to_encode.update({"exp": expire})
+
+    to_encode.update(
+        {
+            "exp": expire,
+            "iat": now,
+            "nbf": now,
+        }
+    )
     encoded_jwt = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
@@ -65,8 +71,17 @@ def decode_token(token: str) -> Dict[str, Any]:
     """Decode and verify a JWT token, returning the payload safely."""
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+            options={
+                "require_sub": True,
+                "require_exp": True,
+                "require_iat": True,
+                "require_nbf": True,
+            },
         )
+        _validate_token_payload(payload)
         return payload
     except ExpiredSignatureError:
         raise HTTPException(
@@ -76,6 +91,28 @@ def decode_token(token: str) -> Dict[str, Any]:
         )
 
     except JWTError:
+        raise _get_credentials_exception()
+
+
+def _validate_token_payload(payload: Dict[str, Any]) -> None:
+    """Validate required JWT claims and payload structure."""
+
+    # Validate subject claim
+    sub = payload.get("sub")
+
+    if not isinstance(sub, str) or not sub.strip():
+        raise _get_credentials_exception()
+
+    # Validate issued-at claim
+    iat = payload.get("iat")
+
+    if iat is not None and not isinstance(iat, (int, float)):
+        raise _get_credentials_exception()
+
+    # Validate not-before claim
+    nbf = payload.get("nbf")
+
+    if nbf is not None and not isinstance(nbf, (int, float)):
         raise _get_credentials_exception()
 
 
