@@ -7,9 +7,10 @@ run without an OpenAI key, a running DB, or any real PDFs on disk.
 """
 
 import io
-import os
 import pytest
 from unittest.mock import MagicMock, patch
+from app.core.security import get_current_user
+from app.main import app
 
 from app.core.config import settings
 from app.core.security import get_current_user
@@ -71,7 +72,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_single_pdf_success(self, mock_load, mock_create, client):
+    def test_single_pdf_success(self, mock_load, mock_create, client, mock_rag_user):
         """
         1. Uploading a single valid PDF should return 200 with correct fields.
         """
@@ -100,7 +101,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_multiple_pdfs_success(self, mock_load, mock_create, client):
+    def test_multiple_pdfs_success(self, mock_load, mock_create, client, mock_rag_user):
         """
         2. Uploading multiple PDFs should reflect all files in the response.
         """
@@ -131,19 +132,18 @@ class TestRagIngest:
     # Validation errors
     # ------------------------------------------------------------------
 
-    def test_no_files_returns_422(self, client):
+    def test_no_files_returns_422(self, client, mock_rag_user):
         """
         3. Sending an empty request (no 'files' field) should return 422.
         FastAPI validates the required File(...) parameter before our code runs.
         """
-        with patch(PATCH_AUTH, return_value=_mock_current_user()):
-            response = client.post("/api/v1/rag/ingest")
+        response = client.post("/api/v1/rag/ingest")
 
         assert response.status_code == 422
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_non_pdf_file_returns_400(self, mock_load, mock_create, client):
+    def test_non_pdf_file_returns_400(self, mock_load, mock_create, client, mock_rag_user):
         """
         4. Uploading a non-PDF file should return 400 with a clear message.
         """
@@ -161,7 +161,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_empty_pdf_returns_400(self, mock_load, mock_create, client):
+    def test_empty_pdf_returns_400(self, mock_load, mock_create, client, mock_rag_user):
         """
         5. A valid-looking PDF that produces zero chunks should return 400.
         This covers scanned/image-only PDFs and password-protected files.
@@ -185,7 +185,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_faiss_build_failure_returns_503(self, mock_load, mock_create, client):
+    def test_faiss_build_failure_returns_503(self, mock_load, mock_create, client, mock_rag_user):
         """
         6. If the FAISS build step raises an exception, the endpoint should
         return 503 with the error forwarded in the detail field.
@@ -222,7 +222,6 @@ class TestRagIngest:
                 detail="Not authenticated",
             )
         
-        from app.main import app
         app.dependency_overrides[get_current_user] = raise_unauthorized
         
         try:
@@ -242,7 +241,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_response_has_all_required_fields(self, mock_load, mock_create, client):
+    def test_response_has_all_required_fields(self, mock_load, mock_create, client, mock_rag_user):
         """
         8. The JSON response must contain exactly the three fields required
         by the issue specification.
