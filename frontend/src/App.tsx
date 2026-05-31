@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
 import { useAuthStore } from './stores/authStore'
 import Layout from './components/Layout'
 import Login from './pages/Login'
@@ -8,7 +9,11 @@ import AISystems from './pages/AISystems'
 import Classification from './pages/Classification'
 import Documents from './pages/Documents'
 import Notifications from './pages/Notifications'
+import Analytics from './pages/Analytics'
+import GuardConsole from './pages/GuardConsole'
+import NotFound from './pages/NotFound'
 import { Toaster } from 'react-hot-toast'
+import RagChat from './pages/RagChat'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -16,6 +21,20 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
+  // ✅ Sync with system theme (only if no manual preference)
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)")
+
+    const handler = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem("theme")) {
+        document.documentElement.classList.toggle("dark", e.matches)
+      }
+    }
+
+    media.addEventListener("change", handler)
+    return () => media.removeEventListener("change", handler)
+  }, [])
+
   return (
     <>
       <Toaster
@@ -38,9 +57,11 @@ function App() {
           },
         }}
       />
+
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+
         <Route
           path="/"
           element={
@@ -50,11 +71,16 @@ function App() {
           }
         >
           <Route index element={<Dashboard />} />
+          <Route path="analytics" element={<Analytics />} />
           <Route path="ai-systems" element={<AISystems />} />
           <Route path="classification/:systemId?" element={<Classification />} />
           <Route path="documents" element={<Documents />} />
+          <Route path="guard" element={<GuardConsole />} />
+          <Route path="rag-chat" element={<RagChat />} />
           <Route path="notifications" element={<Notifications />} />
         </Route>
+
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </>
   )

@@ -1,16 +1,151 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
-
+from app.modules.compliance.nist_mapping import EU_TO_NIST_MAPPING
+from app.schemas.ai_system import NISTMapping
 from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem, RiskLevel, RiskAssessment, ComplianceStatus
-from app.schemas.ai_system import RiskClassificationRequest, RiskClassificationResponse
+from app.schemas.ai_system import (
+    RiskClassificationRequest,
+    RiskClassificationResponse,
+    QuestionnaireRiskFactor,
+)
 
 router = APIRouter()
+
+QUESTIONNAIRE_RISK_FACTORS: List[QuestionnaireRiskFactor] = [
+    # Article 5 — Prohibited practices (checked first)
+    QuestionnaireRiskFactor(
+        id="social_scoring",
+        question="Is the system used by a public authority to evaluate or classify individuals based on their social behaviour or personal characteristics?",
+        article="Article 5(1)(c)",
+        triggers_level=RiskLevel.UNACCEPTABLE,
+    ),
+    QuestionnaireRiskFactor(
+        id="realtime_biometric_public",
+        question="Does the system perform real-time remote biometric identification of individuals in publicly accessible spaces?",
+        article="Article 5(1)(h)",
+        triggers_level=RiskLevel.UNACCEPTABLE,
+    ),
+    QuestionnaireRiskFactor(
+        id="biometric_categorisation",
+        question="Does the system categorise individuals based on biometric data to infer sensitive attributes such as race, political opinions, religion, or sexual orientation?",
+        article="Article 5(1)(g)",
+        triggers_level=RiskLevel.UNACCEPTABLE,
+    ),
+    QuestionnaireRiskFactor(
+        id="subliminal_manipulation",
+        question="Does the system use subliminal techniques or manipulative methods that impair a person's ability to make free decisions, causing them harm?",
+        article="Article 5(1)(a)",
+        triggers_level=RiskLevel.UNACCEPTABLE,
+    ),
+    QuestionnaireRiskFactor(
+        id="exploits_vulnerable_groups",
+        question="Does the system exploit vulnerabilities of specific groups such as children, elderly, or persons with disabilities to distort their behaviour in a harmful way?",
+        article="Article 5(1)(b)",
+        triggers_level=RiskLevel.UNACCEPTABLE,
+    ),
+    QuestionnaireRiskFactor(
+        id="is_safety_component",
+        question="Is the AI system used as a safety component of a product or system?",
+        article="Article 6(1)",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="affects_fundamental_rights",
+        question="Can the AI system affect fundamental rights such as employment, education, essential services, or access to opportunities?",
+        article="Article 6(2)",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="uses_biometric_data",
+        question="Does the system use biometric data for identification, verification, or categorization?",
+        article="Annex III",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="makes_automated_decisions",
+        question="Does the system make automated decisions without meaningful human review?",
+        article="Article 6 / Annex III context",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="hr_recruitment_screening",
+        question="Is the system used for recruitment, CV screening, candidate filtering, or candidate ranking?",
+        article="Annex III point 4(a)",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="hr_promotion_termination",
+        question="Is the system used for promotion, termination, task allocation, performance evaluation, or employment-related decisions?",
+        article="Annex III point 4(b)",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="credit_worthiness",
+        question="Is the system used to evaluate creditworthiness or determine access to financial resources?",
+        article="Annex III point 5(b)",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="insurance_risk_assessment",
+        question="Is the system used for insurance risk assessment, pricing, or eligibility decisions?",
+        article="Annex III point 5(c)",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="law_enforcement",
+        question="Is the system used by or for law enforcement purposes?",
+        article="Annex III point 6",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="border_control",
+        question="Is the system used for migration, asylum, or border control management?",
+        article="Annex III point 7",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="justice_system",
+        question="Is the system used to assist judicial authorities or influence legal outcomes?",
+        article="Annex III point 8",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="education_vocational_training",
+        question="Is the system used to determine access to or assign natural persons to educational and vocational training institutions?",
+        article="Annex III point 3",
+        triggers_level=RiskLevel.HIGH,
+    ),
+    QuestionnaireRiskFactor(
+        id="interacts_with_humans",
+        question="Does the system directly interact with humans, such as a chatbot or virtual assistant?",
+        article="Article 52(1)",
+        triggers_level=RiskLevel.LIMITED,
+    ),
+    QuestionnaireRiskFactor(
+        id="generates_synthetic_content",
+        question="Does the system generate synthetic or manipulated audio, image, video, or text content?",
+        article="Article 52(3)",
+        triggers_level=RiskLevel.LIMITED,
+    ),
+    QuestionnaireRiskFactor(
+        id="emotion_recognition",
+        question="Does the system perform emotion recognition?",
+        article="Article 52(3)",
+        triggers_level=RiskLevel.LIMITED,
+    ),
+    QuestionnaireRiskFactor(
+        id="biometric_categorization",
+        question="Does the system perform biometric categorization?",
+        article="Article 52 / Annex III context",
+        triggers_level=RiskLevel.LIMITED,
+    ),
+]
 
 
 class BulkClassificationItem(BaseModel):
@@ -36,10 +171,42 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
     risk_level = RiskLevel.MINIMAL
     confidence = 0.9
 
-    # Check for UNACCEPTABLE risk (Article 5 - Prohibited practices)
-    # Social scoring, real-time biometric identification in public spaces, etc.
-    # These are typically banned outright
+    # ----------------------------------------------------------------
+    # Article 5 — Prohibited practices (UNACCEPTABLE risk)
+    # These must be checked first — they override all other categories
+    # ----------------------------------------------------------------
+    prohibited_flags = {
+        "social_scoring": "Social scoring by public authorities (Article 5(1)(c))",
+        "realtime_biometric_public": "Real-time remote biometric identification in public spaces (Article 5(1)(h))",
+        "biometric_categorisation": "Biometric categorisation using sensitive attributes (Article 5(1)(g))",
+        "subliminal_manipulation": "Subliminal manipulation of behaviour (Article 5(1)(a))",
+        "exploits_vulnerable_groups": "Exploitation of vulnerabilities of specific groups (Article 5(1)(b))",
+    }
 
+    triggered_prohibitions = [
+        label for field, label in prohibited_flags.items()
+        if getattr(data, field, False)
+    ]
+
+    if triggered_prohibitions:
+        risk_level = RiskLevel.UNACCEPTABLE
+        reasons.extend(triggered_prohibitions)
+        requirements.append(
+            "This AI system is prohibited under Article 5 of the EU AI Act "
+            "and must not be placed on the market, put into service, or used."
+        )
+        return RiskClassificationResponse(
+            risk_level=risk_level,
+            confidence=0.99,
+            reasons=reasons,
+            requirements=requirements,
+            next_steps=[
+                "Immediately cease development or deployment of this system.",
+                "Consult legal counsel regarding Article 5 compliance obligations.",
+                "Review whether any Article 5 exceptions apply to your use case.",
+            ],
+        )
+    
     # Check for HIGH risk (Article 6 + Annex III)
     high_risk_indicators = []
 
@@ -68,6 +235,13 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
             "AI for creditworthiness or insurance risk assessment is HIGH risk under Annex III"
         )
 
+    # Education and vocational training (Annex III, point 3)
+    if data.education_vocational_training:
+        high_risk_indicators.append("Education/vocational training AI")
+        reasons.append(
+            "AI used for determining access to education or vocational training is HIGH risk under Annex III"
+        )
+
     # Safety component
     if data.is_safety_component:
         high_risk_indicators.append("Safety component of a product")
@@ -87,6 +261,20 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
             "Use in law enforcement, border control, or justice is HIGH risk"
         )
 
+    # Biometric data usage (Annex III)           
+    if data.uses_biometric_data:
+        high_risk_indicators.append("Uses biometric data")
+        reasons.append(
+            "System uses biometric data for identification, verification, or categorization (Annex III)"
+        )
+
+    # Automated decisions without human review (Article 6 / Annex III)
+    if data.makes_automated_decisions:
+        high_risk_indicators.append("Automated decisions without human review")
+        reasons.append(
+            "System makes automated decisions without meaningful human oversight (Article 6)"
+        )    
+
     # Determine if HIGH risk
     if high_risk_indicators:
         risk_level = RiskLevel.HIGH
@@ -96,6 +284,7 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
         data.interacts_with_humans
         or data.emotion_recognition
         or data.generates_synthetic_content
+        or data.biometric_categorization
     ):
         risk_level = RiskLevel.LIMITED
         if data.interacts_with_humans:
@@ -109,6 +298,11 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
         if data.generates_synthetic_content:
             reasons.append("System generates synthetic/manipulated content")
             requirements.append("Label AI-generated content appropriately")
+        if data.biometric_categorization:   
+            reasons.append("System performs biometric categorization")
+            requirements.append(
+                "Inform subjects about biometric categorization (Article 52)"
+            )
 
     # MINIMAL risk - no specific requirements
     else:
@@ -141,12 +335,17 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
             "Document your AI governance practices",
         ]
 
+    # Lookup NIST mapping once for the determined risk level
+    nist_data = EU_TO_NIST_MAPPING.get(risk_level.value.upper())
+    nist_mapping = NISTMapping(**nist_data) if nist_data else None
+    
     return RiskClassificationResponse(
         risk_level=risk_level,
-        confidence=confidence,
+        confidence=confidence if not triggered_prohibitions else 0.99,
         reasons=reasons,
         requirements=requirements,
         next_steps=next_steps,
+        nist_mapping=nist_mapping,
     )
 
 
@@ -154,11 +353,16 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
 def classify_ai_system(
     data: RiskClassificationRequest, current_user: User = Depends(get_current_user)
 ):
+    """Classify an AI system's risk level from the questionnaire payload.
+
+    Args:
+        data: Risk classification questionnaire answers for the AI system.
+        current_user: Authenticated user requesting the classification.
+
+    Returns:
+        RiskClassificationResponse containing the inferred risk level and guidance.
     """
-    Classify an AI system's risk level based on EU AI Act criteria.
-    This is a preliminary classification - full assessment requires more details.
-    """
-    return classify_risk(data)
+    return classify_risk(data)    
 
 
 @router.post("/classify/{system_id}", response_model=RiskClassificationResponse)
@@ -168,8 +372,19 @@ def classify_and_save(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Classify an AI system and save the result to the database.
+    """Classify an AI system and persist the result.
+
+    Args:
+        system_id: ID of the AI system to classify.
+        data: Risk classification questionnaire answers.
+        db: Database session used to load the system and save the assessment.
+        current_user: Authenticated user who must own the system.
+
+    Returns:
+        RiskClassificationResponse for the submitted questionnaire.
+
+    Raises:
+        HTTPException: If the system does not exist or does not belong to the user.
     """
     # Get the AI system
     system = (
@@ -210,15 +425,36 @@ def classify_and_save(
     return result
 
 
+
+@router.get("/risk-factors", response_model=List[QuestionnaireRiskFactor])
+def get_questionnaire_risk_factors(
+    current_user: User = Depends(get_current_user),
+):
+    """Return the static questionnaire metadata used by the classifier.
+
+    Args:
+        current_user: Authenticated user requesting the questionnaire metadata.
+
+    Returns:
+        The list of questionnaire risk factors used by the classification flow.
+    """
+    return QUESTIONNAIRE_RISK_FACTORS
+
 @router.post("/bulk", response_model=BulkClassificationResponse)
 def bulk_classify_systems(
     request: BulkClassificationRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Classify multiple AI systems in one request.
-    Returns per-system classification results and partial failure details.
+    """Classify multiple AI systems in a single request.
+
+    Args:
+        request: Payload containing the AI system IDs to classify.
+        db: Database session used to load systems and store assessments.
+        current_user: Authenticated user who must own every system.
+
+    Returns:
+        BulkClassificationResponse containing per-system results and errors.
     """
     results: List[BulkClassificationItem] = []
 
@@ -260,7 +496,7 @@ def bulk_classify_systems(
         result = classify_risk(classification_data)
         system.risk_level = result.risk_level
         system.compliance_status = ComplianceStatus.IN_PROGRESS
-        system.questionnaire_responses = system.questionnaire_responses
+        system.questionnaire_responses = classification_data.model_dump()
 
         assessment = RiskAssessment(
             ai_system_id=system.id,
@@ -281,3 +517,5 @@ def bulk_classify_systems(
 
     db.commit()
     return BulkClassificationResponse(results=results)
+
+

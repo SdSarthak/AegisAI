@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
 import { Save, Eye, EyeOff, X } from 'lucide-react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
+import DOMPurify from 'dompurify'
 import { marked } from 'marked'
+import api from '../services/api'
 
 interface DocumentEditorProps {
   documentId: number
@@ -21,25 +23,19 @@ export default function DocumentEditor({
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
-
+  const sanitizedPreview = useMemo(() => {
+    const renderedMarkdown = marked.parse(content, { async: false }) as string
+    return DOMPurify.sanitize(renderedMarkdown)
+  }, [content])
+  const [saveError, setSaveError] = useState('')
   const handleSave = useCallback(async () => {
     setIsSaving(true)
-    // Call PUT endpoint
     try {
-      const response = await fetch(`/api/v1/documents/${documentId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          // Add auth header if needed - check how other API calls are done in your app
-        },
-        body: JSON.stringify({ content })
-      })
-
-      if (response.ok) {
-        onSave?.(content)
-      }
+      await api.put(`/documents/${documentId}`, { content })
+      onSave?.(content)
+      setSaveError('')
     } catch (error) {
-      console.error('Save failed:', error)
+      setSaveError('Failed to save changes')
     }
     setIsSaving(false)
   }, [content, documentId, onSave])
@@ -78,7 +74,16 @@ export default function DocumentEditor({
           {showPreview ? 'Edit' : 'Preview'}
         </button>
         <div className="flex items-center gap-3">
-          {isSaving && <span className="text-sm text-gray-500">Saving...</span>}
+         {saveError && (
+            <span className="text-sm text-red-500">
+              {saveError}
+            </span>
+          )}
+          {isSaving && (
+            <span className="text-sm text-gray-500">
+              Saving...
+            </span>
+          )} 
           <button
             type="button"
             onClick={handleSave}
@@ -106,7 +111,7 @@ export default function DocumentEditor({
       <div className="flex-1 overflow-auto">
         {showPreview ? (
           <div className="prose max-w-none p-6">
-            <div dangerouslySetInnerHTML={{ __html: marked(content) }} />
+            <div dangerouslySetInnerHTML={{ __html: sanitizedPreview }} />
           </div>
         ) : (
           <div className="h-full">

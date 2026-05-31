@@ -16,6 +16,7 @@ pip-delete-this-directory.txt
 # Virtual envs
 venv/
 .venv/
+.venv*/
 env/
 .env/
 ENV/
@@ -102,3 +103,17 @@ ehthumbs.db
 
 # Local dev tooling
 .claude/
+
+# Custom regulation rulesets
+regulations/custom/*
+!regulations/custom/.gitkeep
+
+# Generated test output artifacts
+conftest.txt
+lifecycle.txt
+error.txt
+pdf_export.txt
+rag_ingest.txt
+
+# Models
+backend/app/modules/guard/models/*

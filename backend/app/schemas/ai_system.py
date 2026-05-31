@@ -42,6 +42,18 @@ class AISystemResponse(BaseModel):
 class RiskClassificationRequest(BaseModel):
     """Questionnaire for EU AI Act risk classification."""
 
+    # Prohibited practices (Article 5) — checked first
+    social_scoring: bool = False
+    # AI used by public authorities to evaluate/classify people based on social behaviour
+    realtime_biometric_public: bool = False
+    # Real-time remote biometric identification in publicly accessible spaces
+    biometric_categorisation: bool = False
+    # Categorises people using biometric data to infer sensitive attributes
+    subliminal_manipulation: bool = False
+    # Techniques that manipulate behaviour subliminally causing harm
+    exploits_vulnerable_groups: bool = False
+    # Targets or exploits vulnerabilities of specific groups (age, disability, etc.)
+
     # Basic use case
     use_case_category: str  # "hr_recruitment", "credit_scoring", "healthcare", etc.
 
@@ -61,6 +73,7 @@ class RiskClassificationRequest(BaseModel):
     law_enforcement: bool = False
     border_control: bool = False
     justice_system: bool = False
+    education_vocational_training: bool = False
 
     # Transparency (Article 52)
     interacts_with_humans: bool = True  # Chatbots, virtual assistants
@@ -69,12 +82,20 @@ class RiskClassificationRequest(BaseModel):
     biometric_categorization: bool = False
 
 
+class NISTMapping(BaseModel):
+    primary_functions: List[str]
+    subcategories: List[str]
+    rationale: str
+    nist_risk_tier: str
+
+
 class RiskClassificationResponse(BaseModel):
     risk_level: RiskLevel
     confidence: float  # 0-1
     reasons: List[str]
     requirements: List[str]
     next_steps: List[str]
+    nist_mapping: Optional["NISTMapping"] = None
 
 
 class RiskAssessmentResponse(BaseModel):
@@ -104,3 +125,10 @@ class ComplianceStatusUpdateSchema(BaseModel):
 class BulkImportResponse(BaseModel):
     created: int
     errors: List[Dict[str, Any]]
+
+# Model for Questionnaire Risk Factor
+class QuestionnaireRiskFactor(BaseModel):
+    id: str
+    question: str
+    article: str
+    triggers_level: RiskLevel

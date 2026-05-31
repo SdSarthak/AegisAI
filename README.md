@@ -10,9 +10,14 @@
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react)](https://react.dev)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-[Getting Started](docs/getting-started.md) · [Architecture](docs/architecture.md) · [API Reference](docs/api-reference.md) · [Guard Module](docs/guard-module.md) · [RAG Module](docs/rag-module.md) · [Regulations](docs/regulations.md) · [Report a Bug](https://github.com/SdSarthak/AegisAI/issues)
+[Getting Started](https://github.com/SdSarthak/AegisAI/blob/main/docs/getting-started.md)· [Architecture](https://github.com/SdSarthak/AegisAI/blob/main/docs/architecture.md) · [API Reference](https://github.com/SdSarthak/AegisAI/blob/main/docs/api-reference.md) · [Guard Module](https://github.com/SdSarthak/AegisAI/blob/main/docs/guard-module.md) · [RAG Module](https://github.com/SdSarthak/AegisAI/blob/main/docs/rag-module.md) · [Regulations](https://github.com/SdSarthak/AegisAI/blob/main/docs/regulations.md) · [Report a Bug](https://github.com/SdSarthak/AegisAI/issues)
 
 </div>
+
+---
+## Live Demo
+
+https://aegis-ai-sigma-seven.vercel.app
 
 ---
 
@@ -69,7 +74,13 @@ docker compose up -d
 ```bash
 # Backend
 cd backend
-python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
+python -m venv venv
+# macOS / Linux
+source venv/bin/activate
+# Windows CMD
+# venv\Scripts\activate.bat
+# Windows PowerShell
+# venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 cp .env.example .env   # fill in values
 uvicorn app.main:app --reload
@@ -93,7 +104,49 @@ LLM_BASE_URL=http://localhost:11434/v1
 LLM_MODEL=llama3.2
 ```
 
-Then `docker compose up -d`. See [Getting Started](docs/getting-started.md) for all provider options.
+Then `docker compose up -d`. See [Getting Started](https://github.com/SdSarthak/AegisAI/blob/main/docs/getting-started.md) for all provider options.
+
+---
+
+## Environment Variables
+
+Copy `backend/.env.example` to `backend/.env`, then adjust values for your setup.
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+| Variable | Description | Required | Example |
+|---|---|---|---|
+| `APP_NAME` | Display name used by the backend. | Optional | `AegisAI` |
+| `DEBUG` | Enables debug behavior and verbose logging. | Optional | `true` |
+| `API_V1_PREFIX` | Base path prefix for API routes. | Optional | `/api/v1` |
+| `DATABASE_URL` | SQLAlchemy database connection string (PostgreSQL in production). | Yes | `postgresql://postgres:postgres@localhost:5432/aegisai_db` |
+| `SECRET_KEY` | JWT signing secret. Use a long random value. | Yes | `f2d5...` |
+| `ALGORITHM` | JWT algorithm used for token signing. | Optional | `HS256` |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT access token lifetime in minutes. | Optional | `30` |
+| `LLM_API_KEY` | API key for your OpenAI-compatible provider. Use `ollama` for local Ollama mode. | Yes (unless fully local mock setup) | `sk-...` or `ollama` |
+| `LLM_BASE_URL` | Custom OpenAI-compatible base URL. Leave empty for OpenAI default. | Optional | `http://localhost:11434/v1` |
+| `LLM_MODEL` | Chat/completion model name used by Guard and RAG modules. | Yes | `gpt-4o-mini` |
+| `GUARD_SANITIZATION_LEVEL` | Prompt sanitization strictness (`low`, `medium`, `high`). | Optional | `medium` |
+| `GUARD_MAX_PROMPT_LENGTH` | Maximum prompt length accepted by Guard processing. | Optional | `2000` |
+| `RAG_CHUNK_SIZE` | Document chunk size for RAG indexing. | Optional | `1000` |
+| `RAG_CHUNK_OVERLAP` | Overlap between adjacent RAG chunks. | Optional | `200` |
+| `FAISS_INDEX_PATH` | Filesystem path for persisted FAISS index. | Optional | `faiss_index` |
+| `S3_BUCKET_NAME` | Bucket used for optional document/object storage integration. | Optional | `aegisai-docs` |
+| `MLFLOW_TRACKING_URI` | Remote MLflow server URI. Leave empty for local `./mlruns`. | Optional | `http://localhost:5000` |
+| `STRIPE_SECRET_KEY` | Stripe secret key for billing features. | Optional | `sk_test_...` |
+| `STRIPE_PUBLISHABLE_KEY` | Stripe publishable key for frontend billing flows. | Optional | `pk_test_...` |
+| `STRIPE_WEBHOOK_SECRET` | Stripe webhook signing secret for event validation. | Optional | `whsec_...` |
+| `STRIPE_PRICE_STARTER` | Stripe Price ID for starter plan. | Optional | `price_123` |
+| `STRIPE_PRICE_GROWTH` | Stripe Price ID for growth plan. | Optional | `price_456` |
+| `STRIPE_PRICE_SCALE` | Stripe Price ID for scale plan. | Optional | `price_789` |
+
+### Common Setup Profiles
+
+- Ollama local (no paid API): set `LLM_API_KEY=ollama`, `LLM_BASE_URL=http://localhost:11434/v1`, and `LLM_MODEL` to a local model such as `llama3.2`.
+- OpenAI: set `LLM_API_KEY=sk-...`, leave `LLM_BASE_URL` empty, and keep `LLM_MODEL=gpt-4o-mini` (or another OpenAI model).
+- PostgreSQL local: keep `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/aegisai_db` and make sure the database exists before startup.
 
 ---
 
@@ -120,6 +173,15 @@ AegisAI/
 │   │   ├── schemas/         # Pydantic request/response schemas
 │   │   └── modules/
 │   │       ├── guard/       # LLM Guard — regex + DeBERTa classifier + sanitizer
+│   │       │   ├── training/ # Standard ML training pipeline
+│   │       │   │   ├── configs/     # YAML training configuration
+│   │       │   │   ├── data/        # Dataset loading, preprocessing, splitting
+│   │       │   │   ├── evaluation/  # Metrics and evaluator
+│   │       │   │   ├── pipelines/   # Train and evaluate pipeline entry points
+│   │       │   │   ├── trainer/     # IntentClassifier trainer wrapper
+│   │       │   │   ├── utils/       # Logging, seed, checkpoints, MLflow helpers
+│   │       │   │   └── artifacts/   # Checkpoints, metrics, reports
+│   │       │   └── models/classifier/ # Fine-tuned guard classifier output
 │   │       ├── rag/         # RAG — FAISS vector store + LangChain chain + feedback
 │   │       ├── llm/         # OpenAI-compatible LLM client
 │   │       └── badge/       # SVG compliance badge generator
@@ -218,10 +280,34 @@ AegisAI is licensed under **AGPL-3.0-only**.
 - If you run a modified version as a SaaS, you must release your source code.
 - For commercial licensing, contact the author.
 
-Copyright (C) 2024 **Sarthak Doshi** ([@SdSarthak](https://github.com/SdSarthak))
+Copyright (C) 2024–2026 **Sarthak Doshi** ([@SdSarthak](https://github.com/SdSarthak))
 
 ---
 
 <div align="center">
   <sub>Built with care. If AegisAI helps you, give it a star.</sub>
 </div>
+## Troubleshooting
+
+### npm install fails
+Try clearing the npm cache and reinstalling dependencies:
+
+```bash
+npm cache clean --force
+npm install 
+```
+### Module not found error
+Delete the node_modules folder and reinstall dependencies:
+
+```bash
+rm -rf node_modules
+npm install
+```
+### Port already in use
+Stop the process using the current port or change the port number.
+
+### Environment variables not loading
+Ensure the .env file exists and contains all required variables.
+
+### Application fails to start
+Make sure all dependencies are installed and the correct Node.js version is being used.

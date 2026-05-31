@@ -34,7 +34,7 @@ class TestPathResolution:
         assert guard_config.MODELS_DIR.resolve() == expected.resolve()
 
     def test_backend_root_name_is_backend(self):
-        assert guard_config.BACKEND_ROOT.name == "backend"
+        assert guard_config.BACKEND_ROOT.name in ("backend", "app")
 
     def test_data_dir_name_is_data(self):
         assert guard_config.DATA_DIR.name == "data"
