@@ -20,10 +20,17 @@ export default function Login() {
 
     try {
       const tokenData = await authApi.login(email, password)
-      setAuth(tokenData.access_token, null)  
-      const user = await authApi.getMe()     
-      setAuth(tokenData.access_token, user)  
-      navigate('/')
+
+setAuth(tokenData.access_token, null)
+
+axios.defaults.headers.common['Authorization'] =
+  `Bearer ${tokenData.access_token}`
+
+const user = await authApi.getMe()
+
+setAuth(tokenData.access_token, user)
+
+navigate('/')
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.detail) {
         setError(err.response.data.detail)
