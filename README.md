@@ -280,7 +280,7 @@ AegisAI is licensed under **AGPL-3.0-only**.
 - If you run a modified version as a SaaS, you must release your source code.
 - For commercial licensing, contact the author.
 
-Copyright (C) 2024 **Sarthak Doshi** ([@SdSarthak](https://github.com/SdSarthak))
+Copyright (C) 2024–2026 **Sarthak Doshi** ([@SdSarthak](https://github.com/SdSarthak))
 
 ---
 
