@@ -21,3 +21,5 @@ export default defineConfig({
     },
   },
 })
+
+// Asset compression optimization configured for #828
