@@ -11,7 +11,6 @@ from app.schemas.ai_system import (
 from app.schemas.document import DocumentCreate, DocumentResponse
 from app.schemas.audit_log import AISystemAuditLogResponse
 from app.schemas.pagination import PaginatedResponse
-from app.schemas.guard_audit_log import GuardAuditLogResponse
 from app.schemas.guard_stats import GuardStatsResponse
 
 __all__ = [
@@ -22,7 +21,6 @@ __all__ = [
     "QuestionnaireRiskFactor",
     "DocumentCreate", "DocumentResponse",
     "AISystemAuditLogResponse",
-    "GuardAuditLogResponse",
     "PaginatedResponse",
     "GuardStatsResponse",
 ]

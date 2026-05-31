@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.models.guard_audit_log import GuardAuditLog
 from app.models.guard_scan_log import GuardScanLog
 from app.api.v1.guard import user_guard_configs
 
@@ -247,30 +246,32 @@ def test_scan_prompt_records_audit_log(authenticated_client: TestClient, db_sess
 
     assert response.status_code == 200
 
-    audit_entry = db_session.query(GuardAuditLog).filter(GuardAuditLog.user_id == test_user.id).first()
+    audit_entry = db_session.query(GuardScanLog).filter(GuardScanLog.user_id == test_user.id).first()
     assert audit_entry is not None
     assert audit_entry.decision == "block"
-    assert audit_entry.threat_type == "malicious"
-    assert audit_entry.confidence_score == 0.8
+    assert audit_entry.intent == "malicious"
+    assert audit_entry.confidence == 0.8
 
 
 def test_get_guard_audit_log_filters(authenticated_client: TestClient, db_session: Session, test_user: User):
     valid_hash = "0" * 64
-    log1 = GuardAuditLog(
+    log1 = GuardScanLog(
         user_id=test_user.id,
         prompt_hash=valid_hash,
         decision="allow",
-        threat_type="benign",
-        confidence_score=0.1,
-        timestamp=datetime.utcnow(),
+        confidence=0.1,
+        matched_patterns=[],
+        intent="benign",
+        scanned_at=datetime.utcnow(),
     )
-    log2 = GuardAuditLog(
+    log2 = GuardScanLog(
         user_id=test_user.id,
         prompt_hash=valid_hash,
         decision="block",
-        threat_type="malicious",
-        confidence_score=0.9,
-        timestamp=datetime.utcnow(),
+        confidence=0.9,
+        matched_patterns=[],
+        intent="malicious",
+        scanned_at=datetime.utcnow(),
     )
     db_session.add_all([log1, log2])
     db_session.commit()

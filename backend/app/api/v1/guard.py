@@ -29,11 +29,9 @@ from app.core.config import settings
 from app.core.database import SessionLocal, get_db
 from app.core.security import get_current_user
 from app.core.rate_limit import guard_scan_rate_limiter
-from app.models.guard_audit_log import GuardAuditLog
 from app.models.guard_scan_log import GuardScanLog
 from app.models.notification import NotificationType
 from app.models.user import User
-from app.schemas.guard_audit_log import GuardAuditLogResponse
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.pagination import PaginatedResponse
@@ -80,6 +78,19 @@ class BulkScanResponse(BaseModel):
     results: list[ScanResponse]
     total: int
     processed: int
+
+
+class GuardAuditLogResponse(BaseModel):
+    id: int
+    user_id: int
+    prompt_hash: str
+    decision: str
+    threat_type: str
+    confidence_score: float
+    timestamp: datetime
+
+    class Config:
+        from_attributes = True
 
 
 VALID_SANITIZATION_LEVELS = {"low", "medium", "high"}
@@ -134,34 +145,16 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict) -> GuardScanL
     )
 
 
-def _build_guard_audit_log(user_id: int, prompt: str, result: dict) -> GuardAuditLog:
-    """Build a privacy-safe GuardAuditLog row for compliance auditing."""
-    metadata = result.get("metadata", {})
-    intent_analysis = metadata.get("intent_analysis", {})
-    decision_reasoning = metadata.get("decision_reasoning", {})
-
-    return GuardAuditLog(
-        user_id=user_id,
-        prompt_hash=hashlib.sha256(prompt.encode()).hexdigest(),
-        decision=result.get("decision", "allow"),
-        threat_type=intent_analysis.get("intent", "unknown"),
-        confidence_score=decision_reasoning.get("confidence", 0.0),
-        timestamp=datetime.utcnow(),
-    )
-
-
 def log_scan(user_id: int, prompt: str, result: dict) -> None:
-    """Log scan details, audit the event, and create block notification without storing raw prompt."""
+    """Log scan details and create block notification without storing raw prompt."""
     db = SessionLocal()
 
     try:
         scan_log = _build_guard_scan_log(user_id, prompt, result)
-        audit_log = _build_guard_audit_log(user_id, prompt, result)
 
-        db.add_all([scan_log, audit_log])
+        db.add(scan_log)
         db.commit()
         db.refresh(scan_log)
-        db.refresh(audit_log)
 
         if scan_log.decision == "block":
             create_notification(
@@ -374,26 +367,39 @@ def get_guard_audit_log(
     current_user: User = Depends(get_current_user),
 ):
     """Return paginated Guard audit history scoped to the authenticated user."""
-    base_query = db.query(GuardAuditLog).filter(GuardAuditLog.user_id == current_user.id)
+    base_query = db.query(GuardScanLog).filter(GuardScanLog.user_id == current_user.id)
 
     if decision:
-        base_query = base_query.filter(GuardAuditLog.decision == decision)
+        base_query = base_query.filter(GuardScanLog.decision == decision)
 
     if date_from:
-        base_query = base_query.filter(GuardAuditLog.timestamp >= date_from)
+        base_query = base_query.filter(GuardScanLog.scanned_at >= date_from)
 
     if date_to:
-        base_query = base_query.filter(GuardAuditLog.timestamp <= date_to)
+        base_query = base_query.filter(GuardScanLog.scanned_at <= date_to)
 
     total = base_query.count()
-    logs = (
-        base_query.order_by(GuardAuditLog.timestamp.desc())
+    scan_logs = (
+        base_query.order_by(GuardScanLog.scanned_at.desc())
         .offset(skip)
         .limit(limit)
         .all()
     )
 
-    return PaginatedResponse(items=logs, total=total, skip=skip, limit=limit)
+    audit_logs = [
+        {
+            "id": scan_log.id,
+            "user_id": scan_log.user_id,
+            "prompt_hash": scan_log.prompt_hash,
+            "decision": scan_log.decision,
+            "threat_type": scan_log.intent,
+            "confidence_score": scan_log.confidence,
+            "timestamp": scan_log.scanned_at,
+        }
+        for scan_log in scan_logs
+    ]
+
+    return PaginatedResponse(items=audit_logs, total=total, skip=skip, limit=limit)
 
 
 @router.get("/stats", response_model=GuardStatsResponse)
