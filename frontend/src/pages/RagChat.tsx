@@ -88,7 +88,7 @@ export default function RagChat() {
 
       setAnswer({
         answer: data.answer,
-        sources: data.sources || [],
+        sources: (data.sources || []).filter((s): s is RagSource => typeof s === 'object' && s !== null),
         answer_id: data.answer_id,
       })
     } catch (err: unknown) {
