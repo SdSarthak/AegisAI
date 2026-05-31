@@ -74,7 +74,13 @@ docker compose up -d
 ```bash
 # Backend
 cd backend
-python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
+python -m venv venv
+# macOS / Linux
+source venv/bin/activate
+# Windows CMD
+# venv\Scripts\activate.bat
+# Windows PowerShell
+# venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 cp .env.example .env   # fill in values
 uvicorn app.main:app --reload
