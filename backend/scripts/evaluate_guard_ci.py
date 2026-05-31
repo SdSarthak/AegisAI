@@ -107,16 +107,34 @@ def _relativize_model_path(model_path: str) -> str:
 
     Absolute paths leak the dev machine's filesystem layout into the
     committed baseline, which then breaks CI runs on other agents. Strip
-    the absolute prefix to keep the baseline portable.
+    the absolute prefix to keep the baseline portable. Already-relative
+    paths are returned unchanged (with forward-slash normalisation).
     """
-    p = Path(model_path).resolve()
-    # Look for "backend/" in the path and take everything from there.
-    parts = p.parts
+    # Already relative: don't resolve(), don't touch the filesystem,
+    # just normalise separators.
+    p = Path(model_path)
+    if not p.is_absolute() and not _looks_like_windows_absolute(model_path):
+        return model_path.replace("\\", "/")
+
+    # Absolute path: look for "backend/" in the path and slice from there.
+    parts = p.resolve().parts if p.is_absolute() else _split_windows_path(model_path)
     if "backend" in parts:
         idx = parts.index("backend")
         return str(Path(*parts[idx:])).replace("\\", "/")
     # Fallback: just the last few segments
     return str(Path(*p.parts[-4:])).replace("\\", "/")
+
+
+def _looks_like_windows_absolute(s: str) -> bool:
+    """Detect 'C:\\...' style paths on non-Windows platforms where pathlib
+    won't recognise them as absolute."""
+    return len(s) >= 2 and s[1] == ":" and s[0].isalpha()
+
+
+def _split_windows_path(s: str) -> tuple[str, ...]:
+    """Parse a Windows-style path into parts on any platform."""
+    # Normalise both separators, then split.
+    return tuple(p for p in s.replace("\\", "/").split("/") if p)
 
 
 def evaluate(
