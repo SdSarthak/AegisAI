@@ -13,6 +13,12 @@ interface RagSource {
   excerpt: string
 }
 
+interface RagApiSource {
+  filename?: string
+  article?: string | null
+  paragraph?: number | null
+}
+
 interface RagAnswer {
   answer: string
   sources: RagSource[]
@@ -53,6 +59,46 @@ function buildAnswerExport(
   ].join('\n')
 }
 
+function normalizeRagSources(
+  sources: unknown
+): RagSource[] {
+  if (!Array.isArray(sources)) {
+    return []
+  }
+
+  return sources.map((source) => {
+    if (typeof source === 'string') {
+      return {
+        title: source,
+        excerpt: '',
+      }
+    }
+
+    if (
+      typeof source !== 'object' ||
+      source === null
+    ) {
+      return {
+        title: 'Unknown source',
+        excerpt: '',
+      }
+    }
+
+    const citation = source as RagApiSource
+    const citationParts = [
+      citation.article,
+      citation.paragraph
+        ? `paragraph ${citation.paragraph}`
+        : null,
+    ].filter(Boolean)
+
+    return {
+      title: citation.filename || 'Unknown source',
+      excerpt: citationParts.join(', '),
+    }
+  })
+}
+
 export default function RagChat() {
   const [question, setQuestion] = useState('')
   const [submittedQuestion, setSubmittedQuestion] =
@@ -88,7 +134,7 @@ export default function RagChat() {
 
       setAnswer({
         answer: data.answer,
-        sources: data.sources || [],
+        sources: normalizeRagSources(data.sources),
         answer_id: data.answer_id,
       })
     } catch (err: unknown) {

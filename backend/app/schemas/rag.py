@@ -9,9 +9,15 @@ class RAGQueryRequest(BaseModel):
     question: str = Field(..., min_length=1, max_length=2000)
 
 
+class RAGSourceCitation(BaseModel):
+    filename: str
+    article: Optional[str] = None
+    paragraph: Optional[int] = None
+
+
 class RAGQueryResponse(BaseModel):
     answer: str
-    sources: list[str] = []
+    sources: list[RAGSourceCitation] = []
     answer_id: Optional[str] = None
     groundedness_score: float = Field(
         default=0.0,
