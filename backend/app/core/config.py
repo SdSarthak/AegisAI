@@ -38,6 +38,11 @@ class Settings(BaseSettings):
     GUARD_RATE_LIMIT_REQUESTS: int = 60
     GUARD_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
+    # Rate Limiting & Outage Policies
+    RATE_LIMIT_FAIL_CLOSED: bool = False
+    BADGE_RATE_LIMIT_REQUESTS: int = 5
+    BADGE_RATE_LIMIT_WINDOW_SECONDS: int = 60
+
     # Shared infrastructure
     REDIS_URL: str = ""
 

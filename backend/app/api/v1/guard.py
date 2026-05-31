@@ -188,6 +188,7 @@ def scan_prompt(
         key=f"guard:scan:{current_user.id}",
         limit=settings.GUARD_RATE_LIMIT_REQUESTS,
         window_seconds=settings.GUARD_RATE_LIMIT_WINDOW_SECONDS,
+        fail_closed=True,
     )
 
     if limited:
@@ -330,6 +331,7 @@ async def explain_prompt(
         key=f"guard:explain:{current_user.id}",
         limit=_ExplainRateLimitConfig.LIMIT,
         window_seconds=_ExplainRateLimitConfig.WINDOW_SECONDS,
+        fail_closed=True,
     )
     if limited:
         return JSONResponse(
@@ -700,6 +702,7 @@ def bulk_scan_prompts(
         limit=settings.GUARD_RATE_LIMIT_REQUESTS,
         window_seconds=settings.GUARD_RATE_LIMIT_WINDOW_SECONDS,
         cost=batch_size,
+        fail_closed=True,
     )
 
     if limited:
@@ -1083,6 +1086,7 @@ def bulk_scan_prompts(
         limit=settings.GUARD_RATE_LIMIT_REQUESTS,
         window_seconds=settings.GUARD_RATE_LIMIT_WINDOW_SECONDS,
         cost=batch_size,
+        fail_closed=True,
     )
 
     if limited:
@@ -1466,6 +1470,7 @@ def bulk_scan_prompts(
         limit=settings.GUARD_RATE_LIMIT_REQUESTS,
         window_seconds=settings.GUARD_RATE_LIMIT_WINDOW_SECONDS,
         cost=batch_size,
+        fail_closed=True,
     )
 
     if limited:
