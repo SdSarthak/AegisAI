@@ -10,17 +10,12 @@ TODO for contributors (medium difficulty):
 """
 
 import hashlib
-from collections import Counter, defaultdict, deque
-from datetime import datetime, timedelta, timezone
-from threading import Lock
-from typing import Optional
-
-from app.api.v1.webhooks import deliver_webhook
 import logging
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Optional, TypedDict
 
+from app.api.v1.webhooks import deliver_webhook
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -170,6 +165,7 @@ def scan_prompt(
     request: ScanRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),              # added this for fixing nameerror crash
 ):
     """Scan a prompt for injection risks.
 

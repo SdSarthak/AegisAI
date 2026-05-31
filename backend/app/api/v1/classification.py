@@ -32,6 +32,12 @@ QUESTIONNAIRE_RISK_FACTORS: List[QuestionnaireRiskFactor] = [
         triggers_level=RiskLevel.UNACCEPTABLE,
     ),
     QuestionnaireRiskFactor(
+        id="biometric_categorisation",
+        question="Does the system categorise individuals based on biometric data to infer sensitive attributes such as race, political opinions, religion, or sexual orientation?",
+        article="Article 5(1)(g)",
+        triggers_level=RiskLevel.UNACCEPTABLE,
+    ),
+    QuestionnaireRiskFactor(
         id="subliminal_manipulation",
         question="Does the system use subliminal techniques or manipulative methods that impair a person's ability to make free decisions, causing them harm?",
         article="Article 5(1)(a)",
@@ -172,6 +178,7 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
     prohibited_flags = {
         "social_scoring": "Social scoring by public authorities (Article 5(1)(c))",
         "realtime_biometric_public": "Real-time remote biometric identification in public spaces (Article 5(1)(h))",
+        "biometric_categorisation": "Biometric categorisation using sensitive attributes (Article 5(1)(g))",
         "subliminal_manipulation": "Subliminal manipulation of behaviour (Article 5(1)(a))",
         "exploits_vulnerable_groups": "Exploitation of vulnerabilities of specific groups (Article 5(1)(b))",
     }

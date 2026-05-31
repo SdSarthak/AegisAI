@@ -13,6 +13,10 @@ TODO for contributors (good first issue):
     that starts with "<svg" and can be saved as a .svg file.
 """
 
+from __future__ import annotations
+
+from xml.sax.saxutils import escape as _xml_escape
+
 STATUS_COLORS = {
     "compliant": "#4ade80",  # green
     "in_progress": "#facc15",  # yellow
@@ -28,6 +32,18 @@ RISK_LABELS = {
     "unacceptable": "Unacceptable",
 }
 
+STATUS_LABELS = {
+    "compliant": "Compliant",
+    "in_progress": "In Progress",
+    "under_review": "Under Review",
+    "non_compliant": "Non Compliant",
+    "not_started": "Not Started",
+}
+
+
+def _escape_svg_text(text: str) -> str:
+    return _xml_escape(text, {'"': "&quot;", "'": "&apos;"})
+
 
 def generate_badge_svg(
     system_name: str,
@@ -37,12 +53,20 @@ def generate_badge_svg(
     """
     Generate an SVG compliance badge.
     """
-    color = STATUS_COLORS.get(compliance_status, STATUS_COLORS["not_started"])
-    status_label = compliance_status.replace("_", " ").title()
+    if compliance_status in STATUS_COLORS:
+        status_key = compliance_status
+        status_label = STATUS_LABELS.get(status_key, "Unknown")
+    else:
+        status_key = "not_started"
+        status_label = "Unknown"
+
+    color = STATUS_COLORS[status_key]
     risk_label = RISK_LABELS.get(risk_level, "Unknown Risk") if risk_level else None
 
     # Text segments
     segments = [("AegisAI", "#555")]
+    if system_name:
+        segments.append((system_name, "#444"))
     if risk_label:
         segments.append((risk_label, "#444"))
     segments.append((status_label, color))
@@ -77,10 +101,11 @@ def generate_badge_svg(
     for i, (text, _) in enumerate(segments):
         w = segment_widths[i]
         center_x = current_x + w / 2
+        safe_text = _escape_svg_text(text)
         svg.append(
-            f'<text x="{center_x}" y="15" fill="#010101" fill-opacity=".3">{text}</text>'
+            f'<text x="{center_x}" y="15" fill="#010101" fill-opacity=".3">{safe_text}</text>'
         )
-        svg.append(f'<text x="{center_x}" y="14">{text}</text>')
+        svg.append(f'<text x="{center_x}" y="14">{safe_text}</text>')
         current_x += w
 
     svg.append("</g>")
