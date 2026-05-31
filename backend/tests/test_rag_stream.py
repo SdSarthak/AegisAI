@@ -123,7 +123,7 @@ class TestStreamRagAnswer:
         assert all(k == "token" for k in kinds[1:-1])
 
         meta = events[0]["data"]
-        assert meta["model"] == "llama3.2"
+        assert meta["model"] == settings.LLM_MODEL
         assert isinstance(meta["answer_id"], str)
         assert len(meta["answer_id"]) >= 32  # uuid hex with dashes
         assert len(meta["citations"]) == 2
