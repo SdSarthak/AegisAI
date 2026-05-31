@@ -73,7 +73,10 @@ def get_qa_chain():
     """
     global ChatOpenAI
 
-    from langchain_classic.chains import RetrievalQA
+    try:
+        from langchain_classic.chains import RetrievalQA
+    except ImportError:
+        from langchain.chains import RetrievalQA
 
     if ChatOpenAI is None:
         from langchain_openai import ChatOpenAI as LangChainChatOpenAI

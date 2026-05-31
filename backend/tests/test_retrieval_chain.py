@@ -40,13 +40,22 @@ class TestVectorStore:
         mock_load_local.assert_called_once()
 
 
+import importlib
+
+# Determine the correct patch target for RetrievalQA based on package availability
+try:
+    importlib.import_module("langchain_classic")
+    PATCH_TARGET = "langchain_classic.chains.RetrievalQA.from_chain_type"
+except ImportError:
+    PATCH_TARGET = "langchain.chains.RetrievalQA.from_chain_type"
+
+
 class TestRetrievalChain:
     """Tests for the QA chain creation and response structure."""
 
     @patch("app.modules.rag.retrieval_chain.load_vector_store")
     @patch("app.modules.rag.retrieval_chain.ChatOpenAI")
-    @patch("langchain_classic.chains.RetrievalQA.from_chain_type")
-    def test_get_qa_chain_returns_chain(self, mock_from_chain_type, mock_llm, mock_load_vs):
+    def test_get_qa_chain_returns_chain(self, mock_llm, mock_load_vs):
         """3. get_qa_chain() should return a chain when the index exists."""
         # Setup: Mock vector store and its retriever
         mock_vs = MagicMock()
@@ -56,19 +65,19 @@ class TestRetrievalChain:
         
         # Mock the chain instance
         mock_chain = MagicMock()
-        mock_from_chain_type.return_value = mock_chain
         
-        # Execute
-        chain = get_qa_chain()
-        
-        # Assertions
-        assert chain == mock_chain
-        mock_from_chain_type.assert_called_once()
-        
-        # Verify it was built with return_source_documents=True
-        # This checks that we are following the project's requirement for source extraction
-        args, kwargs = mock_from_chain_type.call_args
-        assert kwargs["return_source_documents"] is True
+        with patch(PATCH_TARGET, return_value=mock_chain) as mock_from_chain_type:
+            # Execute
+            chain = get_qa_chain()
+            
+            # Assertions
+            assert chain == mock_chain
+            mock_from_chain_type.assert_called_once()
+            
+            # Verify it was built with return_source_documents=True
+            # This checks that we are following the project's requirement for source extraction
+            args, kwargs = mock_from_chain_type.call_args
+            assert kwargs["return_source_documents"] is True
 
     @patch("app.modules.rag.retrieval_chain.load_vector_store")
     @patch("app.modules.rag.retrieval_chain.ChatOpenAI")
@@ -95,7 +104,7 @@ class TestRetrievalChain:
         mock_chain.return_value = expected_response
         
         # We patch RetrievalQA.from_chain_type locally to return our mock_chain
-        with patch("langchain_classic.chains.RetrievalQA.from_chain_type", return_value=mock_chain):
+        with patch(PATCH_TARGET, return_value=mock_chain):
             chain = get_qa_chain()
             
             # Simulate asking a question
