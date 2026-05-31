@@ -298,6 +298,16 @@ def bulk_import_systems(
     return BulkImportResponse(created=created_count, errors=errors)
 
 
+def _sanitize_csv_cell(value: str) -> str:
+    """Prevent CSV formula injection by prefixing dangerous leading characters."""
+    if not value:
+        return value
+    dangerous = {"=", "+", "-", "@", "\t", "\r"}
+    if value and value[0] in dangerous:
+        return "'" + value
+    return value
+
+
 @router.get("/export")
 def export_ai_systems(
     risk_level: Optional[str] = Query(None, description="Filter by risk level: minimal, limited, high, unacceptable"),
@@ -339,13 +349,13 @@ def export_ai_systems(
     for s in systems:
         writer.writerow([
             s.id,
-            s.name,
-            s.description or "",
-            s.version or "",
-            s.use_case or "",
-            s.sector or "",
-            s.risk_level.value if s.risk_level else "",
-            s.compliance_status.value if s.compliance_status else "",
+            _sanitize_csv_cell(s.name or ""),
+            _sanitize_csv_cell(s.description or ""),
+            _sanitize_csv_cell(s.version or ""),
+            _sanitize_csv_cell(s.use_case or ""),
+            _sanitize_csv_cell(s.sector or ""),
+            _sanitize_csv_cell(s.risk_level.value if s.risk_level else ""),
+            _sanitize_csv_cell(s.compliance_status.value if s.compliance_status else ""),
             s.compliance_score if s.compliance_score is not None else "",
             s.created_at.isoformat() if s.created_at else "",
         ])

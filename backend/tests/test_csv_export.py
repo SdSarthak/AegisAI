@@ -119,3 +119,46 @@ class TestCSVExport:
         resp = c.get("/api/v1/ai-systems/export?risk_level=banana")
         assert resp.status_code == 400
         assert "risk_level" in resp.json()["detail"].lower()
+
+    def test_export_sanitizes_formula_injection(self, client):
+        c, db, user = client
+        db.add(AISystem(
+            owner_id=user.id,
+            name="=CMD",
+            description="+DANGER",
+            use_case="-FORMULA",
+            sector="@SPREADSHEET",
+            risk_level=RiskLevel.HIGH,
+        ))
+        db.flush()
+
+        resp = c.get("/api/v1/ai-systems/export")
+        assert resp.status_code == 200
+
+        reader = csv.DictReader(io.StringIO(resp.text))
+        rows = list(reader)
+        assert len(rows) == 1
+
+        assert rows[0]["name"] == "'=CMD"
+        assert rows[0]["description"] == "'+DANGER"
+        assert rows[0]["use_case"] == "'-FORMULA"
+        assert rows[0]["sector"] == "'@SPREADSHEET"
+
+    def test_export_does_not_mangle_safe_values(self, client):
+        c, db, user = client
+        db.add(AISystem(
+            owner_id=user.id,
+            name="Safe System",
+            description="Normal description",
+            risk_level=RiskLevel.MINIMAL,
+        ))
+        db.flush()
+
+        resp = c.get("/api/v1/ai-systems/export")
+        assert resp.status_code == 200
+
+        reader = csv.DictReader(io.StringIO(resp.text))
+        rows = list(reader)
+        assert len(rows) == 1
+        assert rows[0]["name"] == "Safe System"
+        assert rows[0]["description"] == "Normal description"
