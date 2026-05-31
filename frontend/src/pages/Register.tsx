@@ -100,7 +100,7 @@ export default function Register() {
       const parsedErrors = parsePydanticErrors(err.response?.data);
 
       if (parsedErrors && parsedErrors.length > 0) {
-        // Agar password validation fail hui hai, toh use extract karein
+        // Extract and display specific validation error message
         const passwordErr = parsedErrors.find(e => e.field === 'password');
         if (passwordErr) {
           setErrors([
