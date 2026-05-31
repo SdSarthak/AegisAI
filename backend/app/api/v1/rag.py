@@ -9,13 +9,11 @@ TODO for contributors (high difficulty):
   - Add streaming responses via SSE for long answers
 """
 
-import time
-from fastapi import APIRouter, Depends, HTTPException, status
-
-
 import os
 import shutil
-import tempfile
+import time
+import uuid
+from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
@@ -25,12 +23,12 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.rag_document import RAGDocument
 from app.models.rag_feedback import RAGFeedback
+from app.models.rag_query import RagQuery
 from app.models.user import SubscriptionTier, User
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.vector_store import create_vector_store
-from app.models.rag_query import RagQuery
-from typing import Optional
 
 router = APIRouter()
 
@@ -53,6 +51,68 @@ class RAGIngestResponse(BaseModel):
     index_size_bytes: int
 
 
+class RAGDocumentResponse(BaseModel):
+    id: int
+    filename: str
+    original_filename: str
+    content_type: Optional[str] = None
+    file_size_bytes: int
+    chunks_count: int
+    uploaded_by_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RAGDocumentListResponse(BaseModel):
+    items: list[RAGDocumentResponse]
+    total: int
+
+
+class RAGDocumentDeleteResponse(BaseModel):
+    deleted_document_id: int
+    documents_remaining: int
+    index_rebuilt: bool
+    index_size_bytes: int
+
+
+def _ensure_storage_dir() -> str:
+    os.makedirs(settings.RAG_DOCUMENT_STORAGE_PATH, exist_ok=True)
+    return settings.RAG_DOCUMENT_STORAGE_PATH
+
+
+def _stored_filename(original_filename: str) -> str:
+    safe_name = os.path.basename(original_filename).replace(os.sep, "_")
+    return f"{uuid.uuid4().hex}_{safe_name}"
+
+
+def _index_size_bytes() -> int:
+    index_path = settings.FAISS_INDEX_PATH
+    index_size_bytes = 0
+    for fname in ("index.faiss", "index.pkl"):
+        fpath = os.path.join(index_path, fname)
+        if os.path.exists(fpath):
+            index_size_bytes += os.path.getsize(fpath)
+    return index_size_bytes
+
+
+def _rebuild_index_from_documents(documents: list[RAGDocument]) -> int:
+    file_paths = [doc.storage_path for doc in documents if os.path.exists(doc.storage_path)]
+    if not file_paths:
+        shutil.rmtree(settings.FAISS_INDEX_PATH, ignore_errors=True)
+        return 0
+
+    create_vector_store(file_paths)
+    return _index_size_bytes()
+
+
+def _current_user_id(current_user: User) -> Optional[int]:
+    user_id = getattr(current_user, "id", None)
+    return user_id if isinstance(user_id, int) else None
+
+
 # ---------------------------------------------------------------------------
 # POST /rag/ingest
 # ---------------------------------------------------------------------------
@@ -65,6 +125,7 @@ class RAGIngestResponse(BaseModel):
 def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """
     Accept one or more PDF uploads, process them through the document loader,
@@ -93,16 +154,27 @@ def ingest_documents(
             detail="No valid PDF files supplied. Please upload files with a .pdf extension.",
         )
 
-    # ── 2. Save uploads to a temporary directory ──────────────────────────
-    tmp_dir = tempfile.mkdtemp(prefix="aegis_ingest_")
+    storage_dir = _ensure_storage_dir()
     saved_paths: list[str] = []
+    pending_documents: list[RAGDocument] = []
 
     try:
         for upload in pdf_files:
-            dest = os.path.join(tmp_dir, os.path.basename(upload.filename))
+            filename = _stored_filename(upload.filename)
+            dest = os.path.join(storage_dir, filename)
             with open(dest, "wb") as buf:
                 shutil.copyfileobj(upload.file, buf)
             saved_paths.append(dest)
+            pending_documents.append(
+                RAGDocument(
+                    filename=filename,
+                    original_filename=os.path.basename(upload.filename),
+                    storage_path=dest,
+                    content_type=upload.content_type,
+                    file_size_bytes=os.path.getsize(dest),
+                    uploaded_by_id=_current_user_id(current_user),
+                )
+            )
 
         # ── 3. Chunk documents (gives us the accurate chunk count) ────────
         chunks = load_documents_from_paths(saved_paths)
@@ -113,22 +185,29 @@ def ingest_documents(
                        "Ensure the files are not scanned images or password-protected.",
             )
 
+        chunks_by_source: dict[str, int] = {path: 0 for path in saved_paths}
+        for chunk in chunks:
+            source = str(getattr(chunk, "metadata", {}).get("source", ""))
+            if source in chunks_by_source:
+                chunks_by_source[source] += 1
+
+        for document in pending_documents:
+            document.chunks_count = chunks_by_source.get(document.storage_path, 0)
+            db.add(document)
+        db.flush()
+
         # ── 4. Build / rebuild FAISS index and persist to disk ────────────
         try:
-            create_vector_store(saved_paths)
+            all_documents = db.query(RAGDocument).order_by(RAGDocument.id.asc()).all()
+            index_size_bytes = _rebuild_index_from_documents(all_documents)
         except Exception as exc:
+            db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Failed to build FAISS index: {exc}",
             )
 
-        # ── 5. Calculate on-disk index size ───────────────────────────────
-        index_path = settings.FAISS_INDEX_PATH
-        index_size_bytes = 0
-        for fname in ("index.faiss", "index.pkl"):
-            fpath = os.path.join(index_path, fname)
-            if os.path.exists(fpath):
-                index_size_bytes += os.path.getsize(fpath)
+        db.commit()
 
         return RAGIngestResponse(
             files_processed=len(saved_paths),
@@ -137,8 +216,61 @@ def ingest_documents(
         )
 
     finally:
-        # ── 6. Always clean up the temp directory ─────────────────────────
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        if db.is_active:
+            for path in saved_paths:
+                exists_in_db = db.query(RAGDocument).filter(RAGDocument.storage_path == path).first()
+                if not exists_in_db and os.path.exists(path):
+                    os.remove(path)
+
+
+@router.get("/documents", response_model=RAGDocumentListResponse)
+def list_rag_documents(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List documents currently included in the RAG knowledge base."""
+    documents = db.query(RAGDocument).order_by(RAGDocument.created_at.desc()).all()
+    return RAGDocumentListResponse(items=documents, total=len(documents))
+
+
+@router.delete("/documents/{document_id}", response_model=RAGDocumentDeleteResponse)
+def delete_rag_document(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Remove a RAG source document and rebuild the FAISS index."""
+    document = db.query(RAGDocument).filter(RAGDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="RAG document not found")
+
+    storage_path = document.storage_path
+    db.delete(document)
+    db.flush()
+
+    remaining_documents = db.query(RAGDocument).order_by(RAGDocument.id.asc()).all()
+    try:
+        index_size_bytes = _rebuild_index_from_documents(remaining_documents)
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Failed to rebuild FAISS index: {exc}",
+        )
+
+    db.commit()
+    if os.path.exists(storage_path):
+        try:
+            os.remove(storage_path)
+        except OSError:
+            pass
+
+    return RAGDocumentDeleteResponse(
+        deleted_document_id=document_id,
+        documents_remaining=len(remaining_documents),
+        index_rebuilt=bool(remaining_documents),
+        index_size_bytes=index_size_bytes,
+    )
 
 
 @router.post("/query", response_model=RAGQueryResponse)

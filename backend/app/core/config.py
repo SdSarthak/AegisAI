@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     RAG_CHUNK_SIZE: int = 1000
     RAG_CHUNK_OVERLAP: int = 200
     FAISS_INDEX_PATH: str = "faiss_index"
+    RAG_DOCUMENT_STORAGE_PATH: str = "rag_documents"
 
     class Config:
         env_file = ".env"
