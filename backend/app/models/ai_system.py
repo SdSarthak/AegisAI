@@ -24,10 +24,13 @@ class AISystem(Base):
     __tablename__ = "ai_systems"
     __table_args__ = (
         UniqueConstraint("owner_id", "name", name="uq_ai_system_owner_name"),
+        UniqueConstraint("org_id", "name", name="uq_ai_system_org_name"),
     )
 
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    # Org scope — populated automatically when the creating user belongs to an org
+    org_id = Column(Integer, ForeignKey("organisations.id"), nullable=True, index=True)
 
     # Basic info
     name = Column(String(255), nullable=False)
@@ -51,6 +54,7 @@ class AISystem(Base):
 
     # Relationships
     owner = relationship("User", back_populates="ai_systems")
+    organisation = relationship("Organisation", back_populates="ai_systems")
     risk_assessments = relationship("RiskAssessment", back_populates="ai_system")
     documents = relationship("Document", back_populates="ai_system")
     compliance_snapshots = relationship("ComplianceSnapshot", back_populates="ai_system")

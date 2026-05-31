@@ -58,6 +58,18 @@ def _read_upload_file(file: UploadFile, max_bytes: int) -> str:
         )
 
 
+def _scope_filter(current_user: User):
+    """Return an SQLAlchemy filter clause that scopes AI-system queries.
+
+    If the user belongs to an organisation, all systems owned by any member of
+    that organisation are visible.  Otherwise only the user's own systems are
+    returned, preserving full backwards-compatibility for solo users.
+    """
+    if current_user.org_id is not None:
+        return AISystem.org_id == current_user.org_id
+    return AISystem.owner_id == current_user.id
+
+
 def _process_import_rows(
     csv_reader: csv.DictReader,
     db: Session,
@@ -93,8 +105,9 @@ def _process_import_rows(
             errors.append({"row": row_num, "error": f"duplicate name '{name}' in uploaded file"})
             continue
 
+        # Check for existing systems in scope (org or personal)
         existing = db.query(AISystem).filter(
-            AISystem.owner_id == current_user.id,
+            _scope_filter(current_user),
             AISystem.name == name,
         ).first()
 
@@ -105,6 +118,7 @@ def _process_import_rows(
         try:
             ai_system = AISystem(
                 owner_id=current_user.id,
+                org_id=current_user.org_id,  # Automatically scoped to the user's org
                 name=name,
                 description=row.get("description", "").strip() or None,
                 version=row.get("version", "").strip() or None,
@@ -150,6 +164,7 @@ def create_ai_system(
 
     ai_system = AISystem(
         owner_id=current_user.id,
+        org_id=current_user.org_id,  # Automatically scoped to the user's org
         name=system_data.name,
         description=system_data.description,
         version=system_data.version,
@@ -216,7 +231,7 @@ def list_ai_systems(
     column = _SORTABLE_FIELDS[sort_by]
     direction = asc(column) if order == "asc" else desc(column)
 
-    base_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
+    base_query = db.query(AISystem).filter(_scope_filter(current_user))
     total = base_query.count()
 
     systems = (
@@ -317,7 +332,7 @@ def export_ai_systems(
     Raises:
         HTTPException: If the requested risk level is invalid.
     """
-    query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
+    query = db.query(AISystem).filter(_scope_filter(current_user))
 
     if risk_level is not None:
         allowed = {"minimal", "limited", "high", "unacceptable"}
@@ -394,12 +409,12 @@ def get_ai_system_history(
             detail="Invalid order parameter. Use 'asc' or 'desc'.",
         )
 
-    # 2. Verify AI system exists and belongs to the authenticated user
+    # 2. Verify AI system exists and is accessible by the authenticated user
     system = (
         db.query(AISystem)
         .filter(
             AISystem.id == system_id,
-            AISystem.owner_id == current_user.id,
+            _scope_filter(current_user),
         )
         .first()
     )
@@ -460,7 +475,7 @@ def get_ai_system(
     """
     system = (
         db.query(AISystem)
-        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .filter(AISystem.id == system_id, _scope_filter(current_user))
         .first()
     )
 
@@ -528,7 +543,7 @@ def update_ai_system(
     """
     system = (
         db.query(AISystem)
-        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .filter(AISystem.id == system_id, _scope_filter(current_user))
         .first()
     )
 
@@ -568,7 +583,7 @@ def delete_ai_system(
     """
     system = (
         db.query(AISystem)
-        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .filter(AISystem.id == system_id, _scope_filter(current_user))
         .first()
     )
 
@@ -604,7 +619,7 @@ def update_ai_system_status(
     """
     system = db.query(AISystem).filter(
         AISystem.id == system_id,
-        AISystem.owner_id == current_user.id,
+        _scope_filter(current_user),
     ).first()
 
     if not system:
