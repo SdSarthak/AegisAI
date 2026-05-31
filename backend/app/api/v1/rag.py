@@ -13,7 +13,7 @@ import os
 import shutil
 import tempfile
 import time
-from typing import List
+from typing import List, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel
@@ -233,7 +233,7 @@ def rag_health():
 
 class RAGFeedbackRequest(BaseModel):
     answer_id: str
-    vote: str  # "up" or "down"
+    vote: Literal["up", "down"]
 
 
 @router.post("/feedback")
