@@ -67,3 +67,64 @@ def test_distributed_rate_limiter_uses_redis_backing(monkeypatch):
 
     assert limited is True
     assert retry_after == 60
+
+
+def test_rate_limiter_fail_closed_on_redis_error(monkeypatch):
+    """When Redis raises and fail_closed=True, the request is denied."""
+    fake_client = _FakeRedisClient()
+
+    def _broken_register_script(*args, **kwargs):
+        raise ConnectionError("Redis unreachable")
+
+    fake_client.register_script = _broken_register_script  # type: ignore[method-assign]
+    fake_module = _FakeRedisModule(fake_client)
+
+    monkeypatch.setattr(settings, "REDIS_URL", "redis://example:6379/0")
+    monkeypatch.setattr(rate_limit, "redis", fake_module)
+
+    limiter = rate_limit.DistributedRateLimiter()
+
+    limited, retry_after = limiter.check_and_consume(
+        key="guard:scan:1",
+        limit=60,
+        window_seconds=60,
+    )
+
+    assert limited is True
+    assert retry_after == 60
+
+
+def test_rate_limiter_fail_open_on_redis_error(monkeypatch):
+    """When Redis raises and fail_closed=False, the request falls back to local tracking."""
+    fake_client = _FakeRedisClient()
+
+    def _broken_register_script(*args, **kwargs):
+        raise ConnectionError("Redis unreachable")
+
+    fake_client.register_script = _broken_register_script
+    fake_module = _FakeRedisModule(fake_client)
+
+    monkeypatch.setattr(settings, "REDIS_URL", "redis://example:6379/0")
+    monkeypatch.setattr(rate_limit, "redis", fake_module)
+
+    limiter = rate_limit.DistributedRateLimiter()
+
+    for _ in range(60):
+        limited, retry_after = limiter.check_and_consume(
+            key="guard:scan:1",
+            limit=60,
+            window_seconds=60,
+            fail_closed=False,
+        )
+        assert limited is False
+        assert retry_after == 0
+
+    limited, retry_after = limiter.check_and_consume(
+        key="guard:scan:1",
+        limit=60,
+        window_seconds=60,
+        fail_closed=False,
+    )
+
+    assert limited is True
+    assert retry_after > 0

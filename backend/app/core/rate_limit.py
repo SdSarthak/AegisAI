@@ -115,15 +115,24 @@ return {current, ttl}
         limit: int,
         window_seconds: int,
         cost: int = 1,
+        fail_closed: bool = True,
     ) -> tuple[bool, int]:
-        """Return whether a request should be limited and the retry-after value."""
+        """Return whether a request should be limited and the retry-after value.
+
+        When *fail_closed* is ``True`` (default) and the Redis call fails, the
+        request is treated as rate-limited so the system does not serve traffic
+        without protection.  Set *fail_closed* to ``False`` to fall back to an
+        in-process tracking window (useful for local development / tests).
+        """
 
         client = self._get_redis_client()
         if client is not None:
             try:
                 return self._check_redis(client, key, limit, window_seconds, cost)
             except Exception:
-                logger.exception("Redis rate limiting failed for %s; falling back to local tracking.", key)
+                logger.exception("Redis rate limiting failed for %s.", key)
+                if fail_closed:
+                    return True, window_seconds
 
         return self._check_local(key, limit, window_seconds, cost)
 
