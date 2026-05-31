@@ -13,13 +13,10 @@ import hashlib
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
-from typing import Optional
+from typing import Optional, TypedDict
 
 from app.api.v1.webhooks import deliver_webhook
 import logging
-from collections import Counter
-from datetime import datetime, timedelta, timezone
-from typing import Optional, TypedDict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
@@ -32,9 +29,11 @@ from app.core.config import settings
 from app.core.database import SessionLocal, get_db
 from app.core.security import get_current_user
 from app.core.rate_limit import guard_scan_rate_limiter
+from app.models.guard_audit_log import GuardAuditLog
 from app.models.guard_scan_log import GuardScanLog
 from app.models.notification import NotificationType
 from app.models.user import User
+from app.schemas.guard_audit_log import GuardAuditLogResponse
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.pagination import PaginatedResponse
@@ -135,18 +134,36 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict) -> GuardScanL
     )
 
 
+def _build_guard_audit_log(user_id: int, prompt: str, result: dict) -> GuardAuditLog:
+    """Build a privacy-safe GuardAuditLog row for compliance auditing."""
+    metadata = result.get("metadata", {})
+    intent_analysis = metadata.get("intent_analysis", {})
+    decision_reasoning = metadata.get("decision_reasoning", {})
+
+    return GuardAuditLog(
+        user_id=user_id,
+        prompt_hash=hashlib.sha256(prompt.encode()).hexdigest(),
+        decision=result.get("decision", "allow"),
+        threat_type=intent_analysis.get("intent", "unknown"),
+        confidence_score=decision_reasoning.get("confidence", 0.0),
+        timestamp=datetime.utcnow(),
+    )
+
+
 def log_scan(user_id: int, prompt: str, result: dict) -> None:
-    """Log scan details and create block notification without storing raw prompt."""
+    """Log scan details, audit the event, and create block notification without storing raw prompt."""
     db = SessionLocal()
 
     try:
-        log = _build_guard_scan_log(user_id, prompt, result)
+        scan_log = _build_guard_scan_log(user_id, prompt, result)
+        audit_log = _build_guard_audit_log(user_id, prompt, result)
 
-        db.add(log)
+        db.add_all([scan_log, audit_log])
         db.commit()
-        db.refresh(log)
+        db.refresh(scan_log)
+        db.refresh(audit_log)
 
-        if log.decision == "block":
+        if scan_log.decision == "block":
             create_notification(
                 db=db,
                 user_id=user_id,
@@ -154,7 +171,7 @@ def log_scan(user_id: int, prompt: str, result: dict) -> None:
                 title="Prompt blocked by LLM Guard",
                 message="A prompt was blocked because it matched high-risk guard rules.",
                 resource_type="guard_scan",
-                resource_id=log.id,
+                resource_id=scan_log.id,
             )
             db.commit()
 
@@ -328,6 +345,49 @@ def get_guard_history(
     total = base_query.count()
     logs = (
         base_query.order_by(GuardScanLog.scanned_at.desc())  # FIX: use indexed scanned_at
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    return PaginatedResponse(items=logs, total=total, skip=skip, limit=limit)
+
+
+@router.get("/audit-log", response_model=PaginatedResponse[GuardAuditLogResponse])
+def get_guard_audit_log(
+    decision: Optional[str] = Query(
+        None,
+        regex="^(allow|sanitize|block)$",
+        description="Filter audit entries by decision.",
+    ),
+    date_from: Optional[datetime] = Query(
+        None,
+        description="Start of the timestamp window (inclusive).",
+    ),
+    date_to: Optional[datetime] = Query(
+        None,
+        description="End of the timestamp window (inclusive).",
+    ),
+    skip: int = Query(0, ge=0, description="Items to skip"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return paginated Guard audit history scoped to the authenticated user."""
+    base_query = db.query(GuardAuditLog).filter(GuardAuditLog.user_id == current_user.id)
+
+    if decision:
+        base_query = base_query.filter(GuardAuditLog.decision == decision)
+
+    if date_from:
+        base_query = base_query.filter(GuardAuditLog.timestamp >= date_from)
+
+    if date_to:
+        base_query = base_query.filter(GuardAuditLog.timestamp <= date_to)
+
+    total = base_query.count()
+    logs = (
+        base_query.order_by(GuardAuditLog.timestamp.desc())
         .offset(skip)
         .limit(limit)
         .all()
