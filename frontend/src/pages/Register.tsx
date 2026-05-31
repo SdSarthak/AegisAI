@@ -116,7 +116,7 @@ export default function Register() {
         ])
       }
 
-        } else if (err.code === 'ERR_NETWORK') {
+          } else if (err.code === 'ERR_NETWORK') {
           setErrors([
             {
               field: 'general',
