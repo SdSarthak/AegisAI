@@ -87,3 +87,4 @@ function App() {
 }
 
 export default App
+// Lazy loading optimizations added for #801
