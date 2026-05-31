@@ -13,11 +13,13 @@ Dependencies:
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm, APIKeyHeader
 import re
+import secrets
+import hashlib
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 from app.core.database import get_db
 from app.core.security import (
@@ -30,7 +32,14 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.ai_system import AISystem, ComplianceStatus
 from app.models.document import Document
+from app.models.api_key import ApiKey
 from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse
+from app.schemas.api_key import (
+    ApiKeyCreate,
+    ApiKeyResponse,
+    ApiKeyGeneratedResponse,
+    ApiKeyRevokeResponse,
+)
 
 
 class ChangePasswordRequest(BaseModel):
@@ -214,31 +223,131 @@ def get_current_user_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return summary statistics for the authenticated user.
+    total_systems = (
+        db.query(AISystem)
+        .filter(AISystem.owner_id == current_user.id)
+        .count()
+    )
 
-    Args:
-        current_user: Authenticated user whose activity is being summarized.
-        db: Database session used to count systems and documents.
+    total_documents = (
+        db.query(Document)
+        .filter(Document.owner_id == current_user.id)
+        .count()
+    )
+ 
 
-    Returns:
-        UserStatsResponse containing system, document, risk, and compliance counts.
-    """
-    systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
+    systems = (
+        db.query(AISystem)
+        .filter(AISystem.owner_id == current_user.id)
+        .all()
+    )
 
-    risk_breakdown: dict = {}
+    risk_breakdown = {}
     compliant_systems = 0
+
     for system in systems:
-        if system.risk_level:
-            key = system.risk_level.value
-            risk_breakdown[key] = risk_breakdown.get(key, 0) + 1
+        risk_level = (
+            system.risk_level.value
+            if hasattr(system.risk_level, "value")
+            else str(system.risk_level)
+        )
+
+        risk_breakdown[risk_level] = (
+            risk_breakdown.get(risk_level, 0) + 1
+        )
+
         if system.compliance_status == ComplianceStatus.COMPLIANT:
             compliant_systems += 1
 
-    total_documents = db.query(Document).filter(Document.owner_id == current_user.id).count()
-
     return UserStatsResponse(
-        total_systems=len(systems),
+        total_systems=total_systems,
         total_documents=total_documents,
         risk_breakdown=risk_breakdown,
         compliant_systems=compliant_systems,
+    )
+
+
+@router.post(
+    "/api-keys",
+    response_model=ApiKeyGeneratedResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_api_key(
+    payload: ApiKeyCreate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    raw_key = secrets.token_urlsafe(32)
+
+    key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+
+    api_key = ApiKey(
+        user_id=current_user.id,
+        name=payload.name,
+        key_hash=key_hash,
+    )
+
+    db.add(api_key)
+    db.commit()
+    db.refresh(api_key)
+
+    return ApiKeyGeneratedResponse(
+        api_key=raw_key,
+        name=api_key.name,
+    )
+
+
+@router.get(
+    "/api-keys",
+    response_model=list[ApiKeyResponse],
+)
+def list_api_keys(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    api_keys = (
+        db.query(ApiKey)
+        .filter(
+            ApiKey.user_id == current_user.id,
+            ApiKey.revoked == False,
+        )
+        .all()
+    )
+
+    return api_keys
+
+
+@router.delete(
+    "/api-keys/{api_key_id}",
+    response_model=ApiKeyRevokeResponse,
+)
+def revoke_api_key(
+    api_key_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    api_key = (
+        db.query(ApiKey)
+        .filter(
+            ApiKey.id == api_key_id,
+            ApiKey.user_id == current_user.id,
+            ApiKey.revoked == False,
+        )
+        .first()
+    )
+
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="API key not found",
+        )
+
+    api_key.revoked = True
+    api_key.revoked_at = datetime.utcnow()
+
+    db.commit()
+    db.refresh(api_key)
+
+    return ApiKeyRevokeResponse(
+        message="API key revoked successfully"
     )
