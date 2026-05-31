@@ -4,8 +4,19 @@ import sys
 from types import ModuleType
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+from app.api.v1 import guard as guard_api
 from app.core.security import create_access_token
 from app.models.user import User
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    guard_mod = sys.modules.get("app.api.v1.guard")
+    if guard_mod is not None and hasattr(guard_mod, "_scan_attempts_by_user"):
+        guard_mod._scan_attempts_by_user.clear()
+    yield
 
 
 def _guard_result():
@@ -39,7 +50,6 @@ def _authenticate_test_user(db_session):
 
 
 def test_per_user_rate_limit_blocks_61st_guard_scan_request(client, db_session):
-    """After 60 rapid requests, the 61st request should be rate limited."""
     auth_headers = _authenticate_test_user(db_session)
 
     fake_guard_module = ModuleType("app.modules.guard.llm_guard")
@@ -53,7 +63,7 @@ def test_per_user_rate_limit_blocks_61st_guard_scan_request(client, db_session):
     fake_llm_client_module = ModuleType("app.modules.llm.llm_client")
     fake_llm_client_module.LLMClient = MagicMock()
 
-    with patch.dict(
+    with patch("app.api.v1.guard.log_scan"), patch.dict(
         sys.modules,
         {
             "app.modules.guard.llm_guard": fake_guard_module,
@@ -65,14 +75,10 @@ def test_per_user_rate_limit_blocks_61st_guard_scan_request(client, db_session):
         payload = {"prompt": "Hello, this is a harmless test prompt."}
 
         for _ in range(60):
-            response = client.post(
-                "/api/v1/guard/scan", json=payload, headers=auth_headers
-            )
+            response = client.post("/api/v1/guard/scan", json=payload, headers=auth_headers)
             status_codes.append(response.status_code)
 
-        blocked_response = client.post(
-            "/api/v1/guard/scan", json=payload, headers=auth_headers
-        )
+        blocked_response = client.post("/api/v1/guard/scan", json=payload, headers=auth_headers)
 
     assert all(code != 429 for code in status_codes)
     assert blocked_response.status_code == 429
