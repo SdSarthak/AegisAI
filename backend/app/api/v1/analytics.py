@@ -18,6 +18,14 @@ from app.core.security import get_current_user
 from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
+from sqlalchemy import func
+from app.models.ai_system import AISystem, RiskLevel
+from app.models.guard_scan_log import GuardScanLog
+from app.schemas.guard_scan_log import GuardScanLogResponse
+from app.schemas.pagination import PaginatedResponse
+from typing import Optional
+from fastapi import Query
+from datetime import datetime
 
 router = APIRouter()
 
@@ -83,4 +91,58 @@ def get_analytics_summary(
         "average_compliance_score": average_compliance_score,
         "counts": counts,
         "compliance_statuses": compliance_statuses,
+    }
+
+
+@router.get('/audit-logs')
+def get_audit_logs(
+    page: int = 1,
+    page_size: int = 20,
+    decision: str = None,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return paginated guard scan audit logs for the current user.
+
+    Args:
+        page: Page number, 1-indexed (default: 1).
+        page_size: Number of results per page (default: 20).
+        decision: Optional filter by decision (allow/sanitize/block).
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        dict: Paginated list of guard scan log entries.
+    """
+    from app.models.guard_scan_log import GuardScanLog
+
+    query = db.query(GuardScanLog).filter(GuardScanLog.user_id == current_user.id)
+
+    if decision:
+        query = query.filter(GuardScanLog.decision == decision)
+
+    total = query.count()
+    logs = (
+        query.order_by(GuardScanLog.scanned_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+    return {
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "logs": [
+            {
+                "id": log.id,
+                "decision": log.decision,
+                "confidence": log.confidence,
+                "intent": log.intent,
+                "detection_type": log.detection_type,
+                "prompt_length": log.prompt_length,
+                "scanned_at": log.scanned_at,
+            }
+            for log in logs
+        ],
     }
