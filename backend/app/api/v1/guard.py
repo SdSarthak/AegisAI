@@ -15,10 +15,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Optional, TypedDict
 
-<<<<<<< HEAD
 from app.api.v1.webhooks import deliver_webhook
-=======
->>>>>>> 7238fe6 (feat: add comprehensive audit logging for guard scan decisions)
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
