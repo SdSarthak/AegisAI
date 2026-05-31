@@ -226,4 +226,11 @@ export const guardApi = {
   },
 }
 
+export const analyticsApi = {
+  summary: async () => {
+    const { data } = await api.get('/analytics/summary')
+    return data
+  },
+}
+
 export default api
