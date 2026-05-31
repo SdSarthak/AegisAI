@@ -337,6 +337,24 @@ export const ragApi = {
    * `done`) or rejects if the request fails before any events arrive. Stream
    * events are surfaced through the callbacks, not the return value.
    */
+  query: async (question: string) => {
+    const { data } = await api.post('/rag/query', {
+      question,
+    })
+    const responseData = ensureObjectResponse<Record<string, unknown>>(
+      data,
+      'RAG answer'
+    )
+    ensureStringField(responseData, 'answer', 'RAG answer')
+    return responseData as RagQueryResponse
+  },
+  feedback: async (payload: { answer_id: string; vote: 'up' | 'down' }) => {
+    const { data } = await api.post('/rag/feedback', {
+      answer_id: payload.answer_id,
+      vote: payload.vote,
+    })
+    return data
+  },
   streamQuery: async (
     question: string,
     callbacks: RagStreamCallbacks,
@@ -403,31 +421,6 @@ export interface HealthResponse {
 export const checkHealth = async (): Promise<HealthResponse> => {
   const response = await axios.get<HealthResponse>("/health")
   return response.data;
-}
-
-/* ============================
-   ✅ RAG API (ADD THIS ONLY)
-   ============================ */
-
-export const ragApi = {
-  query: async (question: string) => {
-    const { data } = await api.post('/rag/query', {
-      question,
-    })
-    const responseData = ensureObjectResponse<Record<string, unknown>>(
-      data,
-      'RAG answer'
-    )
-    ensureStringField(responseData, 'answer', 'RAG answer')
-    return responseData as RagQueryResponse
-  },
-  feedback: async (payload: { answer_id: string; vote: 'up' | 'down' }) => {
-    const { data } = await api.post('/rag/feedback', {
-      answer_id: payload.answer_id,
-      vote: payload.vote,
-    })
-    return data
-  },
 }
 
 export interface GuardScanResponse {
