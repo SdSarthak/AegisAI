@@ -129,8 +129,10 @@ export const authApi = {
     const { data } = await api.post('/auth/register', userData)
     return data
   },
-  getMe: async () => {
-    const { data } = await api.get('/auth/me')
+  getMe: async (token?: string) => {
+    const { data } = await api.get('/auth/me', {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
     return data
   },
 }
