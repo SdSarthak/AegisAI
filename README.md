@@ -310,4 +310,4 @@ Stop the process using the current port or change the port number.
 Ensure the .env file exists and contains all required variables.
 
 ### Application fails to start
-Make sure all dependencies are installed and the correct Node.js version is being used.
+Make sure all dependencies are installed and the correct Node.js version is being used.\n<!-- Fix for #831 -->\n
