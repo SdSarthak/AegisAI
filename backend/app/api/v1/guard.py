@@ -17,6 +17,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.v1.notifications import create_notification
+from app.api.v1.webhooks import deliver_webhook
 from app.core.config import settings
 from app.core.database import SessionLocal, get_db
 from app.core.rate_limit import guard_scan_rate_limiter
@@ -25,6 +26,10 @@ from app.models.guard_scan_log import GuardScanLog
 from app.models.notification import NotificationType
 from app.models.user import User
 from app.modules.guard import guard_config
+from app.schemas.guard_explain import (
+    ExplainRequest as ExplainRequestModel,
+    ExplainResponse,
+)
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.pagination import PaginatedResponse
@@ -162,6 +167,7 @@ def scan_prompt(
     request: ScanRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     limited, retry_after = guard_scan_rate_limiter.check_and_consume(
         key=f"guard:scan:{current_user.id}",
@@ -200,14 +206,7 @@ def scan_prompt(
         guard = LLMGuard(sanitization_level=san_level)
         result = guard.guard(request.prompt)
 
-        background_tasks.add_task(
-            log_scan,
-            current_user.id,
-            request.prompt,
-            result,
-        )
-
-        return ScanResponse(
+        response = ScanResponse(
             decision=result["decision"],
             confidence=result["metadata"]["decision_reasoning"]["confidence"],
             reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
@@ -218,12 +217,135 @@ def scan_prompt(
             ),
         )
 
+        if response.decision == "block":
+            try:
+                deliver_webhook(
+                    db=db,
+                    user_id=current_user.id,
+                    event="guard_block",
+                    payload={
+                        "decision": response.decision,
+                        "confidence": response.confidence,
+                        "matched_patterns": response.matched_patterns,
+                        "prompt_hash": hashlib.sha256(
+                            request.prompt.encode()
+                        ).hexdigest(),
+                    },
+                    background_tasks=background_tasks,
+                )
+            except Exception:
+                logger.exception("Failed to trigger guard_block webhook delivery")
+
+        background_tasks.add_task(
+            log_scan,
+            current_user.id,
+            request.prompt,
+            result,
+        )
+
+        return response
+
     except Exception:
         logger.exception("Guard scan failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the Guard scan.",
         )
+
+
+class _ExplainRateLimitConfig:
+    LIMIT = 10
+    WINDOW_SECONDS = 60
+    TIMEOUT_SECONDS = 15.0
+
+
+@router.post(
+    "/explain",
+    response_model=ExplainResponse,
+    tags=["LLM Guard"],
+    summary="Explain a Guard verdict with token-level attribution",
+    responses={
+        200: {"description": "Per-token attribution + predicted class."},
+        429: {"description": "Rate limited (10 explanations per minute per user)."},
+        503: {
+            "description": (
+                "No fine-tuned classifier is loaded. Explainability requires "
+                "a real model — the heuristic fallback can't produce Shapley "
+                "values."
+            )
+        },
+        504: {"description": "Explanation exceeded the 15s timeout budget."},
+    },
+)
+async def explain_prompt(
+    request: ExplainRequestModel,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    import asyncio
+
+    from app.modules.guard.explainer import (
+        ExplainerUnavailable,
+        get_explainer,
+    )
+
+    limited, retry_after = guard_scan_rate_limiter.check_and_consume(
+        key=f"guard:explain:{current_user.id}",
+        limit=_ExplainRateLimitConfig.LIMIT,
+        window_seconds=_ExplainRateLimitConfig.WINDOW_SECONDS,
+    )
+
+    if limited:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "detail": (
+                    f"Rate limit exceeded: {_ExplainRateLimitConfig.LIMIT} "
+                    f"explanations per {_ExplainRateLimitConfig.WINDOW_SECONDS} "
+                    "seconds per user."
+                )
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    try:
+        explainer = get_explainer()
+    except ExplainerUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        )
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(
+                explainer.explain,
+                request.text,
+                method=request.method,
+                max_evals=request.max_evals,
+            ),
+            timeout=_ExplainRateLimitConfig.TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=(
+                f"Explanation exceeded {_ExplainRateLimitConfig.TIMEOUT_SECONDS}s. "
+                "Try a shorter prompt or a lower `max_evals`."
+            ),
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    except Exception:
+        logger.exception(
+            "guard.explain.failed", extra={"user_id": current_user.id}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An internal error occurred while generating the explanation.",
+        )
+
+    return result
 
 
 @router.get("/health", tags=["LLM Guard"])
@@ -555,4 +677,3 @@ def bulk_scan_prompts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan.",
         )
-

@@ -57,6 +57,66 @@ function ensureListResponse<T>(
   throw new Error(`${resourceName} response was empty or invalid.`)
 }
 
+function isRecord(data: unknown): data is Record<string, unknown> {
+  return data !== null && typeof data === 'object' && !Array.isArray(data)
+}
+
+function ensureObjectResponse<T extends Record<string, unknown>>(
+  data: unknown,
+  resourceName: string
+): T {
+  if (isRecord(data)) {
+    return data as T
+  }
+
+  throw new Error(`${resourceName} response was empty or invalid.`)
+}
+
+function ensureStringField(
+  data: Record<string, unknown>,
+  fieldName: string,
+  resourceName: string
+) {
+  if (typeof data[fieldName] !== 'string' || !data[fieldName]) {
+    throw new Error(`${resourceName} response was missing ${fieldName}.`)
+  }
+}
+
+function ensureNumberField(
+  data: Record<string, unknown>,
+  fieldName: string,
+  resourceName: string
+) {
+  if (typeof data[fieldName] !== 'number') {
+    throw new Error(`${resourceName} response was missing ${fieldName}.`)
+  }
+}
+
+function ensureStringArrayField(
+  data: Record<string, unknown>,
+  fieldName: string,
+  resourceName: string
+) {
+  if (!Array.isArray(data[fieldName])) {
+    throw new Error(`${resourceName} response was missing ${fieldName}.`)
+  }
+}
+
+interface ClassificationResponse extends Record<string, unknown> {
+  risk_level: string
+  confidence: number
+  reasoning?: string
+  reasons: string[]
+  requirements: string[]
+  next_steps: string[]
+}
+
+interface RagQueryResponse extends Record<string, unknown> {
+  answer: string
+  sources?: Array<string | { title: string; excerpt: string }>
+  answer_id?: string
+}
+
 // Auth API
 export const authApi = {
   login: async (email: string, password: string) => {
@@ -137,15 +197,20 @@ export const aiSystemsApi = {
 
 // Classification API
 export const classificationApi = {
-  classify: async (
-    data: Record<string, unknown>
-  ) => {
-    const response = await api.post(
-      '/classification/classify',
-      data
+  classify: async (data: Record<string, unknown>) => {
+    const response = await api.post('/classification/classify', data)
+    const responseData = ensureObjectResponse<Record<string, unknown>>(
+      response.data,
+      'Classification'
     )
 
-    return response.data
+    ensureStringField(responseData, 'risk_level', 'Classification')
+    ensureNumberField(responseData, 'confidence', 'Classification')
+    ensureStringArrayField(responseData, 'reasons', 'Classification')
+    ensureStringArrayField(responseData, 'requirements', 'Classification')
+    ensureStringArrayField(responseData, 'next_steps', 'Classification')
+
+    return responseData as ClassificationResponse
   },
 
   classifyAndSave: async (
@@ -156,8 +221,18 @@ export const classificationApi = {
       `/classification/classify/${systemId}`,
       data
     )
+    const responseData = ensureObjectResponse<Record<string, unknown>>(
+      response.data,
+      'Classification'
+    )
 
-    return response.data
+    ensureStringField(responseData, 'risk_level', 'Classification')
+    ensureNumberField(responseData, 'confidence', 'Classification')
+    ensureStringArrayField(responseData, 'reasons', 'Classification')
+    ensureStringArrayField(responseData, 'requirements', 'Classification')
+    ensureStringArrayField(responseData, 'next_steps', 'Classification')
+
+    return responseData as ClassificationResponse
   },
 }
 
@@ -189,7 +264,6 @@ export const documentsApi = {
     return data
   },
 
-  // Fix for Issue #751
   update: async (
     id: number,
     document: { content: string }
@@ -241,8 +315,14 @@ export const ragApi = {
     const { data } = await api.post('/rag/query', {
       question,
     })
+    const responseData = ensureObjectResponse<Record<string, unknown>>(
+      data,
+      'RAG answer'
+    )
 
-    return data
+    ensureStringField(responseData, 'answer', 'RAG answer')
+
+    return responseData as RagQueryResponse
   },
 
   feedback: async (payload: {
@@ -270,15 +350,55 @@ export interface GuardScanResponse {
   matched_patterns?: string[]
 }
 
+// Guard explainability. Per-token attribution returned by SHAP/LIME.
+export interface GuardTokenAttribution {
+  token: string
+  attribution: number
+  char_span: [number, number]
+}
+
+export interface GuardExplainResponse {
+  predicted_label: string
+  predicted_proba: number
+  base_value: number
+  tokens: GuardTokenAttribution[]
+  method: 'shap' | 'lime'
+  model_version: string
+  latency_ms: number
+}
+
 export const guardApi = {
-  scan: async (
-    prompt: string
-  ): Promise<GuardScanResponse> => {
-    const { data } = await api.post(
-      '/guard/scan',
-      { prompt }
+  scan: async (prompt: string): Promise<GuardScanResponse> => {
+    const { data } = await api.post('/guard/scan', { prompt })
+    const responseData = ensureObjectResponse<Record<string, unknown>>(
+      data,
+      'Guard scan'
     )
 
+    ensureStringField(responseData, 'decision', 'Guard scan')
+    ensureNumberField(responseData, 'confidence', 'Guard scan')
+    ensureStringField(responseData, 'reasoning', 'Guard scan')
+
+    return responseData as unknown as GuardScanResponse
+  },
+
+  explain: async (
+    text: string,
+    opts: { method?: 'shap' | 'lime'; maxEvals?: number } = {},
+  ): Promise<GuardExplainResponse> => {
+    const { data } = await api.post('/guard/explain', {
+      text,
+      method: opts.method ?? 'shap',
+      max_evals: opts.maxEvals ?? 200,
+    })
+
+    return data
+  },
+}
+
+export const analyticsApi = {
+  summary: async () => {
+    const { data } = await api.get('/analytics/summary')
     return data
   },
 }
