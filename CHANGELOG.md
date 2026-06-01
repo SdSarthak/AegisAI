@@ -28,6 +28,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+- **Fixed** Guard API merge conflicts and resolved pagination inconsistencies in history endpoint
+- **Changed** Updated frontend Guard/RAG API types (removed duplicate interfaces, improved type safety)
+- **Fixed** ESLint issues in frontend services and components
+- **Changed** Improved cursor-based pagination handling for guard scan history
+
+---
+
 ## [0.1.0] — 2026-04-05
 
 ### Added
