@@ -32,7 +32,7 @@ api.interceptors.response.use(
 function ensureListResponse<T>(
   data: unknown,
   resourceName: string
-): T[] | { items: T[]; total?: number; page?: number; limit?: number } {
+): T[] {
   if (Array.isArray(data)) {
     return data
   }
@@ -43,7 +43,7 @@ function ensureListResponse<T>(
     'items' in data &&
     Array.isArray((data as { items?: unknown }).items)
   ) {
-    return data as { items: T[]; total?: number; page?: number; limit?: number }
+    return (data as { items: T[] }).items
   }
 
   throw new Error(`${resourceName} response was empty or invalid.`)
