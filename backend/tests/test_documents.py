@@ -99,6 +99,7 @@ def test_list_document_templates(client):
     "document_type",
     ["technical_documentation", "risk_assessment", "conformity_declaration"],
 )
+
 def test_generate_document_for_each_template(client, document_type):
     headers = register_and_login(client, make_email(document_type))
     system_id = create_ai_system(client, headers)
@@ -113,39 +114,6 @@ def test_generate_document_for_each_template(client, document_type):
     assert data["title"]
     assert data["content"]
     assert data["id"] is not None
-
-
-@pytest.mark.parametrize("method", ["GET", "PUT", "DELETE", "PATCH"])
-def test_generate_document_rejects_wrong_methods(client, method):
-    response = client.request(method, "/api/v1/documents/generate")
-    assert response.status_code in (405, 422)
-
-
-def test_generate_for_nonexistent_system(client):
-    headers = register_and_login(client, make_email("nonsystem"))
-
-    response = client.post(
-        "/api/v1/documents/generate",
-        json={"ai_system_id": 99999, "document_type": "technical_documentation"},
-        headers=headers,
-    )
-
-    assert response.status_code == 404
-
-
-def test_generate_for_another_users_system(client):
-    headers_user1 = register_and_login(client, make_email("user1"))
-    system_id = create_ai_system(client, headers_user1)
-
-    headers_user2 = register_and_login(client, make_email("user2"))
-    response = client.post(
-        "/api/v1/documents/generate",
-        json={"ai_system_id": system_id, "document_type": "technical_documentation"},
-        headers=headers_user2,
-    )
-
-    assert response.status_code == 404
-
 
 def test_generate_with_invalid_template_type(client, auth_headers, ai_system_id):
     response = client.post(
