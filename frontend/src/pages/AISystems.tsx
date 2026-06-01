@@ -71,13 +71,16 @@ export default function AISystems() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['ai-systems', sortBy, order, currentPage, riskFilter, complianceFilter],
+    queryKey: ['ai-systems', sortBy, order, currentPage, riskFilter, complianceFilter, searchTerm],
     queryFn: () =>
       aiSystemsApi.list({
         sort_by: sortBy,
         order,
         skip: (currentPage - 1) * limit,
         limit,
+        search: searchTerm || undefined,
+        risk_level: riskFilter || undefined,
+        compliance_status: complianceFilter || undefined,
       }),
   })
   const systems = (
@@ -101,16 +104,7 @@ export default function AISystems() {
     },
   })
 
-  const filteredSystems = systems.filter((system: AISystem) => {
-    const matchesSearch =
-      system.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (system.description?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
-
-    const matchesRisk = !riskFilter || system.risk_level === riskFilter
-    const matchesCompliance = !complianceFilter || system.compliance_status === complianceFilter
-
-    return matchesSearch && matchesRisk && matchesCompliance
-  })
+  const filteredSystems = systems
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
