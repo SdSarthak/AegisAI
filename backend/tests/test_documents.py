@@ -1,35 +1,22 @@
 """Unit tests for document generation — all 3 template types."""
 
 import pytest
-from app.core.security import create_access_token
 
 
-def get_auth_headers(user_id: int) -> dict:
-    token = create_access_token(data={"sub": str(user_id)})
-    return {"Authorization": f"Bearer {token}"}
-
-
-def register_and_login(client, email, password="TestPass123!"):
-    client.post("/api/v1/auth/register", json={"email": email, "password": password})
-    response = client.post("/api/v1/auth/login", data={"username": email, "password": password})
-    token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
-
-
-def create_ai_system(client, headers):
+@pytest.fixture
+def ai_system_id(client, auth_headers):
     response = client.post(
         "/api/v1/ai-systems/",
         json={"name": "Test AI System", "description": "A test system"},
-        headers=headers
+        headers=auth_headers
     )
     return response.json()["id"]
 
-def test_list_document_templates(client):
-    headers = register_and_login(client, "templates@example.com")
 
+def test_list_document_templates(client, auth_headers):
     response = client.get(
         "/api/v1/documents/templates",
-        headers=headers
+        headers=auth_headers
     )
 
     assert response.status_code == 200
@@ -51,32 +38,32 @@ def test_list_document_templates(client):
         assert template["description"]
 
 
-def test_create_document_with_owned_ai_system(client):
-    headers = register_and_login(client, "create_owned_doc@example.com")
-    system_id = create_ai_system(client, headers)
-
+def test_create_document_with_owned_ai_system(client, auth_headers, ai_system_id):
     response = client.post(
         "/api/v1/documents/",
         json={
             "title": "Owned system document",
             "document_type": "technical_documentation",
-            "ai_system_id": system_id,
+            "ai_system_id": ai_system_id,
             "content": "# Owned system document",
         },
-        headers=headers,
+        headers=auth_headers,
     )
 
     assert response.status_code == 201
     data = response.json()
-    assert data["ai_system_id"] == system_id
+    assert data["ai_system_id"] == ai_system_id
     assert data["title"] == "Owned system document"
 
 
-def test_create_document_rejects_another_users_ai_system(client):
-    headers_user1 = register_and_login(client, "doc_owner@example.com")
-    system_id = create_ai_system(client, headers_user1)
+def test_create_document_rejects_another_users_ai_system(client, auth_headers, other_user_auth_headers):
+    response = client.post(
+        "/api/v1/ai-systems/",
+        json={"name": "Test AI System", "description": "A test system"},
+        headers=auth_headers
+    )
+    system_id = response.json()["id"]
 
-    headers_user2 = register_and_login(client, "doc_attacker@example.com")
     response = client.post(
         "/api/v1/documents/",
         json={
@@ -85,98 +72,95 @@ def test_create_document_rejects_another_users_ai_system(client):
             "ai_system_id": system_id,
             "content": "# Cross-user document",
         },
-        headers=headers_user2,
+        headers=other_user_auth_headers,
     )
 
     assert response.status_code == 404
     assert response.json()["detail"] == "AI system not found"
 
 
-# ✅ Test 1: Generate Technical Documentation → 201
-def test_generate_technical_documentation(client):
-    headers = register_and_login(client, "tech_doc@example.com")
-    system_id = create_ai_system(client, headers)
-
+@pytest.mark.parametrize("document_type", [
+    "technical_documentation",
+    "risk_assessment",
+    "conformity_declaration",
+])
+def test_generate_document(client, auth_headers, ai_system_id, document_type):
     response = client.post(
         "/api/v1/documents/generate",
         json={
-            "ai_system_id": system_id,
-            "document_type": "technical_documentation"
+            "ai_system_id": ai_system_id,
+            "document_type": document_type
         },
-        headers=headers
+        headers=auth_headers
     )
 
     assert response.status_code == 201
     assert response.json() is not None
 
 
-# ✅ Test 2: Generate Risk Assessment → 201
-def test_generate_risk_assessment(client):
-    headers = register_and_login(client, "risk@example.com")
-    system_id = create_ai_system(client, headers)
-
-    response = client.post(
-        "/api/v1/documents/generate",
-        json={
-            "ai_system_id": system_id,
-            "document_type": "risk_assessment"
-        },
-        headers=headers
-    )
-
-    assert response.status_code == 201
-    assert response.json() is not None
-
-
-# ✅ Test 3: Generate Conformity Declaration → 201
-def test_generate_conformity_declaration(client):
-    headers = register_and_login(client, "conformity@example.com")
-    system_id = create_ai_system(client, headers)
-
-    response = client.post(
-        "/api/v1/documents/generate",
-        json={
-            "ai_system_id": system_id,
-            "document_type": "conformity_declaration"
-        },
-        headers=headers
-    )
-
-    assert response.status_code == 201
-    assert response.json() is not None
-
-
-# ❌ Test 4: Non-existent system → 404
-def test_generate_for_nonexistent_system(client):
-    headers = register_and_login(client, "notsystem@example.com")
-
+def test_generate_for_nonexistent_system(client, auth_headers):
     response = client.post(
         "/api/v1/documents/generate",
         json={
             "ai_system_id": 99999,
             "document_type": "technical_documentation"
         },
-        headers=headers
+        headers=auth_headers
     )
 
     assert response.status_code == 404
 
 
-# ❌ Test 5: Another user's system → 404
-def test_generate_for_another_users_system(client):
-    # User 1 creates a system
-    headers_user1 = register_and_login(client, "user1@example.com")
-    system_id = create_ai_system(client, headers_user1)
+def test_generate_for_another_users_system(client, auth_headers, other_user_auth_headers):
+    response = client.post(
+        "/api/v1/ai-systems/",
+        json={"name": "Test AI System", "description": "A test system"},
+        headers=auth_headers
+    )
+    system_id = response.json()["id"]
 
-    # User 2 tries to generate doc for User 1's system
-    headers_user2 = register_and_login(client, "user2@example.com")
     response = client.post(
         "/api/v1/documents/generate",
         json={
             "ai_system_id": system_id,
             "document_type": "technical_documentation"
         },
-        headers=headers_user2
+        headers=other_user_auth_headers
     )
 
     assert response.status_code == 404
+
+
+def test_generate_invalid_document_type(client, auth_headers, ai_system_id):
+    response = client.post(
+        "/api/v1/documents/generate",
+        json={
+            "ai_system_id": ai_system_id,
+            "document_type": "invalid_document_type"
+        },
+        headers=auth_headers
+    )
+
+    assert response.status_code == 422
+
+
+def test_generate_missing_auth(client, ai_system_id):
+    response = client.post(
+        "/api/v1/documents/generate",
+        json={
+            "ai_system_id": ai_system_id,
+            "document_type": "technical_documentation"
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_generate_invalid_payload(client, auth_headers):
+    response = client.post(
+        "/api/v1/documents/generate",
+        json={},
+        headers=auth_headers
+    )
+
+    assert response.status_code == 422
