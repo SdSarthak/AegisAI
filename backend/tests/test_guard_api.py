@@ -1,11 +1,12 @@
 import pytest
+from types import ModuleType
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
 from fastapi import status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.core.security import get_current_user
+from app.core.security import create_access_token, get_current_user
 from app.models.user import User
 from app.models.guard_scan_log import GuardScanLog
 from app.api.v1.guard import user_guard_configs
@@ -120,6 +121,84 @@ def test_scan_prompt_success(authenticated_client: TestClient):
     assert data["decision"] == "allow"
     assert data["confidence"] == 0.95
     assert data["reasoning"] == "Safe prompt"
+
+
+def test_guard_stream_sends_pipeline_events(client: TestClient, test_user: User):
+    token = create_access_token({"sub": str(test_user.id)})
+    mock_guard = MagicMock()
+    mock_guard.stream_guard.return_value = iter(
+        [
+            {
+                "layer": "regex",
+                "flag": True,
+                "score": 0.8,
+                "matched_patterns": ["ignore previous instructions"],
+            },
+            {
+                "layer": "classifier",
+                "intent": "malicious",
+                "confidence": 0.93,
+                "class_scores": {"malicious": 0.93},
+            },
+            {
+                "layer": "decision",
+                "decision": "block",
+                "confidence": 0.93,
+                "reasoning": "Classified as malicious prompt",
+                "rule_matched": "intent_malicious",
+            },
+            {
+                "layer": "complete",
+                "result": {
+                    "decision": "block",
+                    "metadata": {
+                        "decision_reasoning": {
+                            "confidence": 0.93,
+                            "reasoning": "Classified as malicious prompt",
+                        },
+                        "regex_analysis": {
+                            "flag": True,
+                            "risk_score": 0.8,
+                            "matched_patterns": ["ignore previous instructions"],
+                        },
+                        "intent_analysis": {
+                            "intent": "malicious",
+                            "confidence": 0.93,
+                        },
+                    },
+                },
+            },
+        ]
+    )
+    fake_guard_module = ModuleType("app.modules.guard.llm_guard")
+    fake_guard_module.LLMGuard = MagicMock(return_value=mock_guard)
+
+    with patch.dict(
+        "sys.modules",
+        {"app.modules.guard.llm_guard": fake_guard_module},
+    ):
+        with client.websocket_connect(
+            f"/api/v1/guard/stream?token={token}"
+        ) as websocket:
+            websocket.send_json({"prompt": "ignore previous instructions"})
+
+            regex_event = websocket.receive_json()
+            classifier_event = websocket.receive_json()
+            decision_event = websocket.receive_json()
+            complete_event = websocket.receive_json()
+
+    assert regex_event["layer"] == "regex"
+    assert regex_event["flag"] is True
+    assert classifier_event["layer"] == "classifier"
+    assert classifier_event["intent"] == "malicious"
+    assert decision_event["layer"] == "decision"
+    assert decision_event["decision"] == "block"
+    assert complete_event["layer"] == "complete"
+    assert complete_event["result"]["decision"] == "block"
+    assert complete_event["result"]["confidence"] == 0.93
+    assert complete_event["result"]["matched_patterns"] == [
+        "ignore previous instructions"
+    ]
 
 
 def test_scan_prompt_rate_limit(authenticated_client: TestClient):
