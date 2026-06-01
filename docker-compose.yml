@@ -1,7 +1,11 @@
+version: "2.4"
+
 services:
   db:
     image: postgres:15
     restart: unless-stopped
+    ports:
+      - "5433:5432"
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres

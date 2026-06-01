@@ -11,11 +11,14 @@ TODO for contributors (help wanted):
     least one data point per system.
 """
 
+from datetime import datetime, timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
+from app.models.compliance_snapshot import ComplianceSnapshot
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
 
@@ -40,9 +43,32 @@ def get_compliance_timeline(
     Returns:
         ComplianceTimelineResponse containing the system's daily compliance data.
     """
-    # TODO: implement — replace with real DB query
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .one_or_none()
+    )
+    if system is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found or access denied",
+        )
+
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    snapshots = (
+        db.query(ComplianceSnapshot)
+        .filter(
+            ComplianceSnapshot.ai_system_id == system_id,
+            ComplianceSnapshot.snapshotted_at >= cutoff,
+        )
+        .order_by(ComplianceSnapshot.snapshotted_at.asc())
+        .all()
+    )
+
+    return ComplianceTimelineResponse(
+        ai_system_id=system.id,
+        ai_system_name=system.name,
+        snapshots=snapshots,
     )
 
 
