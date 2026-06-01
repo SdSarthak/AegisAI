@@ -48,6 +48,19 @@ prometheus-client==0.18.0
 
 # ── HTTP & Utilities ──────────────────────────────────────────────────────────
 httpx==0.26.0
+redis==5.0.8
+
+# ── Observability ─────────────────────────────────────────────────────────────
+python-json-logger==2.0.7
+
+# ── PDF Utilities ────────────────────────────────────────────────────────────────
+pdfplumber==0.10.3
+pypdf>=3.0.0            # required by LangChain's PyPDFLoader
+
+# ── ML Explainability (issue #77) ─────────────────────────────────────────────
+shap==0.44.1
+lime==0.2.0.1
+redis==5.0.8
 
 # ── Observability ─────────────────────────────────────────────────────────────
 python-json-logger==2.0.7

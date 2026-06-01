@@ -29,6 +29,86 @@ api.interceptors.response.use(
   }
 )
 
+function ensureListResponse<T>(
+  data: unknown,
+  resourceName: string
+): T[] | { items: T[]; total?: number; page?: number; limit?: number } {
+  if (Array.isArray(data)) {
+    return data
+  }
+
+  if (
+    data &&
+    typeof data === 'object' &&
+    'items' in data &&
+    Array.isArray((data as { items?: unknown }).items)
+  ) {
+    return data as { items: T[]; total?: number; page?: number; limit?: number }
+  }
+
+  throw new Error(`${resourceName} response was empty or invalid.`)
+}
+
+function isRecord(data: unknown): data is Record<string, unknown> {
+  return data !== null && typeof data === 'object' && !Array.isArray(data)
+}
+
+function ensureObjectResponse<T extends Record<string, unknown>>(
+  data: unknown,
+  resourceName: string
+): T {
+  if (isRecord(data)) {
+    return data as T
+  }
+
+  throw new Error(`${resourceName} response was empty or invalid.`)
+}
+
+function ensureStringField(
+  data: Record<string, unknown>,
+  fieldName: string,
+  resourceName: string
+) {
+  if (typeof data[fieldName] !== 'string' || !data[fieldName]) {
+    throw new Error(`${resourceName} response was missing ${fieldName}.`)
+  }
+}
+
+function ensureNumberField(
+  data: Record<string, unknown>,
+  fieldName: string,
+  resourceName: string
+) {
+  if (typeof data[fieldName] !== 'number') {
+    throw new Error(`${resourceName} response was missing ${fieldName}.`)
+  }
+}
+
+interface ClassificationResponse extends Record<string, unknown> {
+  risk_level: string
+  confidence: number
+  reasoning?: string
+  reasons: string[]
+  requirements: string[]
+  next_steps: string[]
+}
+
+interface RagQueryResponse extends Record<string, unknown> {
+  answer: string
+  sources?: Array<string | { title: string; excerpt: string }>
+  answer_id?: string
+}
+
+function ensureStringArrayField(
+  data: Record<string, unknown>,
+  fieldName: string,
+  resourceName: string
+) {
+  if (!Array.isArray(data[fieldName])) {
+    throw new Error(`${resourceName} response was missing ${fieldName}.`)
+  }
+}
+
 // Auth API
 export const authApi = {
   login: async (email: string, password: string) => {
@@ -60,23 +140,11 @@ export const aiSystemsApi = {
   list: async (params?: {
     sort_by?: string
     order?: string
-    page?: number
+    skip?: number
     limit?: number
   }) => {
-    // Fix for Issue #631: Transform frontend 'page' into the backend-expected 'skip' query offset parameter
-    const limit = params?.limit ?? 10
-    const page = params?.page ?? 1
-    const skip = (page - 1) * limit
-
-    const queryParams = {
-      sort_by: params?.sort_by,
-      order: params?.order,
-      skip: skip,
-      limit: limit,
-    }
-
-    const { data } = await api.get('/ai-systems/', { params: queryParams })
-    return data
+    const { data } = await api.get('/ai-systems/', { params })
+    return ensureListResponse(data, 'AI systems')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/ai-systems/${id}`)
@@ -104,19 +172,37 @@ export const aiSystemsApi = {
 export const classificationApi = {
   classify: async (data: Record<string, unknown>) => {
     const response = await api.post('/classification/classify', data)
-    return response.data
+    const responseData = ensureObjectResponse<Record<string, unknown>>(
+      response.data,
+      'Classification'
+    )
+    ensureStringField(responseData, 'risk_level', 'Classification')
+    ensureNumberField(responseData, 'confidence', 'Classification')
+    ensureStringArrayField(responseData, 'reasons', 'Classification')
+    ensureStringArrayField(responseData, 'requirements', 'Classification')
+    ensureStringArrayField(responseData, 'next_steps', 'Classification')
+    return responseData as ClassificationResponse
   },
   classifyAndSave: async (systemId: number, data: Record<string, unknown>) => {
     const response = await api.post(`/classification/classify/${systemId}`, data)
-    return response.data
+    const responseData = ensureObjectResponse<Record<string, unknown>>(
+      response.data,
+      'Classification'
+    )
+    ensureStringField(responseData, 'risk_level', 'Classification')
+    ensureNumberField(responseData, 'confidence', 'Classification')
+    ensureStringArrayField(responseData, 'reasons', 'Classification')
+    ensureStringArrayField(responseData, 'requirements', 'Classification')
+    ensureStringArrayField(responseData, 'next_steps', 'Classification')
+    return responseData as ClassificationResponse
   },
 }
 
 // Documents API
 export const documentsApi = {
-  list: async () => {
-    const { data } = await api.get('/documents/')
-    return data
+  list: async (params?: { skip?: number; limit?: number }) => {
+    const { data } = await api.get('/documents/', { params })
+    return ensureListResponse(data, 'Documents')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/documents/${id}`)
@@ -164,7 +250,12 @@ export const ragApi = {
     const { data } = await api.post('/rag/query', {
       question,
     })
-    return data
+    const responseData = ensureObjectResponse<Record<string, unknown>>(
+      data,
+      'RAG answer'
+    )
+    ensureStringField(responseData, 'answer', 'RAG answer')
+    return responseData as RagQueryResponse
   },
   feedback: async (payload: { answer_id: string; vote: 'up' | 'down' }) => {
     const { data } = await api.post('/rag/feedback', {
@@ -183,12 +274,53 @@ export interface GuardScanResponse {
   matched_patterns?: string[]
 }
 
+// Guard explainability (issue #77). Per-token attribution returned by SHAP/LIME.
+export interface GuardTokenAttribution {
+  token: string
+  attribution: number
+  char_span: [number, number]
+}
+
+export interface GuardExplainResponse {
+  predicted_label: string
+  predicted_proba: number
+  base_value: number
+  tokens: GuardTokenAttribution[]
+  method: 'shap' | 'lime'
+  model_version: string
+  latency_ms: number
+}
+
 export const guardApi = {
   scan: async (prompt: string): Promise<GuardScanResponse> => {
     const { data } = await api.post('/guard/scan', { prompt })
+    const responseData = ensureObjectResponse<Record<string, unknown>>(
+      data,
+      'Guard scan'
+    )
+    ensureStringField(responseData, 'decision', 'Guard scan')
+    ensureNumberField(responseData, 'confidence', 'Guard scan')
+    ensureStringField(responseData, 'reasoning', 'Guard scan')
+    return responseData as unknown as GuardScanResponse
+  },
+  explain: async (
+    text: string,
+    opts: { method?: 'shap' | 'lime'; maxEvals?: number } = {},
+  ): Promise<GuardExplainResponse> => {
+    const { data } = await api.post('/guard/explain', {
+      text,
+      method: opts.method ?? 'shap',
+      max_evals: opts.maxEvals ?? 200,
+    })
+    return data
+  },
+}
+
+export const analyticsApi = {
+  summary: async () => {
+    const { data } = await api.get('/analytics/summary')
     return data
   },
 }
 
 export default api
-
