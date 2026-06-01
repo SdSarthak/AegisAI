@@ -41,7 +41,7 @@ def test_scan_prompts_blocks_malicious_prompt(tmp_path, monkeypatch):
     
     client.post.assert_called_once()
     
-    args, kwargs = client.post.call_args
+    kwargs = client.post.call_args.kwargs
     assert "ignore all previous instructions" in str(kwargs)
 
 
@@ -74,5 +74,6 @@ def test_scan_prompts_passes_clean_prompt(tmp_path, monkeypatch):
     
     client.post.assert_called_once()
     
-    args, kwargs = client.post.call_args
+    kwargs = client.post.call_args.kwargs
     assert "Summarize the policy in three bullets." in str(kwargs)
+        
