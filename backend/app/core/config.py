@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     # MLflow
     MLFLOW_TRACKING_URI: Optional[str] = None  # ← only line added
 
+    # Observability (OpenTelemetry)
+    OTEL_SERVICE_NAME: str = "aegis-backend"
+    OTEL_METRICS_EXPORTER: str = "prometheus"
+    OTEL_TRACES_EXPORTER: str = "none"
+
     class Config:
         env_file = ".env"
         case_sensitive = True
