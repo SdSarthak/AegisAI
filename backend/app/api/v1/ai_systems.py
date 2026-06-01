@@ -7,6 +7,7 @@ from typing import List, Optional
 import csv
 import io
 
+from app.core.csv_utils import sanitize_csv_field
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.config import settings
@@ -339,11 +340,11 @@ def export_ai_systems(
     for s in systems:
         writer.writerow([
             s.id,
-            s.name,
-            s.description or "",
-            s.version or "",
-            s.use_case or "",
-            s.sector or "",
+            sanitize_csv_field(s.name),
+            sanitize_csv_field(s.description or ""),
+            sanitize_csv_field(s.version or ""),
+            sanitize_csv_field(s.use_case or ""),
+            sanitize_csv_field(s.sector or ""),
             s.risk_level.value if s.risk_level else "",
             s.compliance_status.value if s.compliance_status else "",
             s.compliance_score if s.compliance_score is not None else "",
