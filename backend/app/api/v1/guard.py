@@ -16,7 +16,7 @@ import base64
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
-from typing import Optional, TypedDict
+from typing import Annotated, Optional, TypedDict
 
 from app.api.v1.webhooks import deliver_webhook
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Query, status
@@ -26,6 +26,7 @@ from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
 
 from app.api.v1.notifications import create_notification
+from app.api.v1.webhooks import deliver_webhook
 from app.core.config import settings
 from app.core.database import SessionLocal, get_db
 from app.core.security import get_current_user
@@ -33,7 +34,6 @@ from app.core.rate_limit import guard_scan_rate_limiter
 from app.models.guard_scan_log import GuardScanLog
 from app.models.notification import NotificationType
 from app.models.user import User
-
 from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.guard_explain import (
@@ -51,9 +51,17 @@ logger = logging.getLogger(__name__)
 _scan_attempts_by_user = guard_scan_rate_limiter._local_attempts_by_key
 _RATE_LIMIT_REQUESTS = settings.GUARD_RATE_LIMIT_REQUESTS
 
+GuardPrompt = Annotated[
+    str,
+    Field(
+        min_length=1,
+        max_length=settings.GUARD_MAX_PROMPT_LENGTH,
+    ),
+]
+
 
 class ScanRequest(BaseModel):
-    prompt: str = Field(..., min_length=1, max_length=settings.GUARD_MAX_PROMPT_LENGTH)
+    prompt: GuardPrompt
 
 
 class ScanResponse(BaseModel):
@@ -71,7 +79,7 @@ class GuardConfigRequest(BaseModel):
 
 
 class BulkScanRequest(BaseModel):
-    prompts: list[str]
+    prompts: list[GuardPrompt]
 
     def validate_prompts(self) -> None:
         if not self.prompts:
@@ -221,14 +229,6 @@ def scan_prompt(
         guard = LLMGuard(sanitization_level=san_level)
         result = guard.guard(request.prompt)
 
-        client_ip = http_request.client.host if http_request.client else None
-        background_tasks.add_task(
-            log_scan,
-            current_user.id,
-            request.prompt,
-            result,
-            client_ip,
-        )
         response = ScanResponse(
             decision=result["decision"],
             confidence=result["metadata"]["decision_reasoning"]["confidence"],
@@ -240,26 +240,32 @@ def scan_prompt(
             ),
         )
 
-        if result["decision"] == "block":
+        if response.decision == "block":
             try:
-                background_tasks.add_task(
-                    deliver_webhook,
-                    db,
-                    current_user.id,
-                   "guard_block",
-                    {
-                       "decision": "block",
-                       "confidence": response.confidence,
-                       "matched_patterns": response.matched_patterns,
-                       "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
-        },             
-                    background_tasks,
-
-)
-            except Exception:
-                logger.exception(
-                    "Failed to trigger guard_block webhook delivery"
+                deliver_webhook(
+                    db=db,
+                    user_id=current_user.id,
+                    event="guard_block",
+                    payload={
+                        "decision": response.decision,
+                        "confidence": response.confidence,
+                        "matched_patterns": response.matched_patterns,
+                        "prompt_hash": hashlib.sha256(
+                            request.prompt.encode()
+                        ).hexdigest(),
+                    },
+                    background_tasks=background_tasks,
                 )
+            except Exception:
+                logger.exception("Failed to trigger guard_block webhook delivery")
+
+        background_tasks.add_task(
+            log_scan,
+            current_user.id,
+            request.prompt,
+            result,
+        )
+
 
         return response
 
@@ -376,6 +382,99 @@ async def explain_prompt(
         )
 
     return result
+
+
+    
+
+
+@router.post(
+    "/explain",
+    response_model=ExplainResponse,
+    tags=["LLM Guard"],
+    summary="Explain a Guard verdict with token-level attribution",
+    responses={
+        200: {"description": "Per-token attribution + predicted class."},
+        429: {"description": "Rate limited (10 explanations per minute per user)."},
+        503: {
+            "description": (
+                "No fine-tuned classifier is loaded. Explainability requires "
+                "a real model — the heuristic fallback can't produce Shapley "
+                "values."
+            )
+        },
+        504: {"description": "Explanation exceeded the 15s timeout budget."},
+    },
+)
+async def explain_prompt(
+    request: ExplainRequestModel,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    import asyncio
+
+    from app.modules.guard.explainer import (
+        ExplainerUnavailable,
+        get_explainer,
+    )
+
+    limited, retry_after = guard_scan_rate_limiter.check_and_consume(
+        key=f"guard:explain:{current_user.id}",
+        limit=_ExplainRateLimitConfig.LIMIT,
+        window_seconds=_ExplainRateLimitConfig.WINDOW_SECONDS,
+    )
+
+    if limited:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content={
+                "detail": (
+                    f"Rate limit exceeded: {_ExplainRateLimitConfig.LIMIT} "
+                    f"explanations per {_ExplainRateLimitConfig.WINDOW_SECONDS} "
+                    "seconds per user."
+                )
+            },
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    try:
+        explainer = get_explainer()
+    except ExplainerUnavailable as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        )
+
+    try:
+        result = await asyncio.wait_for(
+            asyncio.to_thread(
+                explainer.explain,
+                request.text,
+                method=request.method,
+                max_evals=request.max_evals,
+            ),
+            timeout=_ExplainRateLimitConfig.TIMEOUT_SECONDS,
+        )
+    except asyncio.TimeoutError:
+        raise HTTPException(
+            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+            detail=(
+                f"Explanation exceeded {_ExplainRateLimitConfig.TIMEOUT_SECONDS}s. "
+                "Try a shorter prompt or a lower `max_evals`."
+            ),
+        )
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    except Exception:
+        logger.exception(
+            "guard.explain.failed", extra={"user_id": current_user.id}
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An internal error occurred while generating the explanation.",
+        )
+
+    return result
+
 
 @router.get("/health", tags=["LLM Guard"])
 def guard_health():
