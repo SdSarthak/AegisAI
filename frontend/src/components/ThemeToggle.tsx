@@ -2,34 +2,21 @@ import { useState, useEffect } from 'react'
 import { Sun, Moon } from 'lucide-react'
 
 export default function ThemeToggle() {
-  const [isDark, setIsDark] = useState(false)
+  const [isDark, setIsDark] = useState(
+    () => document.documentElement.classList.contains('dark'),
+  )
 
-  // ✅ Initialize theme (localStorage OR system)
-  useEffect(() => {
-    const stored = localStorage.getItem('theme')
-
-    if (stored) {
-      setIsDark(stored === 'dark')
-    } else {
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      setIsDark(systemDark)
-    }
-  }, [])
-
-  // ✅ Apply theme
   useEffect(() => {
     const root = document.documentElement
 
     if (isDark) {
       root.classList.add('dark')
-      localStorage.setItem('theme', 'dark')
     } else {
       root.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
     }
   }, [isDark])
 
-  // ✅ Sync with system if no manual preference
+  // Sync with system if no manual preference
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
 
@@ -43,10 +30,18 @@ export default function ThemeToggle() {
     return () => media.removeEventListener('change', handler)
   }, [])
 
+  const handleToggle = () => {
+    setIsDark(prev => {
+      const next = !prev
+      localStorage.setItem('theme', next ? 'dark' : 'light')
+      return next
+    })
+  }
+
   return (
     <button
       type="button"
-      onClick={() => setIsDark(prev => !prev)}
+      onClick={handleToggle}
       className="
         p-2 
         rounded-lg 
