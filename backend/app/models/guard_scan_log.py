@@ -35,6 +35,8 @@ class GuardScanLog(Base):
     prompt_length = Column(Integer, nullable=True)
     scanned_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
+    ip_address = Column(String(45), nullable=True)  # IPv4/IPv6 max length
+
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     user = relationship("User")

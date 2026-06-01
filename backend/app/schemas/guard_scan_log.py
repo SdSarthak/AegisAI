@@ -18,6 +18,7 @@ class GuardScanLogResponse(BaseModel):
     decision: str
     confidence: float
     matched_patterns: List[Any]
+    ip_address: str | None = None
     created_at: datetime
 
     class Config:
