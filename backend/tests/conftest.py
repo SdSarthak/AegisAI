@@ -132,6 +132,7 @@ def auth_headers(client):
     response = client.post(
         "/api/v1/auth/login",
         data={"username": email, "password": password},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
     )
     token = response.json()["access_token"]
 
@@ -182,15 +183,6 @@ def other_user(db_session) -> MagicMock:
     user.is_active = True
     user.is_verified = True
     return user
-
-
-@pytest.fixture
-def auth_headers(test_user) -> dict:
-    """Create authorization headers for a test user."""
-    from app.core.security import create_access_token
-
-    token = create_access_token(data={"sub": str(test_user.id)})
-    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture(autouse=True)
