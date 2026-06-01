@@ -9,8 +9,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -19,6 +22,7 @@ from app.core.database import engine, Base
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.api.v1 import api_router, badge
+from app.schemas.rag import RAG_QUESTION_MAX_LENGTH
 from app.plugins.regulation_loader import init_registry
 import app.models  # ensure all ORM models are imported so tables are created
 
@@ -82,6 +86,35 @@ app = FastAPI(
     },
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Return a friendly message for oversized RAG questions."""
+    is_rag_query = request.url.path == f"{settings.API_V1_PREFIX}/rag/query"
+    question_too_long = any(
+        error.get("type") == "string_too_long"
+        and list(error.get("loc", ())) == ["body", "question"]
+        for error in exc.errors()
+    )
+
+    if is_rag_query and question_too_long:
+        return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "detail": (
+                    f"Question is too long. Please keep it under "
+                    f"{RAG_QUESTION_MAX_LENGTH} characters."
+                )
+            },
+        )
+
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": jsonable_encoder(exc.errors())},
+    )
 
 # -------------------------------------------------------------------
 # Middleware
