@@ -93,9 +93,14 @@ interface ClassificationResponse extends Record<string, unknown> {
   next_steps: string[]
 }
 
-interface RagQueryResponse extends Record<string, unknown> {
+export interface RagSource {
+  title: string
+  excerpt: string
+}
+
+export interface RagQueryResponse extends Record<string, unknown> {
   answer: string
-  sources?: Array<string | { title: string; excerpt: string }>
+  sources?: RagSource[]
   answer_id?: string
 }
 
@@ -314,23 +319,6 @@ export interface GuardHistoryResponse {
   items: GuardScanLog[]
   limit: number
   next_cursor: string | null
-}
-
-// Guard explainability (issue #77). Per-token attribution returned by SHAP/LIME.
-export interface GuardTokenAttribution {
-  token: string
-  attribution: number
-  char_span: [number, number]
-}
-
-export interface GuardExplainResponse {
-  predicted_label: string
-  predicted_proba: number
-  base_value: number
-  tokens: GuardTokenAttribution[]
-  method: 'shap' | 'lime'
-  model_version: string
-  latency_ms: number
 }
 
 export const guardApi = {
