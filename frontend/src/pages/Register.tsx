@@ -18,6 +18,16 @@ interface ErrorResponseData {
   detail?: string | PydanticValidationError[]
 }
 
+const USER_FRIENDLY_MESSAGES: Record<string, string> = {
+  'value is not a valid email address': 'Please enter a valid email address',
+  'field required': 'This field is required',
+  'extra fields not permitted': 'Unexpected field provided',
+}
+
+function toUserFriendlyMessage(msg: string): string {
+  return USER_FRIENDLY_MESSAGES[msg] ?? msg
+}
+
 function isErrorResponseData(value: unknown): value is ErrorResponseData {
   return typeof value === 'object' && value !== null && 'detail' in value
 }
@@ -28,7 +38,7 @@ function parsePydanticErrors(errorData: unknown): ValidationError[] {
   if (Array.isArray(errorData.detail)) {
     return errorData.detail.map((error) => ({
       field: String(error.loc?.[error.loc.length - 1] ?? 'unknown'),
-      message: error.msg || 'Invalid input',
+      message: toUserFriendlyMessage(error.msg || 'Invalid input'),
     }))
   }
 
@@ -96,13 +106,19 @@ export default function Register() {
       navigate('/login')
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        // Try to parse Pydantic validation errors (422)
+        const status = err.response?.status
         const parsedErrors = parsePydanticErrors(err.response?.data)
 
         if (parsedErrors.length > 0) {
           setErrors(parsedErrors)
+        } else if (status && status >= 500) {
+          setErrors([
+            {
+              field: 'general',
+              message: 'Something went wrong on our end. Please try again later.',
+            },
+          ])
         } else if (err.response?.data?.detail) {
-          // Handle custom error messages (400, etc.)
           setErrors([
             { field: 'general', message: err.response.data.detail },
           ])
@@ -110,8 +126,7 @@ export default function Register() {
           setErrors([
             {
               field: 'general',
-              message:
-                'Network error. Please check your connection and try again.',
+              message: 'Connection timed out. Please check your internet and try again.',
             },
           ])
         } else {

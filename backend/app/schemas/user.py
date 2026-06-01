@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, Dict
 from datetime import datetime
-import re
+from app.core.security import validate_password_strength
 from app.models.user import SubscriptionTier
 
 
@@ -14,18 +14,7 @@ class UserCreate(BaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
-        """Enforce password strength requirements."""
-        errors = []
-        if len(v) < 8:
-            errors.append("at least 8 characters")
-        if not re.search(r'[A-Z]', v):
-            errors.append("at least one uppercase letter")
-        if not re.search(r'\d', v):
-            errors.append("at least one digit")
-        if not re.search(r'[!@#$%^&*]', v):
-            errors.append("at least one special character (!@#$%^&*)")
-        if errors:
-            raise ValueError("Password must contain: " + ", ".join(errors))
+        validate_password_strength(v)
         return v
 
 
