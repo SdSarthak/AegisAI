@@ -11,9 +11,11 @@ const api = axios.create({
 // Add auth token to requests
 api.interceptors.request.use((config) => {
   const token = useAuthStore.getState().token
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+
   return config
 })
 
@@ -25,6 +27,7 @@ api.interceptors.response.use(
       useAuthStore.getState().logout()
       window.location.href = '/login'
     }
+
     return Promise.reject(error)
   }
 )
@@ -43,7 +46,12 @@ function ensureListResponse<T>(
     'items' in data &&
     Array.isArray((data as { items?: unknown }).items)
   ) {
-    return data as { items: T[]; total?: number; page?: number; limit?: number }
+    return data as {
+      items: T[]
+      total?: number
+      page?: number
+      limit?: number
+    }
   }
 
   throw new Error(`${resourceName} response was empty or invalid.`)
@@ -84,21 +92,6 @@ function ensureNumberField(
   }
 }
 
-interface ClassificationResponse extends Record<string, unknown> {
-  risk_level: string
-  confidence: number
-  reasoning?: string
-  reasons: string[]
-  requirements: string[]
-  next_steps: string[]
-}
-
-interface RagQueryResponse extends Record<string, unknown> {
-  answer: string
-  sources?: Array<string | { title: string; excerpt: string }>
-  answer_id?: string
-}
-
 function ensureStringArrayField(
   data: Record<string, unknown>,
   fieldName: string,
@@ -109,17 +102,43 @@ function ensureStringArrayField(
   }
 }
 
+interface ClassificationResponse extends Record<string, unknown> {
+  risk_level: string
+  confidence: number
+  reasoning?: string
+  reasons: string[]
+  requirements: string[]
+  next_steps: string[]
+}
+
+interface RagSource {
+  title: string
+  excerpt: string
+}
+
+interface RagQueryResponse extends Record<string, unknown> {
+  answer: string
+  sources?: RagSource[]
+  answer_id?: string
+}
+
 // Auth API
 export const authApi = {
   login: async (email: string, password: string) => {
     const formData = new URLSearchParams()
+
     formData.append('username', email)
     formData.append('password', password)
+
     const { data } = await api.post('/auth/login', formData, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
     })
+
     return data
   },
+
   register: async (userData: {
     email: string
     password: string
@@ -129,6 +148,7 @@ export const authApi = {
     const { data } = await api.post('/auth/register', userData)
     return data
   },
+
   getMe: async () => {
     const { data } = await api.get('/auth/me')
     return data
@@ -144,12 +164,15 @@ export const aiSystemsApi = {
     limit?: number
   }) => {
     const { data } = await api.get('/ai-systems/', { params })
+
     return ensureListResponse(data, 'AI systems')
   },
+
   get: async (id: number) => {
     const { data } = await api.get(`/ai-systems/${id}`)
     return data
   },
+
   create: async (system: {
     name: string
     description?: string
@@ -159,10 +182,19 @@ export const aiSystemsApi = {
     const { data } = await api.post('/ai-systems/', system)
     return data
   },
-  update: async (id: number, system: Record<string, unknown>) => {
-    const { data } = await api.put(`/ai-systems/${id}`, system)
+
+  update: async (
+    id: number,
+    system: Record<string, unknown>
+  ) => {
+    const { data } = await api.put(
+      `/ai-systems/${id}`,
+      system
+    )
+
     return data
   },
+
   delete: async (id: number) => {
     await api.delete(`/ai-systems/${id}`)
   },
@@ -176,45 +208,79 @@ export const classificationApi = {
       response.data,
       'Classification'
     )
+
     ensureStringField(responseData, 'risk_level', 'Classification')
     ensureNumberField(responseData, 'confidence', 'Classification')
     ensureStringArrayField(responseData, 'reasons', 'Classification')
     ensureStringArrayField(responseData, 'requirements', 'Classification')
     ensureStringArrayField(responseData, 'next_steps', 'Classification')
+
     return responseData as ClassificationResponse
   },
-  classifyAndSave: async (systemId: number, data: Record<string, unknown>) => {
-    const response = await api.post(`/classification/classify/${systemId}`, data)
+
+  classifyAndSave: async (
+    systemId: number,
+    data: Record<string, unknown>
+  ) => {
+    const response = await api.post(
+      `/classification/classify/${systemId}`,
+      data
+    )
     const responseData = ensureObjectResponse<Record<string, unknown>>(
       response.data,
       'Classification'
     )
+
     ensureStringField(responseData, 'risk_level', 'Classification')
     ensureNumberField(responseData, 'confidence', 'Classification')
     ensureStringArrayField(responseData, 'reasons', 'Classification')
     ensureStringArrayField(responseData, 'requirements', 'Classification')
     ensureStringArrayField(responseData, 'next_steps', 'Classification')
+
     return responseData as ClassificationResponse
   },
 }
 
 // Documents API
 export const documentsApi = {
-  list: async (params?: { skip?: number; limit?: number }) => {
+  list: async (params?: {
+    skip?: number
+    limit?: number
+  }) => {
     const { data } = await api.get('/documents/', { params })
+
     return ensureListResponse(data, 'Documents')
   },
+
   get: async (id: number) => {
     const { data } = await api.get(`/documents/${id}`)
     return data
   },
+
   generate: async (request: {
     document_type: string
     ai_system_id: number
   }) => {
-    const { data } = await api.post('/documents/generate', request)
+    const { data } = await api.post(
+      '/documents/generate',
+      request
+    )
+
     return data
   },
+
+  update: async (
+    id: number,
+    document: { content: string }
+  ) => {
+    const { data } = await api.put(
+      `/documents/${id}`,
+      document
+    )
+
+    return data
+  },
+
   delete: async (id: number) => {
     await api.delete(`/documents/${id}`)
   },
@@ -223,58 +289,101 @@ export const documentsApi = {
 // Notifications API
 export const notificationsApi = {
   list: (unreadOnly = false) =>
-    api.get(`/notifications?unread_only=${unreadOnly}`).then((r) => r.data),
+    api
+      .get(`/notifications?unread_only=${unreadOnly}`)
+      .then((r) => r.data),
+
   markRead: (ids: number[]) =>
-    api.post('/notifications/read', { ids }),
+    api.post('/notifications/read', {
+      ids,
+    }),
 }
 
 // Health API — uses root URL, not /api/v1
 export interface HealthResponse {
-  status: "healthy" | "degraded";
-  database: "connected" | "disconnected";
-  version: string;
-  service: string;
+  status: 'healthy' | 'degraded'
+  database: 'connected' | 'disconnected'
+  version: string
+  service: string
 }
 
 export const checkHealth = async (): Promise<HealthResponse> => {
-  const response = await axios.get<HealthResponse>("/health")
+  const response =
+    await axios.get<HealthResponse>('/health')
+
   return response.data
 }
 
-/* ============================
-   ✅ RAG API (ADD THIS ONLY)
-   ============================ */
-
+// RAG API
 export const ragApi = {
   query: async (question: string) => {
     const { data } = await api.post('/rag/query', {
       question,
     })
+
     const responseData = ensureObjectResponse<Record<string, unknown>>(
       data,
       'RAG answer'
     )
+
     ensureStringField(responseData, 'answer', 'RAG answer')
+
+    const rawSources = responseData.sources
+
+    if (Array.isArray(rawSources)) {
+      responseData.sources = rawSources.map((source) => {
+        if (typeof source === 'string') {
+          return {
+            title: source,
+            excerpt: '',
+          }
+        }
+
+        if (
+          source &&
+          typeof source === 'object' &&
+          'title' in source &&
+          'excerpt' in source
+        ) {
+          return source as RagSource
+        }
+
+        return {
+          title: 'Source',
+          excerpt: '',
+        }
+      })
+    }
+
     return responseData as RagQueryResponse
   },
-  feedback: async (payload: { answer_id: string; vote: 'up' | 'down' }) => {
+
+  feedback: async (payload: {
+    answer_id: string
+    vote: 'up' | 'down'
+  }) => {
     const { data } = await api.post('/rag/feedback', {
       answer_id: payload.answer_id,
       vote: payload.vote,
     })
+
     return data
   },
 }
 
 export interface GuardScanResponse {
-  decision: 'allow' | 'sanitize' | 'block' | string
+  decision:
+    | 'allow'
+    | 'sanitize'
+    | 'block'
+    | string
   confidence: number
   reasoning: string
   sanitized_prompt?: string | null
   matched_patterns?: string[]
 }
 
-// Guard explainability (issue #77). Per-token attribution returned by SHAP/LIME.
+// Guard explainability. Per-token attribution returned by SHAP/LIME.
 export interface GuardTokenAttribution {
   token: string
   attribution: number
@@ -298,11 +407,14 @@ export const guardApi = {
       data,
       'Guard scan'
     )
+
     ensureStringField(responseData, 'decision', 'Guard scan')
     ensureNumberField(responseData, 'confidence', 'Guard scan')
     ensureStringField(responseData, 'reasoning', 'Guard scan')
+
     return responseData as unknown as GuardScanResponse
   },
+
   explain: async (
     text: string,
     opts: { method?: 'shap' | 'lime'; maxEvals?: number } = {},
@@ -312,6 +424,7 @@ export const guardApi = {
       method: opts.method ?? 'shap',
       max_evals: opts.maxEvals ?? 200,
     })
+
     return data
   },
 }
