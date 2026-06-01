@@ -24,6 +24,7 @@ const navigation = [
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },
   { name: 'LLM Guard', href: '/guard', icon: ShieldCheck },
+  { name: 'Audit Logs', href: '/audit', icon: BarChart },
   { name: 'Chatbot', href: '/rag-chat', icon: MessageSquareText },
 ]
 
