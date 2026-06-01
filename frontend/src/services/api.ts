@@ -111,9 +111,14 @@ interface ClassificationResponse extends Record<string, unknown> {
   next_steps: string[]
 }
 
+interface RagSource {
+  title: string
+  excerpt: string
+}
+
 interface RagQueryResponse extends Record<string, unknown> {
   answer: string
-  sources?: Array<string | { title: string; excerpt: string }>
+  sources?: RagSource[]
   answer_id?: string
 }
 
@@ -315,12 +320,40 @@ export const ragApi = {
     const { data } = await api.post('/rag/query', {
       question,
     })
+
     const responseData = ensureObjectResponse<Record<string, unknown>>(
       data,
       'RAG answer'
     )
 
     ensureStringField(responseData, 'answer', 'RAG answer')
+
+    const rawSources = responseData.sources
+
+    if (Array.isArray(rawSources)) {
+      responseData.sources = rawSources.map((source) => {
+        if (typeof source === 'string') {
+          return {
+            title: source,
+            excerpt: '',
+          }
+        }
+
+        if (
+          source &&
+          typeof source === 'object' &&
+          'title' in source &&
+          'excerpt' in source
+        ) {
+          return source as RagSource
+        }
+
+        return {
+          title: 'Source',
+          excerpt: '',
+        }
+      })
+    }
 
     return responseData as RagQueryResponse
   },
