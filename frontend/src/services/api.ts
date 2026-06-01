@@ -178,14 +178,8 @@ export const aiSystemsApi = {
     return data
   },
 
-  update: async (
-    id: number,
-    system: Record<string, unknown>
-  ) => {
-    const { data } = await api.put(
-      `/ai-systems/${id}`,
-      system
-    )
+  update: async (id: number, system: Record<string, unknown>) => {
+    const { data } = await api.put(`/ai-systems/${id}`, system)
 
     return data
   },
@@ -213,14 +207,8 @@ export const classificationApi = {
     return responseData as ClassificationResponse
   },
 
-  classifyAndSave: async (
-    systemId: number,
-    data: Record<string, unknown>
-  ) => {
-    const response = await api.post(
-      `/classification/classify/${systemId}`,
-      data
-    )
+  classifyAndSave: async (systemId: number, data: Record<string, unknown>) => {
+    const response = await api.post(`/classification/classify/${systemId}`, data)
     const responseData = ensureObjectResponse<Record<string, unknown>>(
       response.data,
       'Classification'
@@ -256,22 +244,13 @@ export const documentsApi = {
     document_type: string
     ai_system_id: number
   }) => {
-    const { data } = await api.post(
-      '/documents/generate',
-      request
-    )
+    const { data } = await api.post('/documents/generate', request)
 
     return data
   },
 
-  update: async (
-    id: number,
-    document: { content: string }
-  ) => {
-    const { data } = await api.put(
-      `/documents/${id}`,
-      document
-    )
+  update: async (id: number, document: { content: string }) => {
+    const { data } = await api.put(`/documents/${id}`, document)
 
     return data
   },
@@ -303,8 +282,7 @@ export interface HealthResponse {
 }
 
 export const checkHealth = async (): Promise<HealthResponse> => {
-  const response =
-    await axios.get<HealthResponse>('/health')
+  const response = await axios.get<HealthResponse>('/health')
 
   return response.data
 }
@@ -315,6 +293,7 @@ export const ragApi = {
     const { data } = await api.post('/rag/query', {
       question,
     })
+
     const responseData = ensureObjectResponse<Record<string, unknown>>(
       data,
       'RAG answer'
@@ -339,11 +318,7 @@ export const ragApi = {
 }
 
 export interface GuardScanResponse {
-  decision:
-    | 'allow'
-    | 'sanitize'
-    | 'block'
-    | string
+  decision: 'allow' | 'sanitize' | 'block' | string
   confidence: number
   reasoning: string
   sanitized_prompt?: string | null
@@ -384,7 +359,7 @@ export const guardApi = {
 
   explain: async (
     text: string,
-    opts: { method?: 'shap' | 'lime'; maxEvals?: number } = {},
+    opts: { method?: 'shap' | 'lime'; maxEvals?: number } = {}
   ): Promise<GuardExplainResponse> => {
     const { data } = await api.post('/guard/explain', {
       text,
