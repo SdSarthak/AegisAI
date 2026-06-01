@@ -439,6 +439,45 @@ def get_questionnaire_risk_factors(
         The list of questionnaire risk factors used by the classification flow.
     """
     return QUESTIONNAIRE_RISK_FACTORS
+@router.get("/history")
+def get_classification_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    page: int = 1,
+    limit: int = 10,
+):
+    """Return paginated classification history for the current user."""
+
+    query = (
+        db.query(RiskAssessment, AISystem)
+        .join(AISystem, RiskAssessment.ai_system_id == AISystem.id)
+        .filter(AISystem.owner_id == current_user.id)
+        .order_by(RiskAssessment.assessed_at.desc())
+    )
+
+    total = query.count()
+
+    results = (
+        query.offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+
+    history = [
+        {
+            "system_name": system.name,
+            "risk_level": assessment.risk_level,
+            "timestamp": assessment.assessed_at,
+        }
+        for assessment, system in results
+    ]
+
+    return {
+        "page": page,
+        "limit": limit,
+        "total": total,
+        "items": history,
+    }
 
 @router.post("/bulk", response_model=BulkClassificationResponse)
 def bulk_classify_systems(
