@@ -316,6 +316,23 @@ export interface GuardHistoryResponse {
   next_cursor: string | null
 }
 
+// Guard explainability (issue #77). Per-token attribution returned by SHAP/LIME.
+export interface GuardTokenAttribution {
+  token: string
+  attribution: number
+  char_span: [number, number]
+}
+
+export interface GuardExplainResponse {
+  predicted_label: string
+  predicted_proba: number
+  base_value: number
+  tokens: GuardTokenAttribution[]
+  method: 'shap' | 'lime'
+  model_version: string
+  latency_ms: number
+}
+
 export const guardApi = {
   scan: async (prompt: string): Promise<GuardScanResponse> => {
     const { data } = await api.post('/guard/scan', { prompt })

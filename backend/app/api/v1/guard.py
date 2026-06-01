@@ -10,21 +10,16 @@ TODO for contributors (medium difficulty):
 """
 
 import hashlib
+import logging
+import base64
+
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Optional, TypedDict
 
 from app.api.v1.webhooks import deliver_webhook
-import logging
-import base64
-from collections import Counter
-from datetime import datetime, timedelta, timezone
-from typing import Optional, TypedDict
-
-from app.api.v1.webhooks import deliver_webhook
-
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Query, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, and_, or_
@@ -246,7 +241,6 @@ def scan_prompt(
             result,
             client_ip,
         )
-
         response = ScanResponse(
             decision=result["decision"],
             confidence=result["metadata"]["decision_reasoning"]["confidence"],
@@ -260,33 +254,35 @@ def scan_prompt(
 
         if result["decision"] == "block":
             try:
-                deliver_webhook(
-                    db=db,
-                    user_id=current_user.id,
-                    event="guard_block",
-                    payload={
-                        "decision": "block",
-                        "confidence": response.confidence,
-                        "matched_patterns": response.matched_patterns,
-                        "prompt_hash": hashlib.sha256(
-                            request.prompt.encode()
-                        ).hexdigest(),
-                    },
-                    background_tasks=background_tasks,
-                )
+                background_tasks.add_task(
+                    deliver_webhook,
+                    db,
+                    current_user.id,
+                   "guard_block",
+                    {
+                       "decision": "block",
+                       "confidence": response.confidence,
+                       "matched_patterns": response.matched_patterns,
+                       "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
+        },             
+                    background_tasks,
+
+)
             except Exception:
-                logger.exception("Failed to trigger guard_block webhook delivery")
+                logger.exception(
+                    "Failed to trigger guard_block webhook delivery"
+                )
 
         return response
 
-    except Exception as e:
+    except Exception:
         logger.exception("Guard scan failed")
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the Guard scan.",
         )
-
+    
 
 # ---------------------------------------------------------------------------
 # POST /guard/explain - SHAP/LIME explainability (issue #77)
@@ -351,7 +347,6 @@ async def explain_prompt(
         key=f"guard:explain:{current_user.id}",
         limit=_ExplainRateLimitConfig.LIMIT,
         window_seconds=_ExplainRateLimitConfig.WINDOW_SECONDS,
-        fail_closed=True,
     )
     if limited:
         return JSONResponse(
@@ -406,7 +401,6 @@ async def explain_prompt(
         )
 
     return result
-
 
 @router.get("/health", tags=["LLM Guard"])
 def guard_health():
@@ -944,69 +938,3 @@ def bulk_scan_prompts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."
         )
-
-@router.get("/config", tags=["LLM Guard"])
-def get_guard_config(current_user: User = Depends(get_current_user)):
-    """Return the current user's Guard configuration.
-
-    Args:
-        current_user: Authenticated user whose Guard config is requested.
-
-    Returns:
-        The user's saved Guard configuration, or the default config.
-    """
-    default_config = {
-        "sanitization_level": "medium",
-        "malicious_threshold": 0.8,
-        "suspicious_threshold": 0.5,
-    }
-
-    return user_guard_configs.get(current_user.id, default_config)
-
-
-@router.patch("/config", tags=["LLM Guard"])
-def update_guard_config(
-    config: GuardConfigRequest,
-    current_user: User = Depends(get_current_user),
-):
-    """Update the current user's Guard configuration.
-
-    Args:
-        config: Sanitization level and threshold values to persist.
-        current_user: Authenticated user whose Guard config is being updated.
-
-    Returns:
-        A confirmation payload containing the saved configuration.
-
-    Raises:
-        HTTPException: If any configuration value is out of range.
-    """
-    if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid sanitization level",
-        )
-
-    if not (0.0 <= config.malicious_threshold <= 1.0):
-        raise HTTPException(
-            status_code=400,
-            detail="malicious_threshold must be between 0 and 1",
-        )
-
-    if not (0.0 <= config.suspicious_threshold <= 1.0):
-        raise HTTPException(
-            status_code=400,
-            detail="suspicious_threshold must be between 0 and 1",
-        )
-
-    user_guard_configs[current_user.id] = {
-        "sanitization_level": config.sanitization_level,
-        "malicious_threshold": config.malicious_threshold,
-        "suspicious_threshold": config.suspicious_threshold,
-    }
-
-    return {
-        "message": "Guard configuration updated successfully",
-        "config": user_guard_configs[current_user.id],
-    }
-
