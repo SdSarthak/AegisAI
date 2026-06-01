@@ -137,7 +137,19 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Ask a regulatory question and get an answer grounded in source documents."""
+    """Ask a regulatory question and get an answer grounded in source documents.
+
+    Args:
+        request: Query payload containing the user's question.
+        current_user: Authenticated user submitting the query.
+        db: Database session used to persist query history and feedback.
+
+    Returns:
+        RAGQueryResponse containing the grounded answer, sources, and confidence scores.
+
+    Raises:
+        HTTPException: If the RAG index is unavailable or query processing fails.
+    """
     try:
         from app.core.database import Base
         from app.modules.rag.retrieval_chain import get_qa_chain
@@ -209,7 +221,11 @@ def query_knowledge_base(
 
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health():
-    """Check whether the RAG module has an available index."""
+    """Check whether the RAG module has an available FAISS index.
+
+    Returns:
+        A status payload indicating whether the index is loaded.
+    """
     from app.modules.rag.vector_store import check_index_exists
 
     index_loaded = check_index_exists()
@@ -242,7 +258,19 @@ def rag_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Record feedback for a previously returned RAG answer."""
+    """Record feedback (upvote/downvote) for a previously returned RAG answer.
+
+    Args:
+        payload: Feedback payload containing the answer ID and vote.
+        current_user: Authenticated user submitting the feedback.
+        db: Database session used to persist the feedback.
+
+    Returns:
+        A confirmation payload with the feedback status.
+
+    Raises:
+        HTTPException: If the answer is not found.
+    """
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
@@ -262,7 +290,19 @@ def get_low_quality_chunks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return source chunks whose feedback ratio exceeds the threshold."""
+    """Return source chunks whose downvote ratio exceeds the given threshold.
+
+    Args:
+        threshold: Ratio threshold for flagging low-quality chunks.
+        current_user: Authenticated user requesting the report.
+        db: Database session used to query feedback.
+
+    Returns:
+        A payload containing threshold and low-quality chunk details.
+
+    Raises:
+        HTTPException: If the user is not authorized to view this data.
+    """
     try:
         if current_user.subscription_tier != SubscriptionTier.SCALE:
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -305,7 +345,17 @@ def get_rag_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return the current user's paginated RAG query history."""
+    """Return the current user's paginated RAG query history, newest first.
+
+    Args:
+        page: Page number to return, starting at 1.
+        page_size: Number of queries per page.
+        current_user: Authenticated user whose history is requested.
+        db: Database session used to query query history.
+
+    Returns:
+        A paginated list of the user's past RAG queries.
+    """
     offset = (page - 1) * page_size
     queries = (
         db.query(RagQuery)

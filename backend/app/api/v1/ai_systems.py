@@ -477,7 +477,19 @@ def clone_ai_system(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """clone an existing AI system with '(copy)' appended to name and compliance reset"""
+    """Clone an existing AI system with a '(copy)' suffix and reset compliance status.
+
+    Args:
+        system_id: ID of the AI system to clone.
+        db: Database session used to load the original and persist the clone.
+        current_user: Authenticated user who must own the original system.
+
+    Returns:
+        The cloned AI system serialized as AISystemResponse.
+
+    Raises:
+        HTTPException: If the original AI system does not exist or belongs to another user.
+    """
     original = db.query(AISystem).filter(
         AISystem.id == system_id,
         AISystem.owner_id == current_user.id

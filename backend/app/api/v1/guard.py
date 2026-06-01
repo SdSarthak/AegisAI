@@ -316,6 +316,18 @@ async def explain_prompt(
 
     Rate limit: 10 requests per minute per user. Timeout: 15s. Inputs
     longer than 4000 chars are rejected at validation time.
+
+    Args:
+        request: Payload containing the text and explanation method.
+        db: Database session used for audit logging.
+        current_user: Authenticated user requesting the explanation.
+
+    Returns:
+        ExplainResponse containing per-token attribution and predicted class.
+
+    Raises:
+        HTTPException: If rate limited, the explainer is unavailable,
+            the request times out, or an internal error occurs.
     """
     import asyncio
 
@@ -401,7 +413,7 @@ def guard_info():
     """Return diagnostic information about the Guard module.
 
     Returns:
-        A status payload containing device and model details.
+        A status payload containing device, model, and sanitization details.
     """
 
     try:
@@ -608,7 +620,7 @@ def get_guard_config(current_user: User = Depends(get_current_user)):
         current_user: Authenticated user whose Guard config is requested.
 
     Returns:
-        The user's saved Guard configuration, or the default config.
+        The user's saved Guard configuration, or a default configuration object.
     """
     default_config = {
         "sanitization_level": "medium",
@@ -784,7 +796,7 @@ def guard_info():
     """Return diagnostic information about the Guard module.
 
     Returns:
-        A status payload containing device and model details.
+        A status payload containing device, model, and sanitization details.
     """
 
     try:
@@ -991,7 +1003,7 @@ def get_guard_config(current_user: User = Depends(get_current_user)):
         current_user: Authenticated user whose Guard config is requested.
 
     Returns:
-        The user's saved Guard configuration, or the default config.
+        The user's saved Guard configuration, or a default configuration object.
     """
     default_config = {
         "sanitization_level": "medium",
@@ -1167,7 +1179,7 @@ def guard_info():
     """Return diagnostic information about the Guard module.
 
     Returns:
-        A status payload containing device and model details.
+        A status payload containing device, model, and sanitization details.
     """
 
     try:
@@ -1374,7 +1386,7 @@ def get_guard_config(current_user: User = Depends(get_current_user)):
         current_user: Authenticated user whose Guard config is requested.
 
     Returns:
-        The user's saved Guard configuration, or the default config.
+        The user's saved Guard configuration, or a default configuration object.
     """
     default_config = {
         "sanitization_level": "medium",

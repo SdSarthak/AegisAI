@@ -233,7 +233,14 @@ def list_documents(
 def list_document_templates(
     current_user: User = Depends(get_current_user),
 ):
-    """List available document templates for generation."""
+    """List available document templates for generation.
+
+    Args:
+        current_user: Authenticated user requesting the available templates.
+
+    Returns:
+        A list of document template types with their names and descriptions.
+    """
     descriptions = {
         DocumentType.TECHNICAL_DOCUMENTATION: "Generate technical documentation for an AI system.",
         DocumentType.RISK_ASSESSMENT: "Generate a risk assessment report for an AI system.",
