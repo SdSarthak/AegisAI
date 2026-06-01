@@ -117,3 +117,16 @@ def test_query_feedback_and_low_quality_flow(client):
     # 7. Clean up dependency overrides to prevent test leakage
     if get_current_user in app.dependency_overrides:
         del app.dependency_overrides[get_current_user]
+
+
+def test_rag_query_length_validation(client):
+    """Verify that queries longer than 2000 characters or empty are rejected with HTTP 422."""
+    long_question = "x" * 2001
+    resp = client.post("/api/v1/rag/query", json={"question": long_question})
+    assert resp.status_code == 422
+    assert "msg" in resp.text or "validation_error" in resp.text
+
+    empty_question = ""
+    resp = client.post("/api/v1/rag/query", json={"question": empty_question})
+    assert resp.status_code == 422
+    assert "msg" in resp.text or "validation_error" in resp.text
