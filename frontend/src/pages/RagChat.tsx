@@ -37,7 +37,34 @@ function isApiError(
     error !== null
   )
 }
+const normalizeSources = (sources: unknown[]): RagSource[] => {
+  return sources.map((source, index) => {
+    if (typeof source === 'string') {
+      return {
+        title: `Source ${index + 1}`,
+        excerpt: source,
+      }
+    }
 
+    if (typeof source === 'object' && source !== null) {
+      return {
+        title:
+          'title' in source && typeof source.title === 'string'
+            ? source.title
+            : `Source ${index + 1}`,
+        excerpt:
+          'excerpt' in source && typeof source.excerpt === 'string'
+            ? source.excerpt
+            : '',
+      }
+    }
+
+    return {
+      title: `Source ${index + 1}`,
+      excerpt: '',
+    }
+  })
+}
 function buildAnswerExport(
   answer: RagAnswer
 ): string {
@@ -88,7 +115,7 @@ export default function RagChat() {
 
       setAnswer({
         answer: data.answer,
-        sources: data.sources || [],
+        sources: normalizeSources(data.sources),
         answer_id: data.answer_id,
       })
     } catch (err: unknown) {
