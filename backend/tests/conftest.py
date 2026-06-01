@@ -114,17 +114,26 @@ def auth_headers(client):
     response = client.post(
         "/api/v1/auth/login",
         data={"username": email, "password": password},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
     )
     token = response.json()["access_token"]
 
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture
-def other_user_auth_headers(client):
-    email = "other@example.com"
-    password = "TestPass123!"
-    client.post("/api/v1/auth/register", json={"email": email, "password": password, "full_name": "Other User"})
-    response = client.post("/api/v1/auth/login", data={"username": email, "password": password})
+def other_user_auth_headers(client, db_session):
+    # Register a different user
+    client.post("/api/v1/auth/register", json={
+        "email": "other@example.com",
+        "password": "OtherPass123!",
+        "full_name": "Other User",
+        "company_name": "Other Corp",
+    })
+    response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "other@example.com", "password": "OtherPass123!"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -155,15 +164,6 @@ def other_user(db_session) -> MagicMock:
     user.is_active = True
     user.is_verified = True
     return user
-
-
-@pytest.fixture
-def auth_headers(test_user) -> dict:
-    """Create authorization headers for a test user."""
-    from app.core.security import create_access_token
-
-    token = create_access_token(data={"sub": str(test_user.id)})
-    return {"Authorization": f"Bearer {token}"}
 
 
 @pytest.fixture(autouse=True)

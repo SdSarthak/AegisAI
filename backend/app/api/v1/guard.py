@@ -457,8 +457,8 @@ def get_guard_history(
 
 @router.get("/stats", response_model=GuardStatsResponse)
 def get_guard_stats(
+    user_id: Optional[int] = Query(None),
     window: str = Query("7d", pattern="^(24h|7d|30d|all)$"),
-    user_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -476,7 +476,9 @@ def get_guard_stats(
     Raises:
         HTTPException: If the caller is not allowed to query another user's stats.
     """
-    target_user_id = user_id if user_id is not None else current_user.id
+    if user_id is not None and user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Cannot access another user's stats")
+    target_user_id = user_id or current_user.id
     is_admin = getattr(current_user, "role", None) == "admin"
 
     if target_user_id != current_user.id and not is_admin:
