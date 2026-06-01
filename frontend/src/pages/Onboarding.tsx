@@ -105,12 +105,22 @@ export default function Onboarding() {
         affects_decision_making: classificationForm.affects_decision_making,
       })
 
-      setRiskLevel(
-        classification.risk_level ||
-          classification.riskLevel ||
-          classification.classification ||
-          'classified'
-      )
+      const classificationResult = classification as {
+  risk_level?: unknown
+  riskLevel?: unknown
+  classification?: unknown
+}
+
+const detectedRiskLevel =
+  typeof classificationResult.risk_level === 'string'
+    ? classificationResult.risk_level
+    : typeof classificationResult.riskLevel === 'string'
+      ? classificationResult.riskLevel
+      : typeof classificationResult.classification === 'string'
+        ? classificationResult.classification
+        : 'classified'
+
+setRiskLevel(detectedRiskLevel)
 
       setCurrentStep(2)
     } catch {
