@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
@@ -64,6 +64,10 @@ export default function AISystems() {
 
   const limit = 10
 
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchTerm, riskFilter, complianceFilter])
+
   const {
     data: systemsData,
     isLoading,
@@ -71,18 +75,26 @@ export default function AISystems() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['ai-systems', sortBy, order, currentPage, riskFilter, complianceFilter],
+    queryKey: ['ai-systems', sortBy, order, currentPage, searchTerm, riskFilter, complianceFilter],
     queryFn: () =>
       aiSystemsApi.list({
         sort_by: sortBy,
         order,
-        skip: (currentPage - 1) * limit,
+        search: searchTerm || undefined,
+        risk_level: riskFilter || undefined,
+        compliance_status: complianceFilter || undefined,
+        page: currentPage,
         limit,
       }),
   })
   const systems = (
     Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
   ) as AISystem[]
+  const total =
+    !Array.isArray(systemsData) && typeof systemsData?.total === 'number'
+      ? systemsData.total
+      : systems.length
+  const totalPages = Math.max(1, Math.ceil(total / limit))
 
   const createMutation = useMutation({
     mutationFn: aiSystemsApi.create,
@@ -99,17 +111,6 @@ export default function AISystems() {
       queryClient.invalidateQueries({ queryKey: ['ai-systems'] })
       setSystemToDelete(null)
     },
-  })
-
-  const filteredSystems = systems.filter((system: AISystem) => {
-    const matchesSearch =
-      system.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (system.description?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
-
-    const matchesRisk = !riskFilter || system.risk_level === riskFilter
-    const matchesCompliance = !complianceFilter || system.compliance_status === complianceFilter
-
-    return matchesSearch && matchesRisk && matchesCompliance
   })
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -322,7 +323,7 @@ export default function AISystems() {
             Retry
           </button>
         </div>
-      ) : filteredSystems.length === 0 ? (
+      ) : systems.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-medium text-gray-900">
@@ -357,7 +358,7 @@ export default function AISystems() {
         </div>
       ) : (
         <div className="grid gap-4">
-          {filteredSystems.map((system: AISystem) => (
+          {systems.map((system: AISystem) => (
             <div
               key={system.id}
               className="bg-white rounded-xl border border-gray-200 p-6"
@@ -447,12 +448,12 @@ export default function AISystems() {
         </button>
 
         <span className="text-sm font-medium text-gray-700">
-          Page {currentPage}
+          Page {currentPage} of {totalPages}
         </span>
 
         <button
           onClick={() => setCurrentPage((prev) => prev + 1)}
-          disabled={systems.length < limit}
+          disabled={currentPage >= totalPages}
           className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
           Next
