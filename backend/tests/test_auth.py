@@ -50,7 +50,7 @@ def test_register_duplicate_email(client):
     client.post("/api/v1/auth/register", json=user_data)
     response = client.post("/api/v1/auth/register", json=user_data)
     assert response.status_code == 400
-assert "already registered" in response.json()["detail"]
+    assert "already registered" in response.json()["detail"]
 
 def test_login_success(client):
     """Test successful login after registration."""
