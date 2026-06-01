@@ -74,7 +74,13 @@ docker compose up -d
 ```bash
 # Backend
 cd backend
-python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
+python -m venv venv
+# macOS / Linux
+source venv/bin/activate
+# Windows CMD
+# venv\Scripts\activate.bat
+# Windows PowerShell
+# venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 cp .env.example .env   # fill in values
 uvicorn app.main:app --reload
@@ -274,10 +280,34 @@ AegisAI is licensed under **AGPL-3.0-only**.
 - If you run a modified version as a SaaS, you must release your source code.
 - For commercial licensing, contact the author.
 
-Copyright (C) 2024 **Sarthak Doshi** ([@SdSarthak](https://github.com/SdSarthak))
+Copyright (C) 2024–2026 **Sarthak Doshi** ([@SdSarthak](https://github.com/SdSarthak))
 
 ---
 
 <div align="center">
   <sub>Built with care. If AegisAI helps you, give it a star.</sub>
 </div>
+## Troubleshooting
+
+### npm install fails
+Try clearing the npm cache and reinstalling dependencies:
+
+```bash
+npm cache clean --force
+npm install 
+```
+### Module not found error
+Delete the node_modules folder and reinstall dependencies:
+
+```bash
+rm -rf node_modules
+npm install
+```
+### Port already in use
+Stop the process using the current port or change the port number.
+
+### Environment variables not loading
+Ensure the .env file exists and contains all required variables.
+
+### Application fails to start
+Make sure all dependencies are installed and the correct Node.js version is being used.

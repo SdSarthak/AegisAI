@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import {
   Activity,
   AlertCircle,
+  Brain,
   Gauge,
   ListChecks,
   Loader2,
@@ -9,7 +10,12 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import CopyButton from '../components/CopyButton'
-import { guardApi, type GuardScanResponse } from '../services/api'
+import GuardExplanation from '../components/GuardExplanation'
+import {
+  guardApi,
+  type GuardExplainResponse,
+  type GuardScanResponse,
+} from '../services/api'
 
 type GuardMetrics = {
   decision: string
@@ -58,6 +64,9 @@ export default function GuardConsole() {
   const [prompt, setPrompt] = useState('')
   const [submittedPrompt, setSubmittedPrompt] = useState('')
   const [result, setResult] = useState<GuardScanResponse | null>(null)
+  const [explanation, setExplanation] = useState<GuardExplainResponse | null>(null)
+  const [explanationError, setExplanationError] = useState<string | null>(null)
+  const [isExplaining, setIsExplaining] = useState(false)
   const [scannedAt, setScannedAt] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -86,6 +95,8 @@ export default function GuardConsole() {
       setError('Enter a prompt before running the guard scan.')
       setSubmittedPrompt('')
       setResult(null)
+      setExplanation(null)
+      setExplanationError(null)
       setScannedAt('')
       return
     }
@@ -94,6 +105,8 @@ export default function GuardConsole() {
     setIsLoading(true)
     setError(null)
     setResult(null)
+    setExplanation(null)
+    setExplanationError(null)
     setScannedAt('')
 
     try {
@@ -108,6 +121,24 @@ export default function GuardConsole() {
       setError(message)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleExplain = async () => {
+    if (!submittedPrompt) return
+    setIsExplaining(true)
+    setExplanationError(null)
+    try {
+      const data = await guardApi.explain(submittedPrompt)
+      setExplanation(data)
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error
+          ? err.message
+          : 'Unable to generate explanation right now.'
+      setExplanationError(message)
+    } finally {
+      setIsExplaining(false)
     }
   }
 
@@ -240,11 +271,28 @@ export default function GuardConsole() {
                 </p>
               </div>
 
-              <span
-                className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${decisionBadgeClass(result.decision)}`}
-              >
-                {result.decision}
-              </span>
+              <div className="flex items-center gap-2">
+                <span
+                  className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${decisionBadgeClass(result.decision)}`}
+                >
+                  {result.decision}
+                </span>
+                <button
+                  type="button"
+                  onClick={handleExplain}
+                  disabled={isExplaining}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-indigo-200 bg-indigo-50 text-xs font-medium text-indigo-700 hover:bg-indigo-100 disabled:opacity-60 disabled:cursor-wait transition-colors"
+                  title="Generate token-level attribution for this scan"
+                  aria-label="Explain this verdict"
+                >
+                  {isExplaining ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Brain className="w-3 h-3" />
+                  )}
+                  {isExplaining ? 'Explaining…' : 'Explain'}
+                </button>
+              </div>
             </div>
 
             <div className="p-5 space-y-5">
@@ -275,6 +323,23 @@ export default function GuardConsole() {
                 </pre>
               </div>
             </div>
+            {(explanation || explanationError) && (
+              <div className="border-t border-gray-200 dark:border-gray-700 p-5">
+                {explanationError ? (
+                  <div className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <span className="font-medium">Couldn't generate explanation: </span>
+                    {explanationError}
+                  </div>
+                ) : (
+                  explanation && (
+                    <GuardExplanation
+                      text={submittedPrompt}
+                      explanation={explanation}
+                    />
+                  )
+                )}
+              </div>
+            )}
           </section>
 
           <aside className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
