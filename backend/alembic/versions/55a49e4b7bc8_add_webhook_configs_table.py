@@ -1,7 +1,7 @@
 """add_webhook_configs_table
 
 Revision ID: 55a49e4b7bc8
-Revises: 
+Revises: 70dc426d802a
 Create Date: 2026-05-15 02:29:34.617011
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '55a49e4b7bc8'
-down_revision: Union[str, None] = None
+down_revision: Union[str, None] = '70dc426d802a'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
