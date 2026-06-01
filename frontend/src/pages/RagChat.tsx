@@ -115,7 +115,7 @@ export default function RagChat() {
 
       setAnswer({
         answer: data.answer,
-        sources: normalizeSources(data.sources),
+        sources: data.sources || [],
         answer_id: data.answer_id,
       })
     } catch (err: unknown) {
@@ -349,4 +349,3 @@ export default function RagChat() {
     </div>
   )
 }
-

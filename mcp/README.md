@@ -289,5 +289,5 @@ See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines on contributing to the 
 
 ## License
 
-Copyright (C) 2024 Sarthak Doshi  
+Copyright (C) 2024–2026 Sarthak Doshi  
 SPDX-License-Identifier: AGPL-3.0-only
