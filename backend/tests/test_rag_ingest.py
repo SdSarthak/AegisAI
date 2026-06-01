@@ -38,7 +38,7 @@ PATCH_AUTH = "app.core.security.get_current_user"
 
 # Patch the two RAG functions called inside the endpoint
 PATCH_LOAD_DOCS = "app.api.v1.rag.load_documents_from_paths"
-PATCH_CREATE_VS = "app.api.v1.rag.create_vector_store"
+PATCH_MERGE_VS = "app.api.v1.rag.merge_into_vector_store"
 
 
 @pytest.fixture
@@ -60,16 +60,16 @@ class TestRagIngest:
     # Happy path
     # ------------------------------------------------------------------
 
-    @patch(PATCH_CREATE_VS)
+    @patch(PATCH_MERGE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_single_pdf_success(self, mock_load, mock_create, client, mock_rag_user):
+    def test_single_pdf_success(self, mock_load, mock_merge, client, mock_rag_user):
         """
         1. Uploading a single valid PDF should return 200 with correct fields.
         """
         # Arrange: loader returns 5 fake chunks, FAISS index files exist
         mock_chunks = [MagicMock() for _ in range(5)]
         mock_load.return_value = mock_chunks
-        mock_create.return_value = MagicMock()
+        mock_merge.return_value = MagicMock()
 
         with (
             patch(PATCH_AUTH, return_value=_mock_current_user()),
@@ -89,15 +89,15 @@ class TestRagIngest:
         # two files × 512_000 bytes each
         assert data["index_size_bytes"] == 1_024_000
 
-    @patch(PATCH_CREATE_VS)
+    @patch(PATCH_MERGE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_multiple_pdfs_success(self, mock_load, mock_create, client, mock_rag_user):
+    def test_multiple_pdfs_success(self, mock_load, mock_merge, client, mock_rag_user):
         """
         2. Uploading multiple PDFs should reflect all files in the response.
         """
         mock_chunks = [MagicMock() for _ in range(42)]
         mock_load.return_value = mock_chunks
-        mock_create.return_value = MagicMock()
+        mock_merge.return_value = MagicMock()
 
         with (
             patch(PATCH_AUTH, return_value=_mock_current_user()),
@@ -131,7 +131,7 @@ class TestRagIngest:
 
         assert response.status_code == 422
 
-    @patch(PATCH_CREATE_VS)
+    @patch(PATCH_MERGE_VS)
     @patch(PATCH_LOAD_DOCS)
     def test_non_pdf_file_returns_400(self, mock_load, mock_create, client, mock_rag_user):
         """
@@ -149,7 +149,7 @@ class TestRagIngest:
         mock_load.assert_not_called()
         mock_create.assert_not_called()
 
-    @patch(PATCH_CREATE_VS)
+    @patch(PATCH_MERGE_VS)
     @patch(PATCH_LOAD_DOCS)
     def test_empty_pdf_returns_400(self, mock_load, mock_create, client, mock_rag_user):
         """
@@ -173,7 +173,7 @@ class TestRagIngest:
     # Downstream failures
     # ------------------------------------------------------------------
 
-    @patch(PATCH_CREATE_VS)
+    @patch(PATCH_MERGE_VS)
     @patch(PATCH_LOAD_DOCS)
     def test_faiss_build_failure_returns_503(self, mock_load, mock_create, client, mock_rag_user):
         """
@@ -229,7 +229,7 @@ class TestRagIngest:
     # Response schema
     # ------------------------------------------------------------------
 
-    @patch(PATCH_CREATE_VS)
+    @patch(PATCH_MERGE_VS)
     @patch(PATCH_LOAD_DOCS)
     def test_response_has_all_required_fields(self, mock_load, mock_create, client, mock_rag_user):
         """

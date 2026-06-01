@@ -15,6 +15,42 @@ def get_embeddings():
     )
 
 
+def _build_new_index(file_paths: list[str]):
+    """Build a FAISS index from PDF paths without persisting."""
+    documents = load_documents_from_paths(file_paths)
+    embeddings = get_embeddings()
+    return FAISS.from_documents(documents, embeddings)
+
+
+def merge_into_vector_store(file_paths: list[str]):
+    """
+    Merge new documents into the existing FAISS index, or create a new one.
+
+    If an index already exists on disk, the new document embeddings are added
+    to it. Otherwise a fresh index is built from the supplied paths.
+
+    Args:
+        file_paths: Local paths to PDF documents to ingest
+
+    Returns:
+        The updated FAISS vector store
+    """
+    new_store = _build_new_index(file_paths)
+    embeddings = get_embeddings()
+    index_path = settings.FAISS_INDEX_PATH
+
+    if os.path.exists(index_path):
+        existing = FAISS.load_local(
+            index_path, embeddings, allow_dangerous_deserialization=True
+        )
+        existing.merge_from(new_store)
+        existing.save_local(index_path)
+        return existing
+
+    new_store.save_local(index_path)
+    return new_store
+
+
 def create_vector_store(file_paths: list[str]):
     """
     Build a FAISS index from a list of local PDF paths and persist it to disk.
