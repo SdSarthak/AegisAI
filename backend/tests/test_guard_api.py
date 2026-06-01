@@ -211,19 +211,88 @@ def test_bulk_scan_rate_limiting(authenticated_client: TestClient):
 
 
 def test_get_guard_history(authenticated_client: TestClient, db_session: Session, test_user: User):
-    # Add a scan log
-    log = GuardScanLog(
+    from datetime import datetime, timedelta
+
+    # Clean old logs to make test isolated
+    db_session.query(GuardScanLog).filter(GuardScanLog.user_id == test_user.id).delete()
+    db_session.commit()
+
+    # Add scan logs with distinct timestamps for sorting
+    log1 = GuardScanLog(
         user_id=test_user.id,
-        prompt_hash="dummy_hash",
+        prompt_hash="dummy_hash_1",
         decision="allow",
         confidence=0.95,
         matched_patterns=[],
+        intent="benign",
+        scanned_at=datetime.utcnow() - timedelta(minutes=10),
     )
-    db_session.add(log)
+    log2 = GuardScanLog(
+        user_id=test_user.id,
+        prompt_hash="dummy_hash_2",
+        decision="block",
+        confidence=0.90,
+        matched_patterns=[],
+        intent="malicious",
+        scanned_at=datetime.utcnow() - timedelta(minutes=5),
+    )
+    log3 = GuardScanLog(
+        user_id=test_user.id,
+        prompt_hash="dummy_hash_3",
+        decision="sanitize",
+        confidence=0.85,
+        matched_patterns=[],
+        intent="suspicious",
+        scanned_at=datetime.utcnow(),
+    )
+    db_session.add_all([log1, log2, log3])
     db_session.commit()
 
-    response = authenticated_client.get("/api/v1/guard/history")
+    # 1. Test basic get with sorting (newest first: log3, log2, log1)
+    response = authenticated_client.get("/api/v1/guard/history?limit=2")
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] == 1
-    assert data["items"][0]["decision"] == "allow"
+    assert len(data["items"]) == 2
+    assert data["items"][0]["prompt_hash"] == "dummy_hash_3"
+    assert data["items"][1]["prompt_hash"] == "dummy_hash_2"
+    assert data["limit"] == 2
+    assert data["next_cursor"] is not None
+
+    # 2. Test pagination using next_cursor to get the last log (log1)
+    next_cursor = data["next_cursor"]
+    response = authenticated_client.get(f"/api/v1/guard/history?limit=2&cursor={next_cursor}")
+    assert response.status_code == 200
+    data2 = response.json()
+    assert len(data2["items"]) == 1
+    assert data2["items"][0]["prompt_hash"] == "dummy_hash_1"
+    assert data2["next_cursor"] is None
+
+    # 3. Test decision filter
+    response = authenticated_client.get("/api/v1/guard/history?decision=block")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 1
+    assert data["items"][0]["prompt_hash"] == "dummy_hash_2"
+
+    # 4. Test intent filter
+    response = authenticated_client.get("/api/v1/guard/history?intent=suspicious")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["items"]) == 1
+    assert data["items"][0]["prompt_hash"] == "dummy_hash_3"
+
+    # 5. Test invalid filters return 400
+    response = authenticated_client.get("/api/v1/guard/history?decision=invalid_value")
+    assert response.status_code == 400
+    response = authenticated_client.get("/api/v1/guard/history?intent=invalid_value")
+    assert response.status_code == 400
+
+    # 6. Test date range filters
+    start = (datetime.utcnow() - timedelta(minutes=7)).isoformat()
+    end = (datetime.utcnow() - timedelta(minutes=2)).isoformat()
+    response = authenticated_client.get(f"/api/v1/guard/history?start_date={start}&end_date={end}")
+    assert response.status_code == 200
+    data = response.json()
+    # should only match log2 (5 minutes ago)
+    assert len(data["items"]) == 1
+    assert data["items"][0]["prompt_hash"] == "dummy_hash_2"
