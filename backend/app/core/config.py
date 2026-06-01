@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import List, Optional
+from typing import List
 
 
 class Settings(BaseSettings):
@@ -51,9 +51,6 @@ class Settings(BaseSettings):
     RAG_CHUNK_OVERLAP: int = 200
     FAISS_INDEX_PATH: str = "faiss_index"
     MLFLOW_TRACKING_URI: str = ""
-
-    # MLflow
-    MLFLOW_TRACKING_URI: Optional[str] = None  # ← only line added
 
     class Config:
         env_file = ".env"
