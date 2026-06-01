@@ -140,7 +140,7 @@ export const aiSystemsApi = {
   list: async (params?: {
     sort_by?: string
     order?: string
-    skip?: number
+    page?: number
     limit?: number
   }) => {
     const { data } = await api.get('/ai-systems/', { params })

@@ -76,7 +76,7 @@ export default function AISystems() {
       aiSystemsApi.list({
         sort_by: sortBy,
         order,
-        skip: (currentPage - 1) * limit,
+        page: currentPage,
         limit,
       }),
   })
