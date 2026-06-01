@@ -14,7 +14,8 @@ TODO for contributors (help wanted):
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-
+from app.models.audit_log import AuditLog
+from app.schemas.audit_log import AuditLogListResponse
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
@@ -140,4 +141,34 @@ def get_analytics_summary(
         "average_compliance_score": average_compliance_score,
         "counts": counts,
         "compliance_statuses": compliance_statuses,
+    }
+
+@router.get("/audit-logs", response_model=AuditLogListResponse)
+def get_audit_logs(
+    skip: int = 0,
+    limit: int = 100,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    logs = (
+        db.query(AuditLog)
+        .filter(AuditLog.user_id == str(current_user.id))
+        .order_by(AuditLog.timestamp.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    total = (
+        db.query(func.count(AuditLog.id))
+        .filter(AuditLog.user_id == str(current_user.id))
+        .scalar()
+        or 0
+    )
+
+    return {
+        "items": logs,
+        "total": int(total),
+        "skip": skip,
+        "limit": limit,
     }

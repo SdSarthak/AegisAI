@@ -87,10 +87,10 @@ export default function RagChat() {
       const data = await ragApi.query(trimmedQuestion)
 
       setAnswer({
-        answer: data.answer,
-        sources: data.sources || [],
-        answer_id: data.answer_id,
-      })
+  answer: data.answer,
+  sources: (data.sources || []) as RagSource[],
+  answer_id: data.answer_id,
+})
     } catch (err: unknown) {
       const apiError = isApiError(err)
         ? err

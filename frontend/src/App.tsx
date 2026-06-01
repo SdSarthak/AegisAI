@@ -14,7 +14,7 @@ import GuardConsole from './pages/GuardConsole'
 import NotFound from './pages/NotFound'
 import { Toaster } from 'react-hot-toast'
 import RagChat from './pages/RagChat'
-
+import AuditDashboard from "./pages/AuditDashboard";
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />
@@ -59,6 +59,7 @@ function App() {
       />
 
       <Routes>
+        <Route path="/audit" element={<AuditDashboard />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 

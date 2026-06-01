@@ -322,5 +322,29 @@ export const analyticsApi = {
     return data
   },
 }
+export interface AuditLogEntry {
+  id: string
+  user_id?: string | null
+  ip_address?: string | null
+  timestamp: string
+  raw_prompt: string
+  scan_status: 'allowed' | 'blocked' | 'sanitized'
+  risk_score?: number | null
+  triggered_rules?: unknown
+  detection_method?: string | null
+}
 
+export interface AuditLogListResponse {
+  items: AuditLogEntry[]
+  total: number
+  skip: number
+  limit: number
+}
+
+export const auditApi = {
+  getLogs: async (params?: { skip?: number; limit?: number }): Promise<AuditLogListResponse> => {
+    const { data } = await api.get('/analytics/audit-logs', { params })
+    return data
+  },
+}
 export default api
