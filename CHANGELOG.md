@@ -14,6 +14,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Retains both `normalized_prompt` and `user_prompt` in orchestrator response
 - Unit and integration tests for bypass payloads (`test_normalizer.py` and `test_guard.py`)
 
+### Fixed
+- **Documents API** — Validate `ai_system_id` ownership before creating documents so users cannot link documents to another user's AI system.
+
 ---
 
 ## [Unreleased]
