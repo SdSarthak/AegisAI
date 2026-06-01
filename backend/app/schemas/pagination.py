@@ -8,5 +8,5 @@ class PaginatedResponse(BaseModel, Generic[T]):
     """Generic paginated response wrapper for list endpoints."""
     items: List[T]
     total: int
-    page: int
+    skip: int
     limit: int
