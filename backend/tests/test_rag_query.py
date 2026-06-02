@@ -17,6 +17,7 @@ from app.main import app
 
 class _DummyDoc:
     def __init__(self, source: str):
+        self.page_content = source
         self.metadata = {"source": source}
 
 
