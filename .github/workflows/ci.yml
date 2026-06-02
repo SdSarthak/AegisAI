@@ -2,15 +2,12 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
     branches: [main]
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
-  backend-test:
+  backend:
     name: Backend Tests
     runs-on: ubuntu-latest
 
@@ -20,56 +17,65 @@ jobs:
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: aegisai_test
+          POSTGRES_DB: aegisai_db
         ports:
           - 5432:5432
         options: >-
           --health-cmd pg_isready
-          --health-interval 10s
+          --health-interval 5s
           --health-timeout 5s
           --health-retries 5
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
+          cache: "pip"
+          cache-dependency-path: backend/requirements.txt
 
       - name: Install dependencies
         working-directory: backend
         run: pip install -r requirements.txt
 
+      - name: Create .env file
+        working-directory: backend
+        run: |
+          cp .env.example .env
+          echo "DATABASE_URL=postgresql://postgres:postgres@localhost:5432/aegisai_db" >> .env
+          echo "SECRET_KEY=ci-test-secret-key" >> .env
+          echo "GEMINI_API_KEY=placeholder" >> .env
+          echo "OPENAI_API_KEY=placeholder" >> .env
+
       - name: Run tests
         working-directory: backend
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/aegisai_test
-          SECRET_KEY: test-secret-key
         run: pytest tests/ -v --cov=app --cov-report=term-missing
 
-  frontend-lint:
+  frontend:
     name: Frontend Lint & Build
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-      - name: Set up Node 22
+      - name: Set up Node.js 18
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
-          cache: npm
+          node-version: "18"
+          cache: "npm"
           cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: frontend
         run: npm ci
 
-      - name: Lint
+      - name: Type check
         working-directory: frontend
-        run: npm run lint --if-present
+        run: npx tsc --noEmit
 
       - name: Build
         working-directory: frontend
