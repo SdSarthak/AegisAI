@@ -29,6 +29,7 @@ class User(Base):
     # Status
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    role = Column(String(50), nullable=False, server_default="user")
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -37,5 +38,9 @@ class User(Base):
     # Relationships
     ai_systems = relationship("AISystem", back_populates="owner")
     documents = relationship("Document", back_populates="owner")
-    webhook_configs = relationship("WebhookConfig", back_populates="user")
-    notifications    = relationship("Notification",    back_populates="user")
+    notifications = relationship(
+        "Notification", back_populates="user", cascade="all, delete-orphan"
+    )
+    webhook_configs = relationship(
+        "WebhookConfig", back_populates="user", cascade="all, delete-orphan"
+    )

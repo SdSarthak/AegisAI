@@ -21,8 +21,12 @@ from app.schemas.ai_system import (
     BulkImportResponse,
     ComplianceStatusUpdateSchema,
 )
+from app.models.compliance_drift_event import ComplianceDriftEvent
+from app.modules.compliance.monitor import run_drift_scan
 from app.schemas.audit_log import AISystemAuditLogResponse
 from app.schemas.pagination import PaginatedResponse
+from pydantic import BaseModel
+import secrets
 
 router = APIRouter()
 
@@ -537,9 +541,49 @@ def clone_ai_system(
     db.refresh(cloned)
     return cloned
 
-
 @router.put("/{system_id}", response_model=AISystemResponse)
-def update_ai_system(
+def update_ai_system_put(
+    system_id: int,
+    system_data: AISystemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update an existing AI system.
+
+    Args:
+        system_id: ID of the AI system to update.
+        system_data: Partial update payload for the AI system.
+        db: Database session used to load and persist the system.
+        current_user: Authenticated user who must own the system.
+
+    Returns:
+        The updated AI system serialized as AISystemResponse.
+
+    Raises:
+        HTTPException: If the AI system does not exist or belongs to another user.
+    """
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .first()
+    )
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
+        )
+
+    update_data = system_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(system, field, value)
+    
+    system._changed_by_id = current_user.id
+    db.commit()
+    db.refresh(system)
+    return system
+
+@router.patch("/{system_id}", response_model=AISystemResponse)
+def update_ai_system_patch(
     system_id: int,
     system_data: AISystemUpdate,
     db: Session = Depends(get_db),
@@ -651,3 +695,123 @@ def update_ai_system_status(
     db.commit()
     db.refresh(system)
     return system
+
+class MonitoringUpdateRequest(BaseModel):
+    monitoring_enabled: bool
+    webhook_url: str | None = None
+
+@router.patch("/{system_id}/monitoring")
+def update_monitoring_settings(
+    system_id: int, 
+    request: MonitoringUpdateRequest, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id, 
+        AISystem.owner_id == current_user.id
+    ).first()
+    
+    if not system:
+        raise HTTPException(status_code=404, detail="AI System not found")
+        
+    system.monitoring_enabled = request.monitoring_enabled
+    if request.webhook_url is not None:
+        system.webhook_url = request.webhook_url
+        
+    db.commit()
+    db.refresh(system)
+    
+    return {
+        "monitoring_enabled": system.monitoring_enabled,
+        "webhook_url": system.webhook_url,
+        "has_webhook_secret": bool(system.webhook_secret)
+    }
+
+@router.post("/{system_id}/monitoring/rotate-secret", status_code=201)
+def rotate_webhook_secret(
+    system_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id, 
+        AISystem.owner_id == current_user.id
+    ).first()
+    
+    if not system:
+        raise HTTPException(status_code=404, detail="AI System not found")
+        
+    # Generate a new cryptographically secure secret
+    new_secret = secrets.token_urlsafe(32)
+    system.webhook_secret = new_secret
+    
+    db.commit()
+    
+    # Return the secret directly to the user so they can save it
+    return {"webhook_secret": new_secret}
+
+@router.get("/{system_id}/monitoring")
+def get_monitoring_settings(
+    system_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id, 
+        AISystem.owner_id == current_user.id
+    ).first()
+    
+    if not system:
+        raise HTTPException(status_code=404, detail="AI System not found")
+        
+    return {
+        "monitoring_enabled": system.monitoring_enabled,
+        "webhook_url": system.webhook_url,
+        "has_webhook_secret": bool(system.webhook_secret)
+    }
+
+@router.get("/{system_id}/drift-events")
+def list_drift_events(
+    system_id: int, 
+    limit: int = 10, 
+    offset: int = 0, 
+    db: Session = Depends(get_db), 
+    current_user: User = Depends(get_current_user)
+):
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id, 
+        AISystem.owner_id == current_user.id
+    ).first()
+    
+    if not system:
+        raise HTTPException(status_code=404, detail="AI System not found")
+        
+    # Get the total count for the pagination envelope
+    total_count = db.query(ComplianceDriftEvent).filter(
+        ComplianceDriftEvent.ai_system_id == system_id
+    ).count()
+    
+    # Get the paginated items
+    events = db.query(ComplianceDriftEvent).filter(
+        ComplianceDriftEvent.ai_system_id == system_id
+    ).order_by(ComplianceDriftEvent.detected_at.desc()).offset(offset).limit(limit).all()
+    
+    return {
+        "items": events,
+        "total": total_count,
+        "limit": limit,
+        "offset": offset
+    }
+
+@router.post("/admin/compliance/scan")
+def trigger_manual_compliance_scan(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user) # Assuming admins only, or you can omit for local testing
+):
+    """
+    Manually triggers the compliance drift monitor.
+    """
+    # run_drift_scan handles its own DB commits and returns a dict with the stats
+    result = run_drift_scan(db)
+    return result

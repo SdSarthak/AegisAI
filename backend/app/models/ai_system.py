@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, ForeignKey, JSON, Float, UniqueConstraint
+from sqlalchemy import Boolean, Column, Integer, String, Text, DateTime, Enum, ForeignKey, JSON, Float
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -22,9 +22,6 @@ class ComplianceStatus(str, enum.Enum):
 
 class AISystem(Base):
     __tablename__ = "ai_systems"
-    __table_args__ = (
-        UniqueConstraint("owner_id", "name", name="uq_ai_system_owner_name"),
-    )
 
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
@@ -49,12 +46,32 @@ class AISystem(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    # Compliance drift monitoring (issue #82)
+    # When true, the scheduled monitor re-runs the classifier nightly and
+    # records a ComplianceDriftEvent if risk_level or compliance_status
+    # changes since the last scan.
+    monitoring_enabled = Column(Boolean, default=True, nullable=False)
+    # Optional per-system webhook. When set, drift events POST a signed
+    # payload here (HMAC-SHA256 with webhook_secret).
+    webhook_url = Column(String(2048), nullable=True)
+    webhook_secret = Column(String(128), nullable=True)
+
     # Relationships
     owner = relationship("User", back_populates="ai_systems")
     risk_assessments = relationship("RiskAssessment", back_populates="ai_system")
     documents = relationship("Document", back_populates="ai_system")
-    compliance_snapshots = relationship("ComplianceSnapshot", back_populates="ai_system")
-    
+    drift_events = relationship(
+        "ComplianceDriftEvent",
+        back_populates="ai_system",
+        cascade="all, delete-orphan",
+    )
+
+    compliance_snapshots = relationship(
+        "ComplianceSnapshot", 
+        back_populates="ai_system",
+        cascade="all, delete-orphan"
+    )
+
 
 class RiskAssessment(Base):
     __tablename__ = "risk_assessments"

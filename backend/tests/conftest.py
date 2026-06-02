@@ -12,20 +12,19 @@ from fastapi.testclient import TestClient
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SECRET_KEY"] = "testsecret"
 
-from app.core.database import Base, SessionLocal
+from app.core.database import Base
 from app.core.security import decode_token, get_current_user
 from app.models.user import SubscriptionTier
-from app.models.user import User
 from app.main import app
 from uuid import uuid4
 
 def _mock_current_user():
     user = MagicMock()
-    user.id = 1                                # ✅ integer
+    user.id = 1
     user.email = "test@example.com"
-    user.full_name = "Test User"               # ✅ string
+    user.full_name = "Test User"
     user.company_name = "Test Company"
-    user.subscription_tier = SubscriptionTier.FREE  # ✅ proper enum
+    user.subscription_tier = SubscriptionTier.FREE
     user.is_active = True
     user.is_verified = True
     return user
@@ -83,6 +82,7 @@ def client(db_engine):
                 detail="Invalid token"
             )
 
+        from app.models.user import User
         user = session.query(User).filter(User.id == int(user_id)).first()
         return user or _mock_current_user()
 
@@ -114,19 +114,56 @@ def auth_headers(client):
     response = client.post(
         "/api/v1/auth/login",
         data={"username": email, "password": password},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
     )
     token = response.json()["access_token"]
 
     return {"Authorization": f"Bearer {token}"}
 
 @pytest.fixture
-def other_user_auth_headers(client):
-    email = "other@example.com"
-    password = "TestPass123!"
-    client.post("/api/v1/auth/register", json={"email": email, "password": password, "full_name": "Other User"})
-    response = client.post("/api/v1/auth/login", data={"username": email, "password": password})
+def other_user_auth_headers(client, db_session):
+    # Register a different user
+    client.post("/api/v1/auth/register", json={
+        "email": "other@example.com",
+        "password": "OtherPass123!",
+        "full_name": "Other User",
+        "company_name": "Other Corp",
+    })
+    response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "other@example.com", "password": "OtherPass123!"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def test_user(db_session) -> MagicMock:
+    """Create a mock test user to avoid circular model dependencies."""
+    user = MagicMock()
+    user.id = 1
+    user.email = "test@example.com"
+    user.full_name = "Test User"
+    user.company_name = "Test Company"
+    user.subscription_tier = SubscriptionTier.FREE
+    user.is_active = True
+    user.is_verified = True
+    return user
+
+
+@pytest.fixture
+def other_user(db_session) -> MagicMock:
+    """Create another mock test user to avoid circular model dependencies."""
+    user = MagicMock()
+    user.id = 2
+    user.email = "other@example.com"
+    user.full_name = "Other User"
+    user.company_name = "Other Company"
+    user.subscription_tier = SubscriptionTier.FREE
+    user.is_active = True
+    user.is_verified = True
+    return user
 
 
 @pytest.fixture(autouse=True)
