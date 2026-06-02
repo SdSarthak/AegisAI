@@ -67,7 +67,6 @@ DB_QUERY_LATENCY = Histogram(
 
 instrumentator = Instrumentator(
     should_group_status_codes=True,
-    should_ignore_untracked_methods=True,
     should_instrument_requests_inprogress=True,
     excluded_handlers=[
         "/metrics",
