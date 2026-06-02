@@ -117,6 +117,10 @@ class _FakeVectorStore:
     def as_retriever(self, **kwargs):
         return _FakeRetriever()
 
+    def merge_from(self, target):
+        """No-op to satisfy merge_into_vector_store."""
+        pass
+
     @classmethod
     def from_documents(cls, documents, embeddings):
         return cls(index_path="")
