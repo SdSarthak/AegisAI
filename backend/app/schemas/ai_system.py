@@ -19,6 +19,7 @@ class AISystemUpdate(BaseModel):
     use_case: Optional[str] = None
     sector: Optional[str] = None
     questionnaire_responses: Optional[Dict[str, Any]] = None
+    public_badge_enabled: Optional[bool] = None
 
 
 class AISystemResponse(BaseModel):
@@ -31,6 +32,8 @@ class AISystemResponse(BaseModel):
     risk_level: Optional[RiskLevel]
     compliance_status: ComplianceStatus
     compliance_score: Optional[float] = None
+    public_badge_enabled: bool
+    public_badge_id: str
     created_at: datetime
     updated_at: datetime
 

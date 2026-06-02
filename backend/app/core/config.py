@@ -41,7 +41,7 @@ class Settings(BaseSettings):
 
     # Rate Limiting & Outage Policies
     RATE_LIMIT_FAIL_CLOSED: bool = False
-    BADGE_RATE_LIMIT_REQUESTS: int = 5
+    BADGE_RATE_LIMIT_REQUESTS: int = 30
     BADGE_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
     # Shared infrastructure

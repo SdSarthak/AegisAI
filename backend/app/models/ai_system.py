@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, ForeignKey, JSON, Float, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, ForeignKey, JSON, Float, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
+import uuid
 import enum
 from app.core.database import Base
 
@@ -44,6 +45,10 @@ class AISystem(Base):
     compliance_score = Column(Float, nullable=True, default=None)  # 0.0–100.0, null until classification runs
     # Questionnaire responses (JSON)
     questionnaire_responses = Column(JSON, default=dict)
+
+    # Public badge settings
+    public_badge_enabled = Column(Boolean, default=False)
+    public_badge_id = Column(String(50), unique=True, index=True, default=lambda: str(uuid.uuid4()))
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
