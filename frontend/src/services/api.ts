@@ -32,7 +32,7 @@ api.interceptors.response.use(
 function ensureListResponse<T>(
   data: unknown,
   resourceName: string
-): T[] | { items: T[]; total?: number; page?: number; limit?: number } {
+): T[] {
   if (Array.isArray(data)) {
     return data
   }
@@ -43,7 +43,7 @@ function ensureListResponse<T>(
     'items' in data &&
     Array.isArray((data as { items?: unknown }).items)
   ) {
-    return data as { items: T[]; total?: number; page?: number; limit?: number }
+    return (data as { items: T[] }).items
   }
 
   throw new Error(`${resourceName} response was empty or invalid.`)
@@ -129,8 +129,10 @@ export const authApi = {
     const { data } = await api.post('/auth/register', userData)
     return data
   },
-  getMe: async () => {
-    const { data } = await api.get('/auth/me')
+  getMe: async (token?: string) => {
+    const { data } = await api.get('/auth/me', {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
     return data
   },
 }
@@ -140,8 +142,11 @@ export const aiSystemsApi = {
   list: async (params?: {
     sort_by?: string
     order?: string
-    skip?: number
+    page?: number
     limit?: number
+    search?: string
+    risk_level?: string
+    compliance_status?: string
   }) => {
     const { data } = await api.get('/ai-systems/', { params })
     return ensureListResponse(data, 'AI systems')
@@ -214,6 +219,10 @@ export const documentsApi = {
   }) => {
     const { data } = await api.post('/documents/generate', request)
     return data
+  },
+  update: async (id: number, data: { content: string }) => {
+    const { data: response } = await api.put(`/documents/${id}`, data)
+    return response
   },
   delete: async (id: number) => {
     await api.delete(`/documents/${id}`)

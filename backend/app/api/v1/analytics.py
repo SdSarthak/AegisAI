@@ -10,22 +10,25 @@ TODO for contributors (help wanted):
     backend/app/tasks/scheduler.py), the timeline endpoint returns at
     least one data point per system.
 """
-
 from datetime import datetime, timedelta
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.compliance_snapshot import ComplianceSnapshot
+from app.models.guard_scan_log import GuardScanLog
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
+from app.schemas.guard_scan_log import GuardScanLogResponse
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
 
 
-@router.get("/compliance-timeline", response_model=ComplianceTimelineResponse)
+@router.get("/audit-logs", response_model=PaginatedResponse[GuardScanLogResponse])
 def get_compliance_timeline(
     system_id: int,
     days: int = 30,
@@ -110,3 +113,50 @@ def get_analytics_summary(
         "counts": counts,
         "compliance_statuses": compliance_statuses,
     }
+
+
+@router.get("/audit-logs", response_model=PaginatedResponse[GuardAuditLogResponse])
+def get_audit_logs(
+    skip: int = Query(0, ge=0, description="Items to skip"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    user_id: Optional[int] = Query(None, description="Filter by user ID"),
+    decision: Optional[str] = Query(None, pattern="^(allow|sanitize|block)$", description="Filter by decision"),
+    days: Optional[int] = Query(None, ge=1, description="Only include logs from the last N days"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return guard scan audit logs with pagination and optional filters.
+
+    Args:
+        skip: Number of items to skip for pagination.
+        limit: Maximum number of items per page.
+        user_id: Optional filter by user ID (admin only).
+        decision: Optional filter by scan decision (allow/sanitize/block).
+        days: Optional filter by recency (last N days).
+        current_user: Authenticated user requesting the audit logs.
+        db: Database session used to query audit logs.
+
+    Returns:
+        PaginatedResponse containing guard scan audit log entries.
+    """
+    is_admin = getattr(current_user, "role", None) == "admin"
+    if user_id is not None and user_id != current_user.id and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to query audit logs for another user.",
+        )
+
+    target_user_id = user_id if user_id is not None else current_user.id
+    filters = [GuardScanLog.user_id == target_user_id]
+
+    if decision:
+        filters.append(GuardScanLog.decision == decision)
+    if days:
+        since = datetime.utcnow() - timedelta(days=days)
+        filters.append(GuardScanLog.scanned_at >= since)
+
+    base_query = db.query(GuardScanLog).filter(*filters)
+    total = base_query.count()
+    logs = base_query.order_by(GuardScanLog.scanned_at.desc()).offset(skip).limit(limit).all()
+
+    return PaginatedResponse(items=logs, total=total, skip=skip, limit=limit)
