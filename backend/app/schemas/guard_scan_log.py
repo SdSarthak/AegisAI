@@ -18,6 +18,14 @@ class GuardScanLogResponse(BaseModel):
     decision: str
     confidence: float
     matched_patterns: List[Any]
+    detection_type: str = "none"
+    regex_flag: bool = False
+    regex_score: float = 0.0
+    intent: str = "benign"
+    ml_confidence: float = 0.0
+    combined_score: float = 0.0
+    prompt_length: int | None = None
+    scanned_at: datetime | None = None
     created_at: datetime
 
     class Config:

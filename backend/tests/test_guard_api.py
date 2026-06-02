@@ -226,4 +226,220 @@ def test_get_guard_history(authenticated_client: TestClient, db_session: Session
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
-    assert data["items"][0]["decision"] == "allow"
+    item = data["items"][0]
+    assert item["decision"] == "allow"
+    assert item["detection_type"] == "none"
+    assert item["combined_score"] == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Audit log tests — verify Guard scan decisions are persistently logged
+# ---------------------------------------------------------------------------
+
+
+def test_scan_prompt_creates_audit_log(
+    authenticated_client: TestClient,
+    db_session: Session,
+    test_user: User,
+):
+    """Verify that scanning a prompt creates a GuardScanLog audit entry."""
+    mock_guard = MagicMock()
+    mock_guard.guard.return_value = {
+        "decision": "allow",
+        "metadata": {
+            "decision_reasoning": {
+                "confidence": 0.95,
+                "reasoning": "Safe prompt",
+            },
+            "regex_analysis": {
+                "matched_patterns": [],
+            },
+        },
+    }
+
+    with patch("app.modules.guard.llm_guard.LLMGuard", return_value=mock_guard):
+        response = authenticated_client.post(
+            "/api/v1/guard/scan", json={"prompt": "hello"}
+        )
+
+    assert response.status_code == 200
+
+    log = db_session.query(GuardScanLog).filter(
+        GuardScanLog.user_id == test_user.id
+    ).first()
+    assert log is not None, "No GuardScanLog audit entry was created"
+    assert log.decision == "allow"
+    assert log.confidence == 0.95
+
+
+def test_scan_prompt_audit_log_block_decision(
+    authenticated_client: TestClient,
+    db_session: Session,
+    test_user: User,
+):
+    """Verify that blocked prompts create audit logs with full metadata."""
+    mock_guard = MagicMock()
+    mock_guard.guard.return_value = {
+        "decision": "block",
+        "metadata": {
+            "decision_reasoning": {
+                "confidence": 0.98,
+                "reasoning": "Malicious prompt detected",
+            },
+            "regex_analysis": {
+                "matched_patterns": ["sql_injection"],
+                "flag": True,
+                "risk_score": 0.95,
+            },
+            "intent_analysis": {
+                "intent": "malicious",
+                "confidence": 0.97,
+            },
+        },
+    }
+
+    with patch("app.modules.guard.llm_guard.LLMGuard", return_value=mock_guard):
+        response = authenticated_client.post(
+            "/api/v1/guard/scan", json={"prompt": "DROP TABLE users; --"}
+        )
+
+    assert response.status_code == 200
+
+    log = db_session.query(GuardScanLog).filter(
+        GuardScanLog.user_id == test_user.id
+    ).first()
+    assert log is not None
+    assert log.decision == "block"
+    assert log.confidence == 0.98
+    assert log.detection_type == "combined"
+    assert log.regex_flag is True
+    assert log.regex_score == 0.95
+    assert log.intent == "malicious"
+    assert log.ml_confidence == 0.97
+    assert log.combined_score == 0.98
+    assert log.prompt_length == len("DROP TABLE users; --")
+
+
+def test_scan_prompt_audit_log_sanitize_decision(
+    authenticated_client: TestClient,
+    db_session: Session,
+    test_user: User,
+):
+    """Verify that sanitized prompts create audit logs with 'sanitize' decision."""
+    mock_guard = MagicMock()
+    mock_guard.guard.return_value = {
+        "decision": "sanitize",
+        "sanitized_prompt": "****",
+        "metadata": {
+            "decision_reasoning": {
+                "confidence": 0.85,
+                "reasoning": "Suspicious content sanitized",
+            },
+            "regex_analysis": {
+                "matched_patterns": ["profanity"],
+                "flag": True,
+                "risk_score": 0.70,
+            },
+            "intent_analysis": {
+                "intent": "suspicious",
+                "confidence": 0.80,
+            },
+        },
+    }
+
+    with patch("app.modules.guard.llm_guard.LLMGuard", return_value=mock_guard):
+        response = authenticated_client.post(
+            "/api/v1/guard/scan", json={"prompt": "bad word"}
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["decision"] == "sanitize"
+    assert data["sanitized_prompt"] == "****"
+
+    log = db_session.query(GuardScanLog).filter(
+        GuardScanLog.user_id == test_user.id
+    ).first()
+    assert log is not None
+    assert log.decision == "sanitize"
+    assert log.detection_type == "combined"
+
+
+def test_bulk_scan_creates_audit_logs(
+    authenticated_client: TestClient,
+    db_session: Session,
+    test_user: User,
+):
+    """Verify that batch scan creates multiple GuardScanLog entries."""
+    mock_guard = MagicMock()
+    mock_guard.guard.return_value = {
+        "decision": "allow",
+        "metadata": {
+            "decision_reasoning": {"confidence": 0.9, "reasoning": "ok"},
+            "regex_analysis": {"matched_patterns": []},
+        },
+    }
+
+    from app.api.v1.guard import _scan_attempts_by_user
+    _scan_attempts_by_user.clear()
+
+    payload = {"prompts": ["prompt 1", "prompt 2", "prompt 3"]}
+
+    with patch("app.modules.guard.llm_guard.LLMGuard", return_value=mock_guard):
+        response = authenticated_client.post(
+            "/api/v1/guard/scan/batch", json=payload
+        )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 3
+    assert data["processed"] == 3
+
+    logs = db_session.query(GuardScanLog).filter(
+        GuardScanLog.user_id == test_user.id
+    ).order_by(GuardScanLog.id).all()
+    assert len(logs) == 3
+    for log in logs:
+        assert log.decision == "allow"
+
+
+def test_audit_log_history_returns_full_audit_fields(
+    authenticated_client: TestClient,
+    db_session: Session,
+    test_user: User,
+):
+    """Verify that /guard/history returns all audit fields in each item."""
+    from datetime import datetime
+
+    log = GuardScanLog(
+        user_id=test_user.id,
+        prompt_hash="abcd" * 16,
+        decision="block",
+        confidence=0.98,
+        matched_patterns=["sql_injection"],
+        detection_type="combined",
+        regex_flag=True,
+        regex_score=0.95,
+        intent="malicious",
+        ml_confidence=0.97,
+        combined_score=0.98,
+        prompt_length=20,
+        scanned_at=datetime.utcnow(),
+    )
+    db_session.add(log)
+    db_session.commit()
+
+    response = authenticated_client.get("/api/v1/guard/history")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    item = data["items"][0]
+    assert item["decision"] == "block"
+    assert item["detection_type"] == "combined"
+    assert item["regex_flag"] is True
+    assert item["regex_score"] == 0.95
+    assert item["intent"] == "malicious"
+    assert item["ml_confidence"] == 0.97
+    assert item["combined_score"] == 0.98
+    assert item["prompt_length"] == 20
+    assert item["scanned_at"] is not None
