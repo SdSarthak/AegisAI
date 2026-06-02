@@ -2,7 +2,8 @@
 RAG Intelligence API - regulatory knowledge base query endpoint.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
+   
+ 
 TODO for contributors (high difficulty):
   - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
   - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
@@ -24,9 +25,9 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.rag_feedback import RAGFeedback
 from app.models.rag_query import RagQuery
+from app.core.metrics import RAG_QUERIES_TOTAL
 from app.models.user import SubscriptionTier, User
 from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
-
 router = APIRouter()
 
 
@@ -171,6 +172,7 @@ def query_knowledge_base(
 
         t_start = time.monotonic()
         result = qa_chain({"query": request.question})
+        RAG_QUERIES_TOTAL.inc()
         latency_ms = (time.monotonic() - t_start) * 1000
 
         source_docs = result.get("source_documents", [])
