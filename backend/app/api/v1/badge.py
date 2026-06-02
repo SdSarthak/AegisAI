@@ -18,11 +18,11 @@ TODO for contributors (help wanted):
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import Response, JSONResponse
 from sqlalchemy.orm import Session
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.rate_limit import badge_rate_limiter
 from app.models.ai_system import AISystem
 from app.modules.badge.badge_generator import generate_badge_svg
-from app.core.rate_limit import badge_rate_limiter
-from app.core.config import settings
 
 router = APIRouter()
 
@@ -37,13 +37,13 @@ def get_compliance_badge(
     """
     Return a public compliance badge for an AI system.
     """
+    # Rate limit by IP (fail-closed: deny when Redis is unreachable)
     client_ip = request.client.host if request.client else "127.0.0.1"
-    key = f"badge:{client_ip}"
-    
     limited, retry_after = badge_rate_limiter.check_and_consume(
-        key=key,
+        key=f"badge:{client_ip}",
         limit=settings.BADGE_RATE_LIMIT_REQUESTS,
         window_seconds=settings.BADGE_RATE_LIMIT_WINDOW_SECONDS,
+        fail_closed=True,
     )
     if limited:
         raise HTTPException(

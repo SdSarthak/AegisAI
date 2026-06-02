@@ -225,5 +225,5 @@ def test_get_guard_history(authenticated_client: TestClient, db_session: Session
     response = authenticated_client.get("/api/v1/guard/history")
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] == 1
+    assert len(data["items"]) == 1
     assert data["items"][0]["decision"] == "allow"

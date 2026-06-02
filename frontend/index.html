@@ -7,55 +7,25 @@
     <meta name="color-scheme" content="light dark" />
     <title>EU AI Act Compliance Tool</title>
 
-    <!-- Prevent flicker -->
-    <style>
-      html { visibility: hidden; }
-    </style>
-
-    <!-- Theme initialization BEFORE React loads -->
+    <!-- Theme initialization BEFORE React loads to prevent FOUC -->
     <script>
       (() => {
         try {
           const stored = localStorage.getItem("theme");
           const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-
-          const isDark = stored === "dark" || (!stored && systemDark);
-
-          document.documentElement.classList.toggle("dark", isDark);
+          if (stored === "dark" || (!stored && systemDark)) {
+            document.documentElement.classList.add("dark");
+          } else {
+            document.documentElement.classList.remove("dark");
+          }
         } catch (e) {
           console.error("Theme init error:", e);
-        } finally {
-          document.documentElement.style.visibility = "visible";
         }
       })();
     </script>
-
-    <!-- Base styles -->
-    <style>
-      html {
-        background: #f9fafb;
-        color-scheme: light;
-      }
-
-      html.dark {
-        background: #111827;
-        color-scheme: dark;
-      }
-
-      body {
-        margin: 0;
-        background: #f9fafb;
-        color: #111827;
-      }
-
-      html.dark body {
-        background: #111827;
-        color: #f3f4f6;
-      }
-    </style>
   </head>
 
-  <body>
+  <body class="m-0 bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 antialiased">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
