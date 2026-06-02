@@ -116,9 +116,6 @@ def create_webhook(
     db: Session = Depends(get_db),
 ):
 
-    """
-    Register a new webhook endpoint for the current user.
-=======
     """Register a new webhook endpoint for the current user.
 
     Args:
@@ -128,7 +125,6 @@ def create_webhook(
 
     Returns:
         The created webhook configuration serialized as WebhookResponse.
-
     """
     # Force the user_id to be the authenticated user to prevent spoofing
     webhook_data = body.model_dump()
@@ -150,9 +146,6 @@ def list_webhooks(
     db: Session = Depends(get_db),
 ):
 
-    """
-    List all webhook configs for the current user.
-
     """List all webhook configurations for the current user.
 
     Args:
@@ -161,7 +154,6 @@ def list_webhooks(
 
     Returns:
         A list of webhook configurations owned by the current user.
-
     """
     # Fetch webhooks strictly scoped to the authenticated user
     webhooks = db.query(WebhookConfig).filter(WebhookConfig.user_id == current_user.id).all()
@@ -176,9 +168,6 @@ def delete_webhook(
     db: Session = Depends(get_db),
 ):
 
-    """
-    Delete a webhook config (must belong to current user).
-
     """Delete a webhook configuration owned by the current user.
 
     Args:
@@ -191,7 +180,6 @@ def delete_webhook(
 
     Raises:
         HTTPException: If the webhook does not exist or belongs to another user.
-
     """
     # Query checking BOTH the webhook ID and the user ID
     db_webhook = db.query(WebhookConfig).filter(
