@@ -1,4 +1,10 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from jose import jwt, JWTError
+from jose.exceptions import ExpiredSignatureError
+
+
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
@@ -7,6 +13,7 @@ from html import escape as html_escape
 from urllib.parse import quote
 import re
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
@@ -16,6 +23,8 @@ from app.schemas.document import (
     DocumentCreate,
     DocumentResponse,
     DocumentGenerateRequest,
+    DocumentShareResponse,
+    DocumentUpdateRequest,
     DocumentTemplateResponse,
     DocumentUpdateRequest,
 )
@@ -28,8 +37,27 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
+
 router = APIRouter()
 
+def create_share_token(document_id: int):
+    expire = datetime.now(timezone.utc) + timedelta(
+        days=settings.DOCUMENT_SHARE_EXPIRE_DAYS
+    )
+
+    payload = {
+        "document_id": document_id,
+        "type": "document_share",
+        "exp": expire
+    }
+
+    token = jwt.encode(
+        payload,
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM
+    )
+
+    return token
 
 def _escape_pdf_text(value: str) -> str:
     """Escape user-controlled text before ReportLab Paragraph parses it."""
@@ -338,6 +366,92 @@ def list_documents(
     return PaginatedResponse(items=documents, total=total, skip=skip, limit=limit)
 
 
+@router.get("/share/{token}", response_model=DocumentResponse)
+def get_shared_document(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Access shared document without authentication."""
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Share link expired"
+        )
+
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid share token"
+        )
+
+    if payload.get("type") != "document_share":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type"
+        )
+
+    document_id = payload.get("document_id")
+
+    if not document_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token payload"
+        )
+
+    document = db.query(Document).filter(
+        Document.id == document_id
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    if hasattr(document, "is_deleted") and document.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Share link revoked"
+        )
+
+    return document
+
+@router.post(
+    "/{document_id}/share",
+    response_model=DocumentShareResponse
+)
+def share_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Generate share link for a document."""
+
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    token = create_share_token(document.id)
+
+    return {
+        "share_url": f"/api/v1/documents/share/{token}",
+        "expires_in_days": settings.DOCUMENT_SHARE_EXPIRE_DAYS
+    }
 @router.get("/templates", response_model=List[DocumentTemplateResponse])
 def list_document_templates(
     current_user: User = Depends(get_current_user),
@@ -504,7 +618,7 @@ def generate_document(
             sector=ai_system.sector or "Not specified",
             description=ai_system.description or "No description provided",
             risk_level=ai_system.risk_level.value if ai_system.risk_level else "Not assessed",
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             company_name=current_user.company_name or "Not specified",
             classification_reasons="See risk assessment details",
             recommendations="Based on risk assessment",
