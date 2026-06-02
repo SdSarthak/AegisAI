@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
 const api = axios.create({
@@ -9,7 +9,7 @@ const api = axios.create({
 })
 
 // Add auth token to requests
-api.interceptors.request.use((config) => {
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = useAuthStore.getState().token
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -21,8 +21,8 @@ const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 
 // Handle 401 errors
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response: AxiosResponse) => response,
+  (error: any) => {
     const url = error.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
     if (error.response?.status === 401 && !isAuthEndpoint) {
@@ -237,7 +237,7 @@ export const documentsApi = {
 // Notifications API
 export const notificationsApi = {
   list: (unreadOnly = false) =>
-    api.get(`/notifications?unread_only=${unreadOnly}`).then((r) => r.data),
+    api.get(`/notifications?unread_only=${unreadOnly}`).then((r: AxiosResponse) => r.data),
   markRead: (ids: number[]) =>
     api.post('/notifications/read', { ids }),
 }
