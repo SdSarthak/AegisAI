@@ -1,7 +1,9 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { useEffect } from 'react'
 import { useAuthStore } from './stores/authStore'
+
 import Layout from './components/Layout'
+
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
@@ -12,27 +14,29 @@ import Notifications from './pages/Notifications'
 import Analytics from './pages/Analytics'
 import GuardConsole from './pages/GuardConsole'
 import NotFound from './pages/NotFound'
-import { Toaster } from 'react-hot-toast'
 import RagChat from './pages/RagChat'
+import Onboarding from './pages/Onboarding'
+
+import { Toaster } from 'react-hot-toast'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
+
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />
 }
 
 function App() {
-  // ✅ Sync with system theme (only if no manual preference)
   useEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)")
+    const media = window.matchMedia('(prefers-color-scheme: dark)')
 
     const handler = (e: MediaQueryListEvent) => {
-      if (!localStorage.getItem("theme")) {
-        document.documentElement.classList.toggle("dark", e.matches)
+      if (!localStorage.getItem('theme')) {
+        document.documentElement.classList.toggle('dark', e.matches)
       }
     }
 
-    media.addEventListener("change", handler)
-    return () => media.removeEventListener("change", handler)
+    media.addEventListener('change', handler)
+    return () => media.removeEventListener('change', handler)
   }, [])
 
   return (
@@ -59,9 +63,11 @@ function App() {
       />
 
       <Routes>
+        {/* Public Routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
+        {/* Protected Routes */}
         <Route
           path="/"
           element={
@@ -71,15 +77,20 @@ function App() {
           }
         >
           <Route index element={<Dashboard />} />
+          <Route path="onboarding" element={<Onboarding />} />
           <Route path="analytics" element={<Analytics />} />
           <Route path="ai-systems" element={<AISystems />} />
-          <Route path="classification/:systemId?" element={<Classification />} />
+          <Route
+            path="classification/:systemId?"
+            element={<Classification />}
+          />
           <Route path="documents" element={<Documents />} />
           <Route path="guard" element={<GuardConsole />} />
-          <Route path="rag-chat" element={<RagChat />} />
           <Route path="notifications" element={<Notifications />} />
+          <Route path="rag-chat" element={<RagChat />} />
         </Route>
 
+        {/* 404 */}
         <Route path="*" element={<NotFound />} />
       </Routes>
     </>

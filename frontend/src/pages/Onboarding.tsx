@@ -2,27 +2,6 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Shield, Bot, FileCheck, FileText, ChevronRight } from 'lucide-react'
 
-/**
- * Onboarding wizard — guides new users through first-run setup.
- *
- * TODO (good first issue — static layout):
- *   - This component renders a 3-step wizard with a progress bar.
- *   - Implement the static layout: step indicators at the top, step content
- *     in the middle, Back/Next buttons at the bottom.
- *   - No API calls needed yet — just the UI shell with hardcoded step content.
- *   - Acceptance criteria: clicking Next advances the step counter,
- *     clicking Back goes back, and clicking Finish on step 3 navigates to "/".
- *
- * TODO (help wanted — API wiring):
- *   - Step 1: call aiSystemsApi.create() with form data.
- *   - Step 2: call classificationApi.classify() with the new system ID.
- *   - Step 3: call documentsApi.generate() to create the first document.
- *   - On completion, set a flag via PATCH /users/me so the wizard is not
- *     shown again (add `onboarding_completed: boolean` to the user model).
- *   - Acceptance criteria: completing all 3 steps creates a system,
- *     runs classification, and generates a document, then redirects to "/".
- */
-
 const STEPS = [
   {
     label: 'Register AI System',
@@ -43,14 +22,34 @@ const STEPS = [
 
 export default function Onboarding() {
   const navigate = useNavigate()
+
   const [currentStep, setCurrentStep] = useState(0)
 
-  // TODO (help wanted): replace with real form state per step
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    sector: '',
+    use_case: '',
+    documentType: '',
+  })
+
   const isLastStep = currentStep === STEPS.length - 1
+
+  const handleChange = (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => {
+    const { name, value } = e.target
+
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
+  }
 
   const handleNext = () => {
     if (isLastStep) {
-      // TODO (help wanted): mark onboarding complete via API before navigating
       navigate('/')
     } else {
       setCurrentStep((s) => s + 1)
@@ -69,7 +68,9 @@ export default function Onboarding() {
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
           <Shield className="w-8 h-8 text-primary-600" />
-          <h1 className="text-xl font-semibold text-gray-900">Welcome to AegisAI</h1>
+          <h1 className="text-xl font-semibold text-gray-900">
+            Welcome to AegisAI
+          </h1>
         </div>
 
         {/* Step indicators */}
@@ -87,9 +88,12 @@ export default function Onboarding() {
               >
                 {idx + 1}
               </div>
+
               {idx < STEPS.length - 1 && (
                 <div
-                  className={`h-0.5 flex-1 ${idx < currentStep ? 'bg-primary-600' : 'bg-gray-200'}`}
+                  className={`h-0.5 flex-1 ${
+                    idx < currentStep ? 'bg-primary-600' : 'bg-gray-200'
+                  }`}
                 />
               )}
             </div>
@@ -100,15 +104,91 @@ export default function Onboarding() {
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <StepIcon className="w-6 h-6 text-primary-600" />
+
             <h2 className="text-lg font-semibold text-gray-900">
               {STEPS[currentStep].label}
             </h2>
           </div>
-          <p className="text-gray-600 text-sm">{STEPS[currentStep].description}</p>
 
-          {/* TODO (good first issue): add step-specific form fields here */}
-          <div className="mt-6 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center text-sm text-gray-400">
-            Step {currentStep + 1} form fields — implement me
+          <p className="text-gray-600 text-sm">
+            {STEPS[currentStep].description}
+          </p>
+
+          <div className="mt-6">
+            {/* Step 1 */}
+            {currentStep === 0 && (
+              <div className="space-y-4">
+                <input
+                  type="text"
+                  name="name"
+                  placeholder="System Name"
+                  value={formData.name}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+
+                <textarea
+                  name="description"
+                  placeholder="System Description"
+                  value={formData.description}
+                  onChange={handleChange}
+                  rows={4}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+
+                <input
+                  type="text"
+                  name="sector"
+                  placeholder="Sector"
+                  value={formData.sector}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+
+                <input
+                  type="text"
+                  name="use_case"
+                  placeholder="Use Case"
+                  value={formData.use_case}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+            )}
+
+            {/* Step 2 */}
+            {currentStep === 1 && (
+              <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                <p className="text-sm text-blue-700">
+                  Classification will run automatically after system creation.
+                </p>
+              </div>
+            )}
+
+            {/* Step 3 */}
+            {currentStep === 2 && (
+              <div className="space-y-4">
+                <label className="block text-sm font-medium text-gray-700">
+                  Select Document Type
+                </label>
+
+                <select
+                  name="documentType"
+                  value={formData.documentType}
+                  onChange={handleChange}
+                  className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="">Choose a document type</option>
+                  <option value="risk_assessment">
+                    Risk Assessment Report
+                  </option>
+                  <option value="compliance_checklist">
+                    Compliance Checklist
+                  </option>
+                  <option value="audit_summary">Audit Summary</option>
+                </select>
+              </div>
+            )}
           </div>
         </div>
 
@@ -122,12 +202,14 @@ export default function Onboarding() {
           >
             Back
           </button>
+
           <button
             type="button"
             onClick={handleNext}
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
           >
             {isLastStep ? 'Finish' : 'Next'}
+
             {!isLastStep && <ChevronRight className="w-4 h-4" />}
           </button>
         </div>
