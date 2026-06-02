@@ -118,8 +118,6 @@ def create_webhook(
 
     """
     Register a new webhook endpoint for the current user.
-=======
-    """Register a new webhook endpoint for the current user.
 
     Args:
         body: Webhook configuration payload supplied by the client.
@@ -151,9 +149,7 @@ def list_webhooks(
 ):
 
     """
-    List all webhook configs for the current user.
-
-    """List all webhook configurations for the current user.
+    List all webhook configurations for the current user.
 
     Args:
         current_user: Authenticated user whose webhooks are being listed.
@@ -177,9 +173,7 @@ def delete_webhook(
 ):
 
     """
-    Delete a webhook config (must belong to current user).
-
-    """Delete a webhook configuration owned by the current user.
+    Delete a webhook configuration owned by the current user.
 
     Args:
         webhook_id: ID of the webhook configuration to delete.
