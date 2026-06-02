@@ -20,39 +20,59 @@ class DummyDoc:
         self.metadata = {"source": page_content}
 
 
-def _get_test_db():
+def _get_test_db_session():
+    """Creates a fresh in-memory database and returns a sessionmaker."""
     engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
-
-    def _override_get_db():
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    return _override_get_db
+    return TestingSessionLocal
 
 
 @pytest.fixture
 def client():
-    # Setup fresh DB and auth overrides
-    app.dependency_overrides[get_db] = _get_test_db()
+    # 1. Setup fresh in-memory DB
+    SessionLocal = _get_test_db_session()
+    db = SessionLocal()
+
+    # 2. Seed a test user so foreign keys in RagQuery work
+    user = User(
+        id=1,
+        email="tester@example.com",
+        hashed_password="fakehash",
+        subscription_tier=SubscriptionTier.FREE,
+        is_active=True
+    )
+    db.add(user)
+    
+    # Add an admin user as well
+    admin = User(
+        id=2,
+        email="admin@example.com",
+        hashed_password="fakehash",
+        subscription_tier=SubscriptionTier.SCALE,
+        is_active=True
+    )
+    db.add(admin)
+    db.commit()
+
+    # 3. Define dependency overrides
+    def _override_get_db():
+        try:
+            yield db
+        finally:
+            pass # Keep it open for the duration of the test
 
     def _fake_user():
-        u = User()
-        u.id = 1
-        u.email = "tester@example.com"
-        u.subscription_tier = SubscriptionTier.FREE
-        return u
+        return user
 
+    app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = _fake_user
 
     with TestClient(app) as c:
         yield c
     
-    # Clean up overrides after test to prevent leakage
+    # 4. Cleanup
+    db.close()
     app.dependency_overrides.clear()
 
 
@@ -99,11 +119,10 @@ def test_query_feedback_and_low_quality_flow(client, mock_rag_modules):
     assert resp2.status_code == 200
 
     # 3. Route authentication override to test admin extraction privileges
+    # Note: We need to get the admin user from the DB session if we want to be strict,
+    # but the override just needs to return an object with the right tier.
     def _admin_user():
-        u = User()
-        u.id = 2
-        u.email = "admin@example.com"
-        u.subscription_tier = SubscriptionTier.SCALE
+        u = User(id=2, subscription_tier=SubscriptionTier.SCALE)
         return u
 
     app.dependency_overrides[get_current_user] = _admin_user
@@ -147,10 +166,7 @@ def test_feedback_rejects_invalid_vote_value(client, mock_rag_modules):
 
     # 3. Verify admin extraction remains empty
     def _admin_user():
-        u = User()
-        u.id = 2
-        u.email = "admin@example.com"
-        u.subscription_tier = SubscriptionTier.SCALE
+        u = User(id=2, subscription_tier=SubscriptionTier.SCALE)
         return u
 
     app.dependency_overrides[get_current_user] = _admin_user
