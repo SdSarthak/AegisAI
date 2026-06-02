@@ -1,0 +1,182 @@
+# Guard Model Evaluation — runs the Guard safety classifier against a held-out
+# test set, computes F1 / accuracy / per-label metrics, posts them as a workflow
+# summary + sticky PR comment, and fails the build if the threshold metric
+# drops below a configurable floor.
+#
+# Configure thresholds via repository variables (Settings -> Variables -> Actions):
+#   GUARD_F1_THRESHOLD          float, default "0.85"
+#   GUARD_THRESHOLD_METRIC      "weighted_f1" | "macro_f1" | "accuracy"
+#   GUARD_MODEL_RELEASE_TAG     optional release tag to download trained weights
+#                               from (e.g. "guard-model-v3"). If unset, the
+#                               script falls back to whatever guard_config
+#                               resolves locally (typically pre-trained DeBERTa).
+#
+# Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
+# SPDX-License-Identifier: AGPL-3.0-only
+
+name: Guard Model Evaluation
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/app/modules/guard/**"
+      - "backend/data/guard_holdout.csv"
+      - "backend/data/guard_baseline.json"
+      - "backend/scripts/evaluate_guard_ci.py"
+      - ".github/workflows/guard-eval.yml"
+  pull_request_target:
+    branches: [main]
+    paths:
+      - "backend/app/modules/guard/**"
+      - "backend/data/guard_holdout.csv"
+      - "backend/data/guard_baseline.json"
+      - "backend/scripts/evaluate_guard_ci.py"
+      - ".github/workflows/guard-eval.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/app/modules/guard/**"
+      - "backend/data/guard_holdout.csv"
+      - "backend/scripts/evaluate_guard_ci.py"
+  schedule:
+    # Nightly at 03:00 UTC — catches drift from upstream dependency updates.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      threshold:
+        description: "Override the F1 threshold for this run (e.g. 0.80)"
+        required: false
+        default: ""
+      threshold_metric:
+        description: "Metric to enforce: weighted_f1 | macro_f1 | accuracy"
+        required: false
+        default: "weighted_f1"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: guard-eval-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    name: Evaluate Guard classifier
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Cache HuggingFace models
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: hf-${{ runner.os }}-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            hf-${{ runner.os }}-
+
+      - name: Install dependencies
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Download trained model artefact (if release tag configured)
+        if: ${{ vars.GUARD_MODEL_RELEASE_TAG != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ vars.GUARD_MODEL_RELEASE_TAG }}
+        run: |
+          set -euo pipefail
+          dest="backend/app/modules/guard/models/classifier"
+          mkdir -p "$dest"
+          echo "Downloading model from release tag: $RELEASE_TAG"
+          gh release download "$RELEASE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "classifier-*.tar.gz" \
+            --dir /tmp
+          tar -xzf /tmp/classifier-*.tar.gz -C "$dest" --strip-components=0
+          ls -lah "$dest"
+
+      - name: Resolve threshold
+        id: threshold
+        env:
+          DISPATCH_THRESHOLD: ${{ github.event.inputs.threshold }}
+          DISPATCH_METRIC: ${{ github.event.inputs.threshold_metric }}
+          VAR_THRESHOLD: ${{ vars.GUARD_F1_THRESHOLD }}
+          VAR_METRIC: ${{ vars.GUARD_THRESHOLD_METRIC }}
+        run: |
+          THRESHOLD="${DISPATCH_THRESHOLD:-${VAR_THRESHOLD:-0.85}}"
+          METRIC="${DISPATCH_METRIC:-${VAR_METRIC:-weighted_f1}}"
+          echo "threshold=$THRESHOLD" >> "$GITHUB_OUTPUT"
+          echo "metric=$METRIC"       >> "$GITHUB_OUTPUT"
+          echo "Using $METRIC >= $THRESHOLD"
+
+      - name: Run Guard evaluation
+        id: eval
+        working-directory: backend
+        env:
+          PYTHONPATH: .
+        continue-on-error: true
+        run: |
+          set +e
+          python -m scripts.evaluate_guard_ci \
+            --test-set-path data/guard_holdout.csv \
+            --baseline      data/guard_baseline.json \
+            --threshold     "${{ steps.threshold.outputs.threshold }}" \
+            --threshold-metric "${{ steps.threshold.outputs.metric }}" \
+            --output-json   "$GITHUB_WORKSPACE/metrics.json" \
+            --output-md     "$GITHUB_WORKSPACE/metrics.md"
+          code=$?
+          echo "exit_code=$code" >> "$GITHUB_OUTPUT"
+          exit 0   # don't fail the step yet; we want the summary + comment first
+
+      - name: Append metrics to workflow summary
+        if: always()
+        run: |
+          if [ -f "$GITHUB_WORKSPACE/metrics.md" ]; then
+            cat "$GITHUB_WORKSPACE/metrics.md" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "## Guard model evaluation" >> "$GITHUB_STEP_SUMMARY"
+            echo "_metrics.md was not produced — check the previous step logs._" \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload metrics JSON artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: guard-eval-metrics
+          path: |
+            metrics.json
+            metrics.md
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Post sticky PR comment
+        if: ${{ github.event_name == 'pull_request' && always() }}
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: metrics.md
+          edit-mode: replace
+          # Sticky: only one comment per PR — subsequent runs update it in place.
+          comment-tag: guard-eval-comment
+
+      - name: Enforce threshold (fail step if not met)
+        if: ${{ steps.eval.outputs.exit_code != '0' }}
+        run: |
+          echo "Guard evaluation did not meet the threshold (exit ${{ steps.eval.outputs.exit_code }})."
+          exit 1
