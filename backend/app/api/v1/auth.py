@@ -47,18 +47,7 @@ users_router = APIRouter()
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user account.
-
-    Args:
-        user_data: Registration payload containing email, password, and profile fields.
-        db: Database session used to check for duplicates and create the user.
-
-    Returns:
-        The created user serialized as UserResponse.
-
-    Raises:
-        HTTPException: If the email is already registered or registration fails.
-    """
+    """Register a new user account."""
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
@@ -96,18 +85,7 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
-    """Authenticate a user and return an access token.
-
-    Args:
-        form_data: OAuth2 password form containing the user's email and password.
-        db: Database session used to look up and validate the user.
-
-    Returns:
-        A bearer token payload with the access token and token type.
-
-    Raises:
-        HTTPException: If the credentials are invalid or the user is inactive.
-    """
+    """Authenticate a user and return an access token."""
     user = db.query(User).filter(User.email == form_data.username).first()
 
     # Always run a constant-time bcrypt comparison regardless of whether the
@@ -137,14 +115,7 @@ def login(
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Return the authenticated user's profile.
-
-    Args:
-        current_user: Authenticated user resolved from the access token.
-
-    Returns:
-        The current user's profile serialized as UserResponse.
-    """
+    """Return the authenticated user's profile."""
     return current_user
 
 
@@ -154,19 +125,7 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Change the authenticated user's password.
-
-    Args:
-        payload: Current and new password values.
-        current_user: Authenticated user whose password is being changed.
-        db: Database session used to persist the updated password hash.
-
-    Returns:
-        A confirmation message indicating the password was updated.
-
-    Raises:
-        HTTPException: If the current password does not match.
-    """
+    """Change the authenticated user's password."""
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -188,16 +147,7 @@ def update_current_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update the authenticated user's profile details.
-
-    Args:
-        user_data: Partial profile update payload.
-        current_user: Authenticated user whose profile is being updated.
-        db: Database session used to persist the changes.
-
-    Returns:
-        The updated user serialized as UserResponse.
-    """
+    """Update the authenticated user's profile details."""
     if user_data.full_name is not None:
         current_user.full_name = user_data.full_name
     if user_data.company_name is not None:
@@ -214,15 +164,7 @@ def get_current_user_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return summary statistics for the authenticated user.
-
-    Args:
-        current_user: Authenticated user whose activity is being summarized.
-        db: Database session used to count systems and documents.
-
-    Returns:
-        UserStatsResponse containing system, document, risk, and compliance counts.
-    """
+    """Return summary statistics for the authenticated user."""
     systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
 
     risk_breakdown: dict = {}

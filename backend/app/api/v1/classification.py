@@ -353,15 +353,7 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
 def classify_ai_system(
     data: RiskClassificationRequest, current_user: User = Depends(get_current_user)
 ):
-    """Classify an AI system's risk level from the questionnaire payload.
-
-    Args:
-        data: Risk classification questionnaire answers for the AI system.
-        current_user: Authenticated user requesting the classification.
-
-    Returns:
-        RiskClassificationResponse containing the inferred risk level and guidance.
-    """
+    """Classify an AI system's risk level from the questionnaire payload."""
     return classify_risk(data)    
 
 
@@ -372,20 +364,7 @@ def classify_and_save(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Classify an AI system and persist the result.
-
-    Args:
-        system_id: ID of the AI system to classify.
-        data: Risk classification questionnaire answers.
-        db: Database session used to load the system and save the assessment.
-        current_user: Authenticated user who must own the system.
-
-    Returns:
-        RiskClassificationResponse for the submitted questionnaire.
-
-    Raises:
-        HTTPException: If the system does not exist or does not belong to the user.
-    """
+    """Classify an AI system and persist the result."""
     # Get the AI system
     system = (
         db.query(AISystem)
@@ -430,14 +409,7 @@ def classify_and_save(
 def get_questionnaire_risk_factors(
     current_user: User = Depends(get_current_user),
 ):
-    """Return the static questionnaire metadata used by the classifier.
-
-    Args:
-        current_user: Authenticated user requesting the questionnaire metadata.
-
-    Returns:
-        The list of questionnaire risk factors used by the classification flow.
-    """
+    """Return the static questionnaire metadata used by the classifier."""
     return QUESTIONNAIRE_RISK_FACTORS
 
 @router.post("/bulk", response_model=BulkClassificationResponse)
@@ -446,16 +418,7 @@ def bulk_classify_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Classify multiple AI systems in a single request.
-
-    Args:
-        request: Payload containing the AI system IDs to classify.
-        db: Database session used to load systems and store assessments.
-        current_user: Authenticated user who must own every system.
-
-    Returns:
-        BulkClassificationResponse containing per-system results and errors.
-    """
+    """Classify multiple AI systems in a single request."""
     results: List[BulkClassificationItem] = []
 
     for system_id in request.system_ids:

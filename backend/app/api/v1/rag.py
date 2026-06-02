@@ -62,18 +62,7 @@ def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
 ):
-    """Ingest one or more regulatory PDFs and rebuild the FAISS index.
-
-    Args:
-        files: One or more PDF uploads to save, chunk, and index.
-        current_user: Authenticated user requesting the ingestion.
-
-    Returns:
-        RAGIngestResponse with file, chunk, and index size counts.
-
-    Raises:
-        HTTPException: If no valid PDFs are supplied or indexing fails.
-    """
+    """Ingest one or more regulatory PDFs and rebuild the FAISS index."""
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -162,19 +151,7 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Ask a regulatory question and get an answer grounded in source documents.
-
-    Args:
-        request: Query payload containing the user's question.
-        current_user: Authenticated user submitting the query.
-        db: Database session used to persist query history and feedback.
-
-    Returns:
-        RAGQueryResponse containing the grounded answer, sources, and confidence scores.
-
-    Raises:
-        HTTPException: If the RAG index is unavailable or query processing fails.
-    """
+    """Ask a regulatory question and get an answer grounded in source documents."""
     try:
         from app.core.database import Base
         from app.modules.rag.retrieval_chain import get_qa_chain
@@ -246,11 +223,7 @@ def query_knowledge_base(
 
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health():
-    """Check whether the RAG module has an available FAISS index.
-
-    Returns:
-        A status payload indicating whether the index is loaded.
-    """
+    """Check whether the RAG module has an available FAISS index."""
     from app.modules.rag.vector_store import check_index_exists
 
     index_loaded = check_index_exists()
@@ -283,19 +256,7 @@ def rag_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Record feedback (upvote/downvote) for a previously returned RAG answer.
-
-    Args:
-        payload: Feedback payload containing the answer ID and vote.
-        current_user: Authenticated user submitting the feedback.
-        db: Database session used to persist the feedback.
-
-    Returns:
-        A confirmation payload with the feedback status.
-
-    Raises:
-        HTTPException: If the answer is not found.
-    """
+    """Record feedback (upvote/downvote) for a previously returned RAG answer."""
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
@@ -315,19 +276,7 @@ def get_low_quality_chunks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return source chunks whose downvote ratio exceeds the given threshold.
-
-    Args:
-        threshold: Ratio threshold for flagging low-quality chunks.
-        current_user: Authenticated user requesting the report.
-        db: Database session used to query feedback.
-
-    Returns:
-        A payload containing threshold and low-quality chunk details.
-
-    Raises:
-        HTTPException: If the user is not authorized to view this data.
-    """
+    """Return source chunks whose downvote ratio exceeds the given threshold."""
     try:
         if current_user.subscription_tier != SubscriptionTier.SCALE:
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -370,17 +319,7 @@ def get_rag_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return the current user's paginated RAG query history, newest first.
-
-    Args:
-        page: Page number to return, starting at 1.
-        page_size: Number of queries per page.
-        current_user: Authenticated user whose history is requested.
-        db: Database session used to query query history.
-
-    Returns:
-        A paginated list of the user's past RAG queries.
-    """
+    """Return the current user's paginated RAG query history, newest first."""
     offset = (page - 1) * page_size
     queries = (
         db.query(RagQuery)
