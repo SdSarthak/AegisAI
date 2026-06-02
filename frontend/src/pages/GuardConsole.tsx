@@ -173,10 +173,16 @@ export default function GuardConsole() {
             <label htmlFor="guard-prompt" className="sr-only">
               Prompt to scan
             </label>
-            <textarea
+              <textarea
               id="guard-prompt"
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                  const form = (event.target as HTMLTextAreaElement).closest('form')
+                  if (form) form.requestSubmit()
+                }
+              }}
               placeholder="Paste the prompt you want LLM Guard to inspect..."
               rows={10}
               disabled={isLoading}
