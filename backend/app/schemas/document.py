@@ -3,6 +3,9 @@ from typing import Optional
 from datetime import datetime
 from app.models.document import DocumentType, DocumentStatus
 
+class DocumentShareResponse(BaseModel):
+    share_url: str
+    expires_in_days: int
 
 class DocumentCreate(BaseModel):
     title: str
@@ -19,6 +22,13 @@ class DocumentUpdate(BaseModel):
 class DocumentUpdateRequest(BaseModel):
     """Request to update document content only."""
     content: str
+
+class DocumentTemplateResponse(BaseModel):
+    """Available document template metadata for generation."""
+
+    type: DocumentType
+    name: str
+    description: str
 
 class DocumentResponse(BaseModel):
     id: int

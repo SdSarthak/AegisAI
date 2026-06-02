@@ -7,9 +7,10 @@ run without an OpenAI key, a running DB, or any real PDFs on disk.
 """
 
 import io
-import os
 import pytest
 from unittest.mock import MagicMock, patch
+from app.core.security import get_current_user
+from app.main import app
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -40,6 +41,14 @@ PATCH_LOAD_DOCS = "app.api.v1.rag.load_documents_from_paths"
 PATCH_CREATE_VS = "app.api.v1.rag.create_vector_store"
 
 
+@pytest.fixture
+def mock_rag_user():
+    """Authenticate RAG ingest tests without requiring a real JWT."""
+    app.dependency_overrides[get_current_user] = _mock_current_user
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
+
+
 # ---------------------------------------------------------------------------
 # Test class
 # ---------------------------------------------------------------------------
@@ -53,7 +62,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_single_pdf_success(self, mock_load, mock_create, client):
+    def test_single_pdf_success(self, mock_load, mock_create, client, mock_rag_user):
         """
         1. Uploading a single valid PDF should return 200 with correct fields.
         """
@@ -82,7 +91,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_multiple_pdfs_success(self, mock_load, mock_create, client):
+    def test_multiple_pdfs_success(self, mock_load, mock_create, client, mock_rag_user):
         """
         2. Uploading multiple PDFs should reflect all files in the response.
         """
@@ -113,19 +122,18 @@ class TestRagIngest:
     # Validation errors
     # ------------------------------------------------------------------
 
-    def test_no_files_returns_422(self, client):
+    def test_no_files_returns_422(self, client, mock_rag_user):
         """
         3. Sending an empty request (no 'files' field) should return 422.
         FastAPI validates the required File(...) parameter before our code runs.
         """
-        with patch(PATCH_AUTH, return_value=_mock_current_user()):
-            response = client.post("/api/v1/rag/ingest")
+        response = client.post("/api/v1/rag/ingest")
 
         assert response.status_code == 422
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_non_pdf_file_returns_400(self, mock_load, mock_create, client):
+    def test_non_pdf_file_returns_400(self, mock_load, mock_create, client, mock_rag_user):
         """
         4. Uploading a non-PDF file should return 400 with a clear message.
         """
@@ -143,7 +151,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_empty_pdf_returns_400(self, mock_load, mock_create, client):
+    def test_empty_pdf_returns_400(self, mock_load, mock_create, client, mock_rag_user):
         """
         5. A valid-looking PDF that produces zero chunks should return 400.
         This covers scanned/image-only PDFs and password-protected files.
@@ -167,7 +175,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_faiss_build_failure_returns_503(self, mock_load, mock_create, client):
+    def test_faiss_build_failure_returns_503(self, mock_load, mock_create, client, mock_rag_user):
         """
         6. If the FAISS build step raises an exception, the endpoint should
         return 503 with the error forwarded in the detail field.
@@ -204,7 +212,6 @@ class TestRagIngest:
                 detail="Not authenticated",
             )
         
-        from app.main import app
         app.dependency_overrides[get_current_user] = raise_unauthorized
         
         try:
@@ -224,7 +231,7 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_response_has_all_required_fields(self, mock_load, mock_create, client):
+    def test_response_has_all_required_fields(self, mock_load, mock_create, client, mock_rag_user):
         """
         8. The JSON response must contain exactly the three fields required
         by the issue specification.
@@ -251,3 +258,62 @@ class TestRagIngest:
         assert isinstance(data["files_processed"], int) and data["files_processed"] >= 0
         assert isinstance(data["chunks_created"], int) and data["chunks_created"] >= 0
         assert isinstance(data["index_size_bytes"], int) and data["index_size_bytes"] >= 0
+
+    # ------------------------------------------------------------------
+    # Rate and size limit checks
+    # ------------------------------------------------------------------
+
+    def test_too_many_files_returns_413(self, client, mock_rag_user):
+        """
+        9. Uploading more files than RAG_MAX_FILES_PER_REQUEST should return 413.
+        """
+        from app.core.config import settings
+        with (
+            patch(PATCH_AUTH, return_value=_mock_current_user()),
+            patch.object(settings, "RAG_MAX_FILES_PER_REQUEST", 2)
+        ):
+            response = client.post(
+                "/api/v1/rag/ingest",
+                files=[
+                    ("files", _make_pdf_upload("doc1.pdf")),
+                    ("files", _make_pdf_upload("doc2.pdf")),
+                    ("files", _make_pdf_upload("doc3.pdf")),
+                ],
+            )
+        assert response.status_code == 413
+        assert "too many files" in response.json()["detail"].lower()
+
+    def test_oversized_file_returns_413(self, client, mock_rag_user):
+        """
+        10. Uploading a file exceeding RAG_MAX_FILE_SIZE_BYTES should return 413.
+        """
+        from app.core.config import settings
+        with (
+            patch(PATCH_AUTH, return_value=_mock_current_user()),
+            patch.object(settings, "RAG_MAX_FILE_SIZE_BYTES", 10)
+        ):
+            response = client.post(
+                "/api/v1/rag/ingest",
+                files={"files": _make_pdf_upload("large.pdf", content=b"A" * 11)},
+            )
+        assert response.status_code == 413
+        assert "exceeds the maximum size" in response.json()["detail"].lower()
+
+    def test_exceed_total_budget_returns_413(self, client, mock_rag_user):
+        """
+        11. Uploading multiple files exceeding RAG_TOTAL_BUDGET_BYTES should return 413.
+        """
+        from app.core.config import settings
+        with (
+            patch(PATCH_AUTH, return_value=_mock_current_user()),
+            patch.object(settings, "RAG_TOTAL_BUDGET_BYTES", 20)
+        ):
+            response = client.post(
+                "/api/v1/rag/ingest",
+                files=[
+                    ("files", _make_pdf_upload("doc1.pdf", content=b"A" * 15)),
+                    ("files", _make_pdf_upload("doc2.pdf", content=b"A" * 15)),
+                ],
+            )
+        assert response.status_code == 413
+        assert "total upload size exceeds" in response.json()["detail"].lower()

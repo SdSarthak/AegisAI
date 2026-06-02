@@ -84,7 +84,12 @@ Examples:
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+# macOS / Linux
+source venv/bin/activate
+# Windows CMD
+# venv\Scripts\activate.bat
+# Windows PowerShell
+# venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 cp .env.example .env      # fill in your keys
 uvicorn app.main:app --reload
@@ -105,6 +110,21 @@ npm run dev
 ```bash
 cd backend
 pytest tests/ -v --cov=app
+```
+
+### Pre-commit Hooks
+
+We use [pre-commit](https://pre-commit.com/) to catch common issues before they reach CI.
+
+```bash
+pip install pre-commit   # one-time install
+pre-commit install       # activate hooks for this repo
+```
+
+Hooks run automatically on `git commit`. To run them manually against all files:
+
+```bash
+pre-commit run --all-files
 ```
 
 ---
