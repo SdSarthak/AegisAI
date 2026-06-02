@@ -14,6 +14,8 @@ from app.schemas.ai_system import (
     RiskClassificationResponse,
     QuestionnaireRiskFactor,
 )
+from app.schemas.explain import ExplainRequest, ExplainResponse
+from app.modules.explainer.engine import explain_risk
 
 router = APIRouter()
 
@@ -279,7 +281,6 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
     if high_risk_indicators:
         risk_level = RiskLevel.HIGH
 
-    # Check for LIMITED risk (Article 52 - Transparency obligations)
     elif (
         data.interacts_with_humans
         or data.emotion_recognition
@@ -304,14 +305,12 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
                 "Inform subjects about biometric categorization (Article 52)"
             )
 
-    # MINIMAL risk - no specific requirements
     else:
         reasons.append("System does not fall into high-risk or limited-risk categories")
         requirements.append(
             "No mandatory requirements, but voluntary codes of conduct encouraged"
         )
 
-    # Generate next steps based on risk level
     next_steps = []
     if risk_level == RiskLevel.HIGH:
         next_steps = [
@@ -386,7 +385,6 @@ def classify_and_save(
     Raises:
         HTTPException: If the system does not exist or does not belong to the user.
     """
-    # Get the AI system
     system = (
         db.query(AISystem)
         .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
@@ -398,15 +396,12 @@ def classify_and_save(
             status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
         )
 
-    # Perform classification
     result = classify_risk(data)
 
-    # Update the AI system
     system.risk_level = result.risk_level
     system.compliance_status = ComplianceStatus.IN_PROGRESS
     system.questionnaire_responses = data.model_dump()
 
-    # Create risk assessment record
     assessment = RiskAssessment(
         ai_system_id=system.id,
         assessment_type="initial",
@@ -418,12 +413,10 @@ def classify_and_save(
         overall_score=70 if result.risk_level == RiskLevel.MINIMAL else 30,
     )
     db.add(assessment)
-
     db.commit()
     db.refresh(system)
 
     return result
-
 
 
 @router.get("/risk-factors", response_model=List[QuestionnaireRiskFactor])
@@ -439,6 +432,7 @@ def get_questionnaire_risk_factors(
         The list of questionnaire risk factors used by the classification flow.
     """
     return QUESTIONNAIRE_RISK_FACTORS
+
 
 @router.post("/bulk", response_model=BulkClassificationResponse)
 def bulk_classify_systems(
@@ -519,3 +513,15 @@ def bulk_classify_systems(
     return BulkClassificationResponse(results=results)
 
 
+@router.post("/explain", response_model=ExplainResponse)
+def explain_ai_system_risk(
+    data: ExplainRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Explain the risk classification of an AI system from a plain-text description.
+    Unlike /classify which requires a full questionnaire, this endpoint accepts
+    a natural language description and returns risk level, triggered EU AI Act
+    factors, relevant legal articles, and concrete compliance recommendations.
+    """
+    return explain_risk(data)

@@ -30,6 +30,16 @@ def _mock_current_user():
     user.is_verified = True
     return user
 
+def _mock_other_user():
+    user = MagicMock()
+    user.id = 2                                # ✅ integer
+    user.email = "other@example.com"
+    user.full_name = "Other User"               # ✅ string
+    user.company_name = "Other Company"
+    user.subscription_tier = SubscriptionTier.FREE  # ✅ proper enum
+    user.is_active = True
+    user.is_verified = True
+    return user
 
 @pytest.fixture(scope="session")
 def db_engine():
@@ -119,12 +129,21 @@ def auth_headers(client):
 
     return {"Authorization": f"Bearer {token}"}
 
+
 @pytest.fixture
-def other_user_auth_headers(client):
-    email = "other@example.com"
-    password = "TestPass123!"
-    client.post("/api/v1/auth/register", json={"email": email, "password": password, "full_name": "Other User"})
-    response = client.post("/api/v1/auth/login", data={"username": email, "password": password})
+def other_user_auth_headers(client, db_session):
+    # Register a different user
+    client.post("/api/v1/auth/register", json={
+        "email": "other@example.com",
+        "password": "OtherPass123!",
+        "full_name": "Other User",
+        "company_name": "Other Corp",
+    })
+    response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "other@example.com", "password": "OtherPass123!"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 

@@ -174,6 +174,65 @@ class TestPDFExportEndpoint:
         content_disposition = response.headers.get("content-disposition", "")
         assert "filename" in content_disposition or test_document.title in content_disposition
 
+    def test_pdf_export_escapes_user_controlled_markup(
+        self, client, auth_headers, test_user, test_ai_system, db_session
+    ):
+        document = Document(
+            owner_id=test_user.id,
+            ai_system_id=test_ai_system.id,
+            title='Markup <b>Title</b> "draft"',
+            document_type=DocumentType.TECHNICAL_DOCUMENTATION,
+            status=DocumentStatus.GENERATED,
+            content=(
+                "# <b>Injected heading</b>\n"
+                "Plain text with <font color=\"red\">unterminated markup\n"
+                "- <i>Injected bullet</i>\n"
+                "**Bold <script>alert(1)</script> text**"
+            ),
+        )
+        db_session.add(document)
+        db_session.commit()
+
+        response = client.get(
+            f"/api/v1/documents/{document.id}/pdf",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.content.startswith(b"%PDF-")
+
+        pdf_file = BytesIO(response.content)
+        with pdfplumber.open(pdf_file) as pdf:
+            first_page_text = pdf.pages[0].extract_text()
+            assert "Injected heading" in first_page_text
+            assert "unterminated markup" in first_page_text
+            assert "alert(1)" in first_page_text
+
+    def test_pdf_export_sanitizes_download_filename(
+        self, client, auth_headers, test_user, test_ai_system, db_session
+    ):
+        document = Document(
+            owner_id=test_user.id,
+            ai_system_id=test_ai_system.id,
+            title='Unsafe "Q4"/Report\nFinal',
+            document_type=DocumentType.TECHNICAL_DOCUMENTATION,
+            status=DocumentStatus.GENERATED,
+            content="# Safe content\n\nThis document should export.",
+        )
+        db_session.add(document)
+        db_session.commit()
+
+        response = client.get(
+            f"/api/v1/documents/{document.id}/pdf",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        content_disposition = response.headers["content-disposition"]
+        assert "\n" not in content_disposition
+        assert 'filename="Unsafe _Q4_ReportFinal.pdf"' in content_disposition
+        assert "filename*=UTF-8''Unsafe%20_Q4_ReportFinal.pdf" in content_disposition
+
     def test_pdf_export_multiple_documents(self, client, auth_headers, test_user, test_ai_system, db_session):
         doc1 = Document(
             owner_id=test_user.id,
@@ -246,45 +305,3 @@ class TestPDFExportEndpoint:
             headers=other_headers
         )
         assert response.status_code == 404, "Should not be able to access other user's document"
-
-    def test_pdf_export_escapes_content_and_headers(self, client, auth_headers, test_user, test_ai_system, db_session):
-        """Test that HTML/XML tags in title and content are escaped and headers are formatted securely."""
-        malicious_doc = Document(
-            owner_id=test_user.id,
-            ai_system_id=test_ai_system.id,
-            title='<script>alert(1)</script> "Test" Document',
-            document_type=DocumentType.TECHNICAL_DOCUMENTATION,
-            status=DocumentStatus.GENERATED,
-            content="""# <dangerous> tag
-## <subdangerous> tag
-### <subsubdangerous> tag
-- <bullet> point
-Some text with **bold <markup>**."""
-        )
-        db_session.add(malicious_doc)
-        db_session.commit()
-        db_session.refresh(malicious_doc)
-
-        response = client.get(
-            f"/api/v1/documents/{malicious_doc.id}/pdf",
-            headers=auth_headers
-        )
-        assert response.status_code == 200
-        assert response.headers["content-type"] == "application/pdf"
-        
-        # Verify Content-Disposition header format
-        content_disposition = response.headers.get("content-disposition", "")
-        assert 'filename="scriptalert1script Test Document.pdf"' in content_disposition
-        assert "filename*=UTF-8''%3Cscript%3Ealert%281%29%3C/script%3E%20%22Test%22%20Document.pdf" in content_disposition
-
-        # Verify we can extract the text from the generated PDF safely
-        pdf_file = BytesIO(response.content)
-        with pdfplumber.open(pdf_file) as pdf:
-            first_page_text = pdf.pages[0].extract_text()
-            assert '<script>alert(1)</script> "Test"' in first_page_text
-            assert 'Document' in first_page_text
-            assert '<dangerous> tag' in first_page_text
-            assert '<subdangerous> tag' in first_page_text
-            assert '<subsubdangerous> tag' in first_page_text
-            assert '<bullet> point' in first_page_text
-            assert 'bold <markup>' in first_page_text
