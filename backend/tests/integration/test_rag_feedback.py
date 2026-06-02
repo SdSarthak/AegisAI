@@ -140,6 +140,19 @@ def test_query_feedback_and_low_quality_flow(client, mock_rag_modules):
     assert "doc1.pdf#chunk1" in chunks or "doc2.pdf#chunk2" in chunks
 
 
+def test_rag_query_length_validation(client):
+    """Verify that queries longer than 2000 characters or empty are rejected with HTTP 422."""
+    # Long question
+    long_question = "x" * 2001
+    resp = client.post("/api/v1/rag/query", json={"question": long_question})
+    assert resp.status_code == 422
+
+    # Empty question
+    empty_question = ""
+    resp = client.post("/api/v1/rag/query", json={"question": empty_question})
+    assert resp.status_code == 422
+
+
 def test_feedback_rejects_invalid_vote_value(client, mock_rag_modules):
     """Ensure that feedback only accepts valid vote values ('up', 'down')."""
     # 1. Get an answer ID
