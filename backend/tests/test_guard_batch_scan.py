@@ -29,36 +29,6 @@ def _guard_result():
     }
 
 
-@pytest.fixture(autouse=True)
-def clear_guard_rate_limits():
-    guard_scan_rate_limiter._local_attempts_by_key.clear()
-    yield
-    guard_scan_rate_limiter._local_attempts_by_key.clear()
-
-
-@pytest.fixture
-def auth_headers(client):
-    email = f"batch-scan-{uuid4()}@example.com"
-    password = "TestPass123!"
-
-    client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": email,
-            "password": password,
-            "full_name": "Batch Scan Test User",
-        },
-    )
-
-    response = client.post(
-        "/api/v1/auth/login",
-        data={"username": email, "password": password},
-    )
-    token = response.json()["access_token"]
-
-    return {"Authorization": f"Bearer {token}"}
-
-
 def test_batch_scan_accepts_standard_valid_batch_request(client, auth_headers):
     payload = {
         "prompts": [

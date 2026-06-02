@@ -22,13 +22,22 @@ function isErrorResponseData(value: unknown): value is ErrorResponseData {
   return typeof value === 'object' && value !== null && 'detail' in value
 }
 
+const USER_FRIENDLY_ERROR_MAP: Record<string, string> = {
+  'value is not a valid email address': 'Please enter a valid email address',
+  'field required': 'This field is required',
+}
+
+function toUserFriendlyMessage(msg: string): string {
+  return USER_FRIENDLY_ERROR_MAP[msg] || msg
+}
+
 function parsePydanticErrors(errorData: unknown): ValidationError[] {
   if (!isErrorResponseData(errorData)) return []
 
   if (Array.isArray(errorData.detail)) {
     return errorData.detail.map((error) => ({
       field: String(error.loc?.[error.loc.length - 1] ?? 'unknown'),
-      message: error.msg || 'Invalid input',
+      message: toUserFriendlyMessage(error.msg || 'Invalid input'),
     }))
   }
 
@@ -112,6 +121,14 @@ export default function Register() {
               field: 'general',
               message:
                 'Network error. Please check your connection and try again.',
+            },
+          ])
+        } else if (err.code === 'ECONNABORTED') {
+          setErrors([
+            {
+              field: 'general',
+              message:
+                'Connection timed out. Please try again.',
             },
           ])
         } else {

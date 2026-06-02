@@ -32,7 +32,7 @@ api.interceptors.response.use(
 function ensureListResponse<T>(
   data: unknown,
   resourceName: string
-): T[] | { items: T[]; total?: number; page?: number; limit?: number } {
+): T[] {
   if (Array.isArray(data)) {
     return data
   }
@@ -43,7 +43,7 @@ function ensureListResponse<T>(
     'items' in data &&
     Array.isArray((data as { items?: unknown }).items)
   ) {
-    return data as { items: T[]; total?: number; page?: number; limit?: number }
+    return (data as { items: T[] }).items
   }
 
   throw new Error(`${resourceName} response was empty or invalid.`)
@@ -129,8 +129,10 @@ export const authApi = {
     const { data } = await api.post('/auth/register', userData)
     return data
   },
-  getMe: async () => {
-    const { data } = await api.get('/auth/me')
+  getMe: async (token?: string) => {
+    const { data } = await api.get('/auth/me', {
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
     return data
   },
 }
@@ -140,8 +142,11 @@ export const aiSystemsApi = {
   list: async (params?: {
     sort_by?: string
     order?: string
-    skip?: number
+    page?: number
     limit?: number
+    search?: string
+    risk_level?: string
+    compliance_status?: string
   }) => {
     const { data } = await api.get('/ai-systems/', { params })
     return ensureListResponse(data, 'AI systems')
@@ -274,6 +279,23 @@ export interface GuardScanResponse {
   matched_patterns?: string[]
 }
 
+// Guard explainability (issue #77). Per-token attribution returned by SHAP/LIME.
+export interface GuardTokenAttribution {
+  token: string
+  attribution: number
+  char_span: [number, number]
+}
+
+export interface GuardExplainResponse {
+  predicted_label: string
+  predicted_proba: number
+  base_value: number
+  tokens: GuardTokenAttribution[]
+  method: 'shap' | 'lime'
+  model_version: string
+  latency_ms: number
+}
+
 export const guardApi = {
   scan: async (prompt: string): Promise<GuardScanResponse> => {
     const { data } = await api.post('/guard/scan', { prompt })
@@ -285,6 +307,17 @@ export const guardApi = {
     ensureNumberField(responseData, 'confidence', 'Guard scan')
     ensureStringField(responseData, 'reasoning', 'Guard scan')
     return responseData as unknown as GuardScanResponse
+  },
+  explain: async (
+    text: string,
+    opts: { method?: 'shap' | 'lime'; maxEvals?: number } = {},
+  ): Promise<GuardExplainResponse> => {
+    const { data } = await api.post('/guard/explain', {
+      text,
+      method: opts.method ?? 'shap',
+      max_evals: opts.maxEvals ?? 200,
+    })
+    return data
   },
 }
 

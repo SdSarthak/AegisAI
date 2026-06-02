@@ -20,9 +20,9 @@ export default function Login() {
 
     try {
       const tokenData = await authApi.login(email, password)
-      setAuth(tokenData.access_token, null)  
-      const user = await authApi.getMe()     
-      setAuth(tokenData.access_token, user)  
+      setAuth(tokenData.access_token, null)
+      const user = await authApi.getMe(tokenData.access_token)
+      setAuth(tokenData.access_token, user)
       navigate('/')
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.detail) {
