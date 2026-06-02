@@ -1,7 +1,7 @@
 """add rag_audit_logs table
 
 Revision ID: 9f2b7c6a1d3e
-Revises: c3d9f1b2a4e6
+Revises: c3d9f1b2a4e6, e7d9f2b3c4a5, add_onboarding_completed_to_users
 Create Date: 2026-05-31 00:00:00.000000
 
 Changed: Added the production migration for the RAG audit log table.
@@ -18,7 +18,11 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "9f2b7c6a1d3e"
-down_revision: Union[str, None] = "c3d9f1b2a4e6"
+down_revision: Union[str, Sequence[str], None] = (
+    "c3d9f1b2a4e6",
+    "e7d9f2b3c4a5",
+    "add_onboarding_completed_to_users",
+)
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
