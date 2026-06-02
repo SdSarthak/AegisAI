@@ -31,6 +31,7 @@ export default function Documents() {
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
   const [copiedDocId, setCopiedDocId] = useState<number | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const limit = 10
 
@@ -125,19 +126,12 @@ export default function Documents() {
     if (!editingDoc) return
 
     try {
-      const response = await fetch(`/api/v1/documents/${editingDoc.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content })
-      })
-
-      if (response.ok) {
-        queryClient.invalidateQueries({ queryKey: ['documents'] })
-      }
+      setSaveError(null)
+      await documentsApi.update(editingDoc.id, { content })
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
     } catch (error) {
-      console.error('Save failed:', error)
+      const message = error instanceof Error ? error.message : 'Failed to save document'
+      setSaveError(message)
     }
   }
 
@@ -504,14 +498,23 @@ export default function Documents() {
       )}
 
       {/* Editor Modal */}
+      {saveError && (
+        <div className="fixed top-4 right-4 z-50 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-lg">
+          {saveError}
+        </div>
+      )}
+
       {editingDoc && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
           <div className="bg-white rounded-xl w-full max-w-6xl h-[90vh]">
             <DocumentEditor
               documentId={editingDoc.id}
               initialContent={editingDoc.content || ''}
               onSave={handleSaveDocument}
-              onClose={() => setEditingDoc(null)}
+              onClose={() => {
+                setEditingDoc(null)
+                setSaveError(null)
+              }}
             />
           </div>
         </div>
