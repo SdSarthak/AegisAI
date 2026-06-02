@@ -28,7 +28,7 @@ reportlab==4.0.8
 
 # ── Module 2: LLM Guard ───────────────────────────────────────────────────────
 transformers==4.37.0
-torch==2.1.1
+torch>=2.11.0
 scikit-learn==1.3.2
 numpy==1.24.3
 pandas==2.1.1
@@ -55,7 +55,7 @@ python-json-logger==2.0.7
 apscheduler>=3.10.0
 opentelemetry-api==1.22.0
 opentelemetry-sdk==1.22.0
-opentelemetry-exporter-prometheus==1.18.0
+
 prometheus-fastapi-instrumentator==6.1.0
 
 # ── PDF Utilities ────────────────────────────────────────────────────────────────

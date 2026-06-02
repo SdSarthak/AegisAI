@@ -125,20 +125,7 @@ def get_audit_logs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return guard scan audit logs with pagination and optional filters.
-
-    Args:
-        skip: Number of items to skip for pagination.
-        limit: Maximum number of items per page.
-        user_id: Optional filter by user ID (admin only).
-        decision: Optional filter by scan decision (allow/sanitize/block).
-        days: Optional filter by recency (last N days).
-        current_user: Authenticated user requesting the audit logs.
-        db: Database session used to query audit logs.
-
-    Returns:
-        PaginatedResponse containing guard scan audit log entries.
-    """
+    """Return guard scan audit logs with pagination and optional filters."""
     is_admin = getattr(current_user, "role", None) == "admin"
     if user_id is not None and user_id != current_user.id and not is_admin:
         raise HTTPException(

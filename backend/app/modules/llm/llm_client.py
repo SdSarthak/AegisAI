@@ -161,6 +161,12 @@ class LLMClient:
 
         Yields:
             Text chunks as they arrive
+
+        Note:
+            Wraps the openai stream in try/finally so that when the consumer
+            closes this generator (e.g. on client disconnect), the underlying
+            HTTP response is released — otherwise tokens keep generating /
+            billing after nobody is listening.
         """
         messages = []
         if system_prompt:

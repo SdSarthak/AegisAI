@@ -10,7 +10,7 @@
  * shows the predicted label, confidence, and explanation latency.
  */
 
-import { useMemo } from 'react'
+import React, { useMemo } from 'react'
 import { Brain, Clock } from 'lucide-react'
 
 import type { GuardExplainResponse, GuardTokenAttribution } from '../services/api'

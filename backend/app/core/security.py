@@ -23,13 +23,15 @@ def _get_credentials_exception() -> HTTPException:
     """Helper to return a standardized 401 Unauthorized exception."""
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail={"field": "general", "message": "Could not validate credentials"},
         headers={"WWW-Authenticate": "Bearer"},
     )
 
 
 def validate_password_strength(password: str) -> str:
     errors = []
+    if len(password) > 128:
+        raise ValueError("Password must not exceed 128 characters")
     if len(password) < 8:
         errors.append("at least 8 characters")
     if not re.search(r'[A-Z]', password):
@@ -70,7 +72,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     else:
         expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         
-    to_encode.update({"exp": expire})
+    to_encode.update({
+        "exp": expire,
+        "iat": now,
+        "nbf": now,
+    })
     encoded_jwt = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
@@ -111,7 +117,7 @@ def decode_token(token: str) -> Dict[str, Any]:
     except ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired. Please log in again.",
+            detail={"field": "general", "message": "Token has expired. Please log in again."},
             headers={"WWW-Authenticate": "Bearer"},
         )
 
