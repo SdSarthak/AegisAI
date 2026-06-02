@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import List, Optional
+from typing import List
 
 
 class Settings(BaseSettings):
@@ -31,12 +31,18 @@ class Settings(BaseSettings):
     LLM_API_KEY: str = ""
     LLM_BASE_URL: str = ""
     LLM_MODEL: str = "gpt-4o-mini"
+    LLM_TIMEOUT: float = 30.0
 
     # Module 2: LLM Guard
     GUARD_SANITIZATION_LEVEL: str = "medium"
     GUARD_MAX_PROMPT_LENGTH: int = 2000
     GUARD_RATE_LIMIT_REQUESTS: int = 60
     GUARD_RATE_LIMIT_WINDOW_SECONDS: int = 60
+
+    # Rate Limiting & Outage Policies
+    RATE_LIMIT_FAIL_CLOSED: bool = False
+    BADGE_RATE_LIMIT_REQUESTS: int = 5
+    BADGE_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
     # Shared infrastructure
     REDIS_URL: str = ""
@@ -55,8 +61,10 @@ class Settings(BaseSettings):
     RAG_MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024
     RAG_TOTAL_BUDGET_BYTES: int = 50 * 1024 * 1024
 
-    # MLflow
-    MLFLOW_TRACKING_URI: Optional[str] = None  # ← only line added
+    # Observability (OpenTelemetry)
+    OTEL_SERVICE_NAME: str = "aegis-backend"
+    OTEL_METRICS_EXPORTER: str = "prometheus"
+    OTEL_TRACES_EXPORTER: str = "none"
 
     class Config:
         env_file = ".env"

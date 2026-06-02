@@ -17,13 +17,25 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
+
 // Handle 401 errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const url = error.config?.url || ''
+    const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
+    if (error.response?.status === 401 && !isAuthEndpoint) {
+      // Logout and navigate to login without forcing a full page reload.
       useAuthStore.getState().logout()
-      window.location.href = '/login'
+      try {
+        window.history.pushState({}, '', '/login')
+        // Notify router listeners (e.g., react-router) to handle navigation.
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      } catch (e) {
+        // Fallback: if SPA navigation fails, perform a safe replace.
+        window.location.replace('/login')
+      }
     }
     return Promise.reject(error)
   }
@@ -93,9 +105,14 @@ interface ClassificationResponse extends Record<string, unknown> {
   next_steps: string[]
 }
 
-interface RagQueryResponse extends Record<string, unknown> {
+export interface RagSource {
+  title: string
+  excerpt: string
+}
+
+export interface RagQueryResponse extends Record<string, unknown> {
   answer: string
-  sources?: Array<string | { title: string; excerpt: string }>
+  sources?: RagSource[]
   answer_id?: string
 }
 
@@ -135,6 +152,14 @@ export const authApi = {
     })
     return data
   },
+  updateMe: async (payload: {
+  full_name?: string
+  company_name?: string
+  onboarding_completed?: boolean
+}) => {
+  const { data } = await api.patch('/users/me', payload)
+  return data
+},
 }
 
 // AI Systems API
@@ -220,6 +245,10 @@ export const documentsApi = {
     const { data } = await api.post('/documents/generate', request)
     return data
   },
+  update: async (id: number, data: { content: string }) => {
+    const { data: response } = await api.put(`/documents/${id}`, data)
+    return response
+  },
   delete: async (id: number) => {
     await api.delete(`/documents/${id}`)
   },
@@ -296,6 +325,22 @@ export interface GuardExplainResponse {
   latency_ms: number
 }
 
+export interface GuardScanLog {
+  id?: number
+  decision: 'allow' | 'sanitize' | 'block'
+  confidence: number
+  reasoning: string
+  sanitized_prompt?: string | null
+  matched_patterns: string[]
+  scanned_at?: string
+}
+
+export interface GuardHistoryResponse {
+  items: GuardScanLog[]
+  limit: number
+  next_cursor: string | null
+}
+
 export const guardApi = {
   scan: async (prompt: string): Promise<GuardScanResponse> => {
     const { data } = await api.post('/guard/scan', { prompt })
@@ -324,6 +369,22 @@ export const guardApi = {
 export const analyticsApi = {
   summary: async () => {
     const { data } = await api.get('/analytics/summary')
+    return data
+  },
+}
+
+export const guardHistoryApi = {
+  list: async (params?: {
+    cursor?: string | null
+    limit?: number
+    decision?: string
+    intent?: string
+  }): Promise<GuardHistoryResponse> => {
+    const { data } = await api.get<GuardHistoryResponse>(
+      '/guard/history',
+      { params }
+    )
+
     return data
   },
 }

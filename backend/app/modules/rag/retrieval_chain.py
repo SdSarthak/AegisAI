@@ -10,6 +10,7 @@ from importlib import import_module
 from typing import Any
 
 from app.core.config import settings
+from app.core.telemetry import instrument_rag
 
 from .grounding import GroundingChecker
 
@@ -53,6 +54,7 @@ class GroundedRetrievalQA:
         self.embeddings_fn = embeddings_fn
         self.guard = guard
 
+    @instrument_rag
     def __call__(self, payload: Any) -> dict[str, Any]:
         """Run retrieval with chunk filtering and append grounding metadata."""
         query = _extract_query(payload)

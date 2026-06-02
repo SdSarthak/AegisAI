@@ -16,6 +16,7 @@ from .sanitizer import SanitizationLevel
 from .normalizer import normalize_prompt
 from ..llm.llm_client import LLMClient
 from . import guard_config as config
+from app.core.telemetry import instrument_guard
 
 # Logging is configured centrally in app.core.logging (configure_logging).
 # Importing this module must not call logging.basicConfig — doing so would
@@ -75,6 +76,7 @@ class LLMGuard:
             logger.error(f"Failed to initialize Gemini client: {e}")
             self.llm_client = None
 
+    @instrument_guard
     def guard(self, user_prompt: str) -> Dict:
         """
         Run the complete guard pipeline on a user prompt.

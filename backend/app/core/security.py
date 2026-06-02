@@ -23,13 +23,15 @@ def _get_credentials_exception() -> HTTPException:
     """Helper to return a standardized 401 Unauthorized exception."""
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
+        detail={"field": "general", "message": "Could not validate credentials"},
         headers={"WWW-Authenticate": "Bearer"},
     )
 
 
 def validate_password_strength(password: str) -> str:
     errors = []
+    if len(password) > 128:
+        raise ValueError("Password must not exceed 128 characters")
     if len(password) < 8:
         errors.append("at least 8 characters")
     if not re.search(r'[A-Z]', password):
@@ -78,16 +80,40 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
 
 
 def decode_token(token: str) -> Dict[str, Any]:
-    """Decode and verify a JWT token, returning the payload safely."""
+    """Decode and strictly validate a JWT token payload."""
     try:
         payload = jwt.decode(
-            token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM]
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM],
+            options={
+                "verify_signature": True,
+                "verify_exp": True,
+                "verify_iat": True,
+                "verify_nbf": True,
+                "require_sub": True,
+                "require_exp": True,
+                "require_iat": True,
+            },
         )
+
+        # Validate required claims
+        sub = payload.get("sub")
+        if not sub or not isinstance(sub, str):
+            raise _get_credentials_exception()
+
+        # Validate optional timing claims format if present
+        for claim in ("iat", "nbf", "exp"):
+            value = payload.get(claim)
+            if value is not None and not isinstance(value, (int, float)):
+                raise _get_credentials_exception()
+
         return payload
+
     except ExpiredSignatureError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired. Please log in again.",
+            detail={"field": "general", "message": "Token has expired. Please log in again."},
             headers={"WWW-Authenticate": "Bearer"},
         )
 

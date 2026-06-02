@@ -66,7 +66,7 @@ class AISystemAuditLog(Base):
     changed_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    ai_system = relationship("AISystem")
+    ai_system = relationship("AISystem", back_populates="audit_logs")
     changed_by = relationship("User")
 
 

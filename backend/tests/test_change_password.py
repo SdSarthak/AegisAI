@@ -77,7 +77,9 @@ class TestChangePassword:
             json={"current_password": "WrongPass1!", "new_password": "NewSecret1!"},
         )
         assert resp.status_code == 400
-        assert "incorrect" in resp.json()["detail"].lower()
+        detail = resp.json()["detail"]
+        assert detail["field"] == "general"
+        assert "incorrect" in detail["message"].lower()
 
     def test_short_new_password_returns_422(self, client):
         c, user = client
