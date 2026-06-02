@@ -35,8 +35,13 @@ export default function DocumentEditor({
       onSave?.(content)
       setSaveError('')
     } catch (error) {
-      setSaveError('Failed to save changes')
-    }
+  console.error('Save failed:', error)
+  setSaveError(
+    error instanceof Error
+      ? error.message
+      : 'Failed to save changes'
+  )
+}
     setIsSaving(false)
   }, [content, documentId, onSave])
 

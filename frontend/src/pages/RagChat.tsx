@@ -13,8 +13,6 @@ interface RagSource {
   excerpt: string
 }
 
-type RagSourceResponse = string | RagSource
-
 interface RagAnswer {
   answer: string
   sources: RagSource[]
@@ -55,23 +53,6 @@ function buildAnswerExport(
   ].join('\n')
 }
 
-function normalizeSources(
-  sources: RagSourceResponse[] = []
-): RagSource[] {
-  return sources
-    .map((source) => {
-      if (typeof source === 'string') {
-        return {
-          title: source,
-          excerpt: '',
-        }
-      }
-
-      return source
-    })
-    .filter((source) => source.title.trim())
-}
-
 export default function RagChat() {
   const [question, setQuestion] = useState('')
   const [submittedQuestion, setSubmittedQuestion] =
@@ -105,9 +86,19 @@ export default function RagChat() {
     try {
       const data = await ragApi.query(trimmedQuestion)
 
+      const normalizedSources: RagSource[] = (data.sources || []).map(
+        (source: string | RagSource) =>
+          typeof source === 'string'
+            ? {
+                title: source,
+                excerpt: '',
+              }
+            : source
+      )
+
       setAnswer({
         answer: data.answer,
-        sources: normalizeSources(data.sources),
+        sources: normalizedSources,
         answer_id: data.answer_id,
       })
     } catch (err: unknown) {
@@ -290,11 +281,9 @@ export default function RagChat() {
                                 {source.title}
                               </p>
 
-                              {source.excerpt && (
-                                <p className="text-sm text-gray-600 mt-1">
-                                  {source.excerpt}
-                                </p>
-                              )}
+                              <p className="text-sm text-gray-600 mt-1">
+                                {source.excerpt}
+                              </p>
                             </div>
                           )
                         )}

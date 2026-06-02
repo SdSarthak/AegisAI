@@ -15,8 +15,9 @@ import time
 import uuid
 from datetime import datetime
 from typing import List, Optional
+from typing import List, Literal
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -143,6 +144,12 @@ def ingest_documents(
     Raises:
         HTTPException: If no valid PDFs are supplied or indexing fails.
     """
+    if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Too many files. Maximum allowed is {settings.RAG_MAX_FILES_PER_REQUEST}.",
+        )
+
     pdf_files = [
         f
         for f in files
@@ -157,6 +164,26 @@ def ingest_documents(
         )
 
     storage_dir = _ensure_storage_dir()
+    total_size = 0
+    for upload in pdf_files:
+        upload.file.seek(0, 2)
+        file_size = upload.file.tell()
+        upload.file.seek(0)
+
+        if file_size > settings.RAG_MAX_FILE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File {upload.filename} exceeds the maximum size of {settings.RAG_MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB.",
+            )
+        total_size += file_size
+
+    if total_size > settings.RAG_TOTAL_BUDGET_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Total upload size exceeds the maximum budget of {settings.RAG_TOTAL_BUDGET_BYTES // (1024 * 1024)}MB.",
+        )
+
+    tmp_dir = tempfile.mkdtemp(prefix="aegis_ingest_")
     saved_paths: list[str] = []
     pending_documents: list[RAGDocument] = []
 
@@ -377,7 +404,7 @@ def rag_health():
 
 class RAGFeedbackRequest(BaseModel):
     answer_id: str
-    vote: str  # "up" or "down"
+    vote: Literal["up", "down"]
 
 
 @router.post("/feedback")
@@ -402,7 +429,7 @@ def rag_feedback(
 
 @router.get("/low-quality-chunks")
 def get_low_quality_chunks(
-    threshold: float = 0.3,
+    threshold: float = Query(0.3, ge=0, le=1),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

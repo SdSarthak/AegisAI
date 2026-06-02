@@ -49,7 +49,11 @@ def test_register_duplicate_email(client):
     client.post("/api/v1/auth/register", json=user_data)
     response = client.post("/api/v1/auth/register", json=user_data)
     assert response.status_code == 400
-    assert "already registered" in response.json()["detail"]
+    detail = response.json()["detail"]
+    assert detail["field"] == "general"
+    assert "already registered" in detail["message"]
+
+
 def test_login_success(client):
     """Test successful login after registration."""
     register_data = {
@@ -85,6 +89,9 @@ def test_login_wrong_password(client):
         }
     )
     assert response.status_code == 401
+    detail = response.json()["detail"]
+    assert detail["field"] == "general"
+    assert "Invalid email or password" in detail["message"]
 
 
 def test_invalid_token_returns_401(client):
@@ -186,3 +193,34 @@ def test_register_with_both_fields_at_max_length(client):
     )
 
     assert response.status_code == 201
+
+
+def test_login_nonexistent_user(client):
+    """Test login with a completely nonexistent email returns 401 with generic message.
+
+    This is the primary defence against user enumeration: the response
+    must be indistinguishable from a wrong-password failure.
+    """
+    response = client.post(
+        "/api/v1/auth/login",
+        data={
+            "username": "nonexistent@example.com",
+            "password": "DoesNotMatter1!"
+        }
+    )
+    assert response.status_code == 401
+    detail = response.json()["detail"]
+    assert detail["field"] == "general"
+    assert "Invalid email or password" in detail["message"]
+
+
+def test_register_password_too_long(client):
+    """Test registration rejects passwords exceeding 128 characters."""
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "toolong@example.com",
+            "password": "A1!" + "a" * 126  # 129 chars, exceeds 128 limit
+        }
+    )
+    assert response.status_code == 422

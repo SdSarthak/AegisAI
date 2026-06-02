@@ -189,6 +189,10 @@ export default function Classification() {
       setResult(data)
       setActiveTab('results')
     },
+    onError: () => {
+      setResult(null)
+      setActiveTab('questionnaire')
+    },
   })
 
   const getRiskIcon = (level: string) => {
@@ -640,6 +644,14 @@ export default function Classification() {
         >
           {classifyMutation.isPending ? 'Classifying...' : 'Classify Risk Level'}
         </button>
+
+        {classifyMutation.isError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {classifyMutation.error instanceof Error
+              ? classifyMutation.error.message
+              : 'Unable to classify this system right now.'}
+          </div>
+        )}
       </form>
     </div>
   )

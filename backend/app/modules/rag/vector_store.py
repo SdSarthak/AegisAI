@@ -1,10 +1,15 @@
 """FAISS vector store creation and persistence."""
 
 import os
+import shutil
+import tempfile
+import threading
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from app.core.config import settings
 from .document_loader import load_documents_from_paths
+
+_rag_index_lock = threading.Lock()
 
 
 def get_embeddings():
@@ -28,7 +33,15 @@ def create_vector_store(file_paths: list[str]):
     documents = load_documents_from_paths(file_paths)
     embeddings = get_embeddings()
     vector_store = FAISS.from_documents(documents, embeddings)
-    vector_store.save_local(settings.FAISS_INDEX_PATH)
+
+    with _rag_index_lock:
+        with tempfile.TemporaryDirectory(prefix="faiss_") as tmp_dir:
+            vector_store.save_local(tmp_dir)
+            FAISS.load_local(tmp_dir, embeddings, allow_dangerous_deserialization=True)
+            if os.path.exists(settings.FAISS_INDEX_PATH):
+                shutil.rmtree(settings.FAISS_INDEX_PATH, ignore_errors=True)
+            shutil.move(tmp_dir, settings.FAISS_INDEX_PATH)
+
     return vector_store
 
 
