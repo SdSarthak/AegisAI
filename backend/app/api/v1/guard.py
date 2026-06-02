@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, TypedDict
 
 from app.api.v1.webhooks import deliver_webhook
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from sqlalchemy import func
@@ -106,7 +106,7 @@ def _infer_detection_type(regex_flag: bool, intent: str) -> str:
     return "combined"
 
 
-def _build_guard_scan_log(user_id: int, prompt: str, result: dict) -> GuardScanLog:
+def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> GuardScanLog:
     """Build a GuardScanLog row without storing raw prompt text."""
     metadata = result.get("metadata", {})
     regex_analysis = metadata.get("regex_analysis", {})
@@ -130,16 +130,17 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict) -> GuardScanL
         ml_confidence=intent_analysis.get("confidence", 0.0),
         combined_score=decision_reasoning.get("confidence", 0.0),
         prompt_length=len(prompt),
+        ip_address=ip_address,
         scanned_at=datetime.utcnow(),
     )
 
 
-def log_scan(user_id: int, prompt: str, result: dict) -> None:
+def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> None:
     """Log scan details and create block notification without storing raw prompt."""
     db = SessionLocal()
 
     try:
-        log = _build_guard_scan_log(user_id, prompt, result)
+        log = _build_guard_scan_log(user_id, prompt, result, ip_address)
 
         db.add(log)
         db.commit()
@@ -168,6 +169,7 @@ def log_scan(user_id: int, prompt: str, result: dict) -> None:
 def scan_prompt(
     request: ScanRequest,
     background_tasks: BackgroundTasks,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),              # added this for fixing nameerror crash
 ):
@@ -176,6 +178,7 @@ def scan_prompt(
     Args:
         request: Prompt text and scan options submitted by the client.
         background_tasks: FastAPI background task runner used for scan logging.
+        http_request: Incoming HTTP request used to extract client IP.
         current_user: Authenticated user submitting the prompt.
 
     Returns:
@@ -219,11 +222,14 @@ def scan_prompt(
         guard = LLMGuard(sanitization_level=san_level)
         result = guard.guard(request.prompt)
 
+        client_ip = http_request.client.host if http_request.client else None
+
         background_tasks.add_task(
             log_scan,
             current_user.id,
             request.prompt,
             result,
+            client_ip,
         )
 
         return ScanResponse(
@@ -669,6 +675,7 @@ def update_guard_config(
 @router.post("/scan/batch", response_model=BulkScanResponse)
 def bulk_scan_prompts(
     request: BulkScanRequest,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -676,6 +683,7 @@ def bulk_scan_prompts(
 
     Args:
         request: Prompt list payload to scan in one batch.
+        http_request: Incoming HTTP request used to extract client IP.
         current_user: Authenticated user submitting the batch.
         db: Database session used to persist batch scan results.
 
@@ -731,9 +739,11 @@ def bulk_scan_prompts(
         guard = LLMGuard(sanitization_level=san_level)
         results: list[ScanResponse] = []
 
+        client_ip = http_request.client.host if http_request.client else None
+
         for prompt in request.prompts:
             result = guard.guard(prompt)
-            log = _build_guard_scan_log(current_user.id, prompt, result)
+            log = _build_guard_scan_log(current_user.id, prompt, result, client_ip)
 
             db.add(log)
             db.flush()
@@ -1052,6 +1062,7 @@ def update_guard_config(
 @router.post("/scan/batch", response_model=BulkScanResponse)
 def bulk_scan_prompts(
     request: BulkScanRequest,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -1059,6 +1070,7 @@ def bulk_scan_prompts(
 
     Args:
         request: Prompt list payload to scan in one batch.
+        http_request: Incoming HTTP request used to extract client IP.
         current_user: Authenticated user submitting the batch.
         db: Database session used to persist batch scan results.
 
@@ -1114,9 +1126,11 @@ def bulk_scan_prompts(
         guard = LLMGuard(sanitization_level=san_level)
         results: list[ScanResponse] = []
 
+        client_ip = http_request.client.host if http_request.client else None
+
         for prompt in request.prompts:
             result = guard.guard(prompt)
-            log = _build_guard_scan_log(current_user.id, prompt, result)
+            log = _build_guard_scan_log(current_user.id, prompt, result, client_ip)
 
             db.add(log)
             db.flush()
@@ -1435,6 +1449,7 @@ def update_guard_config(
 @router.post("/scan/batch", response_model=BulkScanResponse)
 def bulk_scan_prompts(
     request: BulkScanRequest,
+    http_request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -1442,6 +1457,7 @@ def bulk_scan_prompts(
 
     Args:
         request: Prompt list payload to scan in one batch.
+        http_request: Incoming HTTP request used to extract client IP.
         current_user: Authenticated user submitting the batch.
         db: Database session used to persist batch scan results.
 
@@ -1497,9 +1513,11 @@ def bulk_scan_prompts(
         guard = LLMGuard(sanitization_level=san_level)
         results: list[ScanResponse] = []
 
+        client_ip = http_request.client.host if http_request.client else None
+
         for prompt in request.prompts:
             result = guard.guard(prompt)
-            log = _build_guard_scan_log(current_user.id, prompt, result)
+            log = _build_guard_scan_log(current_user.id, prompt, result, client_ip)
 
             db.add(log)
             db.flush()
