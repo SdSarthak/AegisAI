@@ -13,6 +13,9 @@ TODO for contributors (help wanted):
     block results in a POST request to that URL within 5 seconds.
 """
 
+from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException, status
 import hashlib
 import hmac
 import json
@@ -107,6 +110,7 @@ def create_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+
     """Register a new webhook endpoint for the current user."""
     # Force the user_id to be the authenticated user to prevent spoofing
     webhook_data = body.model_dump()
@@ -127,6 +131,7 @@ def list_webhooks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+
     """List all webhook configurations for the current user."""
     # Fetch webhooks strictly scoped to the authenticated user
     webhooks = db.query(WebhookConfig).filter(WebhookConfig.user_id == current_user.id).all()
@@ -140,6 +145,7 @@ def delete_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+
     """Delete a webhook configuration owned by the current user."""
     # Query checking BOTH the webhook ID and the user ID
     db_webhook = db.query(WebhookConfig).filter(

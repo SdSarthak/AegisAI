@@ -32,6 +32,7 @@ class UserResponse(BaseModel):
     subscription_tier: SubscriptionTier
     is_active: bool
     is_verified: bool
+    onboarding_completed: bool
     created_at: datetime
 
     class Config:
@@ -41,6 +42,7 @@ class UserResponse(BaseModel):
 class UserUpdateSchema(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)
     company_name: Optional[str] = Field(None, max_length=100)
+    onboarding_completed: Optional[bool] = None
 
 
 class Token(BaseModel):
