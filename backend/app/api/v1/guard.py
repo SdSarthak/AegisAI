@@ -14,7 +14,7 @@ import logging
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Optional, TypedDict
-
+from app.models.audit_log import AuditLog, ScanStatus
 from app.api.v1.webhooks import deliver_webhook
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
@@ -233,7 +233,7 @@ def scan_prompt(
             result,
         )
 
-        return ScanResponse(
+        response = ScanResponse(
             decision=result["decision"],
             confidence=result["metadata"]["decision_reasoning"]["confidence"],
             reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
@@ -243,6 +243,22 @@ def scan_prompt(
                 [],
             ),
         )
+
+        audit_log = AuditLog(
+            user_id=str(current_user.id),
+            raw_prompt=request.prompt,
+            scan_status=ScanStatus.blocked
+            if result["decision"] == "block"
+            else ScanStatus.sanitized
+            if result["decision"] == "sanitize"
+            else ScanStatus.allowed,
+            risk_score=response.confidence,
+            triggered_rules=response.matched_patterns,
+            detection_method="guard",
+        )
+
+        db.add(audit_log)
+        db.commit()
 
         if result["decision"] == "block":
             try:
@@ -279,13 +295,13 @@ def scan_prompt(
 # ---------------------------------------------------------------------------
 
 
-class _ExplainRateLimitConfig:
-    """Explanations are 50–100x more expensive than a scan — limit them
+class ExplainRateLimitConfig:
+ """Explanations are 50–100x more expensive than a scan — limit them
     aggressively. Tunable via env if needed; defaults are conservative."""
 
-    LIMIT = 10
-    WINDOW_SECONDS = 60
-    TIMEOUT_SECONDS = 15.0
+ LIMIT = 10
+ WINDOW_SECONDS = 60
+ TIMEOUT_SECONDS = 15.0
 
 
 @router.post(
