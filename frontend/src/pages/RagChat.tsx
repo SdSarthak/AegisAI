@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import {
   AlertCircle,
   Bot,
@@ -10,72 +10,7 @@ import {
   User,
 } from 'lucide-react'
 
-import { ragApi } from '../services/api'
 import { useRagStream } from '../hooks/useRagStream'
-
-interface RagSource {
-  title: string
-  excerpt: string
-}
-
-type RagSourceResponse = string | RagSource
-
-interface RagAnswer {
-  answer: string
-  sources: RagSource[]
-  answer_id?: string
-}
-
-interface ApiError {
-  response?: {
-    status?: number
-    data?: {
-      detail?: string
-    }
-  }
-  message?: string
-}
-
-function isApiError(
-  error: unknown
-): error is ApiError {
-  return (
-    typeof error === 'object' &&
-    error !== null
-  )
-}
-
-function buildAnswerExport(
-  answer: RagAnswer
-): string {
-  return [
-    'AI Response',
-    answer.answer,
-    '',
-    'Source citations',
-    ...answer.sources.map(
-      (source, index) =>
-        `${index + 1}. ${source.title}\n${source.excerpt}`
-    ),
-  ].join('\n')
-}
-
-function normalizeSources(
-  sources: RagSourceResponse[] = []
-): RagSource[] {
-  return sources
-    .map((source) => {
-      if (typeof source === 'string') {
-        return {
-          title: source,
-          excerpt: '',
-        }
-      }
-
-      return source
-    })
-    .filter((source) => source.title.trim())
-}
 
 export default function RagChat() {
   const [question, setQuestion] = useState('')
@@ -98,7 +33,7 @@ export default function RagChat() {
   const hasAnswer = tokens.length > 0
   const displayError = validationError ?? streamError
 
-  const handleAsk = async (e: React.FormEvent) => {
+  const handleAsk = (e: React.FormEvent) => {
     e.preventDefault()
     const trimmed = question.trim()
     if (!trimmed) {
@@ -109,79 +44,37 @@ export default function RagChat() {
     setValidationError(null)
     setSubmittedQuestion(trimmed)
     setQuestion('')
-    setIsLoading(true)
-    setError(null)
-    setAnswer(null)
-
-    try {
-      const data = await ragApi.query(trimmed)
-
-      const normalizedSources: RagSource[] = (data.sources || []).map(
-        (source: string | RagSource) =>
-          typeof source === 'string'
-            ? {
-                title: source,
-                excerpt: '',
-              }
-            : source
-      )
-
-      setAnswer({
-        answer: data.answer,
-        sources: normalizedSources,
-        answer_id: data.answer_id,
-      })
-    } catch (err: unknown) {
-      const apiError = isApiError(err)
-        ? err
-        : {}
-
-      if (
-        apiError.response?.status === 503
-      ) {
-        setError(
-          'Index not ready. Please try again later.'
-        )
-      } else if (
-        apiError.response?.status === 401
-      ) {
-        setError(
-          'Unauthorized. Please login again.'
-        )
-      } else {
-        setError(
-          apiError.response?.data?.detail ||
-            apiError.message ||
-            'Unable to generate an answer right now.'
-        )
-      }
-    } finally {
-      setIsLoading(false)
-    }
+    ask(trimmed)
   }
 
   const handleExport = () => {
-    if (!answer) return
+    if (!hasAnswer) return
 
-    const blob = new Blob(
-      [buildAnswerExport(answer)],
-      {
-        type: 'text/plain;charset=utf-8',
-      }
-    )
+    const exportText = [
+      'AI Response',
+      tokens,
+      '',
+      'Source citations',
+      ...citations.map(
+        (citation, index) =>
+          `${index + 1}. ${citation.source}\n${citation.excerpt}`
+      ),
+    ].join('\n')
 
+    const blob = new Blob([exportText], {
+      type: 'text/plain;charset=utf-8',
+    })
     const url = URL.createObjectURL(blob)
     const link = document.createElement('a')
-
     link.href = url
     link.download = 'rag-answer.txt'
     link.click()
-
     URL.revokeObjectURL(url)
   }
 
   return (
     <div className="h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)] flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* Header */}
       <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-white">
         <div className="flex items-center gap-3">
           <div className="p-2 sm:p-3 bg-primary-50 rounded-xl">
@@ -196,8 +89,10 @@ export default function RagChat() {
         </div>
       </div>
 
+      {/* Body */}
       <div className="flex-1 overflow-y-auto bg-gray-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
+          {/* Empty state */}
           {!submittedQuestion && !hasAnswer && !isStreaming && !displayError && (
             <div className="min-h-[320px] sm:min-h-[420px] flex flex-col items-center justify-center text-center">
               <div className="p-3 sm:p-4 bg-primary-50 rounded-2xl mb-5">
@@ -229,8 +124,10 @@ export default function RagChat() {
             </div>
           )}
 
+          {/* Conversation */}
           {(submittedQuestion || hasAnswer || isStreaming || displayError) && (
             <div className="space-y-5 sm:space-y-6">
+              {/* User bubble */}
               {submittedQuestion && (
                 <div className="flex justify-end">
                   <div className="w-full sm:w-auto sm:max-w-2xl bg-primary-600 text-white rounded-2xl sm:rounded-br-md px-4 sm:px-5 py-3 sm:py-4 shadow-sm">
@@ -242,6 +139,7 @@ export default function RagChat() {
                 </div>
               )}
 
+              {/* Loading skeleton (before first token) */}
               {isAwaitingFirstToken && (
                 <div className="flex justify-start">
                   <div className="w-full max-w-3xl bg-white border border-gray-200 rounded-2xl sm:rounded-bl-md px-4 sm:px-5 py-4 shadow-sm">
@@ -263,6 +161,7 @@ export default function RagChat() {
                 </div>
               )}
 
+              {/* Error state (no answer yet) */}
               {!isAwaitingFirstToken && displayError && !hasAnswer && (
                 <div className="flex justify-start">
                   <div className="w-full max-w-3xl bg-red-50 border border-red-200 rounded-2xl sm:rounded-bl-md px-4 sm:px-5 py-4 text-red-800">
@@ -277,6 +176,7 @@ export default function RagChat() {
                 </div>
               )}
 
+              {/* Answer bubble */}
               {hasAnswer && (
                 <div className="flex justify-start">
                   <div className="w-full max-w-3xl bg-white border border-gray-200 rounded-2xl sm:rounded-bl-md px-4 sm:px-5 py-4 shadow-sm">
@@ -302,26 +202,37 @@ export default function RagChat() {
                           </div>
                         )}
 
-                  {answer.sources.length > 0 && (
-                    <div className="mt-6">
-                      <h3 className="text-sm font-semibold text-gray-900 mb-3">
-                        Sources
-                      </h3>
-
-                      <div className="space-y-3">
-                        {answer.sources.map(
-                          (source, index) => (
-                            <div
-                              key={index}
-                              className="border border-gray-200 rounded-lg p-3 bg-gray-50"
-                            >
-                              <p className="font-medium text-sm text-gray-900">
-                                {source.title}
-                              </p>
-
-                              <p className="text-sm text-gray-600 mt-1">
-                                {source.excerpt}
-                              </p>
+                        {citations.length > 0 && (
+                          <div className="mt-6">
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="text-sm font-semibold text-gray-900">
+                                Sources
+                              </h3>
+                              {!isStreaming && (
+                                <button
+                                  type="button"
+                                  onClick={handleExport}
+                                  className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700"
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                  Export
+                                </button>
+                              )}
+                            </div>
+                            <div className="space-y-3">
+                              {citations.map((citation, index) => (
+                                <div
+                                  key={index}
+                                  className="border border-gray-200 rounded-lg p-3 bg-gray-50"
+                                >
+                                  <p className="font-medium text-sm text-gray-900">
+                                    {citation.source}
+                                  </p>
+                                  <p className="text-sm text-gray-600 mt-1">
+                                    {citation.excerpt}
+                                  </p>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )}
@@ -335,6 +246,7 @@ export default function RagChat() {
         </div>
       </div>
 
+      {/* Input form */}
       <div className="border-t border-gray-200 bg-white px-4 sm:px-6 py-3 sm:py-4">
         <form onSubmit={handleAsk} className="max-w-4xl mx-auto">
           <div className="flex items-end gap-2 sm:gap-3 bg-gray-50 border border-gray-300 rounded-2xl px-3 sm:px-4 py-3 focus-within:ring-2 focus-within:ring-primary-500 focus-within:border-primary-500">
@@ -344,7 +256,7 @@ export default function RagChat() {
             <textarea
               id="rag-question"
               value={question}
-              onChange={(e) => setQuestion(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setQuestion(e.target.value)}
               placeholder="Ask a compliance question..."
               rows={1}
               disabled={isStreaming}
