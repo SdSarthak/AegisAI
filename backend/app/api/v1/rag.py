@@ -13,7 +13,7 @@ import os
 import shutil
 import tempfile
 import time
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
