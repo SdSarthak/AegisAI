@@ -53,7 +53,10 @@ export default function Documents() {
     refetch: refetchDocuments,
   } = useQuery<Document[] | { items: Document[] }>({
     queryKey: ['documents', currentPage],
-    queryFn: () => documentsApi.list({ skip: (currentPage - 1) * limit, limit }),
+    queryFn: async () => {
+      const result = await documentsApi.list({ skip: (currentPage - 1) * limit, limit })
+      return result as Document[] | { items: Document[] }
+    },
   })
   const documents = (
     Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
@@ -76,7 +79,10 @@ export default function Documents() {
     refetch: refetchSystems,
   } = useQuery<AISystem[] | { items: AISystem[] }>({
     queryKey: ['ai-systems'],
-    queryFn: () => aiSystemsApi.list(),
+    queryFn: async () => {
+      const result = await aiSystemsApi.list()
+      return result as AISystem[] | { items: AISystem[] }
+    },
   })
   const systems = (
     Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
