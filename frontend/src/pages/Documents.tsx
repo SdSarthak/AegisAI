@@ -51,7 +51,7 @@ export default function Documents() {
     isError: documentsError,
     error: documentsErrorDetail,
     refetch: refetchDocuments,
-  } = useQuery({
+  } = useQuery<Document[] | { items: Document[] }>({
     queryKey: ['documents', currentPage],
     queryFn: () => documentsApi.list({ skip: (currentPage - 1) * limit, limit }),
   })
@@ -74,7 +74,7 @@ export default function Documents() {
     isError: systemsError,
     error: systemsErrorDetail,
     refetch: refetchSystems,
-  } = useQuery({
+  } = useQuery<AISystem[] | { items: AISystem[] }>({
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
