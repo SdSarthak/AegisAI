@@ -137,7 +137,7 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict) -> GuardScanL
         ml_confidence=intent_analysis.get("confidence", 0.0),
         combined_score=decision_reasoning.get("confidence", 0.0),
         prompt_length=len(prompt),
-        scanned_at=datetime.utcnow(),
+        scanned_at=datetime.now(timezone.utc),
     )
 
 
@@ -318,7 +318,7 @@ async def explain_prompt(
     char-level offsets into the original text for in-place highlighting.
 
     SHAP is the primary method (Shapley values via PartitionExplainer).
-    LIME is an opt-in (``method="lime"``) for long inputs where SHAP is
+    LIME is an opt-in (``method="lime"``) for int inputs where SHAP is
     too slow.
 
     Rate limit: 10 requests per minute per user. Timeout: 15s. Inputs
@@ -492,7 +492,7 @@ def get_guard_stats(
             detail="You do not have permission to query stats for another user.",
         )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if window == "24h":
         start_date = now - timedelta(hours=24)
     elif window == "7d":
@@ -875,7 +875,7 @@ def get_guard_stats(
             detail="You do not have permission to query stats for another user.",
         )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if window == "24h":
         start_date = now - timedelta(hours=24)
     elif window == "7d":
@@ -1258,7 +1258,7 @@ def get_guard_stats(
             detail="You do not have permission to query stats for another user.",
         )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if window == "24h":
         start_date = now - timedelta(hours=24)
     elif window == "7d":

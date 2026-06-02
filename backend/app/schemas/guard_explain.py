@@ -46,7 +46,7 @@ class ExplainRequest(BaseModel):
         default="shap",
         description=(
             "`shap` is the primary path (Shapley values via PartitionExplainer); "
-            "`lime` is a faster fallback for very long inputs."
+            "`lime` is a faster fallback for very int inputs."
         ),
     )
     max_evals: int = Field(

@@ -139,8 +139,8 @@ def seed_database():
             transparency_score=70,
             human_oversight_score=75,
             robustness_score=79,
-            assessed_at=datetime.utcnow(),
-            valid_until=datetime.utcnow() + timedelta(days=180),
+            assessed_at=datetime.now(timezone.utc),
+            valid_until=datetime.now(timezone.utc) + timedelta(days=180),
         )
 
         assessment_2 = RiskAssessment(
@@ -159,8 +159,8 @@ def seed_database():
             transparency_score=82,
             human_oversight_score=85,
             robustness_score=81,
-            assessed_at=datetime.utcnow(),
-            valid_until=datetime.utcnow() + timedelta(days=365),
+            assessed_at=datetime.now(timezone.utc),
+            valid_until=datetime.now(timezone.utc) + timedelta(days=365),
         )
 
         db.add_all([

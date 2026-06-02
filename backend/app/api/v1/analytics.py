@@ -56,7 +56,7 @@ def get_compliance_timeline(
             detail="AI system not found"
         )
 
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(timezone.utc) - timedelta(days=days)
 
     snapshots = db.query(ComplianceSnapshot).filter(
         ComplianceSnapshot.ai_system_id == system_id,
