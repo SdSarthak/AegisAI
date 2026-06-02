@@ -55,6 +55,11 @@ class Settings(BaseSettings):
     RAG_MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024
     RAG_TOTAL_BUDGET_BYTES: int = 50 * 1024 * 1024
 
+    # Observability (OpenTelemetry)
+    OTEL_SERVICE_NAME: str = "aegis-backend"
+    OTEL_METRICS_EXPORTER: str = "prometheus"
+    OTEL_TRACES_EXPORTER: str = "none"
+
     class Config:
         env_file = ".env"
         case_sensitive = True
