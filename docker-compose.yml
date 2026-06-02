@@ -31,6 +31,8 @@ services:
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/aegisai_db
       - REDIS_URL=redis://redis:6379/0
+      - LLM_BASE_URL=http://ollama:11434/v1
+      - LLM_MODEL=llama3.2
     depends_on:
       db:
         condition: service_healthy

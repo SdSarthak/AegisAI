@@ -28,9 +28,9 @@ class Settings(BaseSettings):
     CORS_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
 
     # LLM provider
-    LLM_API_KEY: str = ""
-    LLM_BASE_URL: str = ""
-    LLM_MODEL: str = "gpt-4o-mini"
+    LLM_API_KEY: str = "ollama"
+    LLM_BASE_URL: str = "http://localhost:11434/v1"
+    LLM_MODEL: str = "llama3.2"
     LLM_TIMEOUT: float = 30.0
 
     # Module 2: LLM Guard
@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     RAG_CHUNK_OVERLAP: int = 200
     FAISS_INDEX_PATH: str = "faiss_index"
     MLFLOW_TRACKING_URI: str = ""
+    EMBEDDINGS_MODEL: str = "nomic-embed-text"
     RAG_MAX_FILES_PER_REQUEST: int = 10
     RAG_MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024
     RAG_TOTAL_BUDGET_BYTES: int = 50 * 1024 * 1024
