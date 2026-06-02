@@ -274,6 +274,48 @@ export interface GuardScanResponse {
   matched_patterns?: string[]
 }
 
+export type GuardStreamEvent =
+  | {
+      layer: 'regex'
+      flag: boolean
+      score: number
+      matched_patterns?: string[]
+    }
+  | {
+      layer: 'classifier'
+      intent: string
+      confidence: number
+      class_scores?: Record<string, number>
+    }
+  | {
+      layer: 'decision'
+      decision: string
+      confidence: number
+      reasoning: string
+      rule_matched?: string
+    }
+  | {
+      layer: 'complete'
+      result: GuardScanResponse
+    }
+  | {
+      layer: 'error'
+      message: string
+      retry_after?: number
+    }
+
+type GuardStreamHandlers = {
+  onEvent: (event: GuardStreamEvent) => void
+  onComplete: (result: GuardScanResponse) => void
+  onError: (message: string) => void
+}
+
+function buildGuardStreamUrl(token: string): string {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const params = new URLSearchParams({ token })
+  return `${protocol}//${window.location.host}/api/v1/guard/stream?${params.toString()}`
+}
+
 // Guard explainability (issue #77). Per-token attribution returned by SHAP/LIME.
 export interface GuardTokenAttribution {
   token: string
@@ -302,6 +344,62 @@ export const guardApi = {
     ensureNumberField(responseData, 'confidence', 'Guard scan')
     ensureStringField(responseData, 'reasoning', 'Guard scan')
     return responseData as unknown as GuardScanResponse
+  },
+  streamScan: (
+    prompt: string,
+    handlers: GuardStreamHandlers,
+  ): (() => void) => {
+    const token = useAuthStore.getState().token
+    if (!token) {
+      throw new Error('You must be logged in to run the guard scan.')
+    }
+
+    const socket = new WebSocket(buildGuardStreamUrl(token))
+    let completed = false
+    let failed = false
+
+    socket.onopen = () => {
+      socket.send(JSON.stringify({ prompt }))
+    }
+
+    socket.onmessage = (message) => {
+      let event: GuardStreamEvent
+      try {
+        event = JSON.parse(message.data) as GuardStreamEvent
+      } catch {
+        failed = true
+        handlers.onError('Guard stream returned an invalid response.')
+        socket.close()
+        return
+      }
+
+      handlers.onEvent(event)
+
+      if (event.layer === 'complete') {
+        completed = true
+        handlers.onComplete(event.result)
+      }
+
+      if (event.layer === 'error') {
+        failed = true
+        handlers.onError(event.message)
+      }
+    }
+
+    socket.onerror = () => {
+      failed = true
+      handlers.onError('Unable to connect to the Guard streaming endpoint.')
+    }
+
+    socket.onclose = (event) => {
+      if (!completed && !failed && event.code === 1008) {
+        handlers.onError('Guard stream was rejected. Please sign in again and retry.')
+      }
+    }
+
+    return () => {
+      socket.close()
+    }
   },
   explain: async (
     text: string,

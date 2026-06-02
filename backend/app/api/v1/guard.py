@@ -16,16 +16,26 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, TypedDict
 
 from app.api.v1.webhooks import deliver_webhook
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    status,
+)
 from fastapi.responses import JSONResponse
+from pydantic import ValidationError
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from starlette.websockets import WebSocketState
 
 from app.api.v1.notifications import create_notification
 from app.core.config import settings
 from app.core.database import SessionLocal, get_db
-from app.core.security import get_current_user
+from app.core.security import decode_token, get_current_user
 from app.core.rate_limit import guard_scan_rate_limiter
 from app.models.guard_scan_log import GuardScanLog
 from app.models.notification import NotificationType
@@ -164,6 +174,34 @@ def log_scan(user_id: int, prompt: str, result: dict) -> None:
         db.close()
 
 
+def _build_scan_response(result: dict) -> ScanResponse:
+    """Convert the full guard pipeline result into the public API response."""
+    return ScanResponse(
+        decision=result["decision"],
+        confidence=result["metadata"]["decision_reasoning"]["confidence"],
+        reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
+        sanitized_prompt=result.get("sanitized_prompt"),
+        matched_patterns=result["metadata"]["regex_analysis"].get(
+            "matched_patterns",
+            [],
+        ),
+    )
+
+
+def _get_user_from_websocket_token(token: str | None, db: Session) -> User | None:
+    """Authenticate a WebSocket using the same JWT token as the REST API."""
+    if not token:
+        return None
+
+    try:
+        payload = decode_token(token)
+        user_id = int(payload.get("sub", ""))
+    except (HTTPException, TypeError, ValueError):
+        return None
+
+    return db.query(User).filter(User.id == user_id).first()
+
+
 @router.post("/scan", response_model=ScanResponse)
 def scan_prompt(
     request: ScanRequest,
@@ -226,16 +264,7 @@ def scan_prompt(
             result,
         )
 
-        return ScanResponse(
-            decision=result["decision"],
-            confidence=result["metadata"]["decision_reasoning"]["confidence"],
-            reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
-            sanitized_prompt=result.get("sanitized_prompt"),
-            matched_patterns=result["metadata"]["regex_analysis"].get(
-                "matched_patterns",
-                [],
-            ),
-        )
+        return _build_scan_response(result)
 
         if result["decision"] == "block":
             try:
@@ -265,6 +294,98 @@ def scan_prompt(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the Guard scan.",
         )
+
+
+@router.websocket("/stream")
+async def stream_guard_scan(websocket: WebSocket, token: str | None = Query(default=None)):
+    """Stream Guard scan progress over WebSocket as each pipeline layer completes."""
+    db = SessionLocal()
+
+    try:
+        current_user = _get_user_from_websocket_token(token, db)
+        if current_user is None:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+        await websocket.accept()
+
+        try:
+            payload = await websocket.receive_json()
+            request = ScanRequest.model_validate(payload)
+            if not request.prompt.strip():
+                raise ValueError("Prompt is required.")
+        except (ValueError, ValidationError):
+            await websocket.send_json(
+                {"layer": "error", "message": "A non-empty prompt is required."}
+            )
+            await websocket.close(code=status.WS_1003_UNSUPPORTED_DATA)
+            return
+
+        limited, retry_after = guard_scan_rate_limiter.check_and_consume(
+            key=f"guard:scan:{current_user.id}",
+            limit=settings.GUARD_RATE_LIMIT_REQUESTS,
+            window_seconds=settings.GUARD_RATE_LIMIT_WINDOW_SECONDS,
+        )
+
+        if limited:
+            await websocket.send_json(
+                {
+                    "layer": "error",
+                    "message": (
+                        f"Rate limit exceeded: {settings.GUARD_RATE_LIMIT_REQUESTS} "
+                        f"requests per {settings.GUARD_RATE_LIMIT_WINDOW_SECONDS} seconds per user. "
+                        "Please try again later."
+                    ),
+                    "retry_after": retry_after,
+                }
+            )
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+        from app.modules.guard.llm_guard import LLMGuard
+        from app.modules.guard.sanitizer import SanitizationLevel
+
+        level_map = {
+            "low": SanitizationLevel.LOW,
+            "medium": SanitizationLevel.MEDIUM,
+            "high": SanitizationLevel.HIGH,
+        }
+        san_level = level_map.get(
+            settings.GUARD_SANITIZATION_LEVEL,
+            SanitizationLevel.MEDIUM,
+        )
+
+        guard = LLMGuard(sanitization_level=san_level)
+        final_result = None
+
+        for event in guard.stream_guard(request.prompt):
+            if event["layer"] == "complete":
+                final_result = event["result"]
+                await websocket.send_json(
+                    {
+                        "layer": "complete",
+                        "result": _build_scan_response(final_result).model_dump(),
+                    }
+                )
+            else:
+                await websocket.send_json(event)
+
+        if final_result is not None:
+            log_scan(current_user.id, request.prompt, final_result)
+
+        await websocket.close(code=status.WS_1000_NORMAL_CLOSURE)
+    except Exception:
+        logger.exception("Guard stream failed")
+        if websocket.application_state == WebSocketState.CONNECTED:
+            await websocket.send_json(
+                {
+                    "layer": "error",
+                    "message": "An internal error occurred while processing the Guard scan.",
+                }
+            )
+            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+    finally:
+        db.close()
 
 
 # ---------------------------------------------------------------------------

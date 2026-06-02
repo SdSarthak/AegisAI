@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   AlertCircle,
@@ -15,6 +15,7 @@ import {
   guardApi,
   type GuardExplainResponse,
   type GuardScanResponse,
+  type GuardStreamEvent,
 } from '../services/api'
 
 type GuardMetrics = {
@@ -61,9 +62,11 @@ function decisionBadgeClass(decision: string): string {
 }
 
 export default function GuardConsole() {
+  const closeStreamRef = useRef<(() => void) | null>(null)
   const [prompt, setPrompt] = useState('')
   const [submittedPrompt, setSubmittedPrompt] = useState('')
   const [result, setResult] = useState<GuardScanResponse | null>(null)
+  const [streamEvents, setStreamEvents] = useState<GuardStreamEvent[]>([])
   const [explanation, setExplanation] = useState<GuardExplainResponse | null>(null)
   const [explanationError, setExplanationError] = useState<string | null>(null)
   const [isExplaining, setIsExplaining] = useState(false)
@@ -86,15 +89,24 @@ export default function GuardConsole() {
     [metrics]
   )
 
+  useEffect(() => {
+    return () => {
+      closeStreamRef.current?.()
+    }
+  }, [])
+
   const handleScan = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     const trimmedPrompt = prompt.trim()
+    closeStreamRef.current?.()
+    closeStreamRef.current = null
 
     if (!trimmedPrompt) {
       setError('Enter a prompt before running the guard scan.')
       setSubmittedPrompt('')
       setResult(null)
+      setStreamEvents([])
       setExplanation(null)
       setExplanationError(null)
       setScannedAt('')
@@ -105,21 +117,37 @@ export default function GuardConsole() {
     setIsLoading(true)
     setError(null)
     setResult(null)
+    setStreamEvents([])
     setExplanation(null)
     setExplanationError(null)
     setScannedAt('')
 
     try {
-      const data = await guardApi.scan(trimmedPrompt)
-      setResult(data)
-      setScannedAt(new Date().toISOString())
+      closeStreamRef.current = guardApi.streamScan(trimmedPrompt, {
+        onEvent: (streamEvent) => {
+          setStreamEvents((currentEvents) => [...currentEvents, streamEvent])
+          if (streamEvent.layer === 'error') {
+            setIsLoading(false)
+          }
+        },
+        onComplete: (data) => {
+          setResult(data)
+          setScannedAt(new Date().toISOString())
+          setIsLoading(false)
+          closeStreamRef.current = null
+        },
+        onError: (message) => {
+          setError(message)
+          setIsLoading(false)
+          closeStreamRef.current = null
+        },
+      })
     } catch (scanError: unknown) {
       const message = scanError instanceof Error
         ? scanError.message
         : 'Unable to run the guard scan right now.'
 
       setError(message)
-    } finally {
       setIsLoading(false)
     }
   }
@@ -241,9 +269,31 @@ export default function GuardConsole() {
 
       {isLoading && (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5 shadow-sm">
-          <div className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
-            <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
-            <span className="text-sm font-medium">Running LLM Guard scan</span>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-3 text-gray-700 dark:text-gray-300">
+              <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
+              <span className="text-sm font-medium">Running LLM Guard scan</span>
+            </div>
+
+            {streamEvents.length > 0 && (
+              <div className="grid gap-3 md:grid-cols-3">
+                {streamEvents
+                  .filter((streamEvent) => streamEvent.layer !== 'complete' && streamEvent.layer !== 'error')
+                  .map((streamEvent) => (
+                    <div
+                      key={streamEvent.layer}
+                      className="rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 p-4"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                        {streamEvent.layer}
+                      </p>
+                      <pre className="mt-2 overflow-auto text-xs leading-5 text-gray-800 dark:text-gray-200">
+                        {formatJson(streamEvent)}
+                      </pre>
+                    </div>
+                  ))}
+              </div>
+            )}
           </div>
         </div>
       )}
