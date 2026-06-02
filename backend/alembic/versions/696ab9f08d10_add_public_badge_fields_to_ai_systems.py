@@ -1,7 +1,7 @@
 """add_public_badge_fields_to_ai_systems
 
 Revision ID: 696ab9f08d10
-Revises: c3d9f1b2a4e6
+Revises: e7d9f2b3c4a5
 Create Date: 2026-05-31 20:21:25.914380
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '696ab9f08d10'
-down_revision: Union[str, None] = 'c3d9f1b2a4e6'
+down_revision: Union[str, None] = 'e7d9f2b3c4a5'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
