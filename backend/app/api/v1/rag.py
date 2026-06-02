@@ -31,49 +31,7 @@ router = APIRouter()
 
 
 def load_documents_from_paths(saved_paths: list[str]):
-    """Lazy wrapper around the RAG document loader."""
-    from app.modules.rag.document_loader import load_documents_from_paths as loader
 
-    return loader(saved_paths)
-
-
-def create_vector_store(saved_paths: list[str]):
-    """Lazy wrapper around the RAG vector-store builder."""
-    from app.modules.rag.vector_store import create_vector_store as builder
-
-    return builder(saved_paths)
-
-
-class RAGIngestResponse(BaseModel):
-    """Response returned after a successful document ingestion."""
-
-    files_processed: int
-    chunks_created: int
-    index_size_bytes: int
-
-
-@router.post(
-    "/ingest",
-    response_model=RAGIngestResponse,
-    summary="Upload & index regulatory PDFs",
-    tags=["RAG Intelligence"],
-)
-def ingest_documents(
-    files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
-    current_user: User = Depends(get_current_user),
-):
-    """Ingest one or more regulatory PDFs and rebuild the FAISS index.
-
-    Args:
-        files: One or more PDF uploads to save, chunk, and index.
-        current_user: Authenticated user requesting the ingestion.
-
-    Returns:
-        RAGIngestResponse with file, chunk, and index size counts.
-
-    Raises:
-        HTTPException: If no valid PDFs are supplied or indexing fails.
-    """
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,

@@ -163,205 +163,7 @@ class BulkClassificationResponse(BaseModel):
 
 
 def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse:
-    """
-    Classify the risk level of an AI system based on EU AI Act criteria.
-    """
-    reasons = []
-    requirements = []
-    risk_level = RiskLevel.MINIMAL
-    confidence = 0.9
 
-    # ----------------------------------------------------------------
-    # Article 5 — Prohibited practices (UNACCEPTABLE risk)
-    # These must be checked first — they override all other categories
-    # ----------------------------------------------------------------
-    prohibited_flags = {
-        "social_scoring": "Social scoring by public authorities (Article 5(1)(c))",
-        "realtime_biometric_public": "Real-time remote biometric identification in public spaces (Article 5(1)(h))",
-        "biometric_categorisation": "Biometric categorisation using sensitive attributes (Article 5(1)(g))",
-        "subliminal_manipulation": "Subliminal manipulation of behaviour (Article 5(1)(a))",
-        "exploits_vulnerable_groups": "Exploitation of vulnerabilities of specific groups (Article 5(1)(b))",
-    }
-
-    triggered_prohibitions = [
-        label for field, label in prohibited_flags.items()
-        if getattr(data, field, False)
-    ]
-
-    if triggered_prohibitions:
-        risk_level = RiskLevel.UNACCEPTABLE
-        reasons.extend(triggered_prohibitions)
-        requirements.append(
-            "This AI system is prohibited under Article 5 of the EU AI Act "
-            "and must not be placed on the market, put into service, or used."
-        )
-        return RiskClassificationResponse(
-            risk_level=risk_level,
-            confidence=0.99,
-            reasons=reasons,
-            requirements=requirements,
-            next_steps=[
-                "Immediately cease development or deployment of this system.",
-                "Consult legal counsel regarding Article 5 compliance obligations.",
-                "Review whether any Article 5 exceptions apply to your use case.",
-            ],
-        )
-    
-    # Check for HIGH risk (Article 6 + Annex III)
-    high_risk_indicators = []
-
-    # HR and recruitment AI (Annex III, point 4)
-    if data.hr_recruitment_screening or data.hr_promotion_termination:
-        high_risk_indicators.append("HR recruitment/management AI system")
-        reasons.append(
-            "AI systems used for recruitment, CV screening, or employment decisions are classified as HIGH risk under Annex III"
-        )
-        requirements.extend(
-            [
-                "Implement risk management system (Article 9)",
-                "Ensure data governance and quality (Article 10)",
-                "Maintain technical documentation (Article 11)",
-                "Enable record-keeping/logging (Article 12)",
-                "Provide transparency to users (Article 13)",
-                "Enable human oversight (Article 14)",
-                "Ensure accuracy, robustness, cybersecurity (Article 15)",
-            ]
-        )
-
-    # Credit and insurance (Annex III, point 5)
-    if data.credit_worthiness or data.insurance_risk_assessment:
-        high_risk_indicators.append("Credit/insurance assessment AI")
-        reasons.append(
-            "AI for creditworthiness or insurance risk assessment is HIGH risk under Annex III"
-        )
-
-    # Education and vocational training (Annex III, point 3)
-    if data.education_vocational_training:
-        high_risk_indicators.append("Education/vocational training AI")
-        reasons.append(
-            "AI used for determining access to education or vocational training is HIGH risk under Annex III"
-        )
-
-    # Safety component
-    if data.is_safety_component:
-        high_risk_indicators.append("Safety component of a product")
-        reasons.append("AI used as a safety component requires HIGH risk compliance")
-
-    # Fundamental rights impact
-    if data.affects_fundamental_rights:
-        high_risk_indicators.append("Affects fundamental rights")
-        reasons.append(
-            "System impacts fundamental rights (employment, education, essential services)"
-        )
-
-    # Law enforcement, border control, justice
-    if data.law_enforcement or data.border_control or data.justice_system:
-        high_risk_indicators.append("Law enforcement/justice system use")
-        reasons.append(
-            "Use in law enforcement, border control, or justice is HIGH risk"
-        )
-
-    # Biometric data usage (Annex III)           
-    if data.uses_biometric_data:
-        high_risk_indicators.append("Uses biometric data")
-        reasons.append(
-            "System uses biometric data for identification, verification, or categorization (Annex III)"
-        )
-
-    # Automated decisions without human review (Article 6 / Annex III)
-    if data.makes_automated_decisions:
-        high_risk_indicators.append("Automated decisions without human review")
-        reasons.append(
-            "System makes automated decisions without meaningful human oversight (Article 6)"
-        )    
-
-    # Determine if HIGH risk
-    if high_risk_indicators:
-        risk_level = RiskLevel.HIGH
-
-    # Check for LIMITED risk (Article 52 - Transparency obligations)
-    elif (
-        data.interacts_with_humans
-        or data.emotion_recognition
-        or data.generates_synthetic_content
-        or data.biometric_categorization
-    ):
-        risk_level = RiskLevel.LIMITED
-        if data.interacts_with_humans:
-            reasons.append("System interacts directly with humans (e.g., chatbot)")
-            requirements.append(
-                "Inform users they are interacting with AI (Article 52)"
-            )
-        if data.emotion_recognition:
-            reasons.append("System uses emotion recognition")
-            requirements.append("Inform subjects about emotion recognition system")
-        if data.generates_synthetic_content:
-            reasons.append("System generates synthetic/manipulated content")
-            requirements.append("Label AI-generated content appropriately")
-        if data.biometric_categorization:   
-            reasons.append("System performs biometric categorization")
-            requirements.append(
-                "Inform subjects about biometric categorization (Article 52)"
-            )
-
-    # MINIMAL risk - no specific requirements
-    else:
-        reasons.append("System does not fall into high-risk or limited-risk categories")
-        requirements.append(
-            "No mandatory requirements, but voluntary codes of conduct encouraged"
-        )
-
-    # Generate next steps based on risk level
-    next_steps = []
-    if risk_level == RiskLevel.HIGH:
-        next_steps = [
-            "Complete the full risk assessment questionnaire",
-            "Document your AI system's technical specifications",
-            "Implement a risk management system",
-            "Establish data governance procedures",
-            "Set up human oversight mechanisms",
-            "Prepare conformity assessment documentation",
-        ]
-    elif risk_level == RiskLevel.LIMITED:
-        next_steps = [
-            "Implement transparency notices for users",
-            "Document your disclosure mechanisms",
-            "Review interaction points with users",
-        ]
-    else:
-        next_steps = [
-            "Consider voluntary compliance measures",
-            "Monitor regulatory updates",
-            "Document your AI governance practices",
-        ]
-
-    # Lookup NIST mapping once for the determined risk level
-    nist_data = EU_TO_NIST_MAPPING.get(risk_level.value.upper())
-    nist_mapping = NISTMapping(**nist_data) if nist_data else None
-    
-    return RiskClassificationResponse(
-        risk_level=risk_level,
-        confidence=confidence if not triggered_prohibitions else 0.99,
-        reasons=reasons,
-        requirements=requirements,
-        next_steps=next_steps,
-        nist_mapping=nist_mapping,
-    )
-
-
-@router.post("/classify", response_model=RiskClassificationResponse)
-def classify_ai_system(
-    data: RiskClassificationRequest, current_user: User = Depends(get_current_user)
-):
-    """Classify an AI system's risk level from the questionnaire payload.
-
-    Args:
-        data: Risk classification questionnaire answers for the AI system.
-        current_user: Authenticated user requesting the classification.
-
-    Returns:
-        RiskClassificationResponse containing the inferred risk level and guidance.
-    """
     return classify_risk(data)    
 
 
@@ -372,20 +174,7 @@ def classify_and_save(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Classify an AI system and persist the result.
 
-    Args:
-        system_id: ID of the AI system to classify.
-        data: Risk classification questionnaire answers.
-        db: Database session used to load the system and save the assessment.
-        current_user: Authenticated user who must own the system.
-
-    Returns:
-        RiskClassificationResponse for the submitted questionnaire.
-
-    Raises:
-        HTTPException: If the system does not exist or does not belong to the user.
-    """
     # Get the AI system
     system = (
         db.query(AISystem)
@@ -430,14 +219,7 @@ def classify_and_save(
 def get_questionnaire_risk_factors(
     current_user: User = Depends(get_current_user),
 ):
-    """Return the static questionnaire metadata used by the classifier.
 
-    Args:
-        current_user: Authenticated user requesting the questionnaire metadata.
-
-    Returns:
-        The list of questionnaire risk factors used by the classification flow.
-    """
     return QUESTIONNAIRE_RISK_FACTORS
 
 @router.post("/bulk", response_model=BulkClassificationResponse)
@@ -446,16 +228,7 @@ def bulk_classify_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Classify multiple AI systems in a single request.
 
-    Args:
-        request: Payload containing the AI system IDs to classify.
-        db: Database session used to load systems and store assessments.
-        current_user: Authenticated user who must own every system.
-
-    Returns:
-        BulkClassificationResponse containing per-system results and errors.
-    """
     results: List[BulkClassificationItem] = []
 
     for system_id in request.system_ids:
