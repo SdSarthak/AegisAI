@@ -21,6 +21,7 @@ from app.schemas.ai_system import (
     ComplianceStatusUpdateSchema,
 )
 from app.models.compliance_drift_event import ComplianceDriftEvent
+from app.modules.compliance.monitor import run_drift_scan
 from app.schemas.audit_log import AISystemAuditLogResponse
 from app.schemas.pagination import PaginatedResponse
 from pydantic import BaseModel
@@ -507,9 +508,49 @@ def clone_ai_system(
     db.refresh(cloned)
     return cloned
 
-
 @router.put("/{system_id}", response_model=AISystemResponse)
-def update_ai_system(
+def update_ai_system_put(
+    system_id: int,
+    system_data: AISystemUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Update an existing AI system.
+
+    Args:
+        system_id: ID of the AI system to update.
+        system_data: Partial update payload for the AI system.
+        db: Database session used to load and persist the system.
+        current_user: Authenticated user who must own the system.
+
+    Returns:
+        The updated AI system serialized as AISystemResponse.
+
+    Raises:
+        HTTPException: If the AI system does not exist or belongs to another user.
+    """
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .first()
+    )
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
+        )
+
+    update_data = system_data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(system, field, value)
+    
+    system._changed_by_id = current_user.id
+    db.commit()
+    db.refresh(system)
+    return system
+
+@router.patch("/{system_id}", response_model=AISystemResponse)
+def update_ai_system_patch(
     system_id: int,
     system_data: AISystemUpdate,
     db: Session = Depends(get_db),
@@ -729,3 +770,15 @@ def list_drift_events(
         "limit": limit,
         "offset": offset
     }
+
+@router.post("/admin/compliance/scan")
+def trigger_manual_compliance_scan(
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user) # Assuming admins only, or you can omit for local testing
+):
+    """
+    Manually triggers the compliance drift monitor.
+    """
+    # run_drift_scan handles its own DB commits and returns a dict with the stats
+    result = run_drift_scan(db)
+    return result
