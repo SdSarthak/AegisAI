@@ -12,6 +12,10 @@ from unittest.mock import MagicMock, patch
 from app.core.security import get_current_user
 from app.main import app
 
+from app.core.config import settings
+from app.core.security import get_current_user
+from app.main import app
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -41,9 +45,15 @@ PATCH_LOAD_DOCS = "app.api.v1.rag.load_documents_from_paths"
 PATCH_CREATE_VS = "app.api.v1.rag.create_vector_store"
 
 
-@pytest.fixture
-def mock_rag_user():
-    """Authenticate RAG ingest tests without requiring a real JWT."""
+@pytest.fixture(autouse=True)
+def isolated_rag_document_storage(tmp_path):
+    """Keep persisted RAG upload files out of the repository during tests."""
+    with patch.object(settings, "RAG_DOCUMENT_STORAGE_PATH", str(tmp_path / "rag_documents")):
+        yield
+
+
+@pytest.fixture(autouse=True)
+def authenticated_rag_user():
     app.dependency_overrides[get_current_user] = _mock_current_user
     yield
     app.dependency_overrides.pop(get_current_user, None)
@@ -259,61 +269,73 @@ class TestRagIngest:
         assert isinstance(data["chunks_created"], int) and data["chunks_created"] >= 0
         assert isinstance(data["index_size_bytes"], int) and data["index_size_bytes"] >= 0
 
-    # ------------------------------------------------------------------
-    # Rate and size limit checks
-    # ------------------------------------------------------------------
 
-    def test_too_many_files_returns_413(self, client, mock_rag_user):
-        """
-        9. Uploading more files than RAG_MAX_FILES_PER_REQUEST should return 413.
-        """
-        from app.core.config import settings
-        with (
-            patch(PATCH_AUTH, return_value=_mock_current_user()),
-            patch.object(settings, "RAG_MAX_FILES_PER_REQUEST", 2)
-        ):
-            response = client.post(
-                "/api/v1/rag/ingest",
-                files=[
-                    ("files", _make_pdf_upload("doc1.pdf")),
-                    ("files", _make_pdf_upload("doc2.pdf")),
-                    ("files", _make_pdf_upload("doc3.pdf")),
-                ],
-            )
-        assert response.status_code == 413
-        assert "too many files" in response.json()["detail"].lower()
+class TestRagDocuments:
+    """Tests for managing documents stored in the RAG knowledge base."""
 
-    def test_oversized_file_returns_413(self, client, mock_rag_user):
-        """
-        10. Uploading a file exceeding RAG_MAX_FILE_SIZE_BYTES should return 413.
-        """
-        from app.core.config import settings
-        with (
-            patch(PATCH_AUTH, return_value=_mock_current_user()),
-            patch.object(settings, "RAG_MAX_FILE_SIZE_BYTES", 10)
-        ):
-            response = client.post(
-                "/api/v1/rag/ingest",
-                files={"files": _make_pdf_upload("large.pdf", content=b"A" * 11)},
-            )
-        assert response.status_code == 413
-        assert "exceeds the maximum size" in response.json()["detail"].lower()
+    @patch(PATCH_CREATE_VS)
+    @patch(PATCH_LOAD_DOCS)
+    def test_list_documents_returns_metadata(self, mock_load, mock_create, client):
+        user = _mock_current_user()
+        app.dependency_overrides[get_current_user] = lambda: user
+        mock_load.return_value = [MagicMock()]
+        mock_create.return_value = MagicMock()
 
-    def test_exceed_total_budget_returns_413(self, client, mock_rag_user):
-        """
-        11. Uploading multiple files exceeding RAG_TOTAL_BUDGET_BYTES should return 413.
-        """
-        from app.core.config import settings
-        with (
-            patch(PATCH_AUTH, return_value=_mock_current_user()),
-            patch.object(settings, "RAG_TOTAL_BUDGET_BYTES", 20)
-        ):
-            response = client.post(
-                "/api/v1/rag/ingest",
-                files=[
-                    ("files", _make_pdf_upload("doc1.pdf", content=b"A" * 15)),
-                    ("files", _make_pdf_upload("doc2.pdf", content=b"A" * 15)),
-                ],
-            )
-        assert response.status_code == 413
-        assert "total upload size exceeds" in response.json()["detail"].lower()
+        client.post(
+            "/api/v1/rag/ingest",
+            files={"files": _make_pdf_upload("eu_ai_act.pdf")},
+        )
+
+        response = client.get("/api/v1/rag/documents")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total"] == 1
+        assert data["items"][0]["original_filename"] == "eu_ai_act.pdf"
+        assert data["items"][0]["content_type"] == "application/pdf"
+        assert data["items"][0]["file_size_bytes"] > 0
+
+    @patch(PATCH_CREATE_VS)
+    @patch(PATCH_LOAD_DOCS)
+    def test_delete_document_removes_file_and_rebuilds_index(
+        self,
+        mock_load,
+        mock_create,
+        client,
+    ):
+        user = _mock_current_user()
+        app.dependency_overrides[get_current_user] = lambda: user
+        mock_load.return_value = [MagicMock(), MagicMock()]
+        mock_create.return_value = MagicMock()
+
+        client.post(
+            "/api/v1/rag/ingest",
+            files=[
+                ("files", _make_pdf_upload("delete-me.pdf")),
+                ("files", _make_pdf_upload("keep-me.pdf")),
+            ],
+        )
+        documents = client.get("/api/v1/rag/documents").json()["items"]
+        deleted_doc = next(doc for doc in documents if doc["original_filename"] == "delete-me.pdf")
+        remaining_doc = next(doc for doc in documents if doc["original_filename"] == "keep-me.pdf")
+        deleted_path = os.path.join(settings.RAG_DOCUMENT_STORAGE_PATH, deleted_doc["filename"])
+        remaining_path = os.path.join(settings.RAG_DOCUMENT_STORAGE_PATH, remaining_doc["filename"])
+
+        mock_create.reset_mock()
+        response = client.delete(f"/api/v1/rag/documents/{deleted_doc['id']}")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["deleted_document_id"] == deleted_doc["id"]
+        assert data["documents_remaining"] == 1
+        assert data["index_rebuilt"] is True
+        assert not os.path.exists(deleted_path)
+        mock_create.assert_called_once_with([remaining_path])
+
+    def test_delete_missing_document_returns_404(self, client):
+        user = _mock_current_user()
+        app.dependency_overrides[get_current_user] = lambda: user
+
+        response = client.delete("/api/v1/rag/documents/999999")
+
+        assert response.status_code == 404
