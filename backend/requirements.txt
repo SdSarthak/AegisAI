@@ -55,6 +55,10 @@ python-json-logger==2.0.7
 opentelemetry-api==1.22.0
 opentelemetry-sdk==1.22.0
 
+
+
+opentelemetry-exporter-prometheus>=0.40b0
+
 prometheus-fastapi-instrumentator==6.1.0
 
 # ── PDF Utilities ────────────────────────────────────────────────────────────────
