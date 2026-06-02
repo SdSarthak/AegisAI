@@ -274,6 +274,10 @@ class TestRealModel:
 
         tok.save_pretrained(str(tmp_path))
         mdl.save_pretrained(str(tmp_path))
+        # Create .trained marker so the weights check passes
+        import json
+        with open(os.path.join(str(tmp_path), ".trained"), "w") as f:
+            json.dump({"trained_at": "test", "note": "stub for GuardExplainer test"}, f)
 
         from app.modules.guard import guard_config
 
