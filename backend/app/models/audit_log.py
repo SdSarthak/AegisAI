@@ -79,7 +79,7 @@ def after_ai_system_update(mapper, connection, target):
                 changed_by_id=changed_by_id,
                 old_values=_json_safe_value(old_values),
                 new_values=_json_safe_value(new_values),
-                changed_at=datetime.utcnow(),
+                changed_at=datetime.now(timezone.utc),
             )
         )
         

@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 TODO for contributors (high difficulty):
   - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
   - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
-  - Add streaming responses via SSE for long answers
+  - Add streaming responses via SSE for int answers
 """
 
 import os

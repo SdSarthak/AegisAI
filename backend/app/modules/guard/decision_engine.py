@@ -117,7 +117,7 @@ class DecisionEngine:
 
     def get_safe_response(self) -> str:
         """Get a safe fallback response for blocked prompts."""
-        return (
+        return 
             "I cannot process this request as it appears to contain instructions that conflict "
             "with my guidelines. Please rephrase your question clearly, and I'll be happy to help."
-        )
+        
