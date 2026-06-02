@@ -34,23 +34,9 @@ def _guard_result():
     }
 
 
-def _authenticate_test_user(db_session):
-    user = User(
-        email="rate-limit-user@example.com",
-        hashed_password="$2b$12$R9h31cIPz0yO8W4gw2love.a4UtcWLU7pHPti3/T.D18SMsKvRHO2",
-        is_active=True,
-        company_name="AegisAI Tests",
-    )
-    db_session.add(user)
-    db_session.commit()
-    db_session.refresh(user)
-
-    token = create_access_token(data={"sub": str(user.id)})
-    return {"Authorization": f"Bearer {token}"}
 
 
-def test_per_user_rate_limit_blocks_61st_guard_scan_request(client, db_session):
-    auth_headers = _authenticate_test_user(db_session)
+def test_per_user_rate_limit_blocks_61st_guard_scan_request(client, auth_headers, db_session):
 
     fake_guard_module = ModuleType("app.modules.guard.llm_guard")
     fake_guard_class = MagicMock()

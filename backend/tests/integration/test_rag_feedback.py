@@ -66,25 +66,13 @@ def test_query_feedback_and_low_quality_flow(client):
         "source_documents": [DummyDoc("doc1.pdf#chunk1"), DummyDoc("doc2.pdf#chunk2")]
     }
 
-    # 2. Build mock modules and inject them into sys.modules before the request.
-    #    The endpoint lazily imports both ``retrieval_chain`` and ``groundedness``
-    #    inside its ``try`` block.  ``patch.dict`` temporarily inserts them so that
-    #    Python's import machinery finds the mocks instead of loading the real
-    #    modules (which would fail due to missing external dependencies).
-    retrieval_chain_mod = types.ModuleType("app.modules.rag.retrieval_chain")
-    retrieval_chain_mod.get_qa_chain = lambda: lambda payload: fake_result
+    # 2. Mock the retrieval chain and groundedness functions directly.
+    with patch("app.modules.rag.retrieval_chain.get_qa_chain") as mock_get_qa_chain, \
+         patch("app.modules.rag.groundedness.compute_groundedness") as mock_groundedness:
+        
+        mock_get_qa_chain.return_value = lambda payload: fake_result
+        mock_groundedness.return_value = 0.85
 
-    groundedness_mod = types.ModuleType("app.modules.rag.groundedness")
-    groundedness_mod.compute_groundedness = lambda answer, chunks: 0.85
-
-    # 3. Execute the standard query flow with mocks in place
-    with patch.dict(
-        sys.modules,
-        {
-            "app.modules.rag.retrieval_chain": retrieval_chain_mod,
-            "app.modules.rag.groundedness": groundedness_mod,
-        },
-    ):
         resp = client.post("/api/v1/rag/query", json={"question": "What is X?"})
 
     assert resp.status_code == 200
