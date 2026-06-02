@@ -66,7 +66,7 @@ def test_stats_aggregation(client, auth_headers, db_session):
         confidence=0.9,
         detection_type="ml",
         intent="malicious",
-        scanned_at=datetime.utcnow()
+        scanned_at=datetime.now(timezone.utc)
     )
     log2 = GuardScanLog(
         user_id=user_id,
@@ -75,7 +75,7 @@ def test_stats_aggregation(client, auth_headers, db_session):
         confidence=0.95,
         detection_type="none",
         intent="benign",
-        scanned_at=datetime.utcnow() - timedelta(days=1)
+        scanned_at=datetime.now(timezone.utc) - timedelta(days=1)
     )
     db_session.add_all([log1, log2])
     db_session.commit()
@@ -99,7 +99,7 @@ def test_window_filtering(client, auth_headers, db_session):
         decision="allow",
         confidence=0.9,
         detection_type="none",
-        scanned_at=datetime.utcnow() - timedelta(days=2)
+        scanned_at=datetime.now(timezone.utc) - timedelta(days=2)
     )
     db_session.add(log)
     db_session.commit()
