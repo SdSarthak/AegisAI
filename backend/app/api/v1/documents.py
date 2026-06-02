@@ -1,3 +1,6 @@
+from datetime import datetime, timedelta, timezone
+from jose import jwt, JWTError
+from app.core.config import settings
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
@@ -336,6 +339,22 @@ def list_document_templates(
         )
         for document_type in DOCUMENT_TEMPLATES.keys()
     ]
+@router.get("/share/{token}", response_model=PublicDocumentResponse)
+def access_shared_document(token: str, db: Session = Depends(get_db)):
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=["HS256"])
+    except JWTError as e:
+        if "expired" in str(e).lower():
+            raise HTTPException(status_code=401, detail="Token expired")
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    if payload.get("type") != "document_share":
+        raise HTTPException(status_code=400, detail="Wrong token type")
+
+    document = db.query(Document).filter(Document.id == payload["document_id"]).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    return document
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
@@ -481,7 +500,7 @@ def generate_document(
             sector=ai_system.sector or "Not specified",
             description=ai_system.description or "No description provided",
             risk_level=ai_system.risk_level.value if ai_system.risk_level else "Not assessed",
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             company_name=current_user.company_name or "Not specified",
             classification_reasons="See risk assessment details",
             recommendations="Based on risk assessment",
@@ -709,3 +728,33 @@ def export_document_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": content_disposition}
     )
+
+
+from datetime import datetime, timedelta
+from jose import jwt, JWTError
+
+@router.post("/{document_id}/share")
+def create_share_link(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    token = jwt.encode(
+        {"document_id": document_id, "exp": expires_at, "type": "document_share"},
+        settings.SECRET_KEY,
+        algorithm="HS256"
+    )
+    return {
+        "share_token": token,
+        "expires_at": expires_at.isoformat(),
+        "share_url": f"/api/v1/documents/share/{token}"
+    }
+
