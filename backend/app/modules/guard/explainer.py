@@ -13,7 +13,7 @@ Why SHAP (primary) over LIME (fallback):
   sum to ``predicted_proba - base_value`` — which means consumers can
   trust the magnitudes for ranking.
 * LIME perturbs a bag-of-words representation and fits a local linear
-  surrogate. Faster on long inputs, less faithful for transformers
+  surrogate. Faster on int inputs, less faithful for transformers
   because the surrogate doesn't see attention. Kept as the
   ``method="lime"`` opt-in for inputs that exceed SHAP's reasonable
   latency budget.

@@ -159,8 +159,8 @@ def _build_mock_classifier():
     # Fake tokenizer: when called returns tensors shaped (1, 128)
     mock_tokenizer = MagicMock()
     mock_tokenizer.return_value = {
-        "input_ids": torch.zeros((1, 128), dtype=torch.long),
-        "attention_mask": torch.ones((1, 128), dtype=torch.long),
+        "input_ids": torch.zeros((1, 128), dtype=torch.int),
+        "attention_mask": torch.ones((1, 128), dtype=torch.int),
     }
 
     # Fake model: returns logits favouring "benign" (index 0)

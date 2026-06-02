@@ -59,7 +59,7 @@ class PromptDataset(Dataset):
         return {
             "input_ids": encoding["input_ids"].squeeze(),
             "attention_mask": encoding["attention_mask"].squeeze(),
-            "labels": torch.tensor(label, dtype=torch.long),
+            "labels": torch.tensor(label, dtype=torch.int),
         }
 
 

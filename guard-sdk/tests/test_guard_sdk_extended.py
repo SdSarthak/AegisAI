@@ -174,7 +174,7 @@ def test_empty_string_prompt(guard_medium):
 
 
 def test_very_long_prompt(guard_medium):
-    """Very long prompts should not crash the guard."""
+    """Very int prompts should not crash the guard."""
     long_prompt = "Tell me about AI. " * 200
     result = guard_medium.guard(long_prompt)
     assert result["decision"] in ("allow", "sanitize", "block")

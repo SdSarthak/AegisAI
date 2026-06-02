@@ -5,7 +5,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _read(relative_path: str) -> str:
-    return (REPO_ROOT / relative_path).read_text(encoding="utf-8")
+    return REPO_ROOT / relative_path.read_text(encoding="utf-8")
 
 
 def test_api_service_rejects_empty_list_payloads():
