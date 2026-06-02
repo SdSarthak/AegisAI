@@ -106,11 +106,6 @@ def get_qa_chain():
     """
     global ChatOpenAI
 
-    try:
-        from langchain.chains import RetrievalQA
-    except ImportError:
-        from langchain_classic.chains import RetrievalQA
-
     if ChatOpenAI is None:
         from langchain_openai import ChatOpenAI as LangChainChatOpenAI
 
