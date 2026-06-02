@@ -69,18 +69,19 @@ export default function AISystems() {
     error,
     refetch,
   } = useQuery({
-    queryKey: ['ai-systems', sortBy, order, currentPage, riskFilter, complianceFilter],
+    queryKey: ['ai-systems', sortBy, order, currentPage, riskFilter, complianceFilter, searchTerm],
     queryFn: () =>
       aiSystemsApi.list({
         sort_by: sortBy,
         order,
-        skip: (currentPage - 1) * limit,
+        page: currentPage,
         limit,
+        search: searchTerm || undefined,
+        risk_level: riskFilter || undefined,
+        compliance_status: complianceFilter || undefined,
       }),
   })
-  const systems = (
-    Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
-  ) as AISystem[]
+  const systems = (systemsData ?? []) as AISystem[]
 
   const createMutation = useMutation({
     mutationFn: aiSystemsApi.create,

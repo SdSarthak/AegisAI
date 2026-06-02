@@ -1,5 +1,5 @@
 from pydantic_settings import BaseSettings
-from typing import List, Optional
+from typing import List
 
 
 class Settings(BaseSettings):
@@ -51,9 +51,14 @@ class Settings(BaseSettings):
     RAG_CHUNK_OVERLAP: int = 200
     FAISS_INDEX_PATH: str = "faiss_index"
     MLFLOW_TRACKING_URI: str = ""
+    RAG_MAX_FILES_PER_REQUEST: int = 10
+    RAG_MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024
+    RAG_TOTAL_BUDGET_BYTES: int = 50 * 1024 * 1024
 
-    # MLflow
-    MLFLOW_TRACKING_URI: Optional[str] = None  # ← only line added
+    # Observability (OpenTelemetry)
+    OTEL_SERVICE_NAME: str = "aegis-backend"
+    OTEL_METRICS_EXPORTER: str = "prometheus"
+    OTEL_TRACES_EXPORTER: str = "none"
 
     class Config:
         env_file = ".env"
