@@ -29,6 +29,7 @@ class User(Base):
     # Status
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    role = Column(String(50), nullable=False, server_default="user")
     onboarding_completed = Column(Boolean, default=False)
 
     # Timestamps
