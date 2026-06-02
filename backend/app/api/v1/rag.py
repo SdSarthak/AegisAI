@@ -9,6 +9,7 @@ TODO for contributors (high difficulty):
   - Add streaming responses via SSE for long answers
 """
 
+import hashlib
 import os
 import shutil
 import tempfile
@@ -22,6 +23,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.ingested_document import IngestedDocument, SourceType
 from app.models.rag_feedback import RAGFeedback
 from app.models.rag_query import RagQuery
 from app.models.user import SubscriptionTier, User
@@ -37,11 +39,11 @@ def load_documents_from_paths(saved_paths: list[str]):
     return loader(saved_paths)
 
 
-def create_vector_store(saved_paths: list[str]):
-    """Lazy wrapper around the RAG vector-store builder."""
-    from app.modules.rag.vector_store import create_vector_store as builder
+def merge_into_vector_store(saved_paths: list[str]):
+    """Lazy wrapper around the RAG vector-store merger."""
+    from app.modules.rag.vector_store import merge_into_vector_store as merger
 
-    return builder(saved_paths)
+    return merger(saved_paths)
 
 
 class RAGIngestResponse(BaseModel):
@@ -61,12 +63,14 @@ class RAGIngestResponse(BaseModel):
 def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """Ingest one or more regulatory PDFs and rebuild the FAISS index.
+    """Ingest one or more regulatory PDFs and merge into the FAISS index.
 
     Args:
         files: One or more PDF uploads to save, chunk, and index.
         current_user: Authenticated user requesting the ingestion.
+        db: Database session for persisting document metadata.
 
     Returns:
         RAGIngestResponse with file, chunk, and index size counts.
@@ -108,7 +112,7 @@ def ingest_documents(
             )
 
         try:
-            create_vector_store(saved_paths)
+            merge_into_vector_store(saved_paths)
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -121,6 +125,24 @@ def ingest_documents(
             fpath = os.path.join(index_path, fname)
             if os.path.exists(fpath):
                 index_size_bytes += os.path.getsize(fpath)
+
+        for saved_path, upload in zip(saved_paths, pdf_files):
+            file_hash = hashlib.sha256()
+            with open(saved_path, "rb") as f:
+                for block in iter(lambda: f.read(65536), b""):
+                    file_hash.update(block)
+
+            doc_record = IngestedDocument(
+                filename=upload.filename,
+                source_type=SourceType.UPLOADED,
+                file_hash=file_hash.hexdigest(),
+                file_size_bytes=os.path.getsize(saved_path),
+                chunk_count=len(chunks),
+                uploaded_by_id=current_user.id,
+            )
+            db.add(doc_record)
+
+        db.commit()
 
         return RAGIngestResponse(
             files_processed=len(saved_paths),
