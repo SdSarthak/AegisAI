@@ -98,7 +98,7 @@ export default function RagChat() {
 
       setAnswer({
         answer: data.answer,
-        sources: normalisedSources,
+        sources: normalizedSources,
         answer_id: data.answer_id,
       })
     } catch (err: unknown) {
