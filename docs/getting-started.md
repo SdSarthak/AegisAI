@@ -438,7 +438,7 @@ Training takes ~30 minutes on CPU, ~5 minutes on GPU. The fine-tuned model is sa
 
 
 
-## Seed Demo Data
+## Seed Demo Data  <!-- #69 -->
 
 After starting the backend and database:
 

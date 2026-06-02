@@ -1,4 +1,12 @@
-# backend/scripts/seed.py
+# backend/scripts/seed.py  #69
+"""Database seed script for local development — #69.
+
+Populates a fresh DB with:
+  - 1 demo user (admin@aegisai.dev / password123)
+  - 3 AI systems at different risk levels
+  - 2 risk assessments
+  - 3 compliance documents
+"""
 
 from datetime import datetime, timedelta
 
@@ -21,12 +29,12 @@ from app.models.document import (
 )
 
 
-def seed_database():
+def seed_database():  #69
     db: Session = SessionLocal()
 
     try:
         # ---------------------------------------------------
-        # Create Demo User
+        # Create Demo User  #69
         # ---------------------------------------------------
         existing_user = (
             db.query(User)
@@ -38,7 +46,7 @@ def seed_database():
             print("Demo user already exists.")
             return
 
-        demo_user = User(
+        demo_user = User(  #69
             email="admin@aegisai.dev",
             hashed_password=get_password_hash("password123"),
             full_name="AegisAI Admin",
@@ -55,9 +63,9 @@ def seed_database():
         print("Demo user created.")
 
         # ---------------------------------------------------
-        # Create AI Systems
+        # Create AI Systems  #69
         # ---------------------------------------------------
-        ai_system_1 = AISystem(
+        ai_system_1 = AISystem(  #69
             owner_id=demo_user.id,
             name="CV Screening Assistant",
             description="AI system used for candidate screening.",
@@ -73,7 +81,7 @@ def seed_database():
             },
         )
 
-        ai_system_2 = AISystem(
+        ai_system_2 = AISystem(  #69
             owner_id=demo_user.id,
             name="Medical Diagnosis Support",
             description="AI-assisted healthcare diagnosis support.",
@@ -89,7 +97,7 @@ def seed_database():
             },
         )
 
-        ai_system_3 = AISystem(
+        ai_system_3 = AISystem(  #69
             owner_id=demo_user.id,
             name="Customer Support Chatbot",
             description="Minimal-risk customer support chatbot.",
@@ -120,9 +128,9 @@ def seed_database():
         print("AI systems created.")
 
         # ---------------------------------------------------
-        # Create Risk Assessments
+        # Create Risk Assessments  #69
         # ---------------------------------------------------
-        assessment_1 = RiskAssessment(
+        assessment_1 = RiskAssessment(  #69
             ai_system_id=ai_system_1.id,
             assessment_type="initial",
             risk_level=RiskLevel.HIGH,
@@ -143,7 +151,7 @@ def seed_database():
             valid_until=datetime.utcnow() + timedelta(days=180),
         )
 
-        assessment_2 = RiskAssessment(
+        assessment_2 = RiskAssessment(  #69
             ai_system_id=ai_system_2.id,
             assessment_type="periodic",
             risk_level=RiskLevel.HIGH,
@@ -173,9 +181,9 @@ def seed_database():
         print("Risk assessments created.")
 
         # ---------------------------------------------------
-        # Create Compliance Documents
+        # Create Compliance Documents  #69
         # ---------------------------------------------------
-        document_1 = Document(
+        document_1 = Document(  #69
             owner_id=demo_user.id,
             ai_system_id=ai_system_1.id,
             title="CV Screening Risk Assessment",
@@ -185,7 +193,7 @@ def seed_database():
             version="1.0",
         )
 
-        document_2 = Document(
+        document_2 = Document(  #69
             owner_id=demo_user.id,
             ai_system_id=ai_system_2.id,
             title="Healthcare Transparency Notice",
@@ -195,7 +203,7 @@ def seed_database():
             version="1.2",
         )
 
-        document_3 = Document(
+        document_3 = Document(  #69
             owner_id=demo_user.id,
             ai_system_id=ai_system_3.id,
             title="Customer Support Technical Documentation",
