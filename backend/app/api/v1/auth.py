@@ -12,11 +12,12 @@ Dependencies:
   - pydantic      : request/response schema validation
 """
 
+from datetime import timedelta
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, field_validator
+
 from sqlalchemy.orm import Session
-from datetime import timedelta
 
 from app.core.database import get_db
 from app.core.security import (
@@ -30,17 +31,13 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.ai_system import AISystem, ComplianceStatus
 from app.models.document import Document
-from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse
+from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse, ChangePasswordRequest
 
-
-class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
-
-    @field_validator("new_password")
-    @classmethod
-    def validate_new_password(cls, v: str) -> str:
-        return validate_password_strength(v)
+# Pre-computed bcrypt hash used when the looked-up user is None so that the
+# login endpoint always performs a constant-time hash comparison, closing
+# the timing side-channel that would otherwise let attackers enumerate valid
+# email addresses by measuring response latency.
+_DUMMY_HASH = get_password_hash("dummy-timing-safe-placeholder")
 
 router = APIRouter()
 users_router = APIRouter()
@@ -66,7 +63,10 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
     if existing_user:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This email is already registered. Please use a different email or try logging in."
+            detail={
+                "field": "general",
+                "message": "This email is already registered. Please use a different email or try logging in."
+            }
         )
 
     try:
@@ -85,7 +85,10 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         # Generic database error handler
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred during registration. Please try again."
+            detail={
+                "field": "general",
+                "message": "An error occurred during registration. Please try again."
+            }
         )
 
 
@@ -107,16 +110,21 @@ def login(
     """
     user = db.query(User).filter(User.email == form_data.username).first()
 
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    # Always run a constant-time bcrypt comparison regardless of whether the
+    # user exists.  Without this, an attacker can distinguish "user not found"
+    # (fast — no hash) from "wrong password" (slow — bcrypt verify) by
+    # measuring response latency.
+    hashed = user.hashed_password if user else _DUMMY_HASH
+    password_ok = verify_password(form_data.password, hashed)
+
+    if not user or not user.is_active or not password_ok:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
+            detail={
+                "field": "general",
+                "message": "Invalid email or password"
+            },
             headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user"
         )
 
     access_token = create_access_token(
@@ -162,7 +170,10 @@ def change_password(
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Current password is incorrect",
+            detail={
+                "field": "general",
+                "message": "Current password is incorrect"
+            },
         )
 
     current_user.hashed_password = get_password_hash(payload.new_password)

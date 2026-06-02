@@ -17,13 +17,25 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
+
 // Handle 401 errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const url = error.config?.url || ''
+    const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
+    if (error.response?.status === 401 && !isAuthEndpoint) {
+      // Logout and navigate to login without forcing a full page reload.
       useAuthStore.getState().logout()
-      window.location.href = '/login'
+      try {
+        window.history.pushState({}, '', '/login')
+        // Notify router listeners (e.g., react-router) to handle navigation.
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      } catch (e) {
+        // Fallback: if SPA navigation fails, perform a safe replace.
+        window.location.replace('/login')
+      }
     }
     return Promise.reject(error)
   }
