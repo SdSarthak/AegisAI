@@ -27,7 +27,7 @@ def create_ai_system(client, headers):
     return response.json()["id"]
 
 def test_list_document_templates(client):
-    headers = get_auth_headers(user_id=1)
+    headers = register_and_login(client, "list_templates@example.com")
 
     response = client.get(
         "/api/v1/documents/templates",

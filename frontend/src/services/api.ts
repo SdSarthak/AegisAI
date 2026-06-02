@@ -366,7 +366,7 @@ export const ragApi = {
 
     try {
       while (true) {
-        // eslint-disable-next-line no-constant-condition
+         
         const { value, done } = await reader.read()
         if (done) break
         buffer += value

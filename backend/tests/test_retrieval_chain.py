@@ -27,7 +27,7 @@ from app.modules.rag.vector_store import load_vector_store
 class TestVectorStore:
     """Tests for the vector store loading logic."""
 
-    @patch("os.path.exists")
+    @patch("app.modules.rag.vector_store.Path.exists")
     def test_load_vector_store_raises_file_not_found(self, mock_exists):
         """1. load_vector_store() should raise FileNotFoundError when the FAISS index does not exist."""
         # Setup: Simulate that the index path does NOT exist
@@ -38,9 +38,9 @@ class TestVectorStore:
         
         assert "FAISS index not found" in str(excinfo.value)
 
-    @patch("os.path.exists")
+    @patch("app.modules.rag.vector_store.Path.exists")
     @patch("app.modules.rag.vector_store.get_embeddings")
-    @patch("langchain_community.vectorstores.FAISS.load_local")
+    @patch("app.modules.rag.vector_store.FAISS.load_local")
     def test_load_vector_store_success(self, mock_load_local, mock_get_embeddings, mock_exists):
         """2. load_vector_store() should return the index when it exists."""
         # Setup: Simulate that the index path DOES exist
