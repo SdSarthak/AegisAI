@@ -19,6 +19,8 @@ interface RagAnswer {
   answer_id?: string
 }
 
+type ApiRagSource = string | RagSource
+
 interface ApiError {
   response?: {
     status?: number
@@ -51,6 +53,25 @@ function buildAnswerExport(
         `${index + 1}. ${source.title}\n${source.excerpt}`
     ),
   ].join('\n')
+}
+
+function normalizeSources(
+  sources: ApiRagSource[] | undefined
+): RagSource[] {
+  if (!sources) {
+    return []
+  }
+
+  return sources.map((source, index) => {
+    if (typeof source === 'string') {
+      return {
+        title: `Source ${index + 1}`,
+        excerpt: source,
+      }
+    }
+
+    return source
+  })
 }
 
 export default function RagChat() {
@@ -86,19 +107,9 @@ export default function RagChat() {
     try {
       const data = await ragApi.query(trimmedQuestion)
 
-      const normalizedSources: RagSource[] = (data.sources || []).map(
-        (source: string | RagSource) =>
-          typeof source === 'string'
-            ? {
-                title: source,
-                excerpt: '',
-              }
-            : source
-      )
-
       setAnswer({
         answer: data.answer,
-        sources: normalizedSources,
+        sources: normalizeSources(data.sources),
         answer_id: data.answer_id,
       })
     } catch (err: unknown) {

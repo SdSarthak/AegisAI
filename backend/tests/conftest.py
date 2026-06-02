@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 # Set test database before importing app
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SECRET_KEY"] = "testsecret"
+os.environ["REDIS_URL"] = ""
 
 from app.core.database import Base, SessionLocal
 from app.core.security import decode_token, get_current_user
@@ -57,10 +58,12 @@ def db_session(db_engine) -> Session:
 def client(db_engine):
     """Create test client with test database."""
     from app.core.database import get_db
+    from app.core.rate_limit import guard_scan_rate_limiter
 
     connection = db_engine.connect()
     transaction = connection.begin()
     session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+    guard_scan_rate_limiter._local_attempts_by_key.clear()
 
     def override_get_db():
         yield session

@@ -99,8 +99,14 @@ class GuardExplainer:
     def __init__(self) -> None:
         # Lazy import — heavy ML stack only loads when an explainer is
         # actually instantiated (not on module import).
-        from transformers import AutoTokenizer, AutoModelForSequenceClassification
-        from transformers import pipeline as hf_pipeline
+        try:
+            from transformers import AutoTokenizer, AutoModelForSequenceClassification
+            from transformers import pipeline as hf_pipeline
+        except ImportError as exc:
+            raise ExplainerUnavailable(
+                "Guard explainability requires the optional transformers "
+                "dependency and a fine-tuned classifier model."
+            ) from exc
 
         model_path = guard_config.CLASSIFIER_MODEL_PATH
 
