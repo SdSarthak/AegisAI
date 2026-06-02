@@ -16,6 +16,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - **Documents API** — Validate `ai_system_id` ownership before creating documents so users cannot link documents to another user's AI system.
+- **Dark Mode (ThemeToggle)** — Resolved FOUC by initializing state directly from DOM instead of `useState(false)`. Removed duplicate initialization logic that conflicted with `index.html` inline script. Fixed `localStorage` being overwritten on every page load which permanently broke system theme synchronization. localStorage is now only written on explicit user toggle, allowing OS-level theme changes to propagate correctly when no manual preference is set.
+
 
 ---
 

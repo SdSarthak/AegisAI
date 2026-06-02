@@ -1,35 +1,46 @@
 import { useState, useEffect } from 'react'
 import { Sun, Moon } from 'lucide-react'
 
+// FIX: Read initial theme directly from DOM (set by index.html before React loads)
+// Previously useState(false) caused a wrong first render --> flicker (FOUC)
 export default function ThemeToggle() {
-  const [isDark, setIsDark] = useState(false)
+  const [isDark, setIsDark] = useState<boolean>(() =>
+  document.documentElement.classList.contains('dark')
+)
 
-  // ✅ Initialize theme (localStorage OR system)
-  useEffect(() => {
-    const stored = localStorage.getItem('theme')
+  /* REMOVED: Initialization useEffect was duplicating logic already handled by
+the inline script in index.html.*/
 
-    if (stored) {
-      setIsDark(stored === 'dark')
-    } else {
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      setIsDark(systemDark)
-    }
-  }, [])
 
   // ✅ Apply theme
+  // FIX: Removed localStorage.setItem from here
+/* Previously this wrote light to localStorage on every page load,
+ which permanently broke system theme sync */
   useEffect(() => {
-    const root = document.documentElement
+  const root = document.documentElement
+  if (isDark) {
+    root.classList.add('dark')
+  } else {
+    root.classList.remove('dark')
+  }
+}, [isDark])
 
-    if (isDark) {
-      root.classList.add('dark')
-      localStorage.setItem('theme', 'dark')
-    } else {
-      root.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
-    }
-  }, [isDark])
+// FIX: localStorage is now ONLY written here — when user explicitly clicks
+// This preserves "no stored value = follow system preference" behavior
+const handleToggle = () => {
+  setIsDark(prev => {
+    const next = !prev
+    localStorage.setItem('theme', next ? 'dark' : 'light')
+    return next
+  })
+}
 
   // ✅ Sync with system if no manual preference
+  /* 
+  Note: This logic was already correct but was broken because localStorage 
+   always had a value due to the bug in the apply-theme useEffect above.
+   Now that localStorage is only written on user click, this works correctly. 
+ */
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)')
 
@@ -46,7 +57,8 @@ export default function ThemeToggle() {
   return (
     <button
       type="button"
-      onClick={() => setIsDark(prev => !prev)}
+      //inline arrow function changed with handleToggle function 
+      onClick={handleToggle}
       className="
         p-2 
         rounded-lg 
