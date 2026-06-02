@@ -248,7 +248,6 @@ class TestRagIngest:
         """
         from app.core.config import settings
         with (
-            patch(PATCH_AUTH, return_value=_mock_current_user()),
             patch.object(settings, "RAG_MAX_FILES_PER_REQUEST", 2)
         ):
             response = client.post(
@@ -268,7 +267,6 @@ class TestRagIngest:
         """
         from app.core.config import settings
         with (
-            patch(PATCH_AUTH, return_value=_mock_current_user()),
             patch.object(settings, "RAG_MAX_FILE_SIZE_BYTES", 10)
         ):
             response = client.post(
@@ -284,7 +282,6 @@ class TestRagIngest:
         """
         from app.core.config import settings
         with (
-            patch(PATCH_AUTH, return_value=_mock_current_user()),
             patch.object(settings, "RAG_TOTAL_BUDGET_BYTES", 20)
         ):
             response = client.post(
