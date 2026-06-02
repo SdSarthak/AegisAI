@@ -56,6 +56,16 @@ function ensureObjectResponse<T extends Record<string, unknown>>(
   throw new Error(`${resourceName} response was empty or invalid.`)
 }
 
+function ensureListResponse<T>(data: unknown, resourceName: string): T[] {
+  if (Array.isArray(data)) {
+    return data as T[]
+  }
+  if (data && typeof data === 'object' && 'items' in data && Array.isArray((data as any).items)) {
+    return (data as any).items as T[]
+  }
+  throw new Error(`${resourceName} response was empty or invalid.`)
+}
+
 function ensureStringField(
   data: Record<string, unknown>,
   fieldName: string,
@@ -154,7 +164,7 @@ export const aiSystemsApi = {
     compliance_status?: string
   }) => {
     const { data } = await api.get('/ai-systems/', { params })
-    return data
+    return ensureListResponse(data, 'AI systems')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/ai-systems/${id}`)
@@ -212,7 +222,7 @@ export const classificationApi = {
 export const documentsApi = {
   list: async (params?: { skip?: number; limit?: number }) => {
     const { data } = await api.get('/documents/', { params })
-    return data
+    return ensureListResponse(data, 'Documents')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/documents/${id}`)

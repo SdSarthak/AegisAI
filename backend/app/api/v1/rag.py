@@ -309,8 +309,12 @@ def query_knowledge_base(
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
         chunk_texts = [str(getattr(doc, "page_content", "")) for doc in source_docs]
         answer = str(result.get("result", ""))
-        groundedness_score = compute_groundedness(answer, chunk_texts)
-        low_confidence = groundedness_score < 0.70
+        groundedness_score = result.get("groundedness_score")
+        if groundedness_score is None:
+            groundedness_score = compute_groundedness(answer, chunk_texts)
+            low_confidence = groundedness_score < 0.70
+        else:
+            low_confidence = result.get("low_confidence", groundedness_score < 0.70)
 
         # Ensure tables exist on this DB bind (useful for test DB overrides)
         try:
