@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, TYPE_CHECKING
+import re
 
 from jose import ExpiredSignatureError, JWTError, jwt
 from passlib.context import CryptContext
@@ -25,6 +26,21 @@ def _get_credentials_exception() -> HTTPException:
         detail="Could not validate credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )
+
+
+def validate_password_strength(password: str) -> str:
+    errors = []
+    if len(password) < 8:
+        errors.append("at least 8 characters")
+    if not re.search(r'[A-Z]', password):
+        errors.append("at least one uppercase letter")
+    if not re.search(r'\d', password):
+        errors.append("at least one digit")
+    if not re.search(r'[!@#$%^&*]', password):
+        errors.append("at least one special character (!@#$%^&*)")
+    if errors:
+        raise ValueError("Password must contain: " + ", ".join(errors))
+    return password
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:

@@ -4,6 +4,8 @@ from sqlalchemy.orm import Session
 from typing import List
 from io import BytesIO
 import re
+import html
+import urllib.parse
 
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -524,7 +526,7 @@ def export_document_pdf(
     )
     
     # Add title
-    story.append(Paragraph(document.title, title_style))
+    story.append(Paragraph(html.escape(document.title), title_style))
     story.append(Spacer(1, 0.2*inch))
     
     # Add metadata
@@ -555,7 +557,7 @@ def export_document_pdf(
                 spaceAfter=12,
                 spaceBefore=12,
             )
-            story.append(Paragraph(line.replace('# ', ''), heading_style))
+            story.append(Paragraph(html.escape(line.replace('# ', '')), heading_style))
         elif line.startswith('## '):
             # Heading 2
             heading_style = ParagraphStyle(
@@ -566,7 +568,7 @@ def export_document_pdf(
                 spaceAfter=10,
                 spaceBefore=10,
             )
-            story.append(Paragraph(line.replace('## ', ''), heading_style))
+            story.append(Paragraph(html.escape(line.replace('## ', '')), heading_style))
         elif line.startswith('### '):
             # Heading 3
             heading_style = ParagraphStyle(
@@ -577,13 +579,14 @@ def export_document_pdf(
                 spaceAfter=8,
                 spaceBefore=8,
             )
-            story.append(Paragraph(line.replace('### ', ''), heading_style))
+            story.append(Paragraph(html.escape(line.replace('### ', '')), heading_style))
         elif line.startswith('- '):
             # Bullet point
-            story.append(Paragraph('• ' + line.replace('- ', ''), body_style))
+            story.append(Paragraph('• ' + html.escape(line.replace('- ', '')), body_style))
         else:
-            # Handle inline bold with regex
-            processed_line = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', line.strip())
+            # Handle inline bold with regex after escaping user input
+            escaped_line = html.escape(line.strip())
+            processed_line = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', escaped_line)
             story.append(Paragraph(processed_line, body_style))
     
     # Build PDF
@@ -606,9 +609,17 @@ def export_document_pdf(
             detail="PDF generation failed - PDF too small"
         )
     
+    # Generate RFC 5987/6266 safe filename formatting
+    encoded_filename = urllib.parse.quote(f"{document.title}.pdf")
+    safe_title = "".join(c for c in document.title if c.isalnum() or c in "._- ")
+    if not safe_title.strip():
+        safe_title = "document"
+    safe_filename = f"{safe_title}.pdf"
+    content_disposition = f'attachment; filename="{safe_filename}"; filename*=UTF-8\'\'{encoded_filename}'
+    
     # Return PDF response
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{document.title}.pdf"'}
+        headers={"Content-Disposition": content_disposition}
     )

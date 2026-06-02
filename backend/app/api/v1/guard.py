@@ -17,7 +17,7 @@ from typing import Optional, TypedDict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -48,7 +48,7 @@ _RATE_LIMIT_REQUESTS = settings.GUARD_RATE_LIMIT_REQUESTS
 
 
 class ScanRequest(BaseModel):
-    prompt: str
+    prompt: str = Field(..., min_length=1, max_length=settings.GUARD_MAX_PROMPT_LENGTH)
 
 
 class ScanResponse(BaseModel):
@@ -74,6 +74,13 @@ class BulkScanRequest(BaseModel):
 
         if len(self.prompts) > 50:
             raise ValueError("Maximum 50 prompts allowed per batch request.")
+
+        for i, prompt in enumerate(self.prompts):
+            if not prompt or len(prompt) > settings.GUARD_MAX_PROMPT_LENGTH:
+                raise ValueError(
+                    f"Prompt at index {i} must be between 1 and "
+                    f"{settings.GUARD_MAX_PROMPT_LENGTH} characters."
+                )
 
 
 class BulkScanResponse(BaseModel):

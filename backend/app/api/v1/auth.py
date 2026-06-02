@@ -14,13 +14,13 @@ Dependencies:
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-import re
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 from datetime import timedelta
 
 from app.core.database import get_db
 from app.core.security import (
+    validate_password_strength,
     verify_password,
     get_password_hash,
     create_access_token,
@@ -40,18 +40,7 @@ class ChangePasswordRequest(BaseModel):
     @field_validator("new_password")
     @classmethod
     def validate_new_password(cls, v: str) -> str:
-        errors = []
-        if len(v) < 8:
-            errors.append("at least 8 characters")
-        if not re.search(r'[A-Z]', v):
-            errors.append("at least one uppercase letter")
-        if not re.search(r'\d', v):
-            errors.append("at least one digit")
-        if not re.search(r'[!@#$%^&*]', v):
-            errors.append("at least one special character (!@#$%^&*)")
-        if errors:
-            raise ValueError("Password must contain: " + ", ".join(errors))
-        return v
+        return validate_password_strength(v)
 
 router = APIRouter()
 users_router = APIRouter()

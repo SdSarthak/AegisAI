@@ -58,9 +58,7 @@ export default function Documents() {
     queryKey: ['documents', currentPage],
     queryFn: () => documentsApi.list({ skip: (currentPage - 1) * limit, limit }),
   })
-  const documents = (
-    Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
-  ) as Document[]
+  const documents = (documentsData ?? []) as Document[]
   const filteredDocuments = documents.filter((doc: Document) => {
     const matchesSearch =
       doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -82,9 +80,7 @@ export default function Documents() {
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
-  const systems = (
-    Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
-  ) as AISystem[]
+  const systems = (systemsData ?? []) as AISystem[]
   const isLoading = documentsLoading || systemsLoading
   const hasError = documentsError || systemsError
   const errorMessage =
