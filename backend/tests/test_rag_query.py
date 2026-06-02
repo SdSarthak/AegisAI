@@ -12,11 +12,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from app.core.security import get_current_user
+from app.models.user import SubscriptionTier
 from app.main import app
 
 
 class _DummyDoc:
     def __init__(self, source: str):
+        self.page_content = source
         self.metadata = {"source": source}
 
 
@@ -24,6 +26,9 @@ def _mock_current_user():
     user = MagicMock()
     user.id = 1
     user.email = "test@example.com"
+    user.full_name = "Test User"
+    user.subscription_tier = SubscriptionTier.FREE
+    user.is_active = True
     return user
 
 
