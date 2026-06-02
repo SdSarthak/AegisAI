@@ -18,8 +18,8 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
-    full_name = Column(String(255))
-    company_name = Column(String(255))
+    full_name = Column(String(100))
+    company_name = Column(String(100))
 
     # Subscription
     subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.FREE)
@@ -29,6 +29,7 @@ class User(Base):
     # Status
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    onboarding_completed = Column(Boolean, default=False)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

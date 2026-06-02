@@ -1,12 +1,19 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from jose import jwt, JWTError
+from jose.exceptions import ExpiredSignatureError
+
+
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
 from io import BytesIO
+from html import escape as html_escape
+from urllib.parse import quote
 import re
-import html
-import urllib.parse
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
@@ -17,6 +24,8 @@ from app.schemas.document import (
     DocumentCreate,
     DocumentResponse,
     DocumentGenerateRequest,
+    DocumentShareResponse,
+    DocumentUpdateRequest,
     DocumentTemplateResponse,
     DocumentUpdateRequest,
 )
@@ -29,7 +38,49 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
+
 router = APIRouter()
+
+def create_share_token(document_id: int):
+    expire = datetime.now(timezone.utc) + timedelta(
+        days=settings.DOCUMENT_SHARE_EXPIRE_DAYS
+    )
+
+    payload = {
+        "document_id": document_id,
+        "type": "document_share",
+        "exp": expire
+    }
+
+    token = jwt.encode(
+        payload,
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM
+    )
+
+    return token
+
+def _escape_pdf_text(value: str) -> str:
+    """Escape user-controlled text before ReportLab Paragraph parses it."""
+    return html_escape(value, quote=False)
+
+
+def _render_inline_markdown(value: str) -> str:
+    """Render the small markdown subset supported by PDF export safely."""
+    escaped = _escape_pdf_text(value.strip())
+    return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', escaped)
+
+
+def _safe_pdf_filename(title: str) -> str:
+    """Return a header-safe PDF filename derived from a document title."""
+    filename = re.sub(r"[\x00-\x1f\x7f]", "", title or "").strip()
+    filename = re.sub(r'[/\\:*?"<>|]+', "_", filename)
+    filename = re.sub(r"\s+", " ", filename).strip(" ._")
+
+    if not filename:
+        filename = "document"
+
+    return f"{filename[:120]}.pdf"
 
 
 # Document templates for generation
@@ -316,6 +367,92 @@ def list_documents(
     return PaginatedResponse(items=documents, total=total, skip=skip, limit=limit)
 
 
+@router.get("/share/{token}", response_model=DocumentResponse)
+def get_shared_document(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Access shared document without authentication."""
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Share link expired"
+        )
+
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid share token"
+        )
+
+    if payload.get("type") != "document_share":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type"
+        )
+
+    document_id = payload.get("document_id")
+
+    if not document_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token payload"
+        )
+
+    document = db.query(Document).filter(
+        Document.id == document_id
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    if hasattr(document, "is_deleted") and document.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Share link revoked"
+        )
+
+    return document
+
+@router.post(
+    "/{document_id}/share",
+    response_model=DocumentShareResponse
+)
+def share_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Generate share link for a document."""
+
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    token = create_share_token(document.id)
+
+    return {
+        "share_url": f"/api/v1/documents/share/{token}",
+        "expires_in_days": settings.DOCUMENT_SHARE_EXPIRE_DAYS
+    }
 @router.get("/templates", response_model=List[DocumentTemplateResponse])
 def list_document_templates(
     current_user: User = Depends(get_current_user),
@@ -338,127 +475,6 @@ def list_document_templates(
         for document_type in DOCUMENT_TEMPLATES.keys()
     ]
 
-
-@router.get("/templates")
-def list_document_templates(
-    current_user: User = Depends(get_current_user),
-):
-    """List available compliance document templates."""
-    return [
-        {
-            "type": DocumentType.TECHNICAL_DOCUMENTATION.value,
-            "name": "Technical Documentation",
-            "description": "EU AI Act technical documentation for an AI system.",
-        },
-        {
-            "type": DocumentType.RISK_ASSESSMENT.value,
-            "name": "Risk Assessment",
-            "description": "Risk classification and mitigation assessment.",
-        },
-        {
-            "type": DocumentType.CONFORMITY_DECLARATION.value,
-            "name": "Conformity Declaration",
-            "description": "Declaration of conformity for applicable EU AI Act requirements.",
-        },
-    ]
-
-
-@router.post(
-    "/generate",
-    response_model=DocumentResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-def generate_document(
-    request: DocumentGenerateRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Generate a compliance document for a user's AI system.
-
-    Args:
-        request: Payload specifying the AI system and document type.
-        db: Database session used to look up the AI system and save the result.
-        current_user: Authenticated user who must own the AI system.
-
-    Returns:
-        The generated document serialized as DocumentResponse.
-
-    Raises:
-        HTTPException: If the AI system or template is missing.
-    """
-    ai_system = (
-        db.query(AISystem)
-        .filter(
-            AISystem.id == request.ai_system_id, AISystem.owner_id == current_user.id
-        )
-        .first()
-    )
-
-    if not ai_system:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
-        )
-
-    template = DOCUMENT_TEMPLATES.get(request.document_type)
-    if not template:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"No template available for {request.document_type}",
-        )
-
-    from app.models.ai_system import RiskAssessment
-
-    assessment = db.query(RiskAssessment).filter(
-        RiskAssessment.ai_system_id == ai_system.id
-    ).order_by(RiskAssessment.assessed_at.desc()).first()
-
-    try:
-        content = generate_compliance_narrative(
-            document_type=request.document_type,
-            ai_system=ai_system,
-            risk_assessment=assessment,
-            company_name=current_user.company_name,
-        )
-    except Exception as e:
-        import logging
-
-        logger = logging.getLogger(__name__)
-        logger.warning(f"LLM generation failed, falling back to template: {str(e)}")
-
-        from datetime import datetime
-
-        content = template.format(
-            system_name=ai_system.name,
-            version=ai_system.version or "1.0",
-            use_case=ai_system.use_case or "Not specified",
-            sector=ai_system.sector or "Not specified",
-            description=ai_system.description or "No description provided",
-            risk_level=(
-                ai_system.risk_level.value
-                if ai_system.risk_level
-                else "Not assessed"
-            ),
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
-            company_name=current_user.company_name or "Not specified",
-            classification_reasons="See risk assessment details",
-            recommendations="Based on risk assessment",
-            requirements="See applicable requirements above",
-            next_steps="Complete all checklist items",
-        )
-
-    document = Document(
-        owner_id=current_user.id,
-        ai_system_id=ai_system.id,
-        title=f"{request.document_type.value.replace('_', ' ').title()} - {ai_system.name}",
-        document_type=request.document_type,
-        status=DocumentStatus.GENERATED,
-        content=content,
-    )
-    db.add(document)
-    db.commit()
-    db.refresh(document)
-
-    return document
 
 
 @router.get("/{document_id}", response_model=DocumentResponse)
@@ -532,6 +548,101 @@ def update_document(
     
     return document
 
+
+@router.post(
+    "/generate",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def generate_document(
+    request: DocumentGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a compliance document for a user's AI system.
+
+    Args:
+        request: Payload specifying the AI system and document type.
+        db: Database session used to look up the AI system and save the result.
+        current_user: Authenticated user who must own the AI system.
+
+    Returns:
+        The generated document serialized as DocumentResponse.
+
+    Raises:
+        HTTPException: If the AI system or template is missing.
+    """
+    # Get the AI system
+    ai_system = (
+        db.query(AISystem)
+        .filter(
+            AISystem.id == request.ai_system_id, AISystem.owner_id == current_user.id
+        )
+        .first()
+    )
+
+    if not ai_system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
+        )
+
+    # Get template
+    template = DOCUMENT_TEMPLATES.get(request.document_type)
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No template available for {request.document_type}",
+        )
+
+    # Get latest risk assessment if available
+    from app.models.ai_system import RiskAssessment
+
+    assessment = db.query(RiskAssessment).filter(
+        RiskAssessment.ai_system_id == ai_system.id
+    ).order_by(RiskAssessment.assessed_at.desc()).first()
+    
+    try:
+        content = generate_compliance_narrative(
+            document_type=request.document_type,
+            ai_system=ai_system,
+            risk_assessment=assessment,
+            company_name=current_user.company_name
+        )
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"LLM generation failed, falling back to template: {str(e)}")
+        
+        from datetime import datetime
+        content = template.format(
+            system_name=ai_system.name,
+            version=ai_system.version or "1.0",
+            use_case=ai_system.use_case or "Not specified",
+            sector=ai_system.sector or "Not specified",
+            description=ai_system.description or "No description provided",
+            risk_level=ai_system.risk_level.value if ai_system.risk_level else "Not assessed",
+            date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            company_name=current_user.company_name or "Not specified",
+            classification_reasons="See risk assessment details",
+            recommendations="Based on risk assessment",
+            requirements="See applicable requirements above",
+            next_steps="Complete all checklist items"
+        )
+
+    # Create document
+    document = Document(
+        owner_id=current_user.id,
+        ai_system_id=ai_system.id,
+        title=f"{request.document_type.value.replace('_', ' ').title()} - {ai_system.name}",
+        document_type=request.document_type,
+        status=DocumentStatus.GENERATED,
+        content=content,
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    return document
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(
@@ -640,7 +751,7 @@ def export_document_pdf(
     )
     
     # Add title
-    story.append(Paragraph(html.escape(document.title), title_style))
+    story.append(Paragraph(_escape_pdf_text(document.title), title_style))
     story.append(Spacer(1, 0.2*inch))
     
     # Add metadata
@@ -671,7 +782,7 @@ def export_document_pdf(
                 spaceAfter=12,
                 spaceBefore=12,
             )
-            story.append(Paragraph(html.escape(line.replace('# ', '')), heading_style))
+            story.append(Paragraph(_escape_pdf_text(line[2:]), heading_style))
         elif line.startswith('## '):
             # Heading 2
             heading_style = ParagraphStyle(
@@ -682,7 +793,7 @@ def export_document_pdf(
                 spaceAfter=10,
                 spaceBefore=10,
             )
-            story.append(Paragraph(html.escape(line.replace('## ', '')), heading_style))
+            story.append(Paragraph(_escape_pdf_text(line[3:]), heading_style))
         elif line.startswith('### '):
             # Heading 3
             heading_style = ParagraphStyle(
@@ -693,15 +804,12 @@ def export_document_pdf(
                 spaceAfter=8,
                 spaceBefore=8,
             )
-            story.append(Paragraph(html.escape(line.replace('### ', '')), heading_style))
+            story.append(Paragraph(_escape_pdf_text(line[4:]), heading_style))
         elif line.startswith('- '):
             # Bullet point
-            story.append(Paragraph('• ' + html.escape(line.replace('- ', '')), body_style))
+            story.append(Paragraph('• ' + _escape_pdf_text(line[2:]), body_style))
         else:
-            # Handle inline bold with regex after escaping user input
-            escaped_line = html.escape(line.strip())
-            processed_line = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', escaped_line)
-            story.append(Paragraph(processed_line, body_style))
+            story.append(Paragraph(_render_inline_markdown(line), body_style))
     
     # Build PDF
     doc.build(story)
@@ -723,17 +831,15 @@ def export_document_pdf(
             detail="PDF generation failed - PDF too small"
         )
     
-    # Generate RFC 5987/6266 safe filename formatting
-    encoded_filename = urllib.parse.quote(f"{document.title}.pdf")
-    safe_title = "".join(c for c in document.title if c.isalnum() or c in "._- ")
-    if not safe_title.strip():
-        safe_title = "document"
-    safe_filename = f"{safe_title}.pdf"
-    content_disposition = f'attachment; filename="{safe_filename}"; filename*=UTF-8\'\'{encoded_filename}'
-    
     # Return PDF response
+    filename = _safe_pdf_filename(document.title)
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": content_disposition}
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{filename}"; '
+                f"filename*=UTF-8''{quote(filename)}"
+            )
+        }
     )

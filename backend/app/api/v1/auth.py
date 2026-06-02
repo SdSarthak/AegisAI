@@ -200,8 +200,12 @@ def update_current_user_info(
     """
     if user_data.full_name is not None:
         current_user.full_name = user_data.full_name
+
     if user_data.company_name is not None:
         current_user.company_name = user_data.company_name
+
+    if user_data.onboarding_completed is not None:
+        current_user.onboarding_completed = user_data.onboarding_completed
 
     current_user = db.merge(current_user)
     db.commit()
