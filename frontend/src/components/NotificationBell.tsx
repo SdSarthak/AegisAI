@@ -48,14 +48,19 @@ export default function NotificationBell() {
   const wrapperRef = useRef<HTMLDivElement>(null)
 
   // Live data via useQuery
-  const queryClient = useQueryClient()
-  const { data: notifications = [] } = useQuery({
-    queryKey: ['notifications', 'unread'],
-    queryFn: () => notificationsApi.list(true),
-    refetchInterval: 60_000,
-  })
+const queryClient = useQueryClient()
 
-  const unreadCount = notifications.filter((n: NotificationPreview) => !n.is_read).length
+const { data } = useQuery({
+  queryKey: ['notifications', 'unread'],
+  queryFn: () => notificationsApi.list(true),
+  refetchInterval: 60_000,
+})
+
+const notifications = data?.items ?? []
+
+const unreadCount = notifications.filter(
+  n => !n.is_read
+).length
 
   const handleNotificationClick = async (id: number) => {
     await notificationsApi.markRead([id])
