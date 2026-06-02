@@ -14,6 +14,7 @@ the real SHAP path against a tiny HF stub model. It's opt-in via
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from unittest.mock import MagicMock, patch
 
