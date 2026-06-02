@@ -3,6 +3,7 @@
 import logging
 from typing import Any
 from app.core.config import settings
+from app.core.telemetry import instrument_rag
 
 from .groundedness import GroundednessConfig, HybridGroundednessChecker
 
@@ -23,6 +24,7 @@ class GroundedRetrievalQA:
         self.qa_chain = qa_chain
         self.embeddings_fn = embeddings_fn
 
+    @instrument_rag
     def __call__(self, payload: Any) -> dict[str, Any]:
         """Run the QA chain and append groundedness fields to the result dict."""
         result = self.qa_chain(payload)

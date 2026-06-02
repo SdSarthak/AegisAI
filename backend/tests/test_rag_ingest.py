@@ -305,3 +305,53 @@ class TestRagIngest:
         assert latest.filename == "compliance_policy.pdf"
         assert latest.file_hash == "d" * 64
         assert latest.chunk_count == 7
+
+    # Rate and size limit checks
+    # ------------------------------------------------------------------
+
+    def test_too_many_files_returns_413(self, client, mock_rag_user):
+        """
+        10. Uploading more files than RAG_MAX_FILES_PER_REQUEST should return 413.
+        """
+        from app.core.config import settings
+        with patch.object(settings, "RAG_MAX_FILES_PER_REQUEST", 2):
+            response = client.post(
+                "/api/v1/rag/ingest",
+                files=[
+                    ("files", _make_pdf_upload("doc1.pdf")),
+                    ("files", _make_pdf_upload("doc2.pdf")),
+                    ("files", _make_pdf_upload("doc3.pdf")),
+                ],
+            )
+        assert response.status_code == 413
+        assert "too many files" in response.json()["detail"].lower()
+
+    def test_oversized_file_returns_413(self, client, mock_rag_user):
+        """
+        11. Uploading a file exceeding RAG_MAX_FILE_SIZE_BYTES should return 413.
+        """
+        from app.core.config import settings
+        with patch.object(settings, "RAG_MAX_FILE_SIZE_BYTES", 10):
+            response = client.post(
+                "/api/v1/rag/ingest",
+                files={"files": _make_pdf_upload("large.pdf", content=b"A" * 11)},
+            )
+        assert response.status_code == 413
+        assert "exceeds the maximum size" in response.json()["detail"].lower()
+
+    def test_exceed_total_budget_returns_413(self, client, mock_rag_user):
+        """
+        12. Uploading multiple files exceeding RAG_TOTAL_BUDGET_BYTES should return 413.
+        """
+        from app.core.config import settings
+        with patch.object(settings, "RAG_TOTAL_BUDGET_BYTES", 20):
+            response = client.post(
+                "/api/v1/rag/ingest",
+                files=[
+                    ("files", _make_pdf_upload("doc1.pdf", content=b"A" * 15)),
+                    ("files", _make_pdf_upload("doc2.pdf", content=b"A" * 15)),
+                ],
+            )
+        assert response.status_code == 413
+        assert "total upload size exceeds" in response.json()["detail"].lower()
+
