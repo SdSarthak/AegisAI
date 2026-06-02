@@ -12,6 +12,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem
 from app.models.document import Document, DocumentType, DocumentStatus
+from app.modules.llm.document_generator import generate_compliance_narrative
 from app.schemas.document import (
     DocumentCreate,
     DocumentResponse,
