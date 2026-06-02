@@ -12,8 +12,10 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.config import settings
 from app.models.user import User
-from app.models.ai_system import AISystem, ComplianceStatus
+from app.models.ai_system import AISystem, ComplianceStatus, RiskAssessment
 from app.models.audit_log import AISystemAuditLog
+from app.models.compliance_snapshot import ComplianceSnapshot
+from app.models.document import Document
 from app.schemas.ai_system import (
     AISystemCreate,
     AISystemUpdate,
@@ -609,6 +611,16 @@ def delete_ai_system(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
         )
+
+    db.query(RiskAssessment).filter(
+        RiskAssessment.ai_system_id == system_id,
+    ).delete(synchronize_session=False)
+    db.query(ComplianceSnapshot).filter(
+        ComplianceSnapshot.ai_system_id == system_id,
+    ).delete(synchronize_session=False)
+    db.query(Document).filter(
+        Document.ai_system_id == system_id,
+    ).update({Document.ai_system_id: None}, synchronize_session=False)
 
     db.delete(system)
     db.commit()
