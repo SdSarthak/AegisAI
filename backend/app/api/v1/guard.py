@@ -103,96 +103,7 @@ user_guard_configs: dict[int, UserGuardConfig] = {}
 
 
 def _infer_detection_type(regex_flag: bool, intent: str) -> str:
-    """Infer whether regex, ML, both, or neither triggered the scan decision."""
-    if not regex_flag and intent == "benign":
-        return "none"
-    if regex_flag and intent == "benign":
-        return "regex"
-    if not regex_flag and intent in {"suspicious", "malicious"}:
-        return "ml"
-    return "combined"
 
-
-def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> GuardScanLog:
-    """Build a GuardScanLog row without storing raw prompt text."""
-    metadata = result.get("metadata", {})
-    regex_analysis = metadata.get("regex_analysis", {})
-    intent_analysis = metadata.get("intent_analysis", {})
-    decision_reasoning = metadata.get("decision_reasoning", {})
-
-    regex_flag = regex_analysis.get("flag", False)
-    intent = intent_analysis.get("intent", "benign")
-    detection_type = _infer_detection_type(regex_flag, intent)
-
-    return GuardScanLog(
-        user_id=user_id,
-        prompt_hash=hashlib.sha256(prompt.encode()).hexdigest(),
-        decision=result.get("decision", "allow"),
-        confidence=decision_reasoning.get("confidence", 0.0),
-        matched_patterns=regex_analysis.get("matched_patterns", []),
-        detection_type=detection_type,
-        regex_flag=regex_flag,
-        regex_score=regex_analysis.get("risk_score", 0.0),
-        intent=intent,
-        ml_confidence=intent_analysis.get("confidence", 0.0),
-        combined_score=decision_reasoning.get("confidence", 0.0),
-        prompt_length=len(prompt),
-        scanned_at=datetime.utcnow(),
-        ip_address=ip_address,
-    )
-
-
-def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> None:
-    """Log scan details and create block notification without storing raw prompt."""
-    db = SessionLocal()
-
-    try:
-        log = _build_guard_scan_log(user_id, prompt, result, ip_address=ip_address)
-
-        db.add(log)
-        db.commit()
-        db.refresh(log)
-
-        if log.decision == "block":
-            create_notification(
-                db=db,
-                user_id=user_id,
-                notification_type=NotificationType.GUARD_BLOCK.value,
-                title="Prompt blocked by LLM Guard",
-                message="A prompt was blocked because it matched high-risk guard rules.",
-                resource_type="guard_scan",
-                resource_id=log.id,
-            )
-            db.commit()
-
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
-@router.post("/scan", response_model=ScanResponse)
-def scan_prompt(
-    request: ScanRequest,
-    background_tasks: BackgroundTasks,
-    http_request: Request,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),              # added this for fixing nameerror crash
-):
-    """Scan a prompt for injection risks.
-
-    Args:
-        request: Prompt text and scan options submitted by the client.
-        background_tasks: FastAPI background task runner used for scan logging.
-        current_user: Authenticated user submitting the prompt.
-
-    Returns:
-        ScanResponse describing the guard decision and any sanitization details.
-
-    Raises:
-        HTTPException: If scan processing fails or the request is rate limited.
-    """
     limited, retry_after = guard_scan_rate_limiter.check_and_consume(
         key=f"guard:scan:{current_user.id}",
         limit=settings.GUARD_RATE_LIMIT_REQUESTS,
@@ -285,174 +196,7 @@ def scan_prompt(
 
 
 class _ExplainRateLimitConfig:
-    """Explanations are 50–100x more expensive than a scan — limit them
-    aggressively. Tunable via env if needed; defaults are conservative."""
 
-    LIMIT = 10
-    WINDOW_SECONDS = 60
-    TIMEOUT_SECONDS = 15.0
-
-
-@router.post(
-    "/explain",
-    response_model=ExplainResponse,
-    tags=["LLM Guard"],
-    summary="Explain a Guard verdict with token-level attribution",
-    responses={
-        200: {"description": "Per-token attribution + predicted class."},
-        429: {"description": "Rate limited (10 explanations per minute per user)."},
-        503: {
-            "description": (
-                "No fine-tuned classifier is loaded. Explainability requires "
-                "a real model — the heuristic fallback can't produce Shapley "
-                "values."
-            )
-        },
-        504: {"description": "Explanation exceeded the 15s timeout budget."},
-    },
-)
-async def explain_prompt(
-    request: ExplainRequestModel,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Return per-token attribution scores for the Guard's verdict.
-
-    Used by the dashboard's audit view: a reviewer clicks 'Explain' on a
-    flagged scan and gets back which tokens drove the decision, with
-    char-level offsets into the original text for in-place highlighting.
-
-    SHAP is the primary method (Shapley values via PartitionExplainer).
-    LIME is an opt-in (``method="lime"``) for long inputs where SHAP is
-    too slow.
-
-    Rate limit: 10 requests per minute per user. Timeout: 15s. Inputs
-    longer than 4000 chars are rejected at validation time.
-    """
-    import asyncio
-
-    from app.modules.guard.explainer import (
-        ExplainerUnavailable,
-        get_explainer,
-    )
-
-    # Rate limit: reuse the shared limiter under a distinct key so explain
-    # quota is independent of scan quota.
-    limited, retry_after = guard_scan_rate_limiter.check_and_consume(
-        key=f"guard:explain:{current_user.id}",
-        limit=_ExplainRateLimitConfig.LIMIT,
-        window_seconds=_ExplainRateLimitConfig.WINDOW_SECONDS,
-        fail_closed=True,
-    )
-    if limited:
-        return JSONResponse(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            content={
-                "detail": (
-                    f"Rate limit exceeded: {_ExplainRateLimitConfig.LIMIT} "
-                    f"explanations per {_ExplainRateLimitConfig.WINDOW_SECONDS} "
-                    "seconds per user."
-                )
-            },
-            headers={"Retry-After": str(retry_after)},
-        )
-
-    try:
-        explainer = get_explainer()
-    except ExplainerUnavailable as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        )
-
-    try:
-        # SHAP is CPU-bound and synchronous — run in a worker thread so
-        # the event loop stays responsive and the timeout actually fires.
-        result = await asyncio.wait_for(
-            asyncio.to_thread(
-                explainer.explain,
-                request.text,
-                method=request.method,
-                max_evals=request.max_evals,
-            ),
-            timeout=_ExplainRateLimitConfig.TIMEOUT_SECONDS,
-        )
-    except asyncio.TimeoutError:
-        raise HTTPException(
-            status_code=status.HTTP_504_GATEWAY_TIMEOUT,
-            detail=(
-                f"Explanation exceeded {_ExplainRateLimitConfig.TIMEOUT_SECONDS}s. "
-                "Try a shorter prompt or a lower `max_evals`."
-            ),
-        )
-    except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
-    except Exception:
-        logger.exception(
-            "guard.explain.failed", extra={"user_id": current_user.id}
-        )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An internal error occurred while generating the explanation.",
-        )
-
-    return result
-
-
-@router.get("/health", tags=["LLM Guard"])
-def guard_health():
-    """Check whether the Guard module is available.
-
-    Returns:
-        A status payload describing the Guard module availability.
-    """
-    return {"module": "llm_guard", "status": "available"}
-
-
-@router.get("/info", tags=["LLM Guard"])
-def guard_info():
-    """Return diagnostic information about the Guard module.
-
-    Returns:
-        A status payload containing device and model details.
-    """
-
-    try:
-        import torch
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    except ImportError:
-        device = "cpu"
-
-    from pathlib import Path
-
-    model_path = Path(guard_config.get_trained_model_path()).name
-
-    return {
-        "module": "llm_guard",
-        "status": "available",
-        "device": device,
-        "model_name": model_path or "pretrained-fallback",
-        "sanitization_level": guard_config.SANITIZATION_LEVEL,
-    }
-
-@router.get("/history", response_model=PaginatedResponse[GuardScanLogResponse])
-def get_guard_history(
-    skip: int = Query(0, ge=0, description="Items to skip"),
-    limit: int = Query(20, ge=1, le=100, description="Items per page"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Return the current user's Guard scan history, newest first.
-
-    Args:
-        skip: Number of items to skip for pagination.
-        limit: Maximum number of scan logs to include per page.
-        db: Database session used to query scan history.
-        current_user: Authenticated user whose history is requested.
-
-    Returns:
-        PaginatedResponse containing the user's scan history.
-    """
     base_query = db.query(GuardScanLog).filter(
         GuardScanLog.user_id == current_user.id,
     )
@@ -475,20 +219,7 @@ def get_guard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return Guard scan statistics for a time window and user.
 
-    Args:
-        window: Time window to aggregate over (24h, 7d, 30d, or all).
-        user_id: Optional user ID to query; defaults to the current user.
-        db: Database session used to aggregate scan statistics.
-        current_user: Authenticated user requesting the statistics.
-
-    Returns:
-        GuardStatsResponse containing decision, detection, and trend statistics.
-
-    Raises:
-        HTTPException: If the caller is not allowed to query another user's stats.
-    """
     target_user_id = user_id if user_id is not None else current_user.id
     is_admin = getattr(current_user, "role", None) == "admin"
 
@@ -615,14 +346,7 @@ def get_guard_stats(
 
 @router.get("/config", tags=["LLM Guard"])
 def get_guard_config(current_user: User = Depends(get_current_user)):
-    """Return the current user's Guard configuration.
 
-    Args:
-        current_user: Authenticated user whose Guard config is requested.
-
-    Returns:
-        The user's saved Guard configuration, or the default config.
-    """
     default_config = {
         "sanitization_level": "medium",
         "malicious_threshold": 0.8,
@@ -637,18 +361,7 @@ def update_guard_config(
     config: GuardConfigRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Update the current user's Guard configuration.
 
-    Args:
-        config: Sanitization level and threshold values to persist.
-        current_user: Authenticated user whose Guard config is being updated.
-
-    Returns:
-        A confirmation payload containing the saved configuration.
-
-    Raises:
-        HTTPException: If any configuration value is out of range.
-    """
     if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
         raise HTTPException(
             status_code=400,
@@ -686,19 +399,7 @@ def bulk_scan_prompts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Scan a batch of prompts for injection risks.
 
-    Args:
-        request: Prompt list payload to scan in one batch.
-        current_user: Authenticated user submitting the batch.
-        db: Database session used to persist batch scan results.
-
-    Returns:
-        BulkScanResponse containing scan results, totals, and processed count.
-
-    Raises:
-        HTTPException: If the batch exceeds limits or validation fails.
-    """
     try:
         request.validate_prompts()
     except ValueError as e:
@@ -797,48 +498,7 @@ def bulk_scan_prompts(
 
 @router.get("/info", tags=["LLM Guard"])
 def guard_info():
-    """Return diagnostic information about the Guard module.
 
-    Returns:
-        A status payload containing device and model details.
-    """
-
-    try:
-        import torch
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    except ImportError:
-        device = "cpu"
-
-    from pathlib import Path
-
-    model_path = Path(guard_config.get_trained_model_path()).name
-
-    return {
-        "module": "llm_guard",
-        "status": "available",
-        "device": device,
-        "model_name": model_path or "pretrained-fallback",
-        "sanitization_level": guard_config.SANITIZATION_LEVEL,
-    }
-
-@router.get("/history", response_model=PaginatedResponse[GuardScanLogResponse])
-def get_guard_history(
-    skip: int = Query(0, ge=0, description="Items to skip"),
-    limit: int = Query(20, ge=1, le=100, description="Items per page"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Return the current user's Guard scan history, newest first.
-
-    Args:
-        skip: Number of items to skip for pagination.
-        limit: Maximum number of scan logs to include per page.
-        db: Database session used to query scan history.
-        current_user: Authenticated user whose history is requested.
-
-    Returns:
-        PaginatedResponse containing the user's scan history.
-    """
     base_query = db.query(GuardScanLog).filter(
         GuardScanLog.user_id == current_user.id,
     )
@@ -861,20 +521,7 @@ def get_guard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return Guard scan statistics for a time window and user.
 
-    Args:
-        window: Time window to aggregate over (24h, 7d, 30d, or all).
-        user_id: Optional user ID to query; defaults to the current user.
-        db: Database session used to aggregate scan statistics.
-        current_user: Authenticated user requesting the statistics.
-
-    Returns:
-        GuardStatsResponse containing decision, detection, and trend statistics.
-
-    Raises:
-        HTTPException: If the caller is not allowed to query another user's stats.
-    """
     target_user_id = user_id if user_id is not None else current_user.id
     is_admin = getattr(current_user, "role", None) == "admin"
 
@@ -1001,14 +648,7 @@ def get_guard_stats(
 
 @router.get("/config", tags=["LLM Guard"])
 def get_guard_config(current_user: User = Depends(get_current_user)):
-    """Return the current user's Guard configuration.
 
-    Args:
-        current_user: Authenticated user whose Guard config is requested.
-
-    Returns:
-        The user's saved Guard configuration, or the default config.
-    """
     default_config = {
         "sanitization_level": "medium",
         "malicious_threshold": 0.8,
@@ -1023,18 +663,7 @@ def update_guard_config(
     config: GuardConfigRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Update the current user's Guard configuration.
 
-    Args:
-        config: Sanitization level and threshold values to persist.
-        current_user: Authenticated user whose Guard config is being updated.
-
-    Returns:
-        A confirmation payload containing the saved configuration.
-
-    Raises:
-        HTTPException: If any configuration value is out of range.
-    """
     if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
         raise HTTPException(
             status_code=400,
@@ -1072,19 +701,7 @@ def bulk_scan_prompts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Scan a batch of prompts for injection risks.
 
-    Args:
-        request: Prompt list payload to scan in one batch.
-        current_user: Authenticated user submitting the batch.
-        db: Database session used to persist batch scan results.
-
-    Returns:
-        BulkScanResponse containing scan results, totals, and processed count.
-
-    Raises:
-        HTTPException: If the batch exceeds limits or validation fails.
-    """
     try:
         request.validate_prompts()
     except ValueError as e:
@@ -1183,48 +800,7 @@ def bulk_scan_prompts(
 
 @router.get("/info", tags=["LLM Guard"])
 def guard_info():
-    """Return diagnostic information about the Guard module.
 
-    Returns:
-        A status payload containing device and model details.
-    """
-
-    try:
-        import torch
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-    except ImportError:
-        device = "cpu"
-
-    from pathlib import Path
-
-    model_path = Path(guard_config.get_trained_model_path()).name
-
-    return {
-        "module": "llm_guard",
-        "status": "available",
-        "device": device,
-        "model_name": model_path or "pretrained-fallback",
-        "sanitization_level": guard_config.SANITIZATION_LEVEL,
-    }
-
-@router.get("/history", response_model=PaginatedResponse[GuardScanLogResponse])
-def get_guard_history(
-    skip: int = Query(0, ge=0, description="Items to skip"),
-    limit: int = Query(20, ge=1, le=100, description="Items per page"),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Return the current user's Guard scan history, newest first.
-
-    Args:
-        skip: Number of items to skip for pagination.
-        limit: Maximum number of scan logs to include per page.
-        db: Database session used to query scan history.
-        current_user: Authenticated user whose history is requested.
-
-    Returns:
-        PaginatedResponse containing the user's scan history.
-    """
     base_query = db.query(GuardScanLog).filter(
         GuardScanLog.user_id == current_user.id,
     )
@@ -1247,20 +823,7 @@ def get_guard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return Guard scan statistics for a time window and user.
 
-    Args:
-        window: Time window to aggregate over (24h, 7d, 30d, or all).
-        user_id: Optional user ID to query; defaults to the current user.
-        db: Database session used to aggregate scan statistics.
-        current_user: Authenticated user requesting the statistics.
-
-    Returns:
-        GuardStatsResponse containing decision, detection, and trend statistics.
-
-    Raises:
-        HTTPException: If the caller is not allowed to query another user's stats.
-    """
     target_user_id = user_id if user_id is not None else current_user.id
     is_admin = getattr(current_user, "role", None) == "admin"
 
@@ -1387,14 +950,7 @@ def get_guard_stats(
 
 @router.get("/config", tags=["LLM Guard"])
 def get_guard_config(current_user: User = Depends(get_current_user)):
-    """Return the current user's Guard configuration.
 
-    Args:
-        current_user: Authenticated user whose Guard config is requested.
-
-    Returns:
-        The user's saved Guard configuration, or the default config.
-    """
     default_config = {
         "sanitization_level": "medium",
         "malicious_threshold": 0.8,
@@ -1409,18 +965,7 @@ def update_guard_config(
     config: GuardConfigRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Update the current user's Guard configuration.
 
-    Args:
-        config: Sanitization level and threshold values to persist.
-        current_user: Authenticated user whose Guard config is being updated.
-
-    Returns:
-        A confirmation payload containing the saved configuration.
-
-    Raises:
-        HTTPException: If any configuration value is out of range.
-    """
     if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
         raise HTTPException(
             status_code=400,
@@ -1458,19 +1003,7 @@ def bulk_scan_prompts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Scan a batch of prompts for injection risks.
 
-    Args:
-        request: Prompt list payload to scan in one batch.
-        current_user: Authenticated user submitting the batch.
-        db: Database session used to persist batch scan results.
-
-    Returns:
-        BulkScanResponse containing scan results, totals, and processed count.
-
-    Raises:
-        HTTPException: If the batch exceeds limits or validation fails.
-    """
     try:
         request.validate_prompts()
     except ValueError as e:
