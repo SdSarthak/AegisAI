@@ -41,26 +41,6 @@ api.interceptors.response.use(
   }
 )
 
-function ensureListResponse<T>(
-  data: unknown,
-  resourceName: string
-): T[] {
-  if (Array.isArray(data)) {
-    return data
-  }
-
-  if (
-    data &&
-    typeof data === 'object' &&
-    'items' in data &&
-    Array.isArray((data as { items?: unknown }).items)
-  ) {
-    return (data as { items: T[] }).items
-  }
-
-  throw new Error(`${resourceName} response was empty or invalid.`)
-}
-
 function isRecord(data: unknown): data is Record<string, unknown> {
   return data !== null && typeof data === 'object' && !Array.isArray(data)
 }
@@ -386,6 +366,7 @@ export const ragApi = {
 
     try {
       while (true) {
+        // eslint-disable-next-line no-constant-condition
         const { value, done } = await reader.read()
         if (done) break
         buffer += value
