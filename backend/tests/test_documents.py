@@ -1,7 +1,9 @@
-"""Unit tests for document generation — all 3 template types."""
+"""Unit tests for document generation templates."""
 
 import pytest
 from app.core.security import create_access_token
+from app.api.v1.documents import DOCUMENT_TEMPLATES
+from app.models.document import DocumentType
 
 
 def get_auth_headers(user_id: int) -> dict:
@@ -25,7 +27,7 @@ def create_ai_system(client, headers):
     return response.json()["id"]
 
 def test_list_document_templates(client):
-    headers = register_and_login(client, "templates@example.com")
+    headers = get_auth_headers(user_id=1)
 
     response = client.get(
         "/api/v1/documents/templates",
@@ -36,12 +38,14 @@ def test_list_document_templates(client):
 
     data = response.json()
     assert isinstance(data, list)
-    assert len(data) == 3
+    assert len(data) == 5
 
     template_types = {template["type"] for template in data}
     assert "technical_documentation" in template_types
     assert "risk_assessment" in template_types
     assert "conformity_declaration" in template_types
+    assert "data_governance" in template_types
+    assert "transparency_notice" in template_types
 
     for template in data:
         assert "type" in template
@@ -144,6 +148,47 @@ def test_generate_conformity_declaration(client):
 
     assert response.status_code == 201
     assert response.json() is not None
+
+
+@pytest.mark.parametrize(
+    "document_type,expected_title,expected_content",
+    [
+        (
+            "data_governance",
+            "Data Governance",
+            ["Article 10", "Data Quality Controls", "Data Provenance"],
+        ),
+        (
+            "transparency_notice",
+            "Transparency Notice",
+            ["Article 50", "AI System Disclosure", "User Instructions"],
+        ),
+    ],
+)
+def test_generate_new_compliance_document_templates(
+    document_type,
+    expected_title,
+    expected_content,
+):
+    template = DOCUMENT_TEMPLATES[DocumentType(document_type)]
+    content = template.format(
+        system_name="Test AI System",
+        version="1.0",
+        use_case="Testing",
+        sector="Technology",
+        description="A test AI system",
+        risk_level="limited",
+        date="2026-06-01",
+        company_name="Test Company",
+        classification_reasons="See risk assessment details",
+        recommendations="Based on risk assessment",
+        requirements="See applicable requirements above",
+        next_steps="Complete all checklist items",
+    )
+
+    assert expected_title in content
+    for section in expected_content:
+        assert section in content
 
 
 # ❌ Test 4: Non-existent system → 404
