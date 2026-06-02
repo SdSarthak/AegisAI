@@ -77,6 +77,7 @@ export default function Onboarding() {
           {STEPS.map((step, idx) => (
             <div key={step.label} className="flex items-center gap-2 flex-1">
               <div
+                aria-current={idx === currentStep ? 'step' : undefined}
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                   idx < currentStep
                     ? 'bg-primary-600 text-white'
@@ -97,7 +98,7 @@ export default function Onboarding() {
         </div>
 
         {/* Step content */}
-        <div className="mb-8">
+       <div className="mb-8" aria-live="polite" aria-atomic="true">
           <div className="flex items-center gap-3 mb-2">
             <StepIcon className="w-6 h-6 text-primary-600" />
             <h2 className="text-lg font-semibold text-gray-900">
@@ -122,9 +123,10 @@ export default function Onboarding() {
           >
             Back
           </button>
-          <button
+         <button
             type="button"
             onClick={handleNext}
+            aria-label={isLastStep ? 'Finish setup' : `Next: ${STEPS[currentStep + 1]?.label}`}
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
           >
             {isLastStep ? 'Finish' : 'Next'}

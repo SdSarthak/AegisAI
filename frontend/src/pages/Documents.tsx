@@ -38,12 +38,8 @@ export default function Documents() {
   const handleCopy = async (docId: number, content: string) => {
     try {
       await navigator.clipboard.writeText(content)
-
       setCopiedDocId(docId)
-
-      setTimeout(() => {
-        setCopiedDocId(null)
-      }, 2000)
+      setTimeout(() => setCopiedDocId(null), 2000)
     } catch (error) {
       console.error('Failed to copy content:', error)
     }
@@ -55,19 +51,23 @@ export default function Documents() {
     isError: documentsError,
     error: documentsErrorDetail,
     refetch: refetchDocuments,
-  } = useQuery({
+  } = useQuery<Document[] | { items: Document[] }>({
     queryKey: ['documents', currentPage],
-    queryFn: () => documentsApi.list({ skip: (currentPage - 1) * limit, limit }),
+    queryFn: async () => {
+      const result = await documentsApi.list({ skip: (currentPage - 1) * limit, limit })
+      return result as Document[] | { items: Document[] }
+    },
   })
-  const documents = (documentsData ?? []) as Document[]
+  const documents = (
+    Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
+  ) as Document[]
+
   const filteredDocuments = documents.filter((doc: Document) => {
     const matchesSearch =
       doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (doc.content || '').toLowerCase().includes(searchQuery.toLowerCase())
-
     const matchesType = filterType === 'all' || doc.document_type === filterType
     const matchesStatus = filterStatus === 'all' || doc.status === filterStatus
-
     return matchesSearch && matchesType && matchesStatus
   })
 
@@ -77,18 +77,24 @@ export default function Documents() {
     isError: systemsError,
     error: systemsErrorDetail,
     refetch: refetchSystems,
-  } = useQuery({
+  } = useQuery<AISystem[] | { items: AISystem[] }>({
     queryKey: ['ai-systems'],
-    queryFn: () => aiSystemsApi.list(),
+    queryFn: async () => {
+      const result = await aiSystemsApi.list()
+      return result as AISystem[] | { items: AISystem[] }
+    },
   })
-  const systems = (systemsData ?? []) as AISystem[]
+  const systems = (
+    Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
+  ) as AISystem[]
+
   const isLoading = documentsLoading || systemsLoading
   const hasError = documentsError || systemsError
   const errorMessage =
     (documentsErrorDetail instanceof Error && documentsErrorDetail.message) ||
     (systemsErrorDetail instanceof Error && systemsErrorDetail.message) ||
     'Unable to load documents.'
-  
+
   const generateMutation = useMutation({
     mutationFn: documentsApi.generate,
     onSuccess: () => {
@@ -124,7 +130,6 @@ export default function Documents() {
 
   const handleSaveDocument = async (content: string) => {
     if (!editingDoc) return
-
     try {
       setSaveError(null)
       await documentsApi.update(editingDoc.id, { content })
@@ -137,14 +142,10 @@ export default function Documents() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'approved':
-        return 'bg-green-100 text-green-700'
-      case 'reviewed':
-        return 'bg-blue-100 text-blue-700'
-      case 'generated':
-        return 'bg-yellow-100 text-yellow-700'
-      default:
-        return 'bg-gray-100 text-gray-700'
+      case 'approved': return 'bg-green-100 text-green-700'
+      case 'reviewed': return 'bg-blue-100 text-blue-700'
+      case 'generated': return 'bg-yellow-100 text-yellow-700'
+      default: return 'bg-gray-100 text-gray-700'
     }
   }
 
@@ -153,46 +154,44 @@ export default function Documents() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
-          <p className="text-gray-600">
-            Generate and manage compliance documentation
-          </p>
+          <p className="text-gray-600">Generate and manage compliance documentation</p>
         </div>
         <button
+          type="button"
           onClick={() => setShowModal(true)}
-          disabled={systems.length === 0}
+          disabled={!(Array.isArray(systems) && systems.length > 0)}
           className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
         >
-          <Plus className="w-5 h-5" />
+          <Plus className="w-5 h-5" aria-hidden="true" />
           Generate Document
         </button>
       </div>
 
+      {/* Search and Filters */}
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex flex-col md:flex-row gap-4">
           <input
             type="text"
             placeholder="Search documents..."
+            aria-label="Search documents"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
-
           <select
             value={filterType}
+            aria-label="Filter by document type"
             onChange={(e) => setFilterType(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg"
           >
             <option value="all">All Types</option>
-
             {documentTypes.map((type) => (
-              <option key={type.value} value={type.value}>
-                {type.label}
-              </option>
+              <option key={type.value} value={type.value}>{type.label}</option>
             ))}
           </select>
-
           <select
             value={filterStatus}
+            aria-label="Filter by status"
             onChange={(e) => setFilterStatus(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg"
           >
@@ -213,17 +212,12 @@ export default function Documents() {
       {isLoading ? (
         <div className="grid gap-4">
           {[...Array(3)].map((_, index) => (
-            <div
-              key={index}
-              className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse"
-            >
+            <div key={index} className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse">
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4 flex-1">
                   <div className="w-12 h-12 bg-gray-200 rounded-lg"></div>
-
                   <div className="flex-1 space-y-3">
                     <div className="h-5 bg-gray-200 rounded w-1/3"></div>
-
                     <div className="flex gap-2">
                       <div className="h-5 bg-gray-200 rounded w-20"></div>
                       <div className="h-5 bg-gray-200 rounded w-16"></div>
@@ -231,14 +225,12 @@ export default function Documents() {
                     </div>
                   </div>
                 </div>
-
                 <div className="flex gap-2">
                   <div className="w-9 h-9 bg-gray-200 rounded-lg"></div>
                   <div className="w-9 h-9 bg-gray-200 rounded-lg"></div>
                   <div className="w-9 h-9 bg-gray-200 rounded-lg"></div>
                 </div>
               </div>
-
               <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
                 <div className="h-3 bg-gray-200 rounded w-full"></div>
                 <div className="h-3 bg-gray-200 rounded w-5/6"></div>
@@ -249,14 +241,12 @@ export default function Documents() {
         </div>
       ) : hasError ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <FileText className="w-16 h-16 mx-auto mb-4 text-red-200" />
+          <FileText className="w-16 h-16 mx-auto mb-4 text-red-200" aria-hidden="true" />
           <h3 className="text-lg font-medium text-gray-900">Unable to load documents</h3>
           <p className="text-gray-500 mt-1">{errorMessage}</p>
           <button
-            onClick={() => {
-              refetchDocuments()
-              refetchSystems()
-            }}
+            type="button"
+            onClick={() => { refetchDocuments(); refetchSystems() }}
             className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
           >
             Retry
@@ -264,33 +254,23 @@ export default function Documents() {
         </div>
       ) : documents.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+          <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" aria-hidden="true" />
           <h3 className="text-lg font-medium text-gray-900">No documents yet</h3>
-          <p className="text-gray-500 mt-1">
-            Generate your first compliance document
-          </p>
+          <p className="text-gray-500 mt-1">Generate your first compliance document</p>
         </div>
-      ) : (
-        filteredDocuments.length === 0 ? (
+      ) : filteredDocuments.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">
-            No matching documents
-          </h3>
-          <p className="text-gray-500 mt-1">
-            Try adjusting your search or filters
-          </p>
+          <h3 className="text-lg font-medium text-gray-900">No matching documents</h3>
+          <p className="text-gray-500 mt-1">Try adjusting your search or filters</p>
         </div>
       ) : (
         <div className="grid gap-4">
           {filteredDocuments.map((doc: Document) => (
-            <div
-              key={doc.id}
-              className="bg-white rounded-xl border border-gray-200 p-6"
-            >
+            <div key={doc.id} className="bg-white rounded-xl border border-gray-200 p-6">
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-4">
                   <div className="p-3 bg-primary-50 rounded-lg">
-                    <FileText className="w-6 h-6 text-primary-600" />
+                    <FileText className="w-6 h-6 text-primary-600" aria-hidden="true" />
                   </div>
                   <div>
                     <h3 className="font-semibold text-gray-900">{doc.title}</h3>
@@ -298,11 +278,7 @@ export default function Documents() {
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
                         {doc.document_type.replace(/_/g, ' ')}
                       </span>
-                      <span
-                        className={`text-xs px-2 py-1 rounded ${getStatusColor(
-                          doc.status
-                        )}`}
-                      >
+                      <span className={`text-xs px-2 py-1 rounded ${getStatusColor(doc.status)}`}>
                         {doc.status}
                       </span>
                       <span className="text-xs text-gray-500">
@@ -322,31 +298,30 @@ export default function Documents() {
                     />
                   )}
                   <button
+                    type="button"
                     onClick={() => setEditingDoc(doc)}
+                    aria-label={`Edit ${doc.title}`}
                     className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
-                    title="Edit"
                   >
-                    <Edit className="w-5 h-5" />
+                    <Edit className="w-5 h-5" aria-hidden="true" />
                   </button>
-
                   <button
+                    type="button"
                     onClick={() => handleCopy(doc.id, doc.content || '')}
+                    aria-label={copiedDocId === doc.id ? 'Copied!' : `Copy markdown for ${doc.title}`}
                     className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
-                    title={copiedDocId === doc.id ? 'Copied!' : 'Copy Markdown'}
                   >
                     {copiedDocId === doc.id ? (
-                      <Check className="w-5 h-5" />
+                      <Check className="w-5 h-5" aria-hidden="true" />
                     ) : (
-                      <Copy className="w-5 h-5" />
+                      <Copy className="w-5 h-5" aria-hidden="true" />
                     )}
                   </button>
-
                   <button
+                    type="button"
+                    aria-label={`Download ${doc.title}`}
                     onClick={() => {
-                      // Download as text file
-                      const blob = new Blob([doc.content || ''], {
-                        type: 'text/markdown',
-                      })
+                      const blob = new Blob([doc.content || ''], { type: 'text/markdown' })
                       const url = URL.createObjectURL(blob)
                       const a = document.createElement('a')
                       a.href = url
@@ -355,19 +330,19 @@ export default function Documents() {
                     }}
                     className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
                   >
-                    <Download className="w-5 h-5" />
+                    <Download className="w-5 h-5" aria-hidden="true" />
                   </button>
-
                   <button
+                    type="button"
                     onClick={() => setDocumentToDelete(doc)}
+                    aria-label={`Delete ${doc.title}`}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
                   >
-                    <Trash2 className="w-5 h-5" />
+                    <Trash2 className="w-5 h-5" aria-hidden="true" />
                   </button>
                 </div>
               </div>
 
-              {/* Preview */}
               {doc.content && (
                 <div className="mt-4 pt-4 border-t border-gray-100">
                   <pre className="text-xs text-gray-600 bg-gray-50 p-3 rounded-lg overflow-auto max-h-32">
@@ -378,23 +353,21 @@ export default function Documents() {
             </div>
           ))}
         </div>
-      ))}
+      )}
 
-      {/* Pagination Controls */}
+      {/* Pagination */}
       <div className="flex items-center justify-between pt-4">
         <button
+          type="button"
           onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
           disabled={currentPage === 1}
           className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
           Previous
         </button>
-
-        <span className="text-sm font-medium text-gray-700">
-          Page {currentPage}
-        </span>
-
+        <span className="text-sm font-medium text-gray-700">Page {currentPage}</span>
         <button
+          type="button"
           onClick={() => setCurrentPage((prev) => prev + 1)}
           disabled={documents.length < limit}
           className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
@@ -403,12 +376,16 @@ export default function Documents() {
         </button>
       </div>
 
-
       {/* Delete Confirmation Modal */}
       {documentToDelete && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-doc-title"
+            className="bg-white rounded-xl p-6 w-full max-w-md"
+          >
+            <h2 id="delete-doc-title" className="text-lg font-semibold text-gray-900 mb-2">
               Delete Document
             </h2>
             <p className="text-gray-600">
@@ -438,41 +415,38 @@ export default function Documents() {
       {/* Generate Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="generate-doc-title"
+            className="bg-white rounded-xl p-6 w-full max-w-md"
+          >
+            <h2 id="generate-doc-title" className="text-lg font-semibold text-gray-900 mb-4">
               Generate Document
             </h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  AI System
-                </label>
+                <label className="block text-sm font-medium text-gray-700">AI System</label>
                 <select
                   value={selectedSystem || ''}
                   onChange={(e) => setSelectedSystem(parseInt(e.target.value))}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
                   <option value="">Select AI system...</option>
-                  {systems.map((system: AISystem) => (
-                    <option key={system.id} value={system.id}>
-                      {system.name}
-                    </option>
+                  {Array.isArray(systems) && systems.map((system: AISystem) => (
+                    <option key={system.id} value={system.id}>{system.name}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Document Type
-                </label>
+                <label className="block text-sm font-medium text-gray-700">Document Type</label>
                 <select
                   value={selectedType}
                   onChange={(e) => setSelectedType(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
                   {documentTypes.map((type) => (
-                    <option key={type.value} value={type.value}>
-                      {type.label}
-                    </option>
+                    <option key={type.value} value={type.value}>{type.label}</option>
                   ))}
                 </select>
               </div>
@@ -485,6 +459,7 @@ export default function Documents() {
                   Cancel
                 </button>
                 <button
+                  type="button"
                   onClick={handleGenerate}
                   disabled={!selectedSystem || generateMutation.isPending}
                   className="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
@@ -505,8 +480,13 @@ export default function Documents() {
       )}
 
       {editingDoc && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
-          <div className="bg-white rounded-xl w-full max-w-6xl h-[90vh]">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`Editing: ${editingDoc.title}`}
+            className="bg-white rounded-xl w-full max-w-6xl h-[90vh]"
+          >
             <DocumentEditor
               documentId={editingDoc.id}
               initialContent={editingDoc.content || ''}
@@ -522,3 +502,4 @@ export default function Documents() {
     </div>
   )
 }
+

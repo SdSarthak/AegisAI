@@ -51,12 +51,13 @@ export default function ThemeToggle() {
         shadow-sm
       "
       aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+aria-pressed={isDark}
+title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
     >
-      {isDark ? (
-        <Sun className="w-5 h-5 text-yellow-400" />
+    {isDark ? (
+        <Sun className="w-5 h-5 text-yellow-400" aria-hidden="true" />
       ) : (
-        <Moon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+        <Moon className="w-5 h-5 text-gray-700 dark:text-gray-200" aria-hidden="true" />
       )}
     </button>
   )
