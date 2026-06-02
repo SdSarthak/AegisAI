@@ -46,8 +46,8 @@ export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false)
 
   const wrapperRef = useRef<HTMLDivElement>(null)
-const triggerRef = useRef<HTMLButtonElement>(null)
-const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
   // Live data via useQuery
   const queryClient = useQueryClient()
   const { data: notifications = [] } = useQuery({
@@ -85,11 +85,11 @@ const closeButtonRef = useRef<HTMLButtonElement>(null)
   // Close dropdown on Escape key
   useEffect(() => {
     function handleEscape(e: KeyboardEvent) {
-  if (e.key === 'Escape') {
-    setIsOpen(false)
-    triggerRef.current?.focus()
-  }
-}
+      if (e.key === 'Escape') {
+        setIsOpen(false)
+        triggerRef.current?.focus()
+      }
+    }
     if (isOpen) {
       document.addEventListener('keydown', handleEscape)
     }
@@ -98,16 +98,16 @@ const closeButtonRef = useRef<HTMLButtonElement>(null)
     }
   }, [isOpen])
 
-// Focus close button when opened, return focus to trigger when closed
-const hasOpenedRef = useRef(false)
-useEffect(() => {
-  if (isOpen) {
-    hasOpenedRef.current = true
-    closeButtonRef.current?.focus()
-  } else if (hasOpenedRef.current) {
-    triggerRef.current?.focus()
-  }
-}, [isOpen])
+  // Focus close button when opened, return focus to trigger when closed
+  const hasOpenedRef = useRef(false)
+  useEffect(() => {
+    if (isOpen) {
+      hasOpenedRef.current = true
+      closeButtonRef.current?.focus()
+    } else if (hasOpenedRef.current) {
+      triggerRef.current?.focus()
+    }
+  }, [isOpen])
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -144,8 +144,8 @@ useEffect(() => {
             : 'opacity-0 -translate-y-2 pointer-events-none'
         }`}
       role="dialog"
-aria-modal="true"
-aria-label="Notifications panel"
+      aria-modal="true"
+      aria-label="Notifications panel"
       >
 
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -160,12 +160,12 @@ aria-label="Notifications panel"
             )}
           </div>
           <button
-             ref={closeButtonRef}
+            ref={closeButtonRef}
             type="button"
             onClick={() => {
-  setIsOpen(false)
-  triggerRef.current?.focus()
-}}
+              setIsOpen(false)
+              triggerRef.current?.focus()
+            }}
             className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
             aria-label="Close notifications"
           >
