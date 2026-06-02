@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from fastapi import status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
@@ -120,6 +121,22 @@ def test_scan_prompt_success(authenticated_client: TestClient):
     assert data["decision"] == "allow"
     assert data["confidence"] == 0.95
     assert data["reasoning"] == "Safe prompt"
+
+
+def test_scan_prompt_rejects_prompt_over_configured_length(
+    authenticated_client: TestClient,
+):
+    oversized_prompt = "x" * (settings.GUARD_MAX_PROMPT_LENGTH + 1)
+
+    with patch("app.modules.guard.llm_guard.LLMGuard") as mock_guard_class:
+        response = authenticated_client.post(
+            "/api/v1/guard/scan",
+            json={"prompt": oversized_prompt},
+        )
+
+    assert response.status_code == 422
+    assert "detail" in response.json()
+    mock_guard_class.assert_not_called()
 
 
 def test_scan_prompt_rate_limit(authenticated_client: TestClient):

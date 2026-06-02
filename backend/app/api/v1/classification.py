@@ -208,7 +208,7 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
                 "Review whether any Article 5 exceptions apply to your use case.",
             ],
         )
-    
+
     # Check for HIGH risk (Article 6 + Annex III)
     high_risk_indicators = []
 
@@ -263,7 +263,7 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
             "Use in law enforcement, border control, or justice is HIGH risk"
         )
 
-    # Biometric data usage (Annex III)           
+    # Biometric data usage (Annex III)
     if data.uses_biometric_data:
         high_risk_indicators.append("Uses biometric data")
         reasons.append(
@@ -275,7 +275,7 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
         high_risk_indicators.append("Automated decisions without human review")
         reasons.append(
             "System makes automated decisions without meaningful human oversight (Article 6)"
-        )    
+        )
 
     # Determine if HIGH risk
     if high_risk_indicators:
