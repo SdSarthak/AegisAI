@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SECRET_KEY"] = "testsecret"
 
-from app.core.database import Base, SessionLocal
+from app.core.database import Base, SessionLocal, StaticPool
 from app.core.security import decode_token, get_current_user
 from app.models.user import SubscriptionTier
 from app.models.user import User
@@ -45,7 +45,7 @@ def _mock_other_user():
 def db_engine():
     """Create a test database engine."""
     test_db_url = "sqlite:///:memory:"
-    engine = create_engine(test_db_url, connect_args={"check_same_thread": False})
+    engine = create_engine(test_db_url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(bind=engine)
     yield engine
     Base.metadata.drop_all(bind=engine)
