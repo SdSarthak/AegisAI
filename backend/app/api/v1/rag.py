@@ -3,32 +3,37 @@ RAG Intelligence API — regulatory knowledge base query endpoint.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 
-TODO for contributors (high difficulty):
-  - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
-  - Add streaming responses via SSE for long answers
+Contributor note:
+  - POST /rag/ingest: multipart PDF upload, document_loader, FAISS rebuild
+  - POST /rag/query: single-shot JSON answer (backward compatible)
+  - POST /rag/query/stream: Server-Sent Events stream — see streaming.py
+  - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
+  - TODO: Integrate MLflow tracking from modules/rag/ml_flow.py
 """
 
 import os
 import shutil
 import tempfile
-from typing import List, Optional
+from typing import List, Literal, Optional
+import mimetypes
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.rag_feedback import RAGFeedback
-from app.models.user import SubscriptionTier, User
-from app.modules.rag.document_loader import load_documents_from_paths
-from app.modules.rag.vector_store import create_vector_store
 from app.models.rag_query import RagQuery
+from app.models.user import SubscriptionTier, User
+from app.modules.llm.llm_client import LLMClient
+from app.modules.rag.document_loader import load_documents_from_paths
+from app.modules.rag.streaming import stream_rag_answer
+from app.modules.rag.vector_store import create_vector_store, load_vector_store
 
 router = APIRouter()
-
 
 
 class RAGQueryRequest(BaseModel):
@@ -39,8 +44,6 @@ class RAGQueryResponse(BaseModel):
     answer: str
     sources: list[str] = []
     answer_id: Optional[str] = None
-    groundedness_score: float = Field(0.0, description="Cosine similarity score (0.0 to 1.0) measuring answer groundedness in retrieved chunks.")
-    low_confidence: bool = Field(False, description="True if groundedness score falls below the accepted threshold.")
 
 
 class RAGIngestResponse(BaseModel):
@@ -70,20 +73,23 @@ def ingest_documents(
     ``settings.FAISS_INDEX_PATH``.
 
     **Returns**
-    - ``files_processed`` - number of PDFs successfully saved and chunked
-    - ``chunks_created``  - total text chunks fed into the vector store
-    - ``index_size_bytes`` - on-disk size of the persisted FAISS index
+    - ``files_processed`` – number of PDFs successfully saved and chunked
+    - ``chunks_created``  – total text chunks fed into the vector store
+    - ``index_size_bytes`` – on-disk size of the persisted FAISS index
 
     **Errors**
     - ``400`` if no valid PDF files are supplied
     - ``503`` if the embedding model or FAISS build step fails
     """
+    if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Too many files. Maximum allowed is {settings.RAG_MAX_FILES_PER_REQUEST}.",
+        )
 
-    # ── 1. Validate: at least one PDF ─────────────────────────────────────
     pdf_files = [
         f for f in files
-        if f.filename and f.filename.lower().endswith(".pdf")
-        and f.content_type in ("application/pdf", "binary/octet-stream", None)
+        if f.filename and mimetypes.guess_type(f.filename)[0] in ("application/pdf", "binary/octet-stream", None)
     ]
     if not pdf_files:
         raise HTTPException(
@@ -91,7 +97,25 @@ def ingest_documents(
             detail="No valid PDF files supplied. Please upload files with a .pdf extension.",
         )
 
-    # ── 2. Save uploads to a temporary directory ──────────────────────────
+    total_size = 0
+    for upload in pdf_files:
+        upload.file.seek(0, 2)
+        file_size = upload.file.tell()
+        upload.file.seek(0)
+
+        if file_size > settings.RAG_MAX_FILE_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File {upload.filename} exceeds the maximum size of {settings.RAG_MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB.",
+            )
+        total_size += file_size
+
+    if total_size > settings.RAG_TOTAL_BUDGET_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Total upload size exceeds the maximum budget of {settings.RAG_TOTAL_BUDGET_BYTES // (1024 * 1024)}MB.",
+        )
+
     tmp_dir = tempfile.mkdtemp(prefix="aegis_ingest_")
     saved_paths: list[str] = []
 
@@ -103,17 +127,24 @@ def ingest_documents(
             saved_paths.append(dest)
 
         # ── 3. Chunk documents (gives us the accurate chunk count) ────────
-        chunks = load_documents_from_paths(saved_paths)
+        raw_chunks = load_documents_from_paths(saved_paths)
+        
+        # Filter out chunks with empty or whitespace-only page_content
+        chunks = [
+            chunk for chunk in raw_chunks 
+            if chunk.page_content and chunk.page_content.strip()
+        ]
+
         if not chunks:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Could not extract any text from the supplied PDFs. "
+                detail="Could not extract any valid text from the supplied PDFs. "
                        "Ensure the files are not scanned images or password-protected.",
             )
 
         # ── 4. Build / rebuild FAISS index and persist to disk ────────────
         try:
-            create_vector_store(saved_paths)
+            create_vector_store(chunks) # Pass the extracted Document objects!
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -145,87 +176,41 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Query the regulatory knowledge base with a natural language question.
+    """
+    Ask a regulatory question and get an answer grounded in source documents.
 
-    Runs the question through the RAG pipeline, retrieves relevant chunks
-    from the FAISS index, generates a grounded answer, persists feedback
-    and query records, and logs metrics to MLflow.
-
-    Args:
-        request: Request body containing the question string.
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
-
-    Returns:
-        RAGQueryResponse: Generated answer, source document references,
-            and a unique answer_id for feedback submission.
-
-    Raises:
-        HTTPException: 503 if the FAISS index is not found or the RAG
-            module encounters an error.
+    Example questions:
+    - "Does my CV-screening tool qualify as high-risk under the EU AI Act?"
+    - "What are the transparency requirements for chatbots?"
     """
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
-        from app.modules.rag.groundedness import compute_groundedness
         from app.core.database import Base
 
         qa_chain = get_qa_chain()
-
-        t_start = time.monotonic()
         result = qa_chain({"query": request.question})
-        latency_ms = (time.monotonic() - t_start) * 1000
-
         source_docs = result.get("source_documents", [])
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
-        answer = str(result.get("result", ""))
-
-        # Groundedness Check
-        chunk_texts = [str(doc.page_content) for doc in source_docs]
-        groundedness_score = compute_groundedness(answer, chunk_texts)
-        low_confidence = groundedness_score < 0.70
 
         # Ensure tables exist on this DB bind (useful for test DB overrides)
         try:
             Base.metadata.create_all(bind=db.get_bind())
         except Exception:
+            # best-effort: ignore if bind not available
             pass
 
-        # Persist feedback row
+        # Persist an initial RAGFeedback row to capture the answer and contributing chunks
         feedback = RAGFeedback(
             question=request.question,
-            answer=answer,
+            answer=str(result.get("result", "")),
             source_chunks=sources,
         )
         db.add(feedback)
-        rag_query = RagQuery(
-            user_id=current_user.id,
-            question=request.question,
-            answer_summary=str(result.get("result", ""))[:200],
-            source_count=len(sources),
-        )
-        db.add(rag_query)
         db.commit()
         db.refresh(feedback)
+        answer_id = feedback.id
 
-        # Log to MLflow (non-blocking — failures are swallowed inside log_query)
-        try:
-            from app.modules.rag.ml_flow import log_query
-            log_query(
-                question=request.question,
-                answer=answer,
-                sources=sources,
-                latency_ms=latency_ms,
-            )
-        except Exception:
-            pass
-
-        return RAGQueryResponse(
-            answer=answer, 
-            sources=sources, 
-            answer_id=feedback.id,
-            groundedness_score=groundedness_score,
-            low_confidence=low_confidence
-        )
+        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -238,14 +223,76 @@ def query_knowledge_base(
         )
 
 
+# ---------------------------------------------------------------------------
+# POST /rag/query/stream  —  Server-Sent Events
+# ---------------------------------------------------------------------------
+@router.post(
+    "/query/stream",
+    summary="Stream a regulatory answer token-by-token (SSE)",
+    tags=["RAG Intelligence"],
+    responses={
+        200: {
+            "description": (
+                "Server-Sent Events stream. Emits one `meta` event with "
+                "citations and answer_id, then zero or more `token` events "
+                "with answer deltas, then a terminal `done` event. On "
+                "failure an `error` event is emitted before `done`."
+            ),
+            "content": {"text/event-stream": {}},
+        }
+    },
+)
+async def query_knowledge_base_stream(
+    request: Request,
+    payload: RAGQueryRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    Stream a regulatory answer as Server-Sent Events.
+
+    Unlike `/query`, this endpoint returns immediately and pushes answer
+    tokens to the client as they are generated. The frontend can render
+    progressively, which feels much faster on long answers.
+
+    The non-streaming `/query` endpoint is unchanged and remains the right
+    choice for callers that need a single JSON response.
+    """
+    try:
+        vector_store = load_vector_store()
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        )
+
+    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+    llm_client = LLMClient()
+
+    generator = stream_rag_answer(
+        question=payload.question,
+        retriever=retriever,
+        llm=llm_client,
+        db=db,
+        model_name=settings.LLM_MODEL,
+    )
+
+    return StreamingResponse(
+        generator,
+        media_type="text/event-stream",
+        headers={
+            # Prevent intermediary buffering (nginx in particular) from
+            # holding back tokens until the response is "done".
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
+
+
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health():
-    """Check if the RAG module is available and the FAISS index is loaded.
-
-    Returns:
-        dict: Module name, status (available/unavailable), index_loaded
-            flag, and an optional message if the index is missing.
-    """
+    """Check if the RAG module is available."""
     from app.modules.rag.vector_store import check_index_exists
     
     index_loaded = check_index_exists()
@@ -267,7 +314,7 @@ def rag_health():
 
 class RAGFeedbackRequest(BaseModel):
     answer_id: str
-    vote: str  # "up" or "down"
+    vote: Literal["up", "down"]
 
 
 @router.post("/feedback")
@@ -276,19 +323,7 @@ def rag_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Record a thumbs-up or thumbs-down vote for a previously returned answer.
-
-    Args:
-        payload: Request body containing answer_id and vote (up or down).
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
-
-    Returns:
-        dict: Status confirmation and the answer_id that was voted on.
-
-    Raises:
-        HTTPException: 404 if the answer_id is not found.
-    """
+    """Record a thumbs-up or thumbs-down for a previously returned answer."""
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
@@ -304,27 +339,13 @@ def rag_feedback(
 
 @router.get("/low-quality-chunks")
 def get_low_quality_chunks(
-    threshold: float = 0.3,
+    threshold: float = Query(0.3, ge=0, le=1),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return source chunks with high negative feedback ratios.
+    """Admin endpoint: aggregate feedback by source chunk and return low-quality candidates.
 
-    Aggregates thumbs_up and thumbs_down counts per source chunk across
-    all RAGFeedback records and returns chunks where the ratio of
-    thumbs_down to total feedback exceeds the threshold. Admin only.
-
-    Args:
-        threshold: Minimum thumbs_down ratio to flag a chunk (default: 0.3).
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
-
-    Returns:
-        dict: Threshold value and list of low-quality chunks with their
-            thumbs_down count, total feedback, and ratio.
-
-    Raises:
-        HTTPException: 403 if user does not have Scale tier access.
+    A chunk is considered low-quality when thumbs_down / total_feedback > threshold.
     """
     # Admin-only access: restrict to system owners / scale tier
     try:
@@ -355,7 +376,6 @@ def get_low_quality_chunks(
 
     return {"threshold": threshold, "low_quality_chunks": low_quality}
 
-
 @router.get("/history")
 def get_rag_history(
     page: int = 1,
@@ -363,18 +383,7 @@ def get_rag_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return paginated list of the current user's past RAG queries.
-
-    Args:
-        page: Page number, 1-indexed (default: 1).
-        page_size: Number of results per page (default: 10).
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
-
-    Returns:
-        dict: Page info and list of past queries with id, question,
-            answer_summary, source_count, and created_at.
-    """
+    """Return the current user's paginated RAG query history."""
     offset = (page - 1) * page_size
     queries = (
         db.query(RagQuery)

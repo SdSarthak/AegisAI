@@ -5,18 +5,40 @@ import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 import BackendStatus from '../components/BackendStatus'
 
 export default function Dashboard() {
-  const { data: systemsData, isLoading: systemsLoading } = useQuery({
+  const {
+    data: systemsData,
+    isLoading: systemsLoading,
+    isError: systemsError,
+    error: systemsErrorDetail,
+    refetch: refetchSystems,
+  } = useQuery({
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
-  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
+  const systems = (systemsData ?? []) as Array<{
+    id: number
+    name: string
+    risk_level: string | null
+    compliance_status: string
+  }>
 
-  const { data: documentsData, isLoading: documentsLoading } = useQuery({
+  const {
+    data: documentsData,
+    isLoading: documentsLoading,
+    isError: documentsError,
+    error: documentsErrorDetail,
+    refetch: refetchDocuments,
+  } = useQuery({
     queryKey: ['documents'],
-    queryFn: documentsApi.list,
+    queryFn: () => documentsApi.list(),
   })
-  const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
+  const documents = (documentsData ?? []) as Array<unknown>
   const isLoading = systemsLoading || documentsLoading
+  const hasError = systemsError || documentsError
+  const errorMessage =
+    (systemsErrorDetail instanceof Error && systemsErrorDetail.message) ||
+    (documentsErrorDetail instanceof Error && documentsErrorDetail.message) ||
+    'Unable to load dashboard data.'
 
   const stats = [
     {
@@ -33,13 +55,13 @@ export default function Dashboard() {
     },
     {
       name: 'High Risk',
-      value: systems.filter((s: { risk_level: string }) => s.risk_level === 'high').length,
+      value: systems.filter((s) => s.risk_level === 'high').length,
       icon: AlertTriangle,
       color: 'bg-red-500',
     },
     {
       name: 'Compliant',
-      value: systems.filter((s: { compliance_status: string }) => s.compliance_status === 'compliant').length,
+      value: systems.filter((s) => s.compliance_status === 'compliant').length,
       icon: CheckCircle,
       color: 'bg-emerald-500',
     },
@@ -73,6 +95,21 @@ export default function Dashboard() {
               </div>
             </div>
           ))}
+        </div>
+      ) : hasError ? (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
+          <AlertTriangle className="w-12 h-12 mx-auto mb-4 text-red-300" />
+          <h2 className="text-lg font-semibold text-gray-900">Unable to load dashboard</h2>
+          <p className="text-gray-500 mt-1">{errorMessage}</p>
+          <button
+            onClick={() => {
+              refetchSystems()
+              refetchDocuments()
+            }}
+            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            Retry
+          </button>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -139,12 +176,7 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {systems.slice(0, 5).map((system: {
-              id: number
-              name: string
-              risk_level: string | null
-              compliance_status: string
-            }) => (
+            {systems.slice(0, 5).map((system) => (
               <div
                 key={system.id}
                 className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700"
@@ -185,5 +217,3 @@ export default function Dashboard() {
     </div>
   )
 }
-
-

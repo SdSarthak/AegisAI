@@ -6,7 +6,7 @@ from app.models.user import User
 def test_analytics_summary_counts(client, db_session):
     # Register and login a test user
     email = "analytics_user@example.com"
-    password = "password123"
+    password = "TestPass123!"
     client.post("/api/v1/auth/register", json={"email": email, "password": password, "full_name": "Analytics User"})
     resp = client.post("/api/v1/auth/login", data={"username": email, "password": password})
     token = resp.json()["access_token"]
