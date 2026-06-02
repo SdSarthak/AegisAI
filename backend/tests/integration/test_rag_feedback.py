@@ -16,6 +16,20 @@ class DummyDoc:
         self.page_content = page_content
 
 
+def _install_fake_rag_chain(fake_result):
+    """Install a lightweight fake retrieval chain for RAG endpoint tests."""
+    import sys
+    import types
+
+    mod = types.ModuleType("app.modules.rag.retrieval_chain")
+
+    def _fake_get_qa_chain():
+        return lambda payload: fake_result
+
+    mod.get_qa_chain = _fake_get_qa_chain
+    sys.modules["app.modules.rag.retrieval_chain"] = mod
+
+
 def _get_test_db():
     engine = create_engine("sqlite:///:memory:")
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -75,6 +89,9 @@ def test_query_feedback_and_low_quality_flow(client):
 
         resp = client.post("/api/v1/rag/query", json={"question": "What is X?"})
 
+    # Provide a lightweight fake retrieval_chain module (avoid heavy langchain imports)
+    _install_fake_rag_chain(fake_result)
+
     assert resp.status_code == 200
     data = resp.json()
     assert "answer" in data and data["answer"] == "Test answer"
@@ -107,3 +124,41 @@ def test_query_feedback_and_low_quality_flow(client):
     # 7. Clean up dependency overrides to prevent test leakage
     if get_current_user in app.dependency_overrides:
         del app.dependency_overrides[get_current_user]
+
+def test_feedback_rejects_invalid_vote_value(client):
+    fake_result = {
+        "result": "Test answer",
+        "source_documents": [DummyDoc("doc1.pdf#chunk1")],
+    }
+    _install_fake_rag_chain(fake_result)
+
+    resp = client.post("/api/v1/rag/query", json={"question": "What is X?"})
+    assert resp.status_code == 200
+    answer_id = resp.json()["answer_id"]
+
+    invalid_vote_response = client.post(
+        "/api/v1/rag/feedback",
+        json={"answer_id": answer_id, "vote": "maybe"},
+    )
+
+    assert invalid_vote_response.status_code == 422
+
+    errors = invalid_vote_response.json()["detail"]
+
+    assert any(
+        error["loc"][-1] == "vote"
+        for error in errors
+    )
+
+    def _admin_user():
+        u = User()
+        u.id = 2
+        u.email = "admin@example.com"
+        u.subscription_tier = SubscriptionTier.SCALE
+        return u
+
+    app.dependency_overrides[get_current_user] = _admin_user
+
+    low_quality_response = client.get("/api/v1/rag/low-quality-chunks?threshold=0.0")
+    assert low_quality_response.status_code == 200
+    assert low_quality_response.json()["low_quality_chunks"] == []

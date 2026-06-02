@@ -86,11 +86,14 @@ export default function RagChat() {
     try {
       const data = await ragApi.query(trimmedQuestion)
 
-      const normalisedSources: RagSource[] = (data.sources ?? []).map(
-        (s): RagSource =>
-          typeof s === 'string'
-            ? { title: s, excerpt: '' }
-            : s,
+      const normalizedSources: RagSource[] = (data.sources || []).map(
+        (source: string | RagSource) =>
+          typeof source === 'string'
+            ? {
+                title: source,
+                excerpt: '',
+              }
+            : source
       )
 
       setAnswer({
