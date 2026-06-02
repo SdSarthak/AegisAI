@@ -57,7 +57,7 @@ export default function Documents() {
     refetch: refetchDocuments,
   } = useQuery({
     queryKey: ['documents', currentPage],
-    queryFn: () => documentsApi.list(),
+    queryFn: () => documentsApi.list({ skip: (currentPage - 1) * limit, limit }),
   })
   const documents = (documentsData ?? []) as Document[]
   const filteredDocuments = documents.filter((doc: Document) => {
