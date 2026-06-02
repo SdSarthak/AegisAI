@@ -10,31 +10,25 @@ TODO for contributors (help wanted):
     backend/app/tasks/scheduler.py), the timeline endpoint returns at
     least one data point per system.
 """
-
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func
-from sqlalchemy.orm import Session
-
-from app.core.database import get_db
-from app.core.security import get_current_user
-from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
-from app.models.user import User
-from app.schemas.analytics import ComplianceTimelineResponse
-from app.models.compliance_snapshot import ComplianceSnapshot
-from sqlalchemy import func
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import Query
-
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.core.security import get_current_user
+from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
+from app.models.compliance_snapshot import ComplianceSnapshot
 from app.models.guard_scan_log import GuardScanLog
-from app.schemas.audit_log import GuardAuditLogResponse
+from app.models.user import User
+from app.schemas.analytics import ComplianceTimelineResponse
+from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
 
 
-@router.get("/compliance-timeline", response_model=ComplianceTimelineResponse)
+@router.get("/audit-logs", response_model=PaginatedResponse[GuardScanLogResponse])
 def get_compliance_timeline(
     system_id: int,
     days: int = 30,
@@ -52,28 +46,32 @@ def get_compliance_timeline(
     Returns:
         ComplianceTimelineResponse containing the system's daily compliance data.
     """
-    system = db.query(AISystem).filter(
-        AISystem.id == system_id,
-        AISystem.owner_id == current_user.id
-    ).first()
-
-    if not system:
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .one_or_none()
+    )
+    if system is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="AI system not found"
+            detail="AI system not found or access denied",
         )
 
-    since = datetime.utcnow() - timedelta(days=days)
-
-    snapshots = db.query(ComplianceSnapshot).filter(
-        ComplianceSnapshot.ai_system_id == system_id,
-        ComplianceSnapshot.snapshotted_at >= since
-    ).order_by(ComplianceSnapshot.snapshotted_at.asc()).all()
+    cutoff = datetime.utcnow() - timedelta(days=days)
+    snapshots = (
+        db.query(ComplianceSnapshot)
+        .filter(
+            ComplianceSnapshot.ai_system_id == system_id,
+            ComplianceSnapshot.snapshotted_at >= cutoff,
+        )
+        .order_by(ComplianceSnapshot.snapshotted_at.asc())
+        .all()
+    )
 
     return ComplianceTimelineResponse(
         ai_system_id=system.id,
         ai_system_name=system.name,
-        snapshots=snapshots
+        snapshots=snapshots,
     )
 
 
@@ -91,59 +89,26 @@ def get_analytics_summary(
     Returns:
         Aggregate compliance statistics for the user's AI systems.
     """
-    # FIX: use SQL GROUP BY instead of loading all rows into memory
-    risk_rows = (
-        db.query(AISystem.risk_level, func.count(AISystem.id))
-        .filter(AISystem.owner_id == current_user.id)
-        .group_by(AISystem.risk_level)
-        .all()
-    )
-
-    compliance_rows = (
-        db.query(AISystem.compliance_status, func.count(AISystem.id))
-        .filter(AISystem.owner_id == current_user.id)
-        .group_by(AISystem.compliance_status)
-        .all()
-    )
-
-    score_row = (
-        db.query(func.avg(AISystem.compliance_score))
-        .filter(
-            AISystem.owner_id == current_user.id,
-            AISystem.compliance_score.isnot(None),
-        )
-        .scalar()
-    )
-
-    total_systems = (
-        db.query(func.count(AISystem.id))
-        .filter(AISystem.owner_id == current_user.id)
-        .scalar()
-        or 0
-    )
+    systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
 
     counts = {risk.value: 0 for risk in RiskLevel}
-    for risk_level, count in risk_rows:
-        if risk_level:
-            key = risk_level.value if hasattr(risk_level, "value") else str(risk_level)
-            if key in counts:
-                counts[key] = int(count)
+    compliance_statuses = {status.value: 0 for status in ComplianceStatus}
+    scored_values: list[float] = []
 
-    compliance_statuses = {s.value: 0 for s in ComplianceStatus}
-    for compliance_status, count in compliance_rows:
-        if compliance_status:
-            key = (
-                compliance_status.value
-                if hasattr(compliance_status, "value")
-                else str(compliance_status)
-            )
-            if key in compliance_statuses:
-                compliance_statuses[key] = int(count)
+    for system in systems:
+        if system.risk_level:
+            counts[system.risk_level.value] += 1
+        if system.compliance_status:
+            compliance_statuses[system.compliance_status.value] += 1
+        if system.compliance_score is not None:
+            scored_values.append(float(system.compliance_score))
 
-    average_compliance_score = round(float(score_row), 2) if score_row else 0.0
+    average_compliance_score = (
+        round(sum(scored_values) / len(scored_values), 2) if scored_values else 0.0
+    )
 
     return {
-        "total_systems": int(total_systems),
+        "total_systems": len(systems),
         "average_compliance_score": average_compliance_score,
         "counts": counts,
         "compliance_statuses": compliance_statuses,

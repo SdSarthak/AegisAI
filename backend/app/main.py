@@ -22,6 +22,7 @@ from app.core.telemetry import setup_telemetry
 from app.api.v1 import api_router, badge
 from app.plugins.regulation_loader import init_registry
 import app.models  # ensure all ORM models are imported so tables are created
+from app.tasks.scheduler import shutdown_scheduler, start_scheduler
 
 # -------------------------------------------------------------------
 # Logging Setup
@@ -55,9 +56,14 @@ async def lifespan(app: FastAPI):
     app.state.registry = init_registry(builtin_dir, custom_dir)
     logger.info("Regulation registry initialized.")
 
+    # Start the background scheduler for daily compliance snapshots
+    start_scheduler()
+    logger.info("Background scheduler started.")
+
     yield  # Control is passed to FastAPI and the application runs
 
-    logger.info("Shutting down AegisAI backend...")
+    shutdown_scheduler()
+    logger.info("Background scheduler stopped.")
     # Place any teardown logic here (e.g., closing thread pools, background tasks)
 
 # -------------------------------------------------------------------
