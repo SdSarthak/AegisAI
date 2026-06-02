@@ -350,7 +350,9 @@ class GuardExplainer:
     @staticmethod
     def _has_trained_weights(model_path: str) -> bool:
         import os
-        return any(
+        has_weights = any(
             os.path.exists(os.path.join(model_path, name))
             for name in ("pytorch_model.bin", "model.safetensors")
         )
+        has_marker = os.path.exists(os.path.join(model_path, ".trained"))
+        return has_weights and has_marker
