@@ -1,17 +1,20 @@
 """FAISS vector store creation and persistence.
 
-Changed: Kept LangChain provider imports lazy while preserving atomic FAISS index replacement.
-Why: Tests and lightweight startup should not require provider packages until vector operations run.
-Addresses: Import-time failures in mocked environments and partial index writes during ingestion.
+Changed: Merged upstream Ollama embeddings with lazy, patchable FAISS loading.
+Why: Docker RAG should use the configured local embedding model while tests
+must still be able to monkeypatch ``app.modules.rag.vector_store.FAISS``.
+Addresses: Import-time provider failures, broken mocks, and partial index writes.
 """
+
+from __future__ import annotations
 
 import os
 import shutil
 import tempfile
 import threading
+from typing import Any
 
 from app.core.config import settings
-from .document_loader import load_documents_from_paths
 
 try:
     from langchain_community.vectorstores import FAISS
@@ -21,7 +24,7 @@ except ImportError:  # pragma: no cover - exercised only when optional provider 
 _rag_index_lock = threading.Lock()
 
 
-def _get_faiss_class():
+def _get_faiss_class() -> Any:
     """Return the configured FAISS vector store class."""
     global FAISS
     if FAISS is None:
@@ -31,27 +34,26 @@ def _get_faiss_class():
     return FAISS
 
 
-def get_embeddings():
+def get_embeddings() -> Any:
     """Return the configured embeddings model."""
-    from langchain_openai import OpenAIEmbeddings
+    from langchain_community.embeddings import OllamaEmbeddings
 
-    return OpenAIEmbeddings(
-        openai_api_key=settings.LLM_API_KEY,
-        openai_api_base=settings.LLM_BASE_URL or None,
-    )
+    base = settings.LLM_BASE_URL or "http://ollama:11434"
+    if base.endswith("/v1"):
+        base = base[:-3]
+    return OllamaEmbeddings(model=settings.EMBEDDINGS_MODEL, base_url=base)
 
 
-def create_vector_store(file_paths: list[str]):
+def create_vector_store(documents: list[Any]) -> Any:
     """
-    Build a FAISS index from a list of local PDF paths and persist it to disk.
+    Build a FAISS index from LangChain Document objects and persist it to disk.
 
     Args:
-        file_paths: Local paths to PDF documents to ingest
+        documents: Loaded and chunked LangChain Document objects.
 
     Returns:
-        The populated FAISS vector store
+        The populated FAISS vector store.
     """
-    documents = load_documents_from_paths(file_paths)
     embeddings = get_embeddings()
     faiss_cls = _get_faiss_class()
     vector_store = faiss_cls.from_documents(documents, embeddings)
@@ -67,12 +69,12 @@ def create_vector_store(file_paths: list[str]):
     return vector_store
 
 
-def load_vector_store():
+def load_vector_store() -> Any:
     """
     Load an existing FAISS index from disk.
 
     Raises:
-        FileNotFoundError: if the index has not been created yet
+        FileNotFoundError: if the index has not been created yet.
     """
     index_path = settings.FAISS_INDEX_PATH
     if not os.path.exists(index_path):
@@ -81,6 +83,7 @@ def load_vector_store():
             "The RAG module requires regulatory documents to be ingested first. "
             "Please contact your administrator or check the documentation for setup instructions."
         )
+
     embeddings = get_embeddings()
     faiss_cls = _get_faiss_class()
     return faiss_cls.load_local(
@@ -88,6 +91,6 @@ def load_vector_store():
     )
 
 
-def check_index_exists():
+def check_index_exists() -> bool:
     """Check if FAISS index exists on disk."""
     return os.path.exists(settings.FAISS_INDEX_PATH)

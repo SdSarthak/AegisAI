@@ -1,5 +1,10 @@
 """
-Webhooks API — configure outbound event delivery URLs.
+Webhooks API - configure outbound event delivery URLs.
+
+Changed: Resolved merge conflicts while preserving user-scoped webhook CRUD.
+Why: Webhooks must not be creatable or deletable on behalf of another user.
+Addresses: Cross-user webhook access and broken imports/docstrings after merge.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
@@ -25,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 def _build_signature(secret: str, payload_body: bytes) -> str:
-    """Generate HMAC-SHA256 signature for webhook payload."""
+    """Generate an HMAC-SHA256 signature for a webhook payload."""
     return hmac.new(
         secret.encode("utf-8"),
         payload_body,
@@ -39,7 +44,7 @@ async def _post_webhook(
     payload: dict[str, Any],
     secret: str | None,
 ) -> None:
-    """Post webhook payload to a configured endpoint."""
+    """Post a webhook payload to a configured endpoint."""
     try:
         payload_body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
         headers = {"X-AegisAI-Event": event}
@@ -88,7 +93,7 @@ def create_webhook(
     body: WebhookCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
+) -> WebhookConfig:
     """Register a new webhook endpoint for the current user."""
     webhook_data = body.model_dump()
     db_webhook = WebhookConfig(**webhook_data, user_id=current_user.id)
@@ -104,7 +109,7 @@ def create_webhook(
 def list_webhooks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
+) -> list[WebhookConfig]:
     """List all webhook configurations for the current user."""
     return (
         db.query(WebhookConfig)
@@ -118,7 +123,7 @@ def delete_webhook(
     webhook_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
+) -> None:
     """Delete a webhook configuration owned by the current user."""
     db_webhook = (
         db.query(WebhookConfig)

@@ -1,22 +1,20 @@
 """
 RAG Intelligence API - regulatory knowledge base query endpoint.
 
-Changed: Added query-level guard scanning, RAG audit logging, chunk-drop reporting, and grounding fields.
-Why: RAG queries must be screened before retrieval and responses must expose safety/grounding metadata.
-Addresses: Direct prompt injection, guard failures, poisoned retrieved chunks, and low-grounding answers.
+Changed: Merged guarded RAG query handling with upstream streaming support.
+Why: RAG queries need prompt-injection protection, audit logging, grounding
+metadata, and the new SSE endpoint must remain available after merging main.
+Addresses: Direct prompt injection, poisoned retrieved chunks, low-grounding
+answers, and route loss during upstream conflict resolution.
 
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (high difficulty):
-  - Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - Add a POST /rag/ingest endpoint for uploading custom regulatory PDFs
-  - Add streaming responses via SSE for long answers
 """
 
 import asyncio
 import hashlib
 import logging
+import mimetypes
 import os
 import shutil
 import tempfile
@@ -24,16 +22,8 @@ import time
 from dataclasses import dataclass
 from typing import Any, List, Literal
 
-from fastapi import (
-    APIRouter,
-    Depends,
-    File,
-    HTTPException,
-    Query,
-    Request,
-    UploadFile,
-    status,
-)
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -44,6 +34,10 @@ from app.models.audit_log import RAGAuditLog
 from app.models.rag_feedback import RAGFeedback
 from app.models.rag_query import RagQuery
 from app.models.user import SubscriptionTier, User
+from app.modules.llm.llm_client import LLMClient
+from app.modules.rag.document_loader import load_documents_from_paths
+from app.modules.rag.streaming import stream_rag_answer
+from app.modules.rag.vector_store import create_vector_store, load_vector_store
 from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
 
 router = APIRouter()
@@ -63,18 +57,19 @@ class GuardedRAGQuestion:
     changes_summary: str | None = None
 
 
-def load_documents_from_paths(saved_paths: list[str]):
-    """Lazy wrapper around the RAG document loader."""
-    from app.modules.rag.document_loader import load_documents_from_paths as loader
+class RAGIngestResponse(BaseModel):
+    """Response returned after a successful document ingestion."""
 
-    return loader(saved_paths)
+    files_processed: int
+    chunks_created: int
+    index_size_bytes: int
 
 
-def create_vector_store(saved_paths: list[str]):
-    """Lazy wrapper around the RAG vector-store builder."""
-    from app.modules.rag.vector_store import create_vector_store as builder
+class RAGFeedbackRequest(BaseModel):
+    """Feedback payload for a previously returned RAG answer."""
 
-    return builder(saved_paths)
+    answer_id: str
+    vote: Literal["up", "down"]
 
 
 def get_rag_guard() -> Any:
@@ -85,6 +80,13 @@ def get_rag_guard() -> Any:
 
         _RAG_GUARD = LLMGuard()
     return _RAG_GUARD
+
+
+def get_qa_chain() -> Any:
+    """Return the configured RAG QA chain."""
+    from app.modules.rag.retrieval_chain import get_qa_chain as chain_factory
+
+    return chain_factory()
 
 
 def _hash_question(question: str) -> str:
@@ -133,22 +135,14 @@ def _log_rag_audit(
         logger.exception("Failed to write RAG audit log")
 
 
-def _decision_reasoning(result: dict) -> str | None:
+def _decision_reasoning(result: dict[str, Any]) -> str | None:
     """Extract human-readable reasoning from a guard result."""
-    return (
-        result.get("metadata", {})
-        .get("decision_reasoning", {})
-        .get("reasoning")
-    )
+    return result.get("metadata", {}).get("decision_reasoning", {}).get("reasoning")
 
 
-def _sanitization_summary(result: dict) -> str | None:
+def _sanitization_summary(result: dict[str, Any]) -> str | None:
     """Extract a compact sanitization summary from a guard result."""
-    changes = (
-        result.get("metadata", {})
-        .get("sanitization", {})
-        .get("changes")
-    )
+    changes = result.get("metadata", {}).get("sanitization", {}).get("changes")
     if changes is None:
         return None
     return str(changes)
@@ -207,14 +201,6 @@ async def guard_rag_question(
     )
 
 
-class RAGIngestResponse(BaseModel):
-    """Response returned after a successful document ingestion."""
-
-    files_processed: int
-    chunks_created: int
-    index_size_bytes: int
-
-
 @router.post(
     "/ingest",
     response_model=RAGIngestResponse,
@@ -224,19 +210,9 @@ class RAGIngestResponse(BaseModel):
 def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
-):
-    """Ingest one or more regulatory PDFs and rebuild the FAISS index.
-
-    Args:
-        files: One or more PDF uploads to save, chunk, and index.
-        current_user: Authenticated user requesting the ingestion.
-
-    Returns:
-        RAGIngestResponse with file, chunk, and index size counts.
-
-    Raises:
-        HTTPException: If no valid PDFs are supplied or indexing fails.
-    """
+) -> RAGIngestResponse:
+    """Upload regulatory PDFs, chunk them, and rebuild the persisted FAISS index."""
+    del current_user
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -244,11 +220,12 @@ def ingest_documents(
         )
 
     pdf_files = [
-        f
-        for f in files
-        if f.filename
-        and f.filename.lower().endswith(".pdf")
-        and f.content_type in ("application/pdf", "binary/octet-stream", None)
+        upload
+        for upload in files
+        if upload.filename
+        and upload.filename.lower().endswith(".pdf")
+        and mimetypes.guess_type(upload.filename)[0]
+        in ("application/pdf", "binary/octet-stream", None)
     ]
     if not pdf_files:
         raise HTTPException(
@@ -265,14 +242,20 @@ def ingest_documents(
         if file_size > settings.RAG_MAX_FILE_SIZE_BYTES:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File {upload.filename} exceeds the maximum size of {settings.RAG_MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB.",
+                detail=(
+                    f"File {upload.filename} exceeds the maximum size of "
+                    f"{settings.RAG_MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB."
+                ),
             )
         total_size += file_size
 
     if total_size > settings.RAG_TOTAL_BUDGET_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Total upload size exceeds the maximum budget of {settings.RAG_TOTAL_BUDGET_BYTES // (1024 * 1024)}MB.",
+            detail=(
+                "Total upload size exceeds the maximum budget of "
+                f"{settings.RAG_TOTAL_BUDGET_BYTES // (1024 * 1024)}MB."
+            ),
         )
 
     tmp_dir = tempfile.mkdtemp(prefix="aegis_ingest_")
@@ -285,28 +268,33 @@ def ingest_documents(
                 shutil.copyfileobj(upload.file, buf)
             saved_paths.append(dest)
 
-        chunks = load_documents_from_paths(saved_paths)
+        raw_chunks = load_documents_from_paths(saved_paths)
+        chunks = [
+            chunk
+            for chunk in raw_chunks
+            if chunk.page_content and chunk.page_content.strip()
+        ]
+
         if not chunks:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "Could not extract any text from the supplied PDFs. "
+                    "Could not extract any valid text from the supplied PDFs. "
                     "Ensure the files are not scanned images or password-protected."
                 ),
             )
 
         try:
-            create_vector_store(saved_paths)
+            create_vector_store(chunks)
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Failed to build FAISS index: {exc}",
             )
 
-        index_path = settings.FAISS_INDEX_PATH
         index_size_bytes = 0
         for fname in ("index.faiss", "index.pkl"):
-            fpath = os.path.join(index_path, fname)
+            fpath = os.path.join(settings.FAISS_INDEX_PATH, fname)
             if os.path.exists(fpath):
                 index_size_bytes += os.path.getsize(fpath)
 
@@ -315,6 +303,7 @@ def ingest_documents(
             chunks_created=len(chunks),
             index_size_bytes=index_size_bytes,
         )
+
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -325,7 +314,7 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     guarded_question: GuardedRAGQuestion = Depends(guard_rag_question),
     db: Session = Depends(get_db),
-):
+) -> RAGQueryResponse:
     """Ask a regulatory question and get an answer grounded in source documents."""
     try:
         if guarded_question.guard_decision == "ERROR":
@@ -380,10 +369,8 @@ def query_knowledge_base(
             )
 
         from app.core.database import Base
-        from app.modules.rag.retrieval_chain import get_qa_chain
 
         qa_chain = get_qa_chain()
-
         t_start = time.monotonic()
         result = qa_chain({"query": guarded_question.question})
         latency_ms = (time.monotonic() - t_start) * 1000
@@ -435,13 +422,14 @@ def query_knowledge_base(
             source_chunks=source_labels,
         )
         db.add(feedback)
-        rag_query = RagQuery(
-            user_id=current_user.id,
-            question=guarded_question.question,
-            answer_summary=str(result.get("result", ""))[:200],
-            source_count=len(sources),
+        db.add(
+            RagQuery(
+                user_id=current_user.id,
+                question=guarded_question.question,
+                answer_summary=answer[:200],
+                source_count=len(sources),
+            )
         )
-        db.add(rag_query)
         db.commit()
         db.refresh(feedback)
 
@@ -475,21 +463,73 @@ def query_knowledge_base(
         )
     except HTTPException:
         raise
-    except FileNotFoundError as e:
+    except FileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(e),
+            detail=str(exc),
         )
-    except Exception as e:
+    except Exception as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"RAG module error: {str(e)}",
+            detail=f"RAG module error: {str(exc)}",
         )
+
+
+@router.post(
+    "/query/stream",
+    summary="Stream a regulatory answer token-by-token (SSE)",
+    tags=["RAG Intelligence"],
+    responses={
+        200: {
+            "description": (
+                "Server-Sent Events stream. Emits one meta event with citations "
+                "and answer_id, then token events, then a terminal done event."
+            ),
+            "content": {"text/event-stream": {}},
+        }
+    },
+)
+async def query_knowledge_base_stream(
+    request: Request,
+    payload: RAGQueryRequest,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """Stream a regulatory answer as Server-Sent Events."""
+    del request, current_user
+    try:
+        vector_store = load_vector_store()
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        )
+
+    retriever = vector_store.as_retriever(search_kwargs={"k": 5})
+    llm_client = LLMClient()
+
+    generator = stream_rag_answer(
+        question=payload.question,
+        retriever=retriever,
+        llm=llm_client,
+        db=db,
+        model_name=settings.LLM_MODEL,
+    )
+
+    return StreamingResponse(
+        generator,
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 @router.get("/health", tags=["RAG Intelligence"])
-def rag_health():
-    """Check whether the RAG module has an available index."""
+def rag_health() -> dict[str, Any]:
+    """Check if the RAG module is available."""
     from app.modules.rag.vector_store import check_index_exists
 
     index_loaded = check_index_exists()
@@ -511,18 +551,14 @@ def rag_health():
     }
 
 
-class RAGFeedbackRequest(BaseModel):
-    answer_id: str
-    vote: Literal["up", "down"]
-
-
 @router.post("/feedback")
 def rag_feedback(
     payload: RAGFeedbackRequest,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
-    """Record feedback for a previously returned RAG answer."""
+) -> dict[str, str]:
+    """Record a thumbs-up or thumbs-down for a previously returned answer."""
+    del current_user
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
@@ -541,8 +577,8 @@ def get_low_quality_chunks(
     threshold: float = Query(0.3, ge=0, le=1),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
-    """Return source chunks whose feedback ratio exceeds the threshold."""
+) -> dict[str, Any]:
+    """Aggregate feedback by source chunk and return low-quality candidates."""
     try:
         if current_user.subscription_tier != SubscriptionTier.SCALE:
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -551,26 +587,25 @@ def get_low_quality_chunks(
 
     counts: dict[str, dict[str, int]] = {}
     rows = db.query(RAGFeedback).all()
-    for r in rows:
-        total = (r.thumbs_up or 0) + (r.thumbs_down or 0)
-        for chunk in r.source_chunks or []:
-            if chunk not in counts:
-                counts[chunk] = {"thumbs_up": 0, "thumbs_down": 0, "total": 0}
-            counts[chunk]["thumbs_up"] += r.thumbs_up or 0
-            counts[chunk]["thumbs_down"] += r.thumbs_down or 0
+    for row in rows:
+        total = (row.thumbs_up or 0) + (row.thumbs_down or 0)
+        for chunk in row.source_chunks or []:
+            counts.setdefault(chunk, {"thumbs_up": 0, "thumbs_down": 0, "total": 0})
+            counts[chunk]["thumbs_up"] += row.thumbs_up or 0
+            counts[chunk]["thumbs_down"] += row.thumbs_down or 0
             counts[chunk]["total"] += total
 
     low_quality = []
-    for chunk, c in counts.items():
-        if c["total"] == 0:
+    for chunk, count in counts.items():
+        if count["total"] == 0:
             continue
-        ratio = c["thumbs_down"] / c["total"]
+        ratio = count["thumbs_down"] / count["total"]
         if ratio > threshold:
             low_quality.append(
                 {
                     "chunk": chunk,
-                    "thumbs_down": c["thumbs_down"],
-                    "total": c["total"],
+                    "thumbs_down": count["thumbs_down"],
+                    "total": count["total"],
                     "ratio": ratio,
                 }
             )
@@ -584,7 +619,7 @@ def get_rag_history(
     page_size: int = 10,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
+) -> dict[str, Any]:
     """Return the current user's paginated RAG query history."""
     offset = (page - 1) * page_size
     queries = (
@@ -600,12 +635,12 @@ def get_rag_history(
         "page_size": page_size,
         "results": [
             {
-                "id": q.id,
-                "question": q.question,
-                "answer_summary": q.answer_summary,
-                "source_count": q.source_count,
-                "created_at": q.created_at,
+                "id": query.id,
+                "question": query.question,
+                "answer_summary": query.answer_summary,
+                "source_count": query.source_count,
+                "created_at": query.created_at,
             }
-            for q in queries
+            for query in queries
         ],
     }
