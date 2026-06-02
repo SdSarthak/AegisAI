@@ -32,3 +32,4 @@ In scope:
 Out of scope:
 - Denial of service attacks
 - Issues requiring physical access to the server
+\n<!-- Fix for #830 -->\n
