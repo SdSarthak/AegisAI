@@ -48,18 +48,7 @@ def list_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List the current user's notifications with optional unread filtering.
 
-    Args:
-        unread_only: If true, return only unread notifications.
-        skip: Items to skip.
-        limit: Maximum number of notifications to return per page.
-        current_user: Authenticated user whose notifications are requested.
-        db: Database session used to query notifications.
-
-    Returns:
-        PaginatedResponse containing the user's notifications.
-    """
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
 
     if unread_only:
@@ -88,16 +77,7 @@ def mark_notifications_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Mark the specified notifications as read.
 
-    Args:
-        body: Payload containing the notification IDs to mark read.
-        current_user: Authenticated user who owns the notifications.
-        db: Database session used to update the matching rows.
-
-    Returns:
-        None. The endpoint responds with HTTP 204 No Content.
-    """
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.id.in_(body.ids),
@@ -116,19 +96,7 @@ def delete_notification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a notification owned by the current user.
 
-    Args:
-        notification_id: ID of the notification to delete.
-        current_user: Authenticated user who must own the notification.
-        db: Database session used to locate and delete the notification.
-
-    Returns:
-        None. The endpoint responds with HTTP 204 No Content.
-
-    Raises:
-        HTTPException: If the notification does not exist or belongs to another user.
-    """
     notification = (
         db.query(Notification)
         .filter(
