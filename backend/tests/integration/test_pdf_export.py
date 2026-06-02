@@ -178,6 +178,7 @@ class TestPDFExportEndpoint:
     def test_pdf_export_escapes_user_controlled_markup(
         self, client, auth_headers, test_user, test_ai_system, db_session
     ):
+        pdfplumber = pytest.importorskip("pdfplumber")
         document = Document(
             owner_id=test_user.id,
             ai_system_id=test_ai_system.id,

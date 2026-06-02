@@ -60,8 +60,11 @@ function ensureListResponse<T>(data: unknown, resourceName: string): T[] {
   if (Array.isArray(data)) {
     return data as T[]
   }
-  if (data && typeof data === 'object' && 'items' in data && Array.isArray((data as any).items)) {
-    return (data as any).items as T[]
+  if (data && typeof data === 'object' && 'items' in data) {
+    const items = (data as Record<string, unknown>).items
+    if (Array.isArray(items)) {
+      return items as T[]
+    }
   }
   throw new Error(`${resourceName} response was empty or invalid.`)
 }
