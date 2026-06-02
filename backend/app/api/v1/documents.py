@@ -12,6 +12,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem
 from app.models.document import Document, DocumentType, DocumentStatus
+from app.modules.llm.document_generator import generate_compliance_narrative
 from app.schemas.document import (
     DocumentCreate,
     DocumentResponse,
@@ -338,6 +339,128 @@ def list_document_templates(
     ]
 
 
+@router.get("/templates")
+def list_document_templates(
+    current_user: User = Depends(get_current_user),
+):
+    """List available compliance document templates."""
+    return [
+        {
+            "type": DocumentType.TECHNICAL_DOCUMENTATION.value,
+            "name": "Technical Documentation",
+            "description": "EU AI Act technical documentation for an AI system.",
+        },
+        {
+            "type": DocumentType.RISK_ASSESSMENT.value,
+            "name": "Risk Assessment",
+            "description": "Risk classification and mitigation assessment.",
+        },
+        {
+            "type": DocumentType.CONFORMITY_DECLARATION.value,
+            "name": "Conformity Declaration",
+            "description": "Declaration of conformity for applicable EU AI Act requirements.",
+        },
+    ]
+
+
+@router.post(
+    "/generate",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def generate_document(
+    request: DocumentGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Generate a compliance document for a user's AI system.
+
+    Args:
+        request: Payload specifying the AI system and document type.
+        db: Database session used to look up the AI system and save the result.
+        current_user: Authenticated user who must own the AI system.
+
+    Returns:
+        The generated document serialized as DocumentResponse.
+
+    Raises:
+        HTTPException: If the AI system or template is missing.
+    """
+    ai_system = (
+        db.query(AISystem)
+        .filter(
+            AISystem.id == request.ai_system_id, AISystem.owner_id == current_user.id
+        )
+        .first()
+    )
+
+    if not ai_system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
+        )
+
+    template = DOCUMENT_TEMPLATES.get(request.document_type)
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No template available for {request.document_type}",
+        )
+
+    from app.models.ai_system import RiskAssessment
+
+    assessment = db.query(RiskAssessment).filter(
+        RiskAssessment.ai_system_id == ai_system.id
+    ).order_by(RiskAssessment.assessed_at.desc()).first()
+
+    try:
+        content = generate_compliance_narrative(
+            document_type=request.document_type,
+            ai_system=ai_system,
+            risk_assessment=assessment,
+            company_name=current_user.company_name,
+        )
+    except Exception as e:
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.warning(f"LLM generation failed, falling back to template: {str(e)}")
+
+        from datetime import datetime
+
+        content = template.format(
+            system_name=ai_system.name,
+            version=ai_system.version or "1.0",
+            use_case=ai_system.use_case or "Not specified",
+            sector=ai_system.sector or "Not specified",
+            description=ai_system.description or "No description provided",
+            risk_level=(
+                ai_system.risk_level.value
+                if ai_system.risk_level
+                else "Not assessed"
+            ),
+            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            company_name=current_user.company_name or "Not specified",
+            classification_reasons="See risk assessment details",
+            recommendations="Based on risk assessment",
+            requirements="See applicable requirements above",
+            next_steps="Complete all checklist items",
+        )
+
+    document = Document(
+        owner_id=current_user.id,
+        ai_system_id=ai_system.id,
+        title=f"{request.document_type.value.replace('_', ' ').title()} - {ai_system.name}",
+        document_type=request.document_type,
+        status=DocumentStatus.GENERATED,
+        content=content,
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    return document
+
+
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(
     document_id: int,
@@ -407,101 +530,6 @@ def update_document(
     db.commit()
     db.refresh(document)
     
-    return document
-
-@router.post(
-    "/generate",
-    response_model=DocumentResponse,
-    status_code=status.HTTP_201_CREATED,
-)
-def generate_document(
-    request: DocumentGenerateRequest,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """Generate a compliance document for a user's AI system.
-
-    Args:
-        request: Payload specifying the AI system and document type.
-        db: Database session used to look up the AI system and save the result.
-        current_user: Authenticated user who must own the AI system.
-
-    Returns:
-        The generated document serialized as DocumentResponse.
-
-    Raises:
-        HTTPException: If the AI system or template is missing.
-    """
-    # Get the AI system
-    ai_system = (
-        db.query(AISystem)
-        .filter(
-            AISystem.id == request.ai_system_id, AISystem.owner_id == current_user.id
-        )
-        .first()
-    )
-
-    if not ai_system:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
-        )
-
-    # Get template
-    template = DOCUMENT_TEMPLATES.get(request.document_type)
-    if not template:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"No template available for {request.document_type}",
-        )
-
-    # Get latest risk assessment if available
-    from app.models.ai_system import RiskAssessment
-
-    assessment = db.query(RiskAssessment).filter(
-        RiskAssessment.ai_system_id == ai_system.id
-    ).order_by(RiskAssessment.assessed_at.desc()).first()
-    
-    try:
-        content = generate_compliance_narrative(
-            document_type=request.document_type,
-            ai_system=ai_system,
-            risk_assessment=assessment,
-            company_name=current_user.company_name
-        )
-    except Exception as e:
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.warning(f"LLM generation failed, falling back to template: {str(e)}")
-        
-        from datetime import datetime
-        content = template.format(
-            system_name=ai_system.name,
-            version=ai_system.version or "1.0",
-            use_case=ai_system.use_case or "Not specified",
-            sector=ai_system.sector or "Not specified",
-            description=ai_system.description or "No description provided",
-            risk_level=ai_system.risk_level.value if ai_system.risk_level else "Not assessed",
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
-            company_name=current_user.company_name or "Not specified",
-            classification_reasons="See risk assessment details",
-            recommendations="Based on risk assessment",
-            requirements="See applicable requirements above",
-            next_steps="Complete all checklist items"
-        )
-
-    # Create document
-    document = Document(
-        owner_id=current_user.id,
-        ai_system_id=ai_system.id,
-        title=f"{request.document_type.value.replace('_', ' ').title()} - {ai_system.name}",
-        document_type=request.document_type,
-        status=DocumentStatus.GENERATED,
-        content=content,
-    )
-    db.add(document)
-    db.commit()
-    db.refresh(document)
-
     return document
 
 

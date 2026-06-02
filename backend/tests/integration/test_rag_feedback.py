@@ -172,3 +172,4 @@ def test_feedback_rejects_invalid_vote_value(client):
     low_quality_response = client.get("/api/v1/rag/low-quality-chunks?threshold=0.0")
     assert low_quality_response.status_code == 200
     assert low_quality_response.json()["low_quality_chunks"] == []
+

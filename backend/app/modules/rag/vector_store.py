@@ -45,6 +45,35 @@ def create_vector_store(file_paths: list[str]):
     return vector_store
 
 
+def merge_into_vector_store(file_paths: list[str]):
+    """Load PDFs, embed them, and merge into the existing FAISS index.
+
+    If no index exists on disk yet, a brand-new one is created instead.
+
+    Args:
+        file_paths: Local paths to PDF documents to ingest.
+
+    Returns:
+        tuple: ``(vector_store, chunks)`` — the updated FAISS store and the
+        list of ``Document`` chunks that were added.
+    """
+    documents = load_documents_from_paths(file_paths)
+    embeddings = get_embeddings()
+    new_store = FAISS.from_documents(documents, embeddings)
+
+    index_path = settings.FAISS_INDEX_PATH
+    if os.path.exists(index_path):
+        existing = FAISS.load_local(
+            index_path, embeddings, allow_dangerous_deserialization=True,
+        )
+        existing.merge_from(new_store)
+        existing.save_local(index_path)
+        return existing, documents
+    else:
+        new_store.save_local(index_path)
+        return new_store, documents
+
+
 def load_vector_store():
     """
     Load an existing FAISS index from disk.
@@ -68,3 +97,4 @@ def load_vector_store():
 def check_index_exists():
     """Check if FAISS index exists on disk."""
     return os.path.exists(settings.FAISS_INDEX_PATH)
+

@@ -71,7 +71,6 @@ class BulkScanRequest(BaseModel):
     def validate_prompts(self) -> None:
         if not self.prompts:
             raise ValueError("At least one prompt is required per batch request.")
-
         if len(self.prompts) > 50:
             raise ValueError("Maximum 50 prompts allowed per batch request.")
 
@@ -90,8 +89,6 @@ class BulkScanResponse(BaseModel):
 
 
 VALID_SANITIZATION_LEVELS = {"low", "medium", "high"}
-
-
 class UserGuardConfig(TypedDict):
     sanitization_level: str
     malicious_threshold: float

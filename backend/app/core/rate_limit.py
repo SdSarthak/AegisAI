@@ -222,6 +222,10 @@ return {current, ttl}
 
         return self._check_local(key, limit, window_seconds, cost)
 
+    def clear(self) -> None:
+        """Clear local rate-limit state for test isolation."""
+        with self._local_lock:
+            self._local_attempts_by_key.clear()
 
 guard_scan_rate_limiter = DistributedRateLimiter()
 badge_rate_limiter = DistributedRateLimiter()
