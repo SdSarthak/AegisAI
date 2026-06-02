@@ -1,0 +1,42 @@
+# docker-compose.yml
+# 使用环境变量替换硬编码的数据库凭据
+# 如果 POSTGRES_PASSWORD 未设置，docker-compose up 将失败
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: postgres_db
+    environment:
+      # 从环境变量或 .env 文件中读取
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}  # 默认值为 postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}  # 强制要求设置
+      POSTGRES_DB: ${POSTGRES_DB:-myapp}  # 默认数据库名
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend_service
+    environment:
+      # 数据库连接配置
+      DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}@postgres:5432/${POSTGRES_DB:-myapp}
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
