@@ -32,7 +32,7 @@ router = APIRouter()
 # Document templates for generation
 DOCUMENT_TEMPLATES = {
     DocumentType.TECHNICAL_DOCUMENTATION: """
-# Technical Documentation - {system_name}
+# Technical Documentation - {system_name} 
 
 ## 1. General Description
 **System Name:** {system_name}
