@@ -45,6 +45,8 @@ class RAGQueryResponse(BaseModel):
     answer: str
     sources: list[str] = []
     answer_id: Optional[str] = None
+    groundedness_score: float = 0.0
+    low_confidence: bool = False
 
 
 class RAGIngestResponse(BaseModel):
@@ -192,7 +194,13 @@ def query_knowledge_base(
         db.refresh(feedback)
         answer_id = feedback.id
 
-        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
+        return RAGQueryResponse(
+            answer=result["result"],
+            sources=sources,
+            answer_id=answer_id,
+            groundedness_score=float(result.get("groundedness_score", 0.0) or 0.0),
+            low_confidence=bool(result.get("low_confidence", False)),
+        )
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
