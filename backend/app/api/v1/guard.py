@@ -42,7 +42,7 @@ from app.schemas.guard_explain import (
     ExplainRequest as ExplainRequestModel,
     ExplainResponse,
 )
-from app.schemas.pagination import CursorPaginatedResponse
+from app.schemas.pagination import CursorPaginatedResponse, PaginatedResponse
 
 from app.modules.guard import guard_config
 
@@ -859,7 +859,7 @@ def bulk_scan_prompts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."
         )
-<<<<<<< HEAD
+
 
 
 @router.get("/audit", response_model=PaginatedResponse[GuardScanLogResponse])
@@ -980,5 +980,3 @@ def export_audit_logs(
     }
     return StreamingResponse(iter_csv(), media_type="text/csv", headers=headers)
 
-=======
->>>>>>> feat/pagination
