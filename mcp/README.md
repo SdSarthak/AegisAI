@@ -285,25 +285,145 @@ The MCP server:
 4. **Handles Errors**: Catches and formats errors from the backend API
 5. **Communicates via stdio**: Uses MCP's stdio transport for client communication
 
-## Troubleshooting
+## 🛠 Troubleshooting
 
-### Server won't start
+### Docker Compose Fails to Start
 
-- Ensure `AEGISAI_API_TOKEN` is set: `echo $AEGISAI_API_TOKEN`
-- Check that Python 3.8+ is installed: `python --version`
-- Verify dependencies: `pip list | grep mcp`
+**Problem:**
 
-### MCP client can't connect
+```bash
+docker compose up -d
+```
 
-- Ensure the server is running: `ps aux | grep mcp/server.py`
-- Check the base URL is correct: `curl http://localhost:8000/api/v1/health` (or your configured URL)
-- Verify the API token has permissions for the required endpoints
+fails with container startup errors.
 
-### Tool calls failing
+**Solution:**
 
-- Check AegisAI backend logs: `tail -f backend/logs/app.log`
-- Verify the backend is running: `ps aux | grep uvicorn`
-- Test endpoints manually: `curl -H "Authorization: Bearer $AEGISAI_API_TOKEN" http://localhost:8000/api/v1/guard/scan -d '{"prompt":"test"}'`
+* Ensure Docker Desktop is running.
+* Check container logs:
+
+```bash
+docker compose logs
+```
+
+* Rebuild containers:
+
+```bash
+docker compose down
+docker compose up --build
+```
+
+---
+
+### PostgreSQL Connection Errors
+
+**Problem:**
+
+```text
+connection refused
+database does not exist
+```
+
+**Solution:**
+
+* Verify PostgreSQL is running.
+* Confirm `DATABASE_URL` in `backend/.env`.
+* Ensure the database exists before starting the backend.
+
+---
+
+### Missing Environment Variables
+
+**Problem:**
+
+Backend fails during startup with configuration errors.
+
+**Solution:**
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Fill in required values:
+
+```env
+SECRET_KEY=your-secret-key
+LLM_API_KEY=your-api-key
+DATABASE_URL=postgresql://...
+```
+
+---
+
+### Port Already in Use
+
+**Problem:**
+
+Ports 5173, 8000, or 5432 are already occupied.
+
+**Solution:**
+
+Check active processes:
+
+```bash
+# Windows
+netstat -ano | findstr :8000
+
+# Linux/macOS
+lsof -i :8000
+```
+
+Stop the conflicting process or change the port configuration.
+
+---
+
+### Ollama Connection Issues
+
+**Problem:**
+
+AegisAI cannot connect to Ollama.
+
+**Solution:**
+
+Verify Ollama is running:
+
+```bash
+ollama list
+```
+
+Check configuration:
+
+```env
+LLM_API_KEY=ollama
+LLM_BASE_URL=http://localhost:11434/v1
+```
+
+---
+
+### Dependency Installation Errors
+
+**Python**
+
+```bash
+python --version
+```
+
+Use Python 3.11+.
+
+**Node.js**
+
+```bash
+node --version
+npm --version
+```
+
+Use the project's recommended Node.js version.
+
+If dependencies fail:
+
+```bash
+pip install -r requirements.txt
+npm install
+```
 
 ## Contributing
 
