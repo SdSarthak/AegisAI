@@ -68,16 +68,6 @@ def _build_source_citation(doc) -> RAGSourceCitation:
     )
 
 
-class RAGQueryRequest(BaseModel):
-    question: str
-
-
-class RAGQueryResponse(BaseModel):
-    answer: str
-    sources: list[str] = []
-    answer_id: Optional[str] = None
-
-
 class RAGIngestResponse(BaseModel):
     """Response returned after a successful document ingestion."""
 

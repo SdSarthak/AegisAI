@@ -57,7 +57,7 @@ export default function RagChat() {
       'Source citations',
       ...citations.map(
         (citation, index) =>
-          `${index + 1}. ${citation.source}\n${citation.excerpt}`
+          `${index + 1}. ${citation.filename} ${citation.article ? `- ${citation.article}` : ''} ${citation.paragraph ? `para ${citation.paragraph}` : ''}`
       ),
     ].join('\n')
 
@@ -226,10 +226,7 @@ export default function RagChat() {
                                   className="border border-gray-200 rounded-lg p-3 bg-gray-50"
                                 >
                                   <p className="font-medium text-sm text-gray-900">
-                                    {citation.source}
-                                  </p>
-                                  <p className="text-sm text-gray-600 mt-1">
-                                    {citation.excerpt}
+                                    {citation.filename} {citation.article && `— ${citation.article}`} {citation.paragraph && `¶${citation.paragraph}`}
                                   </p>
                                 </div>
                               ))}
