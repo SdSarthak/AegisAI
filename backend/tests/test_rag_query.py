@@ -96,7 +96,7 @@ class TestRagQuery:
         assert response.status_code == 200
         data = response.json()
         assert data["answer"] == "Regulatory answer based on retrieved context."
-        assert data["sources"] == ["doc.pdf#chunk1"]
+        assert data["sources"][0]["filename"] == "doc.pdf"
         assert isinstance(data["groundedness_score"], (int, float))
         assert data["low_confidence"] is False
 
