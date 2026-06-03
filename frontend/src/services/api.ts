@@ -46,7 +46,7 @@ function isRecord(data: unknown): data is Record<string, unknown> {
   return data !== null && typeof data === 'object' && !Array.isArray(data)
 }
 
-function ensureListResponse<T>(data: unknown, resourceName: string): T[] {
+export function ensureListResponse<T>(data: unknown, resourceName: string): T[] {
   if (Array.isArray(data)) {
     return data as T[]
   }
