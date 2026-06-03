@@ -1,19 +1,20 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, lazy, Suspense } from 'react'
 import { useAuthStore } from './stores/authStore'
 import Layout from './components/Layout'
-import Login from './pages/Login'
-import Register from './pages/Register'
-import Dashboard from './pages/Dashboard'
-import AISystems from './pages/AISystems'
-import Classification from './pages/Classification'
-import Documents from './pages/Documents'
-import Notifications from './pages/Notifications'
-import Analytics from './pages/Analytics'
-import GuardConsole from './pages/GuardConsole'
-import NotFound from './pages/NotFound'
 import { Toaster } from 'react-hot-toast'
-import RagChat from './pages/RagChat'
+
+const Login = lazy(() => import('./pages/Login'))
+const Register = lazy(() => import('./pages/Register'))
+const Dashboard = lazy(() => import('./pages/Dashboard'))
+const AISystems = lazy(() => import('./pages/AISystems'))
+const Classification = lazy(() => import('./pages/Classification'))
+const Documents = lazy(() => import('./pages/Documents'))
+const Notifications = lazy(() => import('./pages/Notifications'))
+const Analytics = lazy(() => import('./pages/Analytics'))
+const GuardConsole = lazy(() => import('./pages/GuardConsole'))
+const NotFound = lazy(() => import('./pages/NotFound'))
+const RagChat = lazy(() => import('./pages/RagChat'))
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -21,16 +22,13 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 }
 
 function App() {
-  // ✅ Sync with system theme (only if no manual preference)
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)")
-
     const handler = (e: MediaQueryListEvent) => {
       if (!localStorage.getItem("theme")) {
         document.documentElement.classList.toggle("dark", e.matches)
       }
     }
-
     media.addEventListener("change", handler)
     return () => media.removeEventListener("change", handler)
   }, [])
@@ -57,31 +55,30 @@ function App() {
           },
         }}
       />
-
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} />
-
-        <Route
-          path="/"
-          element={
-            <PrivateRoute>
-              <Layout />
-            </PrivateRoute>
-          }
-        >
-          <Route index element={<Dashboard />} />
-          <Route path="analytics" element={<Analytics />} />
-          <Route path="ai-systems" element={<AISystems />} />
-          <Route path="classification/:systemId?" element={<Classification />} />
-          <Route path="documents" element={<Documents />} />
-          <Route path="guard" element={<GuardConsole />} />
-          <Route path="rag-chat" element={<RagChat />} />
-          <Route path="notifications" element={<Notifications />} />
-        </Route>
-
-        <Route path="*" element={<NotFound />} />
-      </Routes>
+      <Suspense fallback={<div className="flex items-center justify-center h-screen text-gray-500">Loading...</div>}>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route
+            path="/"
+            element={
+              <PrivateRoute>
+                <Layout />
+              </PrivateRoute>
+            }
+          >
+            <Route index element={<Dashboard />} />
+            <Route path="analytics" element={<Analytics />} />
+            <Route path="ai-systems" element={<AISystems />} />
+            <Route path="classification/:systemId?" element={<Classification />} />
+            <Route path="documents" element={<Documents />} />
+            <Route path="guard" element={<GuardConsole />} />
+            <Route path="rag-chat" element={<RagChat />} />
+            <Route path="notifications" element={<Notifications />} />
+          </Route>
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </Suspense>
     </>
   )
 }
