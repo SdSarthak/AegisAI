@@ -14,7 +14,8 @@ TODO for contributors (help wanted):
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-
+from app.models.audit_log import AuditLog
+from app.schemas.audit_log import AuditLogListResponse
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
@@ -131,7 +132,6 @@ def get_analytics_summary(
         "compliance_statuses": compliance_statuses,
     }
 
-
 @router.get("/audit-logs", response_model=PaginatedResponse[GuardAuditLogResponse])
 def get_audit_logs(
     skip: int = Query(0, ge=0, description="Items to skip"),
@@ -161,6 +161,11 @@ def get_audit_logs(
 
     base_query = db.query(GuardScanLog).filter(*filters)
     total = base_query.count()
-    logs = base_query.order_by(GuardScanLog.scanned_at.desc()).offset(skip).limit(limit).all()
+    logs = (
+        base_query.order_by(GuardScanLog.scanned_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
     return PaginatedResponse(items=logs, total=total, skip=skip, limit=limit)
