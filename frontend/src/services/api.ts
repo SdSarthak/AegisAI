@@ -22,6 +22,7 @@ const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 // Handle 401 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (error: any) => {
     const url = error.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
@@ -365,8 +366,8 @@ export const ragApi = {
     let buffer = ''
 
     try {
+      // eslint-disable-next-line no-constant-condition
       while (true) {
-        // eslint-disable-next-line no-constant-condition
         const { value, done } = await reader.read()
         if (done) break
         buffer += value
