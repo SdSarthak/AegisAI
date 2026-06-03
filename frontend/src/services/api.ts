@@ -254,8 +254,9 @@ export const notificationsApi = {
 // ---------------------------------------------------------------------------
 
 export interface RagCitation {
-  source: string
-  excerpt: string
+  filename: string
+  article?: string | null
+  paragraph?: number | null
 }
 
 export interface RagStreamMeta {
