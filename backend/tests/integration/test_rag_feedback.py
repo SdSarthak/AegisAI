@@ -15,10 +15,9 @@ from app.models.user import User, SubscriptionTier
 
 
 class DummyDoc:
-    """Lightweight document mock for RAG tests."""
-    def __init__(self, page_content):
+    def __init__(self, source, page_content=""):
+        self.metadata = {"source": source}
         self.page_content = page_content
-        self.metadata = {"source": page_content}
 
 
 def _get_test_db_session():
@@ -90,8 +89,11 @@ def mock_rag_modules():
 
     # We'll override the qa_chain result in individual tests if needed
     fake_result = {
-        "result": "Test answer", 
-        "source_documents": [DummyDoc("doc1.pdf#chunk1"), DummyDoc("doc2.pdf#chunk2")]
+        "result": "Test answer",
+        "source_documents": [
+            DummyDoc("doc1.pdf#chunk1", "According to Article 10 paragraph 2, testing is required."),
+            DummyDoc("doc2.pdf#chunk2", "See Article 14 paragraph 1 for human oversight."),
+        ],
     }
     
     retrieval_chain_mod.get_qa_chain = lambda: lambda payload: fake_result
@@ -115,7 +117,15 @@ def test_query_feedback_and_low_quality_flow(client, mock_rag_modules):
     resp = client.post("/api/v1/rag/query", json={"question": "What is X?"})
     assert resp.status_code == 200
     data = resp.json()
-    assert data["answer"] == "Test answer"
+    assert "sources" in data
+    assert isinstance(data["sources"], list)
+    assert len(data["sources"]) == 2
+
+    first = data["sources"][0]
+    assert first["filename"] == "doc1.pdf"
+    assert first["article"] == "Article 10"
+    assert first["paragraph"] == 2
+    assert "answer" in data and data["answer"] == "Test answer"
     assert "answer_id" in data
     answer_id = data["answer_id"]
 

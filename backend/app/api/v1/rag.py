@@ -12,6 +12,7 @@ Contributor note:
 """
 
 import os
+import re
 import shutil
 import tempfile
 from typing import List, Literal, Optional
@@ -32,8 +33,39 @@ from app.modules.llm.llm_client import LLMClient
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.streaming import stream_rag_answer
 from app.modules.rag.vector_store import create_vector_store, load_vector_store
+from app.schemas.rag import RAGQueryRequest, RAGQueryResponse, RAGSourceCitation
 
 router = APIRouter()
+
+def _extract_article(text: str) -> str | None:
+    match = re.search(r"\bArticle\s+\d+[A-Za-z]?\b", text)
+    return match.group(0) if match else None
+
+
+def _extract_paragraph(text: str) -> int | None:
+    match = re.search(r"\bparagraph\s+(\d+)\b", text, re.IGNORECASE)
+    if match:
+        return int(match.group(1))
+
+    match = re.search(r"\((\d+)\)", text)
+    if match:
+        return int(match.group(1))
+
+    return None
+
+
+def _build_source_citation(doc) -> RAGSourceCitation:
+    source = str(doc.metadata.get("source", ""))
+    source_path = source.split("#", 1)[0]
+    filename = os.path.basename(source_path) if source_path else "unknown"
+
+    text = getattr(doc, "page_content", "") or ""
+
+    return RAGSourceCitation(
+        filename=filename,
+        article=_extract_article(text),
+        paragraph=_extract_paragraph(text),
+    )
 
 
 class RAGQueryRequest(BaseModel):
@@ -113,12 +145,10 @@ def ingest_documents(
                 shutil.copyfileobj(upload.file, buf)
             saved_paths.append(dest)
 
-        # ── 3. Chunk documents (gives us the accurate chunk count) ────────
         raw_chunks = load_documents_from_paths(saved_paths)
-        
-        # Filter out chunks with empty or whitespace-only page_content
+
         chunks = [
-            chunk for chunk in raw_chunks 
+            chunk for chunk in raw_chunks
             if chunk.page_content and chunk.page_content.strip()
         ]
 
@@ -129,16 +159,14 @@ def ingest_documents(
                        "Ensure the files are not scanned images or password-protected.",
             )
 
-        # ── 4. Build / rebuild FAISS index and persist to disk ────────────
         try:
-            create_vector_store(chunks) # Pass the extracted Document objects!
+            create_vector_store(chunks)
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Failed to build FAISS index: {exc}",
             )
 
-        # ── 5. Calculate on-disk index size ───────────────────────────────
         index_path = settings.FAISS_INDEX_PATH
         index_size_bytes = 0
         for fname in ("index.faiss", "index.pkl"):
@@ -153,7 +181,6 @@ def ingest_documents(
         )
 
     finally:
-        # ── 6. Always clean up the temp directory ─────────────────────────
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
@@ -171,27 +198,27 @@ def query_knowledge_base(
         qa_chain = get_qa_chain()
         result = qa_chain({"query": request.question})
         source_docs = result.get("source_documents", [])
-        sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
+        sources = [_build_source_citation(doc) for doc in source_docs]
+        source_chunk_refs = [str(doc.metadata.get("source", "")) for doc in source_docs]
+        answer = str(result.get("result", ""))
 
-        # Ensure tables exist on this DB bind (useful for test DB overrides)
         try:
             Base.metadata.create_all(bind=db.get_bind())
         except Exception:
-            # best-effort: ignore if bind not available
             pass
 
-        # Persist an initial RAGFeedback row to capture the answer and contributing chunks
         feedback = RAGFeedback(
             question=request.question,
-            answer=str(result.get("result", "")),
-            source_chunks=sources,
+            answer=answer,
+            source_chunks=source_chunk_refs,
         )
         db.add(feedback)
         db.commit()
         db.refresh(feedback)
         answer_id = feedback.id
 
-        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
+        return RAGQueryResponse(answer=answer, sources=sources, answer_id=answer_id)
+
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -253,8 +280,6 @@ async def query_knowledge_base_stream(
         generator,
         media_type="text/event-stream",
         headers={
-            # Prevent intermediary buffering (nginx in particular) from
-            # holding back tokens until the response is "done".
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
@@ -266,9 +291,9 @@ async def query_knowledge_base_stream(
 def rag_health():
     """Check if the RAG module is available."""
     from app.modules.rag.vector_store import check_index_exists
-    
+
     index_loaded = check_index_exists()
-    
+
     if not index_loaded:
         return {
             "module": "rag_intelligence",
@@ -276,7 +301,7 @@ def rag_health():
             "index_loaded": False,
             "message": "FAISS index not found. RAG module requires document ingestion before use."
         }
-    
+
     return {
         "module": "rag_intelligence",
         "status": "available",
@@ -316,14 +341,12 @@ def get_low_quality_chunks(
     db: Session = Depends(get_db),
 ):
     """Admin endpoint: aggregate feedback by source chunk and return low-quality candidates."""
-    # Admin-only access: restrict to system owners / scale tier
     try:
         if current_user.subscription_tier != SubscriptionTier.SCALE:
             raise HTTPException(status_code=403, detail="Admin access required")
     except Exception:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Aggregate counts per chunk
     counts: dict[str, dict[str, int]] = {}
     rows = db.query(RAGFeedback).all()
     for r in rows:
@@ -344,6 +367,7 @@ def get_low_quality_chunks(
             low_quality.append({"chunk": chunk, "thumbs_down": c["thumbs_down"], "total": c["total"], "ratio": ratio})
 
     return {"threshold": threshold, "low_quality_chunks": low_quality}
+
 
 @router.get("/history")
 def get_rag_history(
