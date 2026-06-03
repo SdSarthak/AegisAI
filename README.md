@@ -148,6 +148,17 @@ cp backend/.env.example backend/.env
 - OpenAI: set `LLM_API_KEY=sk-...`, leave `LLM_BASE_URL` empty, and keep `LLM_MODEL=gpt-4o-mini` (or another OpenAI model).
 - PostgreSQL local: keep `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/aegisai_db` and make sure the database exists before startup.
 
+### Viewing RAG MLflow Runs Locally
+
+RAG query tracking uses `MLFLOW_TRACKING_URI`. Leave it empty to write runs to the local `./mlruns` directory, or set it to a running tracking server such as `http://localhost:5000`.
+
+```bash
+cd backend
+mlflow ui --port 5001
+```
+
+Open http://localhost:5001 and select the RAG query runs to inspect question text, answer length, source count, response latency, and answer artifacts.
+
 ---
 
 ## 📓 Colab Notebooks

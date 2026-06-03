@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Save, Eye, EyeOff } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
-import DOMPurify from 'dompurify'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import api from '../services/api'
 
 interface DocumentEditorProps {
@@ -23,11 +23,12 @@ export default function DocumentEditor({
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
-  const sanitizedPreview = useMemo(() => {
-    const renderedMarkdown = marked.parse(content, { async: false }) as string
-    return DOMPurify.sanitize(renderedMarkdown)
-  }, [content])
   const [saveError, setSaveError] = useState('')
+  const previewHtml = useMemo(
+    () => DOMPurify.sanitize(marked.parse(content, { async: false }) as string),
+    [content]
+  )
+
   const handleSave = useCallback(async () => {
     setIsSaving(true)
     try {
@@ -35,8 +36,13 @@ export default function DocumentEditor({
       onSave?.(content)
       setSaveError('')
     } catch (error) {
-      setSaveError('Failed to save changes')
-    }
+  console.error('Save failed:', error)
+  setSaveError(
+    error instanceof Error
+      ? error.message
+      : 'Failed to save changes'
+  )
+}
     setIsSaving(false)
   }, [content, documentId, onSave])
 
@@ -106,7 +112,7 @@ export default function DocumentEditor({
       <div className="flex-1 overflow-auto">
         {showPreview ? (
           <div className="prose max-w-none p-6">
-            <div dangerouslySetInnerHTML={{ __html: sanitizedPreview }} />
+            <div dangerouslySetInnerHTML={{ __html: previewHtml }} />
           </div>
         ) : (
           <div className="h-full">
