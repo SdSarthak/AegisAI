@@ -250,7 +250,7 @@ def test_rag_response_contains_groundedness_fields_without_losing_existing_keys(
     }
     response = RAGQueryResponse(
         answer=fake_result["result"],
-        sources=["eu_ai_act.pdf"],
+        sources=[{"filename": "eu_ai_act.pdf", "article": None, "paragraph": None}],
         answer_id="answer-1",
         groundedness_score=fake_result["groundedness_score"],
         low_confidence=fake_result["low_confidence"],
