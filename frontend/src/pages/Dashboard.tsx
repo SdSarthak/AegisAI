@@ -1,3 +1,4 @@
+import React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { aiSystemsApi, documentsApi } from '../services/api'
@@ -15,9 +16,7 @@ export default function Dashboard() {
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
-  const systems = (
-    Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
-  ) as Array<{
+  const systems = (systemsData ?? []) as Array<{
     id: number
     name: string
     risk_level: string | null
@@ -34,9 +33,7 @@ export default function Dashboard() {
     queryKey: ['documents'],
     queryFn: () => documentsApi.list(),
   })
-  const documents = (
-    Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
-  ) as Array<unknown>
+  const documents = (documentsData ?? []) as Array<unknown>
   const isLoading = systemsLoading || documentsLoading
   const hasError = systemsError || documentsError
   const errorMessage =

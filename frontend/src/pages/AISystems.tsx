@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import React, { useState } from 'react'
+import {
+ useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
@@ -42,7 +43,7 @@ export default function AISystems() {
       aiSystemsApi.list({
         sort_by: sortBy,
         order,
-        skip: (currentPage - 1) * limit,
+        page: currentPage,
         limit,
         search: searchTerm || undefined,
         risk_level: riskFilter || undefined,
