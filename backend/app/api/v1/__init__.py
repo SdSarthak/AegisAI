@@ -1,10 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1 import auth, ai_systems, documents, classification, guard, badge, analytics, notifications, webhooks
-
-from app.models.user import User
-from app.models.ai_system import AISystem
-from app.models.document import Document
-from app.models.api_key import ApiKey
+from app.api.v1 import auth, ai_systems, documents, classification, guard, badge, analytics, notifications, webhooks, rag
 
 api_router = APIRouter()
 
@@ -16,7 +11,7 @@ api_router.include_router(
 )
 api_router.include_router(documents.router, prefix="/documents", tags=["Documents"])
 api_router.include_router(guard.router, prefix="/guard", tags=["LLM Guard"])
-#api_router.include_router(rag.router, prefix="/rag", tags=["RAG Intelligence"])
+api_router.include_router(rag.router, prefix="/rag", tags=["RAG Intelligence"])
 api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
 api_router.include_router(notifications.router, prefix="/notifications", tags=["Notifications"])
 api_router.include_router(webhooks.router, prefix="/webhooks", tags=["Webhooks"])
