@@ -6,5 +6,8 @@ from app.models.rag_document import RAGDocument
 from app.models.audit_log import AISystemAuditLog
 from app.models.guard_scan_log import GuardScanLog
 from app.models.rag_query import RagQuery
+from app.models.guard_scan_log import GuardScanLog
+from app.models.webhook import WebhookConfig
+from app.models.notification import Notification                      
 from app.models.compliance_snapshot import ComplianceSnapshot
-__all__ = ["User", "AISystem", "RiskAssessment", "Document", "RAGFeedback", "RAGDocument", "AISystemAuditLog", "GuardScanLog", "WebhookConfig", "Notification", "ComplianceSnapshot"]
+__all__ = ["User", "AISystem", "RiskAssessment", "Document", "RAGFeedback", "RAGDocument", "RagQuery", "AISystemAuditLog", "GuardScanLog", "WebhookConfig", "Notification", "ComplianceSnapshot"]

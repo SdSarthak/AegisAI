@@ -136,20 +136,7 @@ def ingest_documents(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Accept one or more PDF uploads, process them through the document loader,
-    build (or rebuild) the FAISS vector index, and persist it to
-    ``settings.FAISS_INDEX_PATH``.
-
-    **Returns**
-    - ``files_processed`` – number of PDFs successfully saved and chunked
-    - ``chunks_created``  – total text chunks fed into the vector store
-    - ``index_size_bytes`` – on-disk size of the persisted FAISS index
-
-    **Errors**
-    - ``400`` if no valid PDF files are supplied
-    - ``503`` if the embedding model or FAISS build step fails
-    """
+    """Accept one or more PDF uploads, process them through the document loader,"""
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -318,13 +305,7 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Ask a regulatory question and get an answer grounded in source documents.
-
-    Example questions:
-    - "Does my CV-screening tool qualify as high-risk under the EU AI Act?"
-    - "What are the transparency requirements for chatbots?"
-    """
+    """Ask a regulatory question and get an answer grounded in source documents."""
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
         from app.core.database import Base
@@ -390,16 +371,7 @@ async def query_knowledge_base_stream(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Stream a regulatory answer as Server-Sent Events.
-
-    Unlike `/query`, this endpoint returns immediately and pushes answer
-    tokens to the client as they are generated. The frontend can render
-    progressively, which feels much faster on long answers.
-
-    The non-streaming `/query` endpoint is unchanged and remains the right
-    choice for callers that need a single JSON response.
-    """
+    """Stream a regulatory answer as Server-Sent Events."""
     try:
         vector_store = load_vector_store()
     except FileNotFoundError as exc:
@@ -485,10 +457,7 @@ def get_low_quality_chunks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Admin endpoint: aggregate feedback by source chunk and return low-quality candidates.
-
-    A chunk is considered low-quality when thumbs_down / total_feedback > threshold.
-    """
+    """Admin endpoint: aggregate feedback by source chunk and return low-quality candidates."""
     # Admin-only access: restrict to system owners / scale tier
     try:
         if current_user.subscription_tier != SubscriptionTier.SCALE:

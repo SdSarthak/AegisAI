@@ -79,12 +79,7 @@ def deliver_webhook(
     payload: dict[str, Any],
     background_tasks: BackgroundTasks,
 ) -> None:
-    """
-    Schedule delivery to active user webhooks subscribed to the event.
-
-    Delivery runs in FastAPI BackgroundTasks so webhook failures do not block
-    or fail the originating request.
-    """
+    """Schedule delivery to active user webhooks subscribed to the event."""
     webhooks = (
         db.query(WebhookConfig)
         .filter(
@@ -116,18 +111,7 @@ def create_webhook(
     db: Session = Depends(get_db),
 ):
 
-    """
-    Register a new webhook endpoint for the current user.
-
-    Args:
-        body: Webhook configuration payload supplied by the client.
-        current_user: Authenticated user that will own the webhook.
-        db: Database session used to persist the webhook configuration.
-
-    Returns:
-        The created webhook configuration serialized as WebhookResponse.
-
-    """
+    """Register a new webhook endpoint for the current user."""
     # Force the user_id to be the authenticated user to prevent spoofing
     webhook_data = body.model_dump()
     db_webhook = WebhookConfig(
@@ -148,17 +132,7 @@ def list_webhooks(
     db: Session = Depends(get_db),
 ):
 
-    """
-    List all webhook configurations for the current user.
-
-    Args:
-        current_user: Authenticated user whose webhooks are being listed.
-        db: Database session used to query webhook configurations.
-
-    Returns:
-        A list of webhook configurations owned by the current user.
-
-    """
+    """List all webhook configurations for the current user."""
     # Fetch webhooks strictly scoped to the authenticated user
     webhooks = db.query(WebhookConfig).filter(WebhookConfig.user_id == current_user.id).all()
     
@@ -172,21 +146,7 @@ def delete_webhook(
     db: Session = Depends(get_db),
 ):
 
-    """
-    Delete a webhook configuration owned by the current user.
-
-    Args:
-        webhook_id: ID of the webhook configuration to delete.
-        current_user: Authenticated user who must own the webhook.
-        db: Database session used to locate and delete the webhook.
-
-    Returns:
-        None. The endpoint responds with HTTP 204 No Content.
-
-    Raises:
-        HTTPException: If the webhook does not exist or belongs to another user.
-
-    """
+    """Delete a webhook configuration owned by the current user."""
     # Query checking BOTH the webhook ID and the user ID
     db_webhook = db.query(WebhookConfig).filter(
         WebhookConfig.id == webhook_id,
