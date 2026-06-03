@@ -18,6 +18,7 @@ from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.core.telemetry import setup_telemetry
 from app.api.v1 import api_router, badge
 from app.plugins.regulation_loader import init_registry
 import app.models  # ensure all ORM models are imported so tables are created
@@ -99,6 +100,12 @@ app.add_middleware(
 app.add_middleware(RequestContextMiddleware)
 
 # -------------------------------------------------------------------
+# Observability (OTel + Prometheus instrumentation)
+# -------------------------------------------------------------------
+setup_telemetry(app)
+logger.info("Telemetry instrumentation initialised.")
+
+# -------------------------------------------------------------------
 # Routing
 # -------------------------------------------------------------------
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
@@ -139,4 +146,26 @@ def health_check() -> Dict[str, Any]:
         "database": db_status,
         "version": app.version,
         "service": "AegisAI Backend"
+    }
+
+
+@app.get("/ready", tags=["Health"])
+def readiness_check() -> Dict[str, Any]:
+    """
+    Readiness probe — confirms the application can serve traffic.
+    """
+    db_ready = False
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        db_ready = True
+    except SQLAlchemyError:
+        logger.exception("Readiness check — database not reachable")
+
+    ready = db_ready
+    return {
+        "ready": ready,
+        "database": db_ready,
+        "version": app.version,
+        "service": "AegisAI Backend",
     }
