@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import List, Any
+from typing import List, Any, Optional
 from datetime import datetime
 
 
@@ -18,6 +18,14 @@ class GuardScanLogResponse(BaseModel):
     decision: str
     confidence: float
     matched_patterns: List[Any]
+    detection_type: str
+    regex_flag: bool
+    regex_score: float
+    intent: str
+    ml_confidence: float
+    combined_score: float
+    prompt_length: Optional[int]
+    scanned_at: datetime
     created_at: datetime
 
     class Config:

@@ -16,7 +16,9 @@ from typing import Optional
 import logging
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+import csv
+from io import StringIO
 from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -620,4 +622,123 @@ def bulk_scan_prompts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."
         )
-    
+
+
+@router.get("/audit", response_model=PaginatedResponse[GuardScanLogResponse])
+def get_audit_logs(
+    skip: int = Query(0, ge=0, description="Items to skip"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    decision: Optional[str] = Query(None, description="Filter by decision (allow/sanitize/block)"),
+    user_id: Optional[int] = Query(None, description="Filter by user ID"),
+    window: Optional[str] = Query(None, pattern="^(24h|7d|30d)$", description="Time window"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin endpoint to get system-wide Guard scan audit logs."""
+    is_admin = getattr(current_user, "role", None) == "admin"
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to access the system audit log.",
+        )
+
+    filters = []
+    if decision:
+        filters.append(GuardScanLog.decision == decision)
+    if user_id:
+        filters.append(GuardScanLog.user_id == user_id)
+        
+    if window:
+        now = datetime.utcnow()
+        if window == "24h":
+            start_date = now - timedelta(hours=24)
+        elif window == "7d":
+            start_date = now - timedelta(days=7)
+        elif window == "30d":
+            start_date = now - timedelta(days=30)
+        filters.append(GuardScanLog.scanned_at >= start_date)
+
+    base_query = db.query(GuardScanLog).filter(*filters)
+    total = base_query.count()
+    logs = (
+        base_query.order_by(GuardScanLog.scanned_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    return PaginatedResponse(items=logs, total=total, skip=skip, limit=limit)
+
+
+@router.get("/audit/export")
+def export_audit_logs(
+    decision: Optional[str] = Query(None, description="Filter by decision"),
+    user_id: Optional[int] = Query(None, description="Filter by user ID"),
+    window: Optional[str] = Query(None, pattern="^(24h|7d|30d)$", description="Time window"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Admin endpoint to export Guard scan audit logs as CSV."""
+    is_admin = getattr(current_user, "role", None) == "admin"
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to export the system audit log.",
+        )
+
+    filters = []
+    if decision:
+        filters.append(GuardScanLog.decision == decision)
+    if user_id:
+        filters.append(GuardScanLog.user_id == user_id)
+        
+    if window:
+        now = datetime.utcnow()
+        if window == "24h":
+            start_date = now - timedelta(hours=24)
+        elif window == "7d":
+            start_date = now - timedelta(days=7)
+        elif window == "30d":
+            start_date = now - timedelta(days=30)
+        filters.append(GuardScanLog.scanned_at >= start_date)
+
+    logs = db.query(GuardScanLog).filter(*filters).order_by(GuardScanLog.scanned_at.desc()).all()
+
+    def iter_csv():
+        output = StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "ID", "User ID", "Prompt Hash", "Decision", "Confidence", 
+            "Detection Type", "Regex Flag", "Regex Score", "Intent", 
+            "ML Confidence", "Combined Score", "Prompt Length", "Scanned At", "Created At"
+        ])
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+        for log in logs:
+            writer.writerow([
+                log.id,
+                log.user_id,
+                log.prompt_hash,
+                log.decision,
+                f"{log.confidence:.4f}",
+                log.detection_type,
+                log.regex_flag,
+                f"{log.regex_score:.4f}",
+                log.intent,
+                f"{log.ml_confidence:.4f}",
+                f"{log.combined_score:.4f}",
+                log.prompt_length,
+                log.scanned_at.isoformat() if log.scanned_at else "",
+                log.created_at.isoformat() if log.created_at else ""
+            ])
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+    headers = {
+        "Content-Disposition": "attachment; filename=guard_audit_log.csv"
+    }
+    return StreamingResponse(iter_csv(), media_type="text/csv", headers=headers)
+
