@@ -1,4 +1,4 @@
-import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
+import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
 const api = axios.create({
@@ -22,7 +22,7 @@ const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 // Handle 401 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: any) => {
+  (error: AxiosError) => {
     const url = error.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
     if (error.response?.status === 401 && !isAuthEndpoint) {
@@ -32,7 +32,7 @@ api.interceptors.response.use(
         window.history.pushState({}, '', '/login')
         // Notify router listeners (e.g., react-router) to handle navigation.
         window.dispatchEvent(new PopStateEvent('popstate'))
-      } catch (e) {
+      } catch {
         // Fallback: if SPA navigation fails, perform a safe replace.
         window.location.replace('/login')
       }
@@ -51,6 +51,17 @@ function ensureObjectResponse<T extends Record<string, unknown>>(
 ): T {
   if (isRecord(data)) {
     return data as T
+  }
+
+  throw new Error(`${resourceName} response was empty or invalid.`)
+}
+
+function ensureListResponse<T>(
+  data: unknown,
+  resourceName: string
+): T[] {
+  if (Array.isArray(data)) {
+    return data as T[]
   }
 
   throw new Error(`${resourceName} response was empty or invalid.`)
@@ -154,7 +165,7 @@ export const aiSystemsApi = {
     compliance_status?: string
   }) => {
     const { data } = await api.get('/ai-systems/', { params })
-    return data
+    return ensureListResponse(data, 'AI systems')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/ai-systems/${id}`)
@@ -212,7 +223,7 @@ export const classificationApi = {
 export const documentsApi = {
   list: async () => {
     const { data } = await api.get('/documents/')
-    return data
+    return ensureListResponse(data, 'Documents')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/documents/${id}`)
@@ -365,8 +376,8 @@ export const ragApi = {
     let buffer = ''
 
     try {
+      // eslint-disable-next-line no-constant-condition
       while (true) {
-        // eslint-disable-next-line no-constant-condition
         const { value, done } = await reader.read()
         if (done) break
         buffer += value
