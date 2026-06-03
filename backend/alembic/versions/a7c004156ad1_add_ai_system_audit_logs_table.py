@@ -29,7 +29,8 @@ def upgrade() -> None:
     sa.Column('changed_at', sa.DateTime(), nullable=True),
     sa.ForeignKeyConstraint(['ai_system_id'], ['ai_systems.id'], ),
     sa.ForeignKeyConstraint(['changed_by_id'], ['users.id'], ),
-    sa.PrimaryKeyConstraint('id')
+    sa.PrimaryKeyConstraint('id'),
+    if_not_exists=True
     )
     op.create_index(op.f('ix_ai_system_audit_logs_id'), 'ai_system_audit_logs', ['id'], unique=False)
     # ### end Alembic commands ###
