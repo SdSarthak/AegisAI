@@ -176,6 +176,22 @@ def create_document(
     Returns:
         The created document serialized as DocumentResponse.
     """
+    # BOLA fix: verify the ai_system_id belongs to the current user
+    if doc_data.ai_system_id is not None:
+        ai_system = (
+            db.query(AISystem)
+            .filter(
+                AISystem.id == doc_data.ai_system_id,
+                AISystem.owner_id == current_user.id,
+            )
+            .first()
+        )
+        if not ai_system:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="AI system not found or access denied",
+            )
+
     document = Document(
         owner_id=current_user.id,
         title=doc_data.title,
