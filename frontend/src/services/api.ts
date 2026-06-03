@@ -1,4 +1,4 @@
-import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
+import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
 const api = axios.create({
@@ -22,7 +22,7 @@ const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 // Handle 401 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: any) => {
+  (error: AxiosError) => {
     const url = error.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
     if (error.response?.status === 401 && !isAuthEndpoint) {
@@ -331,8 +331,8 @@ export const ragApi = {
     let buffer = ''
 
     try {
-      while (true) {
-        // eslint-disable-next-line no-constant-condition
+      for (;;) {
+  
         const { value, done } = await reader.read()
         if (done) break
         buffer += value
