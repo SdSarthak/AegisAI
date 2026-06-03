@@ -41,17 +41,7 @@ def get_compliance_timeline(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return daily compliance snapshots for a single AI system.
-
-    Args:
-        system_id: ID of the AI system to inspect.
-        days: Number of days of history to return.
-        current_user: Authenticated user requesting the timeline.
-        db: Database session used to query compliance snapshots.
-
-    Returns:
-        ComplianceTimelineResponse containing the system's daily compliance data.
-    """
+    """Return daily compliance snapshots for a single AI system."""
     system = db.query(AISystem).filter(
         AISystem.id == system_id,
         AISystem.owner_id == current_user.id
@@ -82,15 +72,7 @@ def get_analytics_summary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return aggregate compliance statistics for the current user.
-
-    Args:
-        current_user: Authenticated user whose systems are being summarized.
-        db: Database session used to aggregate compliance metrics.
-
-    Returns:
-        Aggregate compliance statistics for the user's AI systems.
-    """
+    """Return aggregate compliance statistics for the current user."""
     # FIX: use SQL GROUP BY instead of loading all rows into memory
     risk_rows = (
         db.query(AISystem.risk_level, func.count(AISystem.id))
@@ -160,20 +142,7 @@ def get_audit_logs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return guard scan audit logs with pagination and optional filters.
-
-    Args:
-        skip: Number of items to skip for pagination.
-        limit: Maximum number of items per page.
-        user_id: Optional filter by user ID (admin only).
-        decision: Optional filter by scan decision (allow/sanitize/block).
-        days: Optional filter by recency (last N days).
-        current_user: Authenticated user requesting the audit logs.
-        db: Database session used to query audit logs.
-
-    Returns:
-        PaginatedResponse containing guard scan audit log entries.
-    """
+    """Return guard scan audit logs with pagination and optional filters."""
     is_admin = getattr(current_user, "role", None) == "admin"
     if user_id is not None and user_id != current_user.id and not is_admin:
         raise HTTPException(

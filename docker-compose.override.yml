@@ -6,10 +6,15 @@ services:
       - ollama_data:/root/.ollama
     restart: unless-stopped
 
+  db:
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      DATABASE_URL: postgresql://postgres:postgres@db:5432/aegisai_db
+
   backend:
     environment:
       - LLM_BASE_URL=http://ollama:11434/v1
-      - LLM_MODEL=llama3.2
 
 volumes:
   ollama_data:

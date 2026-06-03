@@ -19,6 +19,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem
 from app.models.document import Document, DocumentType, DocumentStatus
+from app.modules.llm.document_generator import generate_compliance_narrative
 from app.schemas.document import (
     DocumentCreate,
     DocumentResponse,
@@ -303,16 +304,7 @@ def create_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new document for the authenticated user.
-
-    Args:
-        doc_data: Document creation payload.
-        db: Database session used to persist the new document.
-        current_user: Authenticated user who will own the document.
-
-    Returns:
-        The created document serialized as DocumentResponse.
-    """
+    """Create a new document for the authenticated user."""
     if doc_data.ai_system_id is not None:
         ai_system = (
             db.query(AISystem)
@@ -348,17 +340,7 @@ def list_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List the current user's documents with pagination.
-
-    Args:
-        skip: Number of documents to skip.
-        limit: Maximum number of documents to return per page.
-        db: Database session used to query documents.
-        current_user: Authenticated user whose documents are being listed.
-
-    Returns:
-        PaginatedResponse containing the user's documents.
-    """
+    """List the current user's documents with pagination."""
     base_query = db.query(Document).filter(Document.owner_id == current_user.id)
     total = base_query.count()
 
@@ -481,19 +463,7 @@ def get_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return a single document owned by the current user.
-
-    Args:
-        document_id: ID of the document to retrieve.
-        db: Database session used to query the document.
-        current_user: Authenticated user who must own the document.
-
-    Returns:
-        The requested document serialized as DocumentResponse.
-
-    Raises:
-        HTTPException: If the document does not exist or belongs to another user.
-    """
+    """Return a single document owned by the current user."""
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -513,20 +483,7 @@ def update_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update the content of an existing document.
-
-    Args:
-        document_id: ID of the document to update.
-        body: Payload containing the replacement document content.
-        db: Database session used to load and persist the document.
-        current_user: Authenticated user who must own the document.
-
-    Returns:
-        The updated document serialized as DocumentResponse.
-
-    Raises:
-        HTTPException: If the document does not exist or belongs to another user.
-    """
+    """Update the content of an existing document."""
     # Fetch document
     document = db.query(Document).filter(
         Document.id == document_id,
@@ -556,19 +513,7 @@ def generate_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate a compliance document for a user's AI system.
-
-    Args:
-        request: Payload specifying the AI system and document type.
-        db: Database session used to look up the AI system and save the result.
-        current_user: Authenticated user who must own the AI system.
-
-    Returns:
-        The generated document serialized as DocumentResponse.
-
-    Raises:
-        HTTPException: If the AI system or template is missing.
-    """
+    """Generate a compliance document for a user's AI system."""
     # Get the AI system
     ai_system = (
         db.query(AISystem)
@@ -648,19 +593,7 @@ def delete_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a document owned by the current user.
-
-    Args:
-        document_id: ID of the document to delete.
-        db: Database session used to locate and delete the document.
-        current_user: Authenticated user who must own the document.
-
-    Returns:
-        None. The endpoint responds with HTTP 204 No Content.
-
-    Raises:
-        HTTPException: If the document does not exist or belongs to another user.
-    """
+    """Delete a document owned by the current user."""
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -682,19 +615,7 @@ def export_document_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Export a document as a PDF attachment.
-
-    Args:
-        document_id: ID of the document to export.
-        db: Database session used to load the document.
-        current_user: Authenticated user who must own the document.
-
-    Returns:
-        StreamingResponse containing the generated PDF bytes.
-
-    Raises:
-        HTTPException: If the document is missing, has no content, or PDF generation fails.
-    """
+    """Export a document as a PDF attachment."""
     # Retrieve the document
     document = db.query(Document).filter(
         Document.id == document_id,
