@@ -305,24 +305,6 @@ def create_document(
     current_user: User = Depends(get_current_user),
 ):
     """Create a new document for the authenticated user."""
-    if doc_data.ai_system_id is not None:
-        ai_system = (
-            db.query(AISystem)
-            .filter(
-                AISystem.id == doc_data.ai_system_id,
-                AISystem.owner_id == current_user.id,
-            )
-            .first()
-        )
-        if not ai_system:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="AI system not found",
-            )
-
-    Returns:
-        The created document serialized as DocumentResponse.
-    """
     # BOLA fix: verify the ai_system_id belongs to the current user
     if doc_data.ai_system_id is not None:
         ai_system = (
