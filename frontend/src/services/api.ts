@@ -1,4 +1,4 @@
-import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
+import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
 const api = axios.create({
@@ -22,7 +22,7 @@ const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 // Handle 401 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: any) => {
+  (error: AxiosError) => {
     const url = error.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
     if (error.response?.status === 401 && !isAuthEndpoint) {
@@ -40,71 +40,6 @@ api.interceptors.response.use(
     return Promise.reject(error)
   }
 )
-
-function isRecord(data: unknown): data is Record<string, unknown> {
-  return data !== null && typeof data === 'object' && !Array.isArray(data)
-}
-
-function ensureObjectResponse<T extends Record<string, unknown>>(
-  data: unknown,
-  resourceName: string
-): T {
-  if (isRecord(data)) {
-    return data as T
-  }
-
-  throw new Error(`${resourceName} response was empty or invalid.`)
-}
-
-function ensureStringField(
-  data: Record<string, unknown>,
-  fieldName: string,
-  resourceName: string
-) {
-  if (typeof data[fieldName] !== 'string' || !data[fieldName]) {
-    throw new Error(`${resourceName} response was missing ${fieldName}.`)
-  }
-}
-
-function ensureNumberField(
-  data: Record<string, unknown>,
-  fieldName: string,
-  resourceName: string
-) {
-  if (typeof data[fieldName] !== 'number') {
-    throw new Error(`${resourceName} response was missing ${fieldName}.`)
-  }
-}
-
-interface ClassificationResponse extends Record<string, unknown> {
-  risk_level: string
-  confidence: number
-  reasoning?: string
-  reasons: string[]
-  requirements: string[]
-  next_steps: string[]
-}
-
-export interface RagSource {
-  title: string
-  excerpt: string
-}
-
-export interface RagQueryResponse extends Record<string, unknown> {
-  answer: string
-  sources?: RagSource[]
-  answer_id?: string
-}
-
-function ensureStringArrayField(
-  data: Record<string, unknown>,
-  fieldName: string,
-  resourceName: string
-) {
-  if (!Array.isArray(data[fieldName])) {
-    throw new Error(`${resourceName} response was missing ${fieldName}.`)
-  }
-}
 
 // Auth API
 export const authApi = {
@@ -142,6 +77,26 @@ export const authApi = {
 },
 }
 
+function ensureListResponse<T>(
+  data: unknown,
+  resourceName: string
+): T[] | { items: T[]; total?: number; page?: number; limit?: number } {
+  if (Array.isArray(data)) {
+    return data
+  }
+
+  if (
+    data &&
+    typeof data === 'object' &&
+    'items' in data &&
+    Array.isArray((data as { items?: unknown }).items)
+  ) {
+    return data as { items: T[]; total?: number; page?: number; limit?: number }
+  }
+
+  throw new Error(`${resourceName} response was empty or invalid.`)
+}
+
 // AI Systems API
 export const aiSystemsApi = {
   list: async (params?: {
@@ -153,8 +108,19 @@ export const aiSystemsApi = {
     risk_level?: string
     compliance_status?: string
   }) => {
-    const { data } = await api.get('/ai-systems/', { params })
-    return data
+    // Fix for Issue #631: 'skip' is the backend-expected query offset parameter
+    const queryParams = {
+      sort_by: params?.sort_by,
+      order: params?.order,
+      skip: params?.skip ?? 0,
+      limit: params?.limit ?? 10,
+      search: params?.search || undefined,
+      risk_level: params?.risk_level || undefined,
+      compliance_status: params?.compliance_status || undefined,
+    }
+
+    const { data } = await api.get('/ai-systems/', { params: queryParams })
+    return ensureListResponse(data, 'AI systems')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/ai-systems/${id}`)
@@ -365,8 +331,8 @@ export const ragApi = {
     let buffer = ''
 
     try {
-      while (true) {
-        // eslint-disable-next-line no-constant-condition
+      for (;;) {
+  
         const { value, done } = await reader.read()
         if (done) break
         buffer += value
