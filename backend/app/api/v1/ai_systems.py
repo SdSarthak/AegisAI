@@ -446,18 +446,36 @@ def clone_ai_system(
             detail="AI system not found"
         )
 
-    cloned = AISystem(
-        owner_id=current_user.id,
-        name=f"{original.name} (copy)",
-        description=original.description,
-        version=original.version,
-        use_case=original.use_case,
-        sector=original.sector,
-        compliance_status=ComplianceStatus.NOT_STARTED,
-    )
+        base_name = f"{original.name} (copy)"
+        clone_name = base_name
+        counter = 2
 
-    db.add(cloned)
-    db.commit()
+        while db.query(AISystem).filter(
+            AISystem.owner_id == current_user.id,
+            AISystem.name == clone_name,
+        ).first():
+            clone_name = f"{original.name} (copy {counter})"
+            counter += 1
+
+        cloned = AISystem(
+            owner_id=current_user.id,
+            name=clone_name,
+            description=original.description,
+            version=original.version,
+            use_case=original.use_case,
+            sector=original.sector,
+            compliance_status=ComplianceStatus.NOT_STARTED,
+        )
+
+        db.add(cloned)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Could not create a unique clone name.",
+        )
     db.refresh(cloned)
     return cloned
 
