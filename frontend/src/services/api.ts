@@ -22,10 +22,11 @@ const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 // Handle 401 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: any) => {
-    const url = error.config?.url || ''
+  (error: unknown) => {
+    const axiosError = error as { config?: { url?: string }; response?: { status?: number } }
+    const url = axiosError.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
-    if (error.response?.status === 401 && !isAuthEndpoint) {
+    if (axiosError.response?.status === 401 && !isAuthEndpoint) {
       // Logout and navigate to login without forcing a full page reload.
       useAuthStore.getState().logout()
       try {
@@ -105,6 +106,12 @@ function ensureStringArrayField(
     throw new Error(`${resourceName} response was missing ${fieldName}.`)
   }
 }
+function ensureListResponse<T>(data: unknown, resourceName: string): T[] {
+  if (Array.isArray(data)) {
+    return data as T[]
+  }
+  throw new Error(`${resourceName} response was empty or invalid.`)
+}
 
 // Auth API
 export const authApi = {
@@ -154,7 +161,7 @@ export const aiSystemsApi = {
     compliance_status?: string
   }) => {
     const { data } = await api.get('/ai-systems/', { params })
-    return data
+    return ensureListResponse(data, 'AI systems')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/ai-systems/${id}`)
@@ -212,7 +219,7 @@ export const classificationApi = {
 export const documentsApi = {
   list: async () => {
     const { data } = await api.get('/documents/')
-    return data
+    return ensureListResponse(data, 'Documents')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/documents/${id}`)
@@ -365,8 +372,7 @@ export const ragApi = {
     let buffer = ''
 
     try {
-      while (true) {
-        // eslint-disable-next-line no-constant-condition
+      for (;;) {
         const { value, done } = await reader.read()
         if (done) break
         buffer += value
