@@ -30,6 +30,10 @@ from app.models.document import (
 
 
 def seed_database():  #69
+    from app.core.database import engine, Base
+    import app.models  # ensure all ORM models are imported
+    Base.metadata.create_all(bind=engine)
+
     db: Session = SessionLocal()
 
     try:
