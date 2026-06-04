@@ -9,7 +9,9 @@ run without an OpenAI key, a running DB, or any real PDFs on disk.
 import io
 import pytest
 from unittest.mock import MagicMock, patch
+from fastapi import HTTPException, UploadFile
 from pypdf.errors import PdfReadError
+from app.api.v1.rag import ingest_documents
 from app.core.security import get_current_user
 from app.main import app
 
@@ -196,34 +198,44 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_pdf_parser_failure_returns_400(self, mock_load, mock_create, client, mock_rag_user):
+    def test_pdf_parser_failure_returns_400(self, mock_load, mock_create):
         """Malformed or encrypted PDFs should return a sanitized client error."""
         mock_load.side_effect = PdfReadError("sensitive parser detail")
 
-        with patch(PATCH_AUTH, return_value=_mock_current_user()):
-            response = client.post(
-                "/api/v1/rag/ingest",
-                files={"files": _make_pdf_upload("broken.pdf")},
+        with pytest.raises(HTTPException) as exc_info:
+            ingest_documents(
+                files=[
+                    UploadFile(
+                        filename="broken.pdf",
+                        file=io.BytesIO(b"%PDF-1.4 broken"),
+                    )
+                ],
+                current_user=_mock_current_user(),
             )
 
-        assert response.status_code == 400
-        assert "sensitive parser detail" not in response.json()["detail"]
+        assert exc_info.value.status_code == 400
+        assert "sensitive parser detail" not in exc_info.value.detail
         mock_create.assert_not_called()
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
-    def test_unexpected_loader_failure_returns_503(self, mock_load, mock_create, client, mock_rag_user):
+    def test_unexpected_loader_failure_returns_503(self, mock_load, mock_create):
         """Unexpected loader failures should be logged without leaking details."""
         mock_load.side_effect = RuntimeError("sensitive storage detail")
 
-        with patch(PATCH_AUTH, return_value=_mock_current_user()):
-            response = client.post(
-                "/api/v1/rag/ingest",
-                files={"files": _make_pdf_upload("valid.pdf")},
+        with pytest.raises(HTTPException) as exc_info:
+            ingest_documents(
+                files=[
+                    UploadFile(
+                        filename="valid.pdf",
+                        file=io.BytesIO(b"%PDF-1.4 valid"),
+                    )
+                ],
+                current_user=_mock_current_user(),
             )
 
-        assert response.status_code == 503
-        assert "sensitive storage detail" not in response.json()["detail"]
+        assert exc_info.value.status_code == 503
+        assert "sensitive storage detail" not in exc_info.value.detail
         mock_create.assert_not_called()
 
     # ------------------------------------------------------------------
