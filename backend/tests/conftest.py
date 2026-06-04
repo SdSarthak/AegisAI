@@ -5,7 +5,8 @@ import pytest
 from unittest.mock import MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
-from fastapi import Request
+from sqlalchemy.pool import StaticPool
+from fastapi import Request, HTTPException, status
 from fastapi.testclient import TestClient
 
 # Set test database before importing app
@@ -17,7 +18,7 @@ from app.core.security import decode_token, get_current_user
 from app.models.user import SubscriptionTier
 from app.models.user import User
 from app.main import app
-
+from uuid import uuid4
 
 def _mock_current_user():
     user = MagicMock()
@@ -30,12 +31,26 @@ def _mock_current_user():
     user.is_verified = True
     return user
 
+def _mock_other_user():
+    user = MagicMock()
+    user.id = 2                                # ✅ integer
+    user.email = "other@example.com"
+    user.full_name = "Other User"               # ✅ string
+    user.company_name = "Other Company"
+    user.subscription_tier = SubscriptionTier.FREE  # ✅ proper enum
+    user.is_active = True
+    user.is_verified = True
+    return user
 
 @pytest.fixture(scope="session")
 def db_engine():
     """Create a test database engine."""
     test_db_url = "sqlite:///:memory:"
-    engine = create_engine(test_db_url, connect_args={"check_same_thread": False})
+    engine = create_engine(
+        test_db_url,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     Base.metadata.create_all(bind=engine)
     yield engine
     Base.metadata.drop_all(bind=engine)
@@ -68,13 +83,20 @@ def client(db_engine):
     def override_current_user(request: Request):
         auth_header = request.headers.get("authorization", "")
         if not auth_header.lower().startswith("bearer "):
-            return _mock_current_user()
+            # Block unauthenticated requests!
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, 
+                detail="Not authenticated"
+            )
 
         token = auth_header.split(" ", 1)[1]
         payload = decode_token(token)
         user_id = payload.get("sub")
         if user_id is None:
-            return _mock_current_user()
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED, 
+                detail="Invalid token"
+            )
 
         user = session.query(User).filter(User.id == int(user_id)).first()
         return user or _mock_current_user()
@@ -90,12 +112,63 @@ def client(db_engine):
     connection.close()
     app.dependency_overrides.clear()
 
+@pytest.fixture
+def auth_headers(client):
+    email = f"batch-scan-{uuid4()}@example.com"
+    password = "TestPass123!"
+
+    client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": password,
+            "full_name": "Batch Scan Test User",
+        },
+    )
+
+    response = client.post(
+        "/api/v1/auth/login",
+        data={"username": email, "password": password},
+    )
+    token = response.json()["access_token"]
+
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def other_user_auth_headers(client, db_session):
+    # Register a different user
+    client.post("/api/v1/auth/register", json={
+        "email": "other@example.com",
+        "password": "OtherPass123!",
+        "full_name": "Other User",
+        "company_name": "Other Corp",
+    })
+    response = client.post(
+        "/api/v1/auth/login",
+        data={"username": "other@example.com", "password": "OtherPass123!"},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
+    )
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
 
 @pytest.fixture(autouse=True)
 def clear_guard_rate_limits():
-    """Keep in-memory guard rate limits isolated between tests."""
+    """Keep in-memory and Redis guard rate limits isolated between tests."""
     from app.core.rate_limit import guard_scan_rate_limiter
-
+    
+    # 1. Clear local memory
     guard_scan_rate_limiter._local_attempts_by_key.clear()
+    
+    # 2. Clear Redis
+    redis_client = guard_scan_rate_limiter._get_redis_client()
+    if redis_client is not None:
+        redis_client.flushdb()
+        
     yield
+    
+    # Clean up after the test completes
     guard_scan_rate_limiter._local_attempts_by_key.clear()
+    if redis_client is not None:
+        redis_client.flushdb()
