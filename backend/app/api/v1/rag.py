@@ -11,6 +11,7 @@ Contributor note:
   - TODO: Integrate MLflow tracking from modules/rag/ml_flow.py
 """
 
+import logging
 import os
 import shutil
 import tempfile
@@ -20,6 +21,7 @@ import mimetypes
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from pypdf.errors import PdfReadError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -34,6 +36,7 @@ from app.modules.rag.streaming import stream_rag_answer
 from app.modules.rag.vector_store import create_vector_store, load_vector_store
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class RAGQueryRequest(BaseModel):
@@ -114,7 +117,22 @@ def ingest_documents(
             saved_paths.append(dest)
 
         # ── 3. Chunk documents (gives us the accurate chunk count) ────────
-        raw_chunks = load_documents_from_paths(saved_paths)
+        try:
+            raw_chunks = load_documents_from_paths(saved_paths)
+        except PdfReadError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Could not read one or more uploaded PDFs. Ensure the files "
+                    "are valid and not password-protected."
+                ),
+            )
+        except Exception:
+            logger.exception("Failed to load uploaded RAG documents")
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Unable to process uploaded PDF documents right now.",
+            )
         
         # Filter out chunks with empty or whitespace-only page_content
         chunks = [
