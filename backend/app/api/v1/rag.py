@@ -14,6 +14,7 @@ Contributor note:
 import os
 import shutil
 import tempfile
+import time
 from typing import List, Literal, Optional
 import mimetypes
 
@@ -32,18 +33,9 @@ from app.modules.llm.llm_client import LLMClient
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.streaming import stream_rag_answer
 from app.modules.rag.vector_store import create_vector_store, load_vector_store
+from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
 
 router = APIRouter()
-
-
-class RAGQueryRequest(BaseModel):
-    question: str
-
-
-class RAGQueryResponse(BaseModel):
-    answer: str
-    sources: list[str] = []
-    answer_id: Optional[str] = None
 
 
 class RAGIngestResponse(BaseModel):
@@ -168,10 +160,13 @@ def query_knowledge_base(
         from app.modules.rag.retrieval_chain import get_qa_chain
         from app.core.database import Base
 
+        started_at = time.monotonic()
         qa_chain = get_qa_chain()
         result = qa_chain({"query": request.question})
+        answer = str(result.get("result", ""))
         source_docs = result.get("source_documents", [])
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
+        latency_ms = round((time.monotonic() - started_at) * 1000, 2)
 
         # Ensure tables exist on this DB bind (useful for test DB overrides)
         try:
@@ -183,7 +178,7 @@ def query_knowledge_base(
         # Persist an initial RAGFeedback row to capture the answer and contributing chunks
         feedback = RAGFeedback(
             question=request.question,
-            answer=str(result.get("result", "")),
+            answer=answer,
             source_chunks=sources,
         )
         db.add(feedback)
@@ -191,7 +186,43 @@ def query_knowledge_base(
         db.refresh(feedback)
         answer_id = feedback.id
 
-        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
+        try:
+            db.add(
+                RagQuery(
+                    user_id=current_user.id,
+                    question=request.question,
+                    answer_summary=answer[:200],
+                    source_count=len(sources),
+                )
+            )
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        try:
+            from app.modules.rag.ml_flow import log_query
+
+            log_query(
+                question=request.question,
+                answer=answer,
+                sources=sources,
+                latency_ms=latency_ms,
+            )
+        except Exception:
+            # MLflow telemetry is useful, but answering the user should not
+            # fail when optional tracking dependencies are absent.
+            pass
+
+        return RAGQueryResponse(
+            answer=answer,
+            sources=sources,
+            answer_id=answer_id,
+            groundedness_score=float(result.get("groundedness_score", 0.0)),
+            low_confidence=bool(result.get("low_confidence", False)),
+            confidence_tier=str(result.get("confidence_tier", "unknown")),
+            per_verifier_scores=result.get("per_verifier_scores") or {},
+            flagged_reason=result.get("flagged_reason"),
+        )
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
