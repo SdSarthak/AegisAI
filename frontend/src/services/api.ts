@@ -25,18 +25,18 @@ api.interceptors.response.use(
   (error: any) => {
     const url = error.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
+
     if (error.response?.status === 401 && !isAuthEndpoint) {
-      // Logout and navigate to login without forcing a full page reload.
       useAuthStore.getState().logout()
+
       try {
         window.history.pushState({}, '', '/login')
-        // Notify router listeners (e.g., react-router) to handle navigation.
         window.dispatchEvent(new PopStateEvent('popstate'))
-      } catch (e) {
-        // Fallback: if SPA navigation fails, perform a safe replace.
+      } catch {
         window.location.replace('/login')
       }
     }
+
     return Promise.reject(error)
   }
 )
@@ -51,6 +51,14 @@ function ensureObjectResponse<T extends Record<string, unknown>>(
 ): T {
   if (isRecord(data)) {
     return data as T
+  }
+
+  throw new Error(`${resourceName} response was empty or invalid.`)
+}
+
+function ensureListResponse<T>(data: unknown, resourceName: string): T[] {
+  if (Array.isArray(data) && data.length > 0) {
+    return data as T[]
   }
 
   throw new Error(`${resourceName} response was empty or invalid.`)
@@ -76,6 +84,16 @@ function ensureNumberField(
   }
 }
 
+function ensureStringArrayField(
+  data: Record<string, unknown>,
+  fieldName: string,
+  resourceName: string
+) {
+  if (!Array.isArray(data[fieldName])) {
+    throw new Error(`${resourceName} response was missing ${fieldName}.`)
+  }
+}
+
 interface ClassificationResponse extends Record<string, unknown> {
   risk_level: string
   confidence: number
@@ -96,27 +114,20 @@ export interface RagQueryResponse extends Record<string, unknown> {
   answer_id?: string
 }
 
-function ensureStringArrayField(
-  data: Record<string, unknown>,
-  fieldName: string,
-  resourceName: string
-) {
-  if (!Array.isArray(data[fieldName])) {
-    throw new Error(`${resourceName} response was missing ${fieldName}.`)
-  }
-}
-
 // Auth API
 export const authApi = {
   login: async (email: string, password: string) => {
     const formData = new URLSearchParams()
     formData.append('username', email)
     formData.append('password', password)
+
     const { data } = await api.post('/auth/login', formData, {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     })
+
     return data
   },
+
   register: async (userData: {
     email: string
     password: string
@@ -126,20 +137,22 @@ export const authApi = {
     const { data } = await api.post('/auth/register', userData)
     return data
   },
+
   getMe: async (token?: string) => {
     const { data } = await api.get('/auth/me', {
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     })
     return data
   },
+
   updateMe: async (payload: {
-  full_name?: string
-  company_name?: string
-  onboarding_completed?: boolean
-}) => {
-  const { data } = await api.patch('/users/me', payload)
-  return data
-},
+    full_name?: string
+    company_name?: string
+    onboarding_completed?: boolean
+  }) => {
+    const { data } = await api.patch('/users/me', payload)
+    return data
+  },
 }
 
 // AI Systems API
@@ -154,12 +167,14 @@ export const aiSystemsApi = {
     compliance_status?: string
   }) => {
     const { data } = await api.get('/ai-systems/', { params })
-    return data
+    return ensureListResponse(data, 'AI systems')
   },
+
   get: async (id: number) => {
     const { data } = await api.get(`/ai-systems/${id}`)
     return data
   },
+
   create: async (system: {
     name: string
     description?: string
@@ -169,10 +184,12 @@ export const aiSystemsApi = {
     const { data } = await api.post('/ai-systems/', system)
     return data
   },
+
   update: async (id: number, system: Record<string, unknown>) => {
     const { data } = await api.put(`/ai-systems/${id}`, system)
     return data
   },
+
   delete: async (id: number) => {
     await api.delete(`/ai-systems/${id}`)
   },
@@ -186,24 +203,29 @@ export const classificationApi = {
       response.data,
       'Classification'
     )
+
     ensureStringField(responseData, 'risk_level', 'Classification')
     ensureNumberField(responseData, 'confidence', 'Classification')
     ensureStringArrayField(responseData, 'reasons', 'Classification')
     ensureStringArrayField(responseData, 'requirements', 'Classification')
     ensureStringArrayField(responseData, 'next_steps', 'Classification')
+
     return responseData as ClassificationResponse
   },
+
   classifyAndSave: async (systemId: number, data: Record<string, unknown>) => {
     const response = await api.post(`/classification/classify/${systemId}`, data)
     const responseData = ensureObjectResponse<Record<string, unknown>>(
       response.data,
       'Classification'
     )
+
     ensureStringField(responseData, 'risk_level', 'Classification')
     ensureNumberField(responseData, 'confidence', 'Classification')
     ensureStringArrayField(responseData, 'reasons', 'Classification')
     ensureStringArrayField(responseData, 'requirements', 'Classification')
     ensureStringArrayField(responseData, 'next_steps', 'Classification')
+
     return responseData as ClassificationResponse
   },
 }
@@ -212,12 +234,14 @@ export const classificationApi = {
 export const documentsApi = {
   list: async () => {
     const { data } = await api.get('/documents/')
-    return data
+    return ensureListResponse(data, 'Documents')
   },
+
   get: async (id: number) => {
     const { data } = await api.get(`/documents/${id}`)
     return data
   },
+
   generate: async (request: {
     document_type: string
     ai_system_id: number
@@ -225,10 +249,12 @@ export const documentsApi = {
     const { data } = await api.post('/documents/generate', request)
     return data
   },
+
   update: async (id: number, data: { content: string }) => {
     const { data: response } = await api.put(`/documents/${id}`, data)
     return response
   },
+
   delete: async (id: number) => {
     await api.delete(`/documents/${id}`)
   },
@@ -236,10 +262,15 @@ export const documentsApi = {
 
 // Notifications API
 export const notificationsApi = {
-  list: (unreadOnly = false) =>
-    api.get(`/notifications?unread_only=${unreadOnly}`).then((r: AxiosResponse) => r.data),
-  markRead: (ids: number[]) =>
-    api.post('/notifications/read', { ids }),
+  list: async (unreadOnly = false) => {
+    const { data } = await api.get(`/notifications?unread_only=${unreadOnly}`)
+    return ensureListResponse(data, 'Notifications')
+  },
+
+  markRead: async (ids: number[]) => {
+    const { data } = await api.post('/notifications/read', { ids })
+    return data
+  },
 }
 
 // ---------------------------------------------------------------------------
@@ -274,73 +305,67 @@ export interface RagStreamCallbacks {
   onError?: (error: RagStreamError) => void
 }
 
-/**
- * Parse a buffer of SSE text into discrete (event, data) frames.
- * Returns the parsed events plus any trailing partial frame that should
- * be carried into the next chunk.
- */
 function parseSseBuffer(
-  buffer: string,
+  buffer: string
 ): { events: Array<{ event: string; data: string }>; remainder: string } {
   const events: Array<{ event: string; data: string }> = []
-  // Frames are separated by a blank line (\n\n). Anything after the last
-  // \n\n is a partial frame to carry forward.
   const lastSep = buffer.lastIndexOf('\n\n')
+
   if (lastSep === -1) {
     return { events, remainder: buffer }
   }
+
   const complete = buffer.slice(0, lastSep)
   const remainder = buffer.slice(lastSep + 2)
 
   for (const block of complete.split('\n\n')) {
     if (!block.trim()) continue
+
     let event: string | null = null
     let data: string | null = null
+
     for (const line of block.split('\n')) {
       if (line.startsWith('event: ')) event = line.slice(7).trim()
       else if (line.startsWith('data: ')) data = line.slice(6)
     }
-    if (event && data !== null) events.push({ event, data })
+
+    if (event && data !== null) {
+      events.push({ event, data })
+    }
   }
+
   return { events, remainder }
 }
 
 export const ragApi = {
-  /**
-   * Stream a regulatory answer as Server-Sent Events.
-   *
-   * Uses `fetch` + ReadableStream rather than EventSource because EventSource
-   * is GET-only. The `signal` lets the caller abort the request (Stop button);
-   * the backend honours abort and stops generating tokens.
-   *
-   * Returns a promise that resolves when the stream ends naturally (after
-   * `done`) or rejects if the request fails before any events arrive. Stream
-   * events are surfaced through the callbacks, not the return value.
-   */
   query: async (question: string) => {
-    const { data } = await api.post('/rag/query', {
-      question,
-    })
+    const { data } = await api.post('/rag/query', { question })
     const responseData = ensureObjectResponse<Record<string, unknown>>(
       data,
       'RAG answer'
     )
+
     ensureStringField(responseData, 'answer', 'RAG answer')
+
     return responseData as RagQueryResponse
   },
+
   feedback: async (payload: { answer_id: string; vote: 'up' | 'down' }) => {
     const { data } = await api.post('/rag/feedback', {
       answer_id: payload.answer_id,
       vote: payload.vote,
     })
+
     return data
   },
+
   streamQuery: async (
     question: string,
     callbacks: RagStreamCallbacks,
-    signal?: AbortSignal,
+    signal?: AbortSignal
   ): Promise<void> => {
     const token = useAuthStore.getState().token
+
     const resp = await fetch('/api/v1/rag/query/stream', {
       method: 'POST',
       headers: {
@@ -353,11 +378,13 @@ export const ragApi = {
 
     if (!resp.ok || !resp.body) {
       let detail: string | undefined
+
       try {
         detail = (await resp.json()).detail
       } catch {
-        /* non-JSON error */
+        // non-JSON error
       }
+
       throw new Error(detail || `RAG stream failed with status ${resp.status}`)
     }
 
@@ -366,21 +393,23 @@ export const ragApi = {
 
     try {
       while (true) {
-        // eslint-disable-next-line no-constant-condition
         const { value, done } = await reader.read()
         if (done) break
+
         buffer += value
         const { events, remainder } = parseSseBuffer(buffer)
         buffer = remainder
+
         for (const { event, data } of events) {
           try {
             const parsed = JSON.parse(data)
+
             if (event === 'meta') callbacks.onMeta?.(parsed)
             else if (event === 'token') callbacks.onToken?.(parsed.delta)
             else if (event === 'done') callbacks.onDone?.(parsed)
             else if (event === 'error') callbacks.onError?.(parsed)
           } catch {
-            /* malformed JSON in a frame — skip rather than abort */
+            // malformed JSON in a frame — skip rather than abort
           }
         }
       }
@@ -390,18 +419,17 @@ export const ragApi = {
   },
 }
 
-
 // Health API — uses root URL, not /api/v1
 export interface HealthResponse {
-  status: "healthy" | "degraded";
-  database: "connected" | "disconnected";
-  version: string;
-  service: string;
+  status: 'healthy' | 'degraded'
+  database: 'connected' | 'disconnected'
+  version: string
+  service: string
 }
 
 export const checkHealth = async (): Promise<HealthResponse> => {
-  const response = await axios.get<HealthResponse>("/health")
-  return response.data;
+  const response = await axios.get<HealthResponse>('/health')
+  return response.data
 }
 
 export interface GuardScanResponse {
@@ -412,7 +440,6 @@ export interface GuardScanResponse {
   matched_patterns?: string[]
 }
 
-// Guard explainability (issue #77). Per-token attribution returned by SHAP/LIME.
 export interface GuardTokenAttribution {
   token: string
   attribution: number
@@ -452,20 +479,24 @@ export const guardApi = {
       data,
       'Guard scan'
     )
+
     ensureStringField(responseData, 'decision', 'Guard scan')
     ensureNumberField(responseData, 'confidence', 'Guard scan')
     ensureStringField(responseData, 'reasoning', 'Guard scan')
+
     return responseData as unknown as GuardScanResponse
   },
+
   explain: async (
     text: string,
-    opts: { method?: 'shap' | 'lime'; maxEvals?: number } = {},
+    opts: { method?: 'shap' | 'lime'; maxEvals?: number } = {}
   ): Promise<GuardExplainResponse> => {
     const { data } = await api.post('/guard/explain', {
       text,
       method: opts.method ?? 'shap',
       max_evals: opts.maxEvals ?? 200,
     })
+
     return data
   },
 }
@@ -484,10 +515,9 @@ export const guardHistoryApi = {
     decision?: string
     intent?: string
   }): Promise<GuardHistoryResponse> => {
-    const { data } = await api.get<GuardHistoryResponse>(
-      '/guard/history',
-      { params }
-    )
+    const { data } = await api.get<GuardHistoryResponse>('/guard/history', {
+      params,
+    })
 
     return data
   },

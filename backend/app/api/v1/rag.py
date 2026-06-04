@@ -2,20 +2,13 @@
 RAG Intelligence API — regulatory knowledge base query endpoint.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-Contributor note:
-  - POST /rag/ingest: multipart PDF upload, document_loader, FAISS rebuild
-  - POST /rag/query: single-shot JSON answer (backward compatible)
-  - POST /rag/query/stream: Server-Sent Events stream — see streaming.py
-  - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - TODO: Integrate MLflow tracking from modules/rag/ml_flow.py
 """
 
 import os
 import shutil
 import tempfile
+import time
 from typing import List, Literal, Optional
-import mimetypes
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
@@ -44,19 +37,16 @@ class RAGQueryResponse(BaseModel):
     answer: str
     sources: list[str] = []
     answer_id: Optional[str] = None
+    groundedness_score: Optional[float] = None
+    low_confidence: bool = False
 
 
 class RAGIngestResponse(BaseModel):
-    """Response returned after a successful document ingestion."""
-
     files_processed: int
     chunks_created: int
     index_size_bytes: int
 
 
-# ---------------------------------------------------------------------------
-# POST /rag/ingest
-# ---------------------------------------------------------------------------
 @router.post(
     "/ingest",
     response_model=RAGIngestResponse,
@@ -67,17 +57,34 @@ def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
 ):
-    """Accept one or more PDF uploads, process them through the document loader,"""
+    """Accept one or more PDF uploads and process them."""
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"Too many files. Maximum allowed is {settings.RAG_MAX_FILES_PER_REQUEST}.",
         )
 
-    pdf_files = [
-        f for f in files
-        if f.filename and mimetypes.guess_type(f.filename)[0] in ("application/pdf", "binary/octet-stream", None)
-    ]
+    pdf_files: list[UploadFile] = []
+
+    for upload in files:
+        filename = upload.filename or ""
+        content_type = upload.content_type or ""
+
+        is_pdf_extension = filename.lower().endswith(".pdf")
+        is_pdf_content_type = content_type in (
+            "application/pdf",
+            "binary/octet-stream",
+            "",
+        )
+
+        if not is_pdf_extension or not is_pdf_content_type:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only PDF files are supported.",
+            )
+
+        pdf_files.append(upload)
+
     if not pdf_files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -85,6 +92,7 @@ def ingest_documents(
         )
 
     total_size = 0
+
     for upload in pdf_files:
         upload.file.seek(0, 2)
         file_size = upload.file.tell()
@@ -93,14 +101,21 @@ def ingest_documents(
         if file_size > settings.RAG_MAX_FILE_SIZE_BYTES:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=f"File {upload.filename} exceeds the maximum size of {settings.RAG_MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB.",
+                detail=(
+                    f"File {upload.filename} exceeds the maximum size of "
+                    f"{settings.RAG_MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB."
+                ),
             )
+
         total_size += file_size
 
     if total_size > settings.RAG_TOTAL_BUDGET_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Total upload size exceeds the maximum budget of {settings.RAG_TOTAL_BUDGET_BYTES // (1024 * 1024)}MB.",
+            detail=(
+                f"Total upload size exceeds the maximum budget of "
+                f"{settings.RAG_TOTAL_BUDGET_BYTES // (1024 * 1024)}MB."
+            ),
         )
 
     tmp_dir = tempfile.mkdtemp(prefix="aegis_ingest_")
@@ -109,40 +124,43 @@ def ingest_documents(
     try:
         for upload in pdf_files:
             dest = os.path.join(tmp_dir, os.path.basename(upload.filename))
+
             with open(dest, "wb") as buf:
                 shutil.copyfileobj(upload.file, buf)
+
             saved_paths.append(dest)
 
-        # ── 3. Chunk documents (gives us the accurate chunk count) ────────
         raw_chunks = load_documents_from_paths(saved_paths)
-        
-        # Filter out chunks with empty or whitespace-only page_content
+
         chunks = [
-            chunk for chunk in raw_chunks 
+            chunk
+            for chunk in raw_chunks
             if chunk.page_content and chunk.page_content.strip()
         ]
 
         if not chunks:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Could not extract any valid text from the supplied PDFs. "
-                       "Ensure the files are not scanned images or password-protected.",
+                detail=(
+                    "Could not extract any valid text from the supplied PDFs. "
+                    "Ensure the files are not scanned images or password-protected."
+                ),
             )
 
-        # ── 4. Build / rebuild FAISS index and persist to disk ────────────
         try:
-            create_vector_store(chunks) # Pass the extracted Document objects!
+            create_vector_store(chunks)
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Failed to build FAISS index: {exc}",
             )
 
-        # ── 5. Calculate on-disk index size ───────────────────────────────
         index_path = settings.FAISS_INDEX_PATH
         index_size_bytes = 0
+
         for fname in ("index.faiss", "index.pkl"):
             fpath = os.path.join(index_path, fname)
+
             if os.path.exists(fpath):
                 index_size_bytes += os.path.getsize(fpath)
 
@@ -153,7 +171,6 @@ def ingest_documents(
         )
 
     finally:
-        # ── 6. Always clean up the temp directory ─────────────────────────
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
@@ -164,23 +181,24 @@ def query_knowledge_base(
     db: Session = Depends(get_db),
 ):
     """Ask a regulatory question and get an answer grounded in source documents."""
+    start_time = time.monotonic()
+
     try:
-        from app.modules.rag.retrieval_chain import get_qa_chain
         from app.core.database import Base
+        from app.modules.rag.retrieval_chain import get_qa_chain
 
         qa_chain = get_qa_chain()
         result = qa_chain({"query": request.question})
+
         source_docs = result.get("source_documents", [])
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
+        _latency_ms = int((time.monotonic() - start_time) * 1000)
 
-        # Ensure tables exist on this DB bind (useful for test DB overrides)
         try:
             Base.metadata.create_all(bind=db.get_bind())
         except Exception:
-            # best-effort: ignore if bind not available
             pass
 
-        # Persist an initial RAGFeedback row to capture the answer and contributing chunks
         feedback = RAGFeedback(
             question=request.question,
             answer=str(result.get("result", "")),
@@ -189,9 +207,15 @@ def query_knowledge_base(
         db.add(feedback)
         db.commit()
         db.refresh(feedback)
-        answer_id = feedback.id
 
-        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
+        return RAGQueryResponse(
+            answer=str(result.get("result", "")),
+            sources=sources,
+            answer_id=str(feedback.id),
+            groundedness_score=result.get("groundedness_score"),
+            low_confidence=bool(result.get("low_confidence", False)),
+        )
+
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -204,24 +228,10 @@ def query_knowledge_base(
         )
 
 
-# ---------------------------------------------------------------------------
-# POST /rag/query/stream  —  Server-Sent Events
-# ---------------------------------------------------------------------------
 @router.post(
     "/query/stream",
     summary="Stream a regulatory answer token-by-token (SSE)",
     tags=["RAG Intelligence"],
-    responses={
-        200: {
-            "description": (
-                "Server-Sent Events stream. Emits one `meta` event with "
-                "citations and answer_id, then zero or more `token` events "
-                "with answer deltas, then a terminal `done` event. On "
-                "failure an `error` event is emitted before `done`."
-            ),
-            "content": {"text/event-stream": {}},
-        }
-    },
 )
 async def query_knowledge_base_stream(
     request: Request,
@@ -253,8 +263,6 @@ async def query_knowledge_base_stream(
         generator,
         media_type="text/event-stream",
         headers={
-            # Prevent intermediary buffering (nginx in particular) from
-            # holding back tokens until the response is "done".
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
@@ -266,21 +274,21 @@ async def query_knowledge_base_stream(
 def rag_health():
     """Check if the RAG module is available."""
     from app.modules.rag.vector_store import check_index_exists
-    
+
     index_loaded = check_index_exists()
-    
+
     if not index_loaded:
         return {
             "module": "rag_intelligence",
             "status": "unavailable",
             "index_loaded": False,
-            "message": "FAISS index not found. RAG module requires document ingestion before use."
+            "message": "FAISS index not found. RAG module requires document ingestion before use.",
         }
-    
+
     return {
         "module": "rag_intelligence",
         "status": "available",
-        "index_loaded": True
+        "index_loaded": True,
     }
 
 
@@ -297,15 +305,19 @@ def rag_feedback(
 ):
     """Record a thumbs-up or thumbs-down for a previously returned answer."""
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
+
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
+
     if payload.vote == "up":
         fb.thumbs_up = (fb.thumbs_up or 0) + 1
     else:
         fb.thumbs_down = (fb.thumbs_down or 0) + 1
+
     db.add(fb)
     db.commit()
     db.refresh(fb)
+
     return {"status": "ok", "answer_id": fb.id}
 
 
@@ -316,34 +328,46 @@ def get_low_quality_chunks(
     db: Session = Depends(get_db),
 ):
     """Admin endpoint: aggregate feedback by source chunk and return low-quality candidates."""
-    # Admin-only access: restrict to system owners / scale tier
     try:
         if current_user.subscription_tier != SubscriptionTier.SCALE:
             raise HTTPException(status_code=403, detail="Admin access required")
     except Exception:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Aggregate counts per chunk
     counts: dict[str, dict[str, int]] = {}
     rows = db.query(RAGFeedback).all()
+
     for r in rows:
         total = (r.thumbs_up or 0) + (r.thumbs_down or 0)
-        for chunk in (r.source_chunks or []):
+
+        for chunk in r.source_chunks or []:
             if chunk not in counts:
                 counts[chunk] = {"thumbs_up": 0, "thumbs_down": 0, "total": 0}
-            counts[chunk]["thumbs_up"] += (r.thumbs_up or 0)
-            counts[chunk]["thumbs_down"] += (r.thumbs_down or 0)
+
+            counts[chunk]["thumbs_up"] += r.thumbs_up or 0
+            counts[chunk]["thumbs_down"] += r.thumbs_down or 0
             counts[chunk]["total"] += total
 
     low_quality = []
+
     for chunk, c in counts.items():
         if c["total"] == 0:
             continue
+
         ratio = c["thumbs_down"] / c["total"]
+
         if ratio > threshold:
-            low_quality.append({"chunk": chunk, "thumbs_down": c["thumbs_down"], "total": c["total"], "ratio": ratio})
+            low_quality.append(
+                {
+                    "chunk": chunk,
+                    "thumbs_down": c["thumbs_down"],
+                    "total": c["total"],
+                    "ratio": ratio,
+                }
+            )
 
     return {"threshold": threshold, "low_quality_chunks": low_quality}
+
 
 @router.get("/history")
 def get_rag_history(
@@ -354,6 +378,7 @@ def get_rag_history(
 ):
     """Return the current user's paginated RAG query history."""
     offset = (page - 1) * page_size
+
     queries = (
         db.query(RagQuery)
         .filter(RagQuery.user_id == current_user.id)
@@ -362,6 +387,7 @@ def get_rag_history(
         .limit(page_size)
         .all()
     )
+
     return {
         "page": page,
         "page_size": page_size,
