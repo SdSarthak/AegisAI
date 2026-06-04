@@ -15,6 +15,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Unit and integration tests for bypass payloads (`test_normalizer.py` and `test_guard.py`)
 
 ### Fixed
+- **AI Systems** — Send server-side pagination offsets with search and filter requests so results are evaluated across all records instead of the current page only.
 - **Frontend Theme** — Fixed dark mode flash of unstyled content (FOUC), eliminated duplicate CSS, fixed React state overwrite bugs, and improved system preference synchronization.
 - **Documents API** — Validate `ai_system_id` ownership before creating documents so users cannot link documents to another user's AI system.
 - **PDF Export** — Escape user-controlled document text before ReportLab rendering and sanitize generated download filenames.

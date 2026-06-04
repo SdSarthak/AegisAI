@@ -22,17 +22,18 @@ const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 // Handle 401 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: any) => {
-    const url = error.config?.url || ''
+  (error: unknown) => {
+    const url = axios.isAxiosError(error) ? error.config?.url || '' : ''
+    const status = axios.isAxiosError(error) ? error.response?.status : undefined
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
-    if (error.response?.status === 401 && !isAuthEndpoint) {
+    if (status === 401 && !isAuthEndpoint) {
       // Logout and navigate to login without forcing a full page reload.
       useAuthStore.getState().logout()
       try {
         window.history.pushState({}, '', '/login')
         // Notify router listeners (e.g., react-router) to handle navigation.
         window.dispatchEvent(new PopStateEvent('popstate'))
-      } catch (e) {
+      } catch {
         // Fallback: if SPA navigation fails, perform a safe replace.
         window.location.replace('/login')
       }
@@ -148,12 +149,19 @@ export const aiSystemsApi = {
     sort_by?: string
     order?: string
     page?: number
+    skip?: number
     limit?: number
     search?: string
     risk_level?: string
     compliance_status?: string
   }) => {
-    const { data } = await api.get('/ai-systems/', { params })
+    const { page, skip, limit, ...rest } = params ?? {}
+    const requestParams = {
+      ...rest,
+      limit,
+      skip: skip ?? (page && limit ? (page - 1) * limit : undefined),
+    }
+    const { data } = await api.get('/ai-systems/', { params: requestParams })
     return data
   },
   get: async (id: number) => {
@@ -210,8 +218,8 @@ export const classificationApi = {
 
 // Documents API
 export const documentsApi = {
-  list: async () => {
-    const { data } = await api.get('/documents/')
+  list: async (params?: { skip?: number; limit?: number }) => {
+    const { data } = await api.get('/documents/', { params })
     return data
   },
   get: async (id: number) => {
@@ -365,10 +373,13 @@ export const ragApi = {
     let buffer = ''
 
     try {
-      while (true) {
-        // eslint-disable-next-line no-constant-condition
+      let isReading = true
+      while (isReading) {
         const { value, done } = await reader.read()
-        if (done) break
+        if (done) {
+          isReading = false
+          break
+        }
         buffer += value
         const { events, remainder } = parseSseBuffer(buffer)
         buffer = remainder

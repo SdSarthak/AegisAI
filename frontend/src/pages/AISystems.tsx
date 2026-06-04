@@ -18,6 +18,13 @@ interface AISystem {
   updated_at: string
 }
 
+interface AISystemsListResponse {
+  items: AISystem[]
+  total: number
+  skip: number
+  limit: number
+}
+
 export default function AISystems() {
   const queryClient = useQueryClient()
   const [showModal, setShowModal] = useState(false)
@@ -84,7 +91,13 @@ export default function AISystems() {
         compliance_status: complianceFilter || undefined,
       }),
   })
-  const systems = (systemsData ?? []) as AISystem[]
+  const systemsResponse = systemsData as AISystemsListResponse | AISystem[] | undefined
+  const systems = Array.isArray(systemsResponse)
+    ? systemsResponse
+    : systemsResponse?.items ?? []
+  const totalSystems = Array.isArray(systemsResponse)
+    ? systems.length
+    : systemsResponse?.total ?? systems.length
 
   const createMutation = useMutation({
     mutationFn: aiSystemsApi.create,
@@ -103,7 +116,7 @@ export default function AISystems() {
     },
   })
 
-  const filteredSystems = systems
+  const hasNextPage = currentPage * limit < totalSystems
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -315,7 +328,7 @@ export default function AISystems() {
             Retry
           </button>
         </div>
-      ) : filteredSystems.length === 0 ? (
+      ) : systems.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-medium text-gray-900">
@@ -350,7 +363,7 @@ export default function AISystems() {
         </div>
       ) : (
         <div className="grid gap-4">
-          {filteredSystems.map((system: AISystem) => (
+          {systems.map((system: AISystem) => (
             <div
               key={system.id}
               className="bg-white rounded-xl border border-gray-200 p-6"
@@ -445,7 +458,7 @@ export default function AISystems() {
 
         <button
           onClick={() => setCurrentPage((prev) => prev + 1)}
-          disabled={systems.length < limit}
+          disabled={!hasNextPage}
           className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
         >
           Next
