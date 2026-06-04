@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
@@ -326,3 +327,4 @@ function PasswordRequirement({ met, text }: { met: boolean; text: string }) {
     </div>
   )
 }
+
