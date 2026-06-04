@@ -8,7 +8,6 @@ const api = axios.create({
   },
 })
 
-// Add auth token to requests
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = useAuthStore.getState().token
   if (token) {
@@ -19,14 +18,18 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 
-// Handle 401 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: any) => {
-    const url = error.config?.url || ''
+  (error: unknown) => {
+    const axiosError = error as {
+      config?: { url?: string }
+      response?: { status?: number }
+    }
+
+    const url = axiosError.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
 
-    if (error.response?.status === 401 && !isAuthEndpoint) {
+    if (axiosError.response?.status === 401 && !isAuthEndpoint) {
       useAuthStore.getState().logout()
 
       try {
@@ -56,7 +59,10 @@ function ensureObjectResponse<T extends Record<string, unknown>>(
   throw new Error(`${resourceName} response was empty or invalid.`)
 }
 
-function ensureListResponse<T>(data: unknown, resourceName: string): T[] {
+function ensureListResponse<T = Record<string, unknown>>(
+  data: unknown,
+  resourceName: string
+): T[] {
   if (Array.isArray(data) && data.length > 0) {
     return data as T[]
   }
@@ -103,6 +109,41 @@ interface ClassificationResponse extends Record<string, unknown> {
   next_steps: string[]
 }
 
+export interface AISystem {
+  id: number
+  name: string
+  description: string
+  use_case: string
+  sector?: string
+  risk_level?: string
+  compliance_status?: string
+  compliance_score?: number
+  created_at?: string
+}
+
+export interface DocumentItem {
+  id: number
+  title: string
+  document_type: string
+  status: string
+  content?: string
+  ai_system_id?: number
+  created_at?: string
+  updated_at?: string
+}
+
+export interface NotificationPreview {
+  id: number
+  title: string
+  message: string
+  is_read: boolean
+  type: 'alert' | 'update' | 'ai' | 'news'
+  notification_type?: string
+  created_at: string
+  resource_type?: string
+  resource_id?: number
+}
+
 export interface RagSource {
   title: string
   excerpt: string
@@ -114,7 +155,6 @@ export interface RagQueryResponse extends Record<string, unknown> {
   answer_id?: string
 }
 
-// Auth API
 export const authApi = {
   login: async (email: string, password: string) => {
     const formData = new URLSearchParams()
@@ -155,7 +195,6 @@ export const authApi = {
   },
 }
 
-// AI Systems API
 export const aiSystemsApi = {
   list: async (params?: {
     sort_by?: string
@@ -167,7 +206,7 @@ export const aiSystemsApi = {
     compliance_status?: string
   }) => {
     const { data } = await api.get('/ai-systems/', { params })
-    return ensureListResponse(data, 'AI systems')
+    return ensureListResponse<AISystem>(data, 'AI systems')
   },
 
   get: async (id: number) => {
@@ -195,7 +234,6 @@ export const aiSystemsApi = {
   },
 }
 
-// Classification API
 export const classificationApi = {
   classify: async (data: Record<string, unknown>) => {
     const response = await api.post('/classification/classify', data)
@@ -230,11 +268,10 @@ export const classificationApi = {
   },
 }
 
-// Documents API
 export const documentsApi = {
-  list: async () => {
-    const { data } = await api.get('/documents/')
-    return ensureListResponse(data, 'Documents')
+  list: async (params?: { skip?: number; limit?: number }) => {
+    const { data } = await api.get('/documents/', { params })
+    return ensureListResponse<DocumentItem>(data, 'Documents')
   },
 
   get: async (id: number) => {
@@ -260,11 +297,10 @@ export const documentsApi = {
   },
 }
 
-// Notifications API
 export const notificationsApi = {
   list: async (unreadOnly = false) => {
     const { data } = await api.get(`/notifications?unread_only=${unreadOnly}`)
-    return ensureListResponse(data, 'Notifications')
+    return ensureListResponse<NotificationPreview>(data, 'Notifications')
   },
 
   markRead: async (ids: number[]) => {
@@ -272,10 +308,6 @@ export const notificationsApi = {
     return data
   },
 }
-
-// ---------------------------------------------------------------------------
-// RAG Intelligence API
-// ---------------------------------------------------------------------------
 
 export interface RagCitation {
   source: string
@@ -392,9 +424,15 @@ export const ragApi = {
     let buffer = ''
 
     try {
-      while (true) {
+      let reading = true
+
+      while (reading) {
         const { value, done } = await reader.read()
-        if (done) break
+
+        if (done) {
+          reading = false
+          break
+        }
 
         buffer += value
         const { events, remainder } = parseSseBuffer(buffer)
@@ -419,7 +457,6 @@ export const ragApi = {
   },
 }
 
-// Health API — uses root URL, not /api/v1
 export interface HealthResponse {
   status: 'healthy' | 'degraded'
   database: 'connected' | 'disconnected'
