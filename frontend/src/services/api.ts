@@ -206,7 +206,7 @@ export const aiSystemsApi = {
     compliance_status?: string
   }) => {
     const { data } = await api.get('/ai-systems/', { params })
-    return ensureListResponse<AISystem>(data, 'AI systems')
+    return ensureListResponse(data, 'AI systems') as AISystem[]
   },
 
   get: async (id: number) => {
@@ -271,7 +271,7 @@ export const classificationApi = {
 export const documentsApi = {
   list: async (params?: { skip?: number; limit?: number }) => {
     const { data } = await api.get('/documents/', { params })
-    return ensureListResponse<DocumentItem>(data, 'Documents')
+    return ensureListResponse(data, 'Documents') as DocumentItem[]
   },
 
   get: async (id: number) => {
@@ -300,7 +300,7 @@ export const documentsApi = {
 export const notificationsApi = {
   list: async (unreadOnly = false) => {
     const { data } = await api.get(`/notifications?unread_only=${unreadOnly}`)
-    return ensureListResponse<NotificationPreview>(data, 'Notifications')
+    return ensureListResponse(data, 'Notifications') as NotificationPreview[]
   },
 
   markRead: async (ids: number[]) => {
