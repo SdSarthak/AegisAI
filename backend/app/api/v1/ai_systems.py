@@ -446,9 +446,22 @@ def clone_ai_system(
             detail="AI system not found"
         )
 
+    base_name = f"{original.name} (copy)"
+    new_name = base_name
+    counter = 2
+    while True:
+        exists = db.query(AISystem).filter(
+            AISystem.owner_id == current_user.id,
+            AISystem.name == new_name
+        ).first()
+        if not exists:
+            break
+        new_name = f"{original.name} (copy {counter})"
+        counter += 1
+
     cloned = AISystem(
         owner_id=current_user.id,
-        name=f"{original.name} (copy)",
+        name=new_name,
         description=original.description,
         version=original.version,
         use_case=original.use_case,

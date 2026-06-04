@@ -68,3 +68,31 @@ def test_create_duplicate_ai_system_rejected(client):
     resp2 = c.post("/api/v1/ai-systems/", json=payload)
     assert resp2.status_code == 400
     assert "already exists" in resp2.json()["detail"].lower()
+
+
+def test_clone_ai_system_duplicates_resolves_collisions(client):
+    c = client
+
+    payload = {
+        "name": "Cloneable System",
+        "description": "Test cloning",
+    }
+
+    resp = c.post("/api/v1/ai-systems/", json=payload)
+    assert resp.status_code == 201
+    system_id = resp.json()["id"]
+
+    # First clone: should be "Cloneable System (copy)"
+    clone1 = c.post(f"/api/v1/ai-systems/{system_id}/clone")
+    assert clone1.status_code == 201
+    assert clone1.json()["name"] == "Cloneable System (copy)"
+
+    # Second clone: should be "Cloneable System (copy 2)"
+    clone2 = c.post(f"/api/v1/ai-systems/{system_id}/clone")
+    assert clone2.status_code == 201
+    assert clone2.json()["name"] == "Cloneable System (copy 2)"
+
+    # Third clone: should be "Cloneable System (copy 3)"
+    clone3 = c.post(f"/api/v1/ai-systems/{system_id}/clone")
+    assert clone3.status_code == 201
+    assert clone3.json()["name"] == "Cloneable System (copy 3)"
