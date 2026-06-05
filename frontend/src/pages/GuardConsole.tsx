@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
   Activity,
   AlertCircle,
@@ -111,6 +111,12 @@ export default function GuardConsole() {
 
     try {
       const data = await guardApi.scan(trimmedPrompt)
+
+      if (!data || typeof data !== 'object' || !data.decision) {
+        setError('The server returned an empty or invalid response. Please try again.')
+        return
+      }
+
       setResult(data)
       setScannedAt(new Date().toISOString())
     } catch (scanError: unknown) {
@@ -173,10 +179,16 @@ export default function GuardConsole() {
             <label htmlFor="guard-prompt" className="sr-only">
               Prompt to scan
             </label>
-            <textarea
+              <textarea
               id="guard-prompt"
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+                  const form = (event.target as HTMLTextAreaElement).closest('form')
+                  if (form) form.requestSubmit()
+                }
+              }}
               placeholder="Paste the prompt you want LLM Guard to inspect..."
               rows={10}
               disabled={isLoading}

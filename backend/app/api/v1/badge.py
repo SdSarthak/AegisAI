@@ -18,7 +18,9 @@ TODO for contributors (help wanted):
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+from app.core.config import settings
 from app.core.database import get_db
+from app.core.rate_limit import badge_rate_limiter
 from app.models.ai_system import AISystem
 from app.modules.badge.badge_generator import generate_badge_svg
 
@@ -34,6 +36,20 @@ def get_compliance_badge(
     """
     Return a public compliance badge for an AI system.
     """
+    # Rate limit: 5 requests per minute per system ID by default (sensitive, fail closed)
+    limited, retry_after = badge_rate_limiter.check_and_consume(
+        key=f"badge:gen:{system_id}",
+        limit=settings.BADGE_RATE_LIMIT_REQUESTS,
+        window_seconds=settings.BADGE_RATE_LIMIT_WINDOW_SECONDS,
+        fail_closed=True,
+    )
+    if limited:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Rate limit exceeded. Please try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     system = db.query(AISystem).filter(AISystem.id == system_id).first()
     if not system:
         raise HTTPException(
