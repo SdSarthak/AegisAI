@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-from app.modules.guard.training.data.split import train_validation_split
+from app.modules.guard.train import train_validation_split
 
 
 def _make_training_frame() -> pd.DataFrame:

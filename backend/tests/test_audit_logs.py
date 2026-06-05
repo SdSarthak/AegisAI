@@ -8,6 +8,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
 from app.core.security import get_current_user
@@ -23,6 +24,7 @@ def engine():
     eng = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
 
     Base.metadata.create_all(bind=eng)
@@ -117,7 +119,7 @@ class TestAuditLogs:
 
     def test_history_endpoint_returns_paginated_response(self, client):
         response = client.get(
-        "/api/v1/ai-systems/1/history?page=1&limit=10"
+        "/api/v1/ai-systems/1/history?skip=0&limit=10"
         )
 
         assert response.status_code == 200
@@ -126,7 +128,7 @@ class TestAuditLogs:
 
         assert "items" in data
         assert "total" in data
-        assert "page" in data
+        assert "skip" in data
         assert "limit" in data
 
     def test_status_update_records_json_safe_audit_log(self, client):

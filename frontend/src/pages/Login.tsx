@@ -1,21 +1,49 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
 import { authApi } from '../services/api'
-import { Shield } from 'lucide-react'
+import { Shield, Eye, EyeOff, AlertCircle } from 'lucide-react'
+
+interface ValidationError {
+  field: string
+  message: string
+}
+
+interface PydanticValidationError {
+  loc?: Array<string | number>
+  msg?: string
+}
 
 export default function Login() {
   const navigate = useNavigate()
   const { setAuth } = useAuthStore()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [errors, setErrors] = useState<ValidationError[]>([])
   const [loading, setLoading] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError('')
+    setErrors([])
+
+    const trimmedEmail = email.trim()
+    const validationErrors: ValidationError[] = []
+
+    if (!trimmedEmail) {
+      validationErrors.push({ field: 'email', message: 'Email is required.' })
+    }
+
+    if (!password) {
+      validationErrors.push({ field: 'password', message: 'Password is required.' })
+    }
+
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors)
+      return
+    }
+
     setLoading(true)
 
     try {
@@ -58,9 +86,12 @@ export default function Login() {
         </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
-          {error && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-lg">
-              {error}
+          {errors.some((e: any) => e.field === 'general') && (
+            <div className="p-3 flex items-start gap-3 text-sm bg-red-50 rounded-lg border border-red-200">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div className="text-red-700">
+                {errors.find((e: any) => e.field === 'general')?.message}
+              </div>
             </div>
           )}
 
@@ -74,22 +105,49 @@ export default function Login() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
+              className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
+                errors.some((e: any) => e.field === 'email')
+                  ? 'border-red-300 bg-red-50'
+                  : 'border-gray-300'
+              }`}
             />
+            {errors.some((e: any) => e.field === 'email') && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.find((e: any) => e.field === 'email')?.message}
+              </p>
+            )}
           </div>
 
           <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-700">
               Password
             </label>
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
-            />
+            <div className="relative mt-1">
+              <input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
+                  errors.some((e: any) => e.field === 'password')
+                    ? 'border-red-300 bg-red-50'
+                    : 'border-gray-300'
+                }`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
+              >
+                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+              </button>
+            </div>
+            {errors.some((e: any) => e.field === 'password') && (
+              <p className="mt-1 text-sm text-red-600">
+                {errors.find((e: any) => e.field === 'password')?.message}
+              </p>
+            )}
           </div>
 
           <button
