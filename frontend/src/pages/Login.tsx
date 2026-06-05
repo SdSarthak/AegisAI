@@ -20,27 +20,26 @@ export default function Login() {
 
     try {
       const tokenData = await authApi.login(email, password)
-      setAuth(tokenData.access_token, null)  
-      const user = await authApi.getMe()     
-      setAuth(tokenData.access_token, user)  
+      setAuth(tokenData.access_token, null)
+      const user = await authApi.getMe()
+      setAuth(tokenData.access_token, user)
       navigate('/')
-    } // ✅ Fix
-} catch (err) {
-  if (axios.isAxiosError(err)) {
-    const status = err.response?.status
-    if (status === 401 || status === 403) {
-      setError('Invalid email or password.')
-    } else if (status && status >= 500) {
-      setError('Server error, please try again later.')
-    } else if (!err.response) {
-      setError('Unable to connect to server.')
-    } else {
-      setError(err.response.data?.detail ?? 'Something went wrong. Please try again.')
-    }
-  } else {
-    setError('Something went wrong. Please try again.')
-  }
-}finally {
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        const status = err.response?.status
+        if (status === 401 || status === 403) {
+          setError('Invalid email or password.')
+        } else if (status && status >= 500) {
+          setError('Server error, please try again later.')
+        } else if (!err.response) {
+          setError('Unable to connect to server.')
+        } else {
+          setError(err.response.data?.detail ?? 'Something went wrong. Please try again.')
+        }
+      } else {
+        setError('Something went wrong. Please try again.')
+      }
+    } finally {
       setLoading(false)
     }
   }
