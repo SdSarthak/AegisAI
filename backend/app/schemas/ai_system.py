@@ -128,7 +128,19 @@ class BulkImportResponse(BaseModel):
 
 # Model for Questionnaire Risk Factor
 class QuestionnaireRiskFactor(BaseModel):
-    id: str
+    id: int
     question: str
     article: str
     triggers_level: RiskLevel
+    weight: float
+    
+# RiskFactor Schema  - for /risk-factors endpoint 
+class RiskFactorSchema(BaseModel):
+    id: int
+    question: str
+    article_reference: str
+    risk_level_triggered: RiskLevel
+    weight: float
+    
+    class Config:
+        use_enum_values = True
