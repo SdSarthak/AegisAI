@@ -1,8 +1,13 @@
 import axios from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
+const TIMEOUT_MS = 30000
+const MAX_RETRIES = 3
+const BASE_DELAY_MS = 500
+
 const api = axios.create({
   baseURL: '/api/v1',
+  timeout: TIMEOUT_MS,           // ← added: kills slow requests after 30s
   headers: {
     'Content-Type': 'application/json',
   },
@@ -17,178 +22,62 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Handle 401 errors
+// ← added: structured failure logger
+function logAIFailure(config: ReturnType<typeof api.request> extends Promise<infer R> ? never : Parameters<typeof api.request>[0], err: unknown, attempt: number, willRetry: boolean) {
+  console.error('[AI Resilience]', JSON.stringify({
+    timestamp: new Date().toISOString(),
+    url: config?.url,
+    method: config?.method,
+    attempt,
+    willRetry,
+    status: axios.isAxiosError(err) ? err.response?.status : null,
+    message: axios.isAxiosError(err)
+      ? (err.response?.data?.detail ?? err.message)
+      : err instanceof Error ? err.message : String(err),
+  }))
+}
+
+// ← added: exponential backoff helper
+function delay(ms: number) {
+  return new Promise<void>(resolve => setTimeout(resolve, ms))
+}
+
+// Handle 401 + retry on 5xx / network failure
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
       useAuthStore.getState().logout()
       window.location.href = '/login'
+      return Promise.reject(error)
     }
-    return Promise.reject(error)
+
+    const config = error.config
+    if (!config) return Promise.reject(error)
+
+    // ← added: retry state tracking on the config object
+    config.__retryCount = config.__retryCount ?? 0
+
+    const status = error.response?.status
+    const isNetworkFailure = !error.response
+    const isTimeout = error.code === 'ECONNABORTED'
+    const isServerError = status !== undefined && status >= 500
+
+    const shouldRetry =
+      config.__retryCount < MAX_RETRIES &&
+      (isNetworkFailure || isTimeout || isServerError)
+
+    if (!shouldRetry) {
+      logAIFailure(config, error, config.__retryCount, false)
+      return Promise.reject(error)
+    }
+
+    config.__retryCount++
+    logAIFailure(config, error, config.__retryCount, true)
+
+    const backoff = BASE_DELAY_MS * Math.pow(2, config.__retryCount - 1)
+    await delay(backoff)
+
+    return api(config)
   }
 )
-
-// Auth API
-export const authApi = {
-  login: async (email: string, password: string) => {
-    const formData = new URLSearchParams()
-    formData.append('username', email)
-    formData.append('password', password)
-    const { data } = await api.post('/auth/login', formData, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    })
-    return data
-  },
-  register: async (userData: {
-    email: string
-    password: string
-    full_name?: string
-    company_name?: string
-  }) => {
-    const { data } = await api.post('/auth/register', userData)
-    return data
-  },
-  getMe: async () => {
-    const { data } = await api.get('/auth/me')
-    return data
-  },
-}
-
-// AI Systems API
-export const aiSystemsApi = {
-  list: async (params?: {
-    sort_by?: string
-    order?: string
-    page?: number
-    limit?: number
-  }) => {
-    // Fix for Issue #631: Transform frontend 'page' into the backend-expected 'skip' query offset parameter
-    const limit = params?.limit ?? 10
-    const page = params?.page ?? 1
-    const skip = (page - 1) * limit
-
-    const queryParams = {
-      sort_by: params?.sort_by,
-      order: params?.order,
-      skip: skip,
-      limit: limit,
-    }
-
-    const { data } = await api.get('/ai-systems/', { params: queryParams })
-    return data
-  },
-  get: async (id: number) => {
-    const { data } = await api.get(`/ai-systems/${id}`)
-    return data
-  },
-  create: async (system: {
-    name: string
-    description?: string
-    use_case?: string
-    sector?: string
-  }) => {
-    const { data } = await api.post('/ai-systems/', system)
-    return data
-  },
-  update: async (id: number, system: Record<string, unknown>) => {
-    const { data } = await api.put(`/ai-systems/${id}`, system)
-    return data
-  },
-  delete: async (id: number) => {
-    await api.delete(`/ai-systems/${id}`)
-  },
-}
-
-// Classification API
-export const classificationApi = {
-  classify: async (data: Record<string, unknown>) => {
-    const response = await api.post('/classification/classify', data)
-    return response.data
-  },
-  classifyAndSave: async (systemId: number, data: Record<string, unknown>) => {
-    const response = await api.post(`/classification/classify/${systemId}`, data)
-    return response.data
-  },
-}
-
-// Documents API
-export const documentsApi = {
-  list: async () => {
-    const { data } = await api.get('/documents/')
-    return data
-  },
-  get: async (id: number) => {
-    const { data } = await api.get(`/documents/${id}`)
-    return data
-  },
-  generate: async (request: {
-    document_type: string
-    ai_system_id: number
-  }) => {
-    const { data } = await api.post('/documents/generate', request)
-    return data
-  },
-  delete: async (id: number) => {
-    await api.delete(`/documents/${id}`)
-  },
-}
-
-// Notifications API
-export const notificationsApi = {
-  list: (unreadOnly = false) =>
-    api.get(`/notifications?unread_only=${unreadOnly}`).then((r) => r.data),
-  markRead: (ids: number[]) =>
-    api.post('/notifications/read', { ids }),
-}
-
-// Health API — uses root URL, not /api/v1
-export interface HealthResponse {
-  status: "healthy" | "degraded";
-  database: "connected" | "disconnected";
-  version: string;
-  service: string;
-}
-
-export const checkHealth = async (): Promise<HealthResponse> => {
-  const response = await axios.get<HealthResponse>("/health")
-  return response.data
-}
-
-/* ============================
-   ✅ RAG API (ADD THIS ONLY)
-   ============================ */
-
-export const ragApi = {
-  query: async (question: string) => {
-    const { data } = await api.post('/rag/query', {
-      question,
-    })
-    return data
-  },
-  feedback: async (payload: { answer_id: string; vote: 'up' | 'down' }) => {
-    const { data } = await api.post('/rag/feedback', {
-      answer_id: payload.answer_id,
-      vote: payload.vote,
-    })
-    return data
-  },
-}
-
-export interface GuardScanResponse {
-  decision: 'allow' | 'sanitize' | 'block' | string
-  confidence: number
-  reasoning: string
-  sanitized_prompt?: string | null
-  matched_patterns?: string[]
-}
-
-export const guardApi = {
-  scan: async (prompt: string): Promise<GuardScanResponse> => {
-    const { data } = await api.post('/guard/scan', { prompt })
-    return data
-  },
-}
-
-export default api
-
