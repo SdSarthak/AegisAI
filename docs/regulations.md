@@ -147,17 +147,17 @@ Organisations operating in the UK must already comply with:
 
 ### Key Obligations for Data Fiduciaries
 
-- **Lawful basis:** Primary lawful basis is **consent** — must be free, specific, informed, unconditional, and unambiguous. Bundled consent is not acceptable.
-- **Purpose limitation:** Data may only be used for the stated collection purpose. No secondary use provisions , strict by design.
-- **Consent withdrawal:** Must be as easy as giving consent. Upon withdrawal, data must be deleted unless a legal retention obligation applies.
-- **Privacy notice:** Plain language; available in all 22 scheduled languages of India.
-- **Data security:** Appropriate technical and organisational measures required.
-- **Data deletion:** Data no longer needed or for which consent is withdrawn must be erased.
-- **Breach notification:** Notify Data Protection Board and affected individuals. Failure carries penalties up to **INR 200 crore (~USD 24M)**.
-- **DPO requirement:** SDFs must appoint a Data Protection Officer based in India.
-- **Children's data:** Verifiable parental consent required. Penalties up to INR 200 crore.
-- **DPIA:** SDFs must conduct yearly Data Protection Impact Assessments and independent audits.
-- **Cross-border transfers:** Government may restrict transfers to certain countries; permitted countries list pending finalisation.
+- **Lawful basis (Sections 6 & 7):** Primary lawful basis is **consent** under Section 6 — which must be free, specific, informed, unconditional, and unambiguous with a clear affirmative action. Alternatively, personal data can be processed for **certain legitimate uses** under Section 7, such as voluntary provision of data, state functions, medical emergencies, employment, or legal/compliance requirements.
+- **Purpose limitation (Section 4 & 5):** Data may only be used for the specified purpose for which consent was given, or for a legitimate use under Section 7. Strict purpose limitation is enforced.
+- **Consent withdrawal (Section 6(4)):** The Data Principal has the right to withdraw consent at any time. The ease of withdrawal must be comparable to the ease of giving consent. Upon withdrawal, data must be deleted unless retention is required by law.
+- **Privacy notice (Section 5):** A detailed notice must accompany or precede a request for consent, specifying the data to be processed, the purpose of processing, how rights can be exercised, and how to file a complaint with the Board. It must be accessible and available in all 22 scheduled languages of India.
+- **Data security (Section 8(5)):** Data Fiduciaries must implement appropriate technical and organizational measures to ensure security and prevent personal data breaches.
+- **Data deletion (Section 8(7)):** Data must be erased once the specified purpose is fulfilled or when consent is withdrawn, unless retention is legally mandated.
+- **Breach notification (Section 8(6)):** In the event of a personal data breach, the Data Fiduciary must notify the Data Protection Board of India and each affected Data Principal. Failure to notify carries severe penalties.
+- **DPO requirement (Section 10(2)(a)):** Significant Data Fiduciaries must appoint a Data Protection Officer based in India to serve as a point of contact for grievance redressal and compliance.
+- **Children's data (Section 9):** Verifiable parental consent is mandatory for processing data of children (under 18) or persons with disabilities. Tracking, behavioral monitoring, or targeted advertising directed at children is strictly prohibited.
+- **DPIA & Audits (Section 10(2)):** Significant Data Fiduciaries must conduct periodic Data Protection Impact Assessments (DPIA), independent audits, and other compliance evaluations.
+- **Cross-border transfers (Section 16):** The Central Government may restrict the transfer of personal data outside India to certain notified countries or territories.
 
 ### Enforcement
 

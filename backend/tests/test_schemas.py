@@ -12,15 +12,15 @@ class TestPaginatedResponseSchema:
     def test_paginated_response_exposes_required_fields(self):
         schema = PaginatedResponse[int].model_json_schema()
 
-        assert set(schema["properties"]) >= {"items", "total", "page", "limit"}
-        assert set(schema["required"]) == {"items", "total", "page", "limit"}
+        assert set(schema["properties"]) >= {"items", "total", "skip", "limit"}
+        assert set(schema["required"]) == {"items", "total", "skip", "limit"}
         assert schema["properties"]["items"]["type"] == "array"
 
     def test_items_is_typed_as_a_list(self):
         response = PaginatedResponse[int](
             items=[1, 2, 3],
             total=3,
-            page=1,
+            skip=0,
             limit=10,
         )
 
@@ -32,7 +32,7 @@ class TestPaginatedResponseSchema:
             {
                 "items": [1, 2],
                 "total": 2,
-                "page": 1,
+                "skip": 0,
                 "limit": 10,
             }
         )
@@ -41,7 +41,7 @@ class TestPaginatedResponseSchema:
         assert serialized == {
             "items": [1, 2],
             "total": 2,
-            "page": 1,
+            "skip": 0,
             "limit": 10,
         }
 
@@ -49,14 +49,14 @@ class TestPaginatedResponseSchema:
 
     def test_serializes_and_deserializes_string_items(self):
         response = PaginatedResponse[str].model_validate_json(
-            '{"items":["alpha","beta"],"total":2,"page":1,"limit":10}'
+            '{"items":["alpha","beta"],"total":2,"skip":0,"limit":10}'
         )
 
         assert response.items == ["alpha", "beta"]
         assert response.model_dump() == {
             "items": ["alpha", "beta"],
             "total": 2,
-            "page": 1,
+            "skip": 0,
             "limit": 10,
         }
 
@@ -65,7 +65,7 @@ class TestPaginatedResponseSchema:
             {
                 "items": [{"id": 1, "name": "First"}, {"id": 2, "name": "Second"}],
                 "total": 2,
-                "page": 1,
+                "skip": 0,
                 "limit": 10,
             }
         )
@@ -77,7 +77,7 @@ class TestPaginatedResponseSchema:
         assert response.model_dump() == {
             "items": [{"id": 1, "name": "First"}, {"id": 2, "name": "Second"}],
             "total": 2,
-            "page": 1,
+            "skip": 0,
             "limit": 10,
         }
 
@@ -85,7 +85,7 @@ class TestPaginatedResponseSchema:
         response = PaginatedResponse[str](
             items=["only-current-page"],
             total=42,
-            page=2,
+            skip=10,
             limit=1,
         )
 

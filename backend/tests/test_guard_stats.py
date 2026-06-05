@@ -4,23 +4,11 @@ from datetime import datetime, timedelta, timezone
 from app.models.guard_scan_log import GuardScanLog
 from app.models.user import User
 
-@pytest.fixture
-def auth_headers(client):
-    email = "test_stats@example.com"
-    password = "testpassword123"
-    client.post("/api/v1/auth/register", json={"email": email, "password": password, "full_name": "Test User"})
-    response = client.post("/api/v1/auth/login", data={"username": email, "password": password})
-    token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
-
-@pytest.fixture
-def other_user_auth_headers(client):
-    email = "other@example.com"
-    password = "testpassword123"
-    client.post("/api/v1/auth/register", json={"email": email, "password": password, "full_name": "Other User"})
-    response = client.post("/api/v1/auth/login", data={"username": email, "password": password})
-    token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
+def _get_user_id_from_headers(headers: dict) -> int:
+    from app.core.security import decode_token
+    token = headers["Authorization"].split("Bearer ")[1]
+    payload = decode_token(token)
+    return int(payload["sub"])
 
 @pytest.fixture
 def mock_session_local(db_session):
@@ -57,6 +45,7 @@ def test_scan_creates_log_row(client, auth_headers, db_session, mock_session_loc
     assert log.detection_type == "none"
     assert log.prompt_length == 5
 
+@pytest.mark.usefixtures("auth_headers")
 def test_empty_stats_response(client, auth_headers):
     response = client.get("/api/v1/guard/stats", headers=auth_headers)
     assert response.status_code == 200
@@ -65,12 +54,13 @@ def test_empty_stats_response(client, auth_headers):
     assert "by_decision" in data
     assert data["by_decision"]["allow"]["count"] == 0
 
+@pytest.mark.usefixtures("auth_headers")
 def test_stats_aggregation(client, auth_headers, db_session):
-    # Manually add some logs
-    user = db_session.query(User).filter(User.email == "test_stats@example.com").first()
+    # Old hardcoded query removed; reading user ID dynamically from token payload instead
+    user_id = _get_user_id_from_headers(auth_headers)
     
     log1 = GuardScanLog(
-        user_id=user.id,
+        user_id=user_id,
         prompt_hash="h1",
         decision="block",
         confidence=0.9,
@@ -79,7 +69,7 @@ def test_stats_aggregation(client, auth_headers, db_session):
         scanned_at=datetime.utcnow()
     )
     log2 = GuardScanLog(
-        user_id=user.id,
+        user_id=user_id,
         prompt_hash="h2",
         decision="allow",
         confidence=0.95,
@@ -98,12 +88,13 @@ def test_stats_aggregation(client, auth_headers, db_session):
     assert data["by_decision"]["block"]["pct"] == 50.0
     assert data["by_detection_type"]["ml"]["count"] == 1
 
+@pytest.mark.usefixtures("auth_headers")
 def test_window_filtering(client, auth_headers, db_session):
-    user = db_session.query(User).filter(User.email == "test_stats@example.com").first()
+    user_id = _get_user_id_from_headers(auth_headers)
     
     # Log from 2 days ago
     log = GuardScanLog(
-        user_id=user.id,
+        user_id=user_id,
         prompt_hash="old",
         decision="allow",
         confidence=0.9,
@@ -121,30 +112,33 @@ def test_window_filtering(client, auth_headers, db_session):
     response = client.get("/api/v1/guard/stats", params={"window": "7d"}, headers=auth_headers)
     assert response.json()["total_scans"] == 1
 
+@pytest.mark.usefixtures("auth_headers", "other_user_auth_headers")
 def test_unauthorized_user_access(client, auth_headers, other_user_auth_headers, db_session):
-    user = db_session.query(User).filter(User.email == "test_stats@example.com").first()
+    # Read target user identity directly from standard auth headers token payload
+    target_user_id = _get_user_id_from_headers(auth_headers)
     
-    # Try to access test_stats@example.com stats using other@example.com headers
+    # Try to access target stats using other_user_auth_headers
     response = client.get(
         "/api/v1/guard/stats",
-        params={"user_id": user.id},
+        params={"user_id": target_user_id},
         headers=other_user_auth_headers
     )
     assert response.status_code == 403
 
 def test_admin_access(client, db_session):
     # Create regular user
-    client.post("/api/v1/auth/register", json={"email": "user@example.com", "password": "password", "full_name": "Regular User"})
+    password = "TestPass123!"
+    client.post("/api/v1/auth/register", json={"email": "user@example.com", "password": password, "full_name": "Regular User"})
     user = db_session.query(User).filter(User.email == "user@example.com").first()
     
     # Create admin user
-    client.post("/api/v1/auth/register", json={"email": "admin@example.com", "password": "password", "full_name": "Admin User"})
+    client.post("/api/v1/auth/register", json={"email": "admin@example.com", "password": password, "full_name": "Admin User"})
     
     # We need to mock the 'role' property on the User instance that get_current_user returns.
     # We can patch the model class or the dependency.
     
     with patch("app.models.user.User.role", "admin", create=True):
-        response = client.post("/api/v1/auth/login", data={"username": "admin@example.com", "password": "password"})
+        response = client.post("/api/v1/auth/login", data={"username": "admin@example.com", "password": password})
         admin_token = response.json()["access_token"]
         
         response = client.get(

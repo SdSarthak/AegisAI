@@ -6,12 +6,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Added
+- **Pre-commit hooks** — Added `.pre-commit-config.yaml` with repository hygiene hooks (trailing-whitespace, end-of-file-fixer, check-merge-conflict, check-yaml, check-json) and a local ESLint hook wrapping the existing frontend lint command.
 - **LLM Guard Prompt Normalization** — Preprocessor layer (`normalizer.py`) to prevent Unicode, zero-width, and homoglyph bypasses:
   - Strips invisible format characters in Unicode `Cf` category (e.g. zero-width space, non-joiner, joiner)
   - Normalizes stylized font variations using NFKC compatibility normalization
   - Resolves Cyrillic and Greek homoglyphs to standard Latin equivalents via static mapping
   - Retains both `normalized_prompt` and `user_prompt` in orchestrator response
 - Unit and integration tests for bypass payloads (`test_normalizer.py` and `test_guard.py`)
+
+### Fixed
+- **Frontend Theme** — Fixed dark mode flash of unstyled content (FOUC), eliminated duplicate CSS, fixed React state overwrite bugs, and improved system preference synchronization.
+- **Documents API** — Validate `ai_system_id` ownership before creating documents so users cannot link documents to another user's AI system.
+- **PDF Export** — Escape user-controlled document text before ReportLab rendering and sanitize generated download filenames.
 
 ---
 
@@ -20,6 +26,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 - **Compliance Engine** — Added Education & Vocational Training (Annex III point 3) risk factor to EU AI Act classification.
 - LLM Guard console with copy-to-clipboard exports for scan response payloads and raw audit metrics.
+
+---
+
+## [Unreleased]
+
+- **Fixed** Guard API merge conflicts and resolved pagination inconsistencies in history endpoint
+- **Changed** Updated frontend Guard/RAG API types (removed duplicate interfaces, improved type safety)
+- **Fixed** ESLint issues in frontend services and components
+- **Changed** Improved cursor-based pagination handling for guard scan history
 
 ---
 

@@ -16,9 +16,10 @@ To view the MLflow UI locally:
 """
 
 import logging
-import os
 
 import mlflow
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +39,7 @@ def log_query(
         sources:     List of source document identifiers used to ground the answer.
         latency_ms:  End-to-end response latency in milliseconds.
     """
-    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "")
+    tracking_uri = settings.MLFLOW_TRACKING_URI or ""
     if tracking_uri:
         mlflow.set_tracking_uri(tracking_uri)
 
@@ -57,9 +58,3 @@ def log_query(
     except Exception as exc:
         # MLflow tracking is non-critical — log and continue
         logger.warning("MLflow logging failed: %s", exc)
-
-def log_query(question: str, answer: str, sources: list):
-    with mlflow.start_run():
-        mlflow.log_param("question", question)
-        mlflow.log_metric("source_count", len(sources))
-        mlflow.log_text(answer, "answer.txt")

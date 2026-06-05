@@ -12,6 +12,7 @@ def test_generate_badge_svg_compliant():
     assert svg.startswith("<svg")
     assert svg.endswith("</svg>")
     assert f'fill="{STATUS_COLORS["compliant"]}"' in svg
+    assert system_name in svg
     assert "Compliant" in svg
     assert "High Risk" in svg
     assert "AegisAI" in svg
@@ -30,3 +31,12 @@ def test_generate_badge_svg_unknown_status():
     svg = generate_badge_svg("My AI", None, "unknown")
     assert f'fill="{STATUS_COLORS["not_started"]}"' in svg
     assert "Unknown" in svg
+
+
+def test_generate_badge_svg_escapes_untrusted_text():
+    system_name = '</text><script>alert("xss")</script><text>'
+    compliance_status = '<script>alert("xss")</script>'
+    svg = generate_badge_svg(system_name, None, compliance_status)
+
+    assert "<script>" not in svg
+    assert "&lt;script&gt;" in svg

@@ -26,20 +26,6 @@ def create_notification(
     resource_type: str | None = None,
     resource_id: int | None = None,
 ) -> Notification:
-    """Create and persist a new in-app notification for a user.
-
-    Args:
-        db: Database session dependency.
-        user_id: The ID of the user to notify.
-        notification_type: Type of notification event (e.g. GUARD_BLOCK).
-        title: Short title for the notification.
-        message: Full notification message body.
-        resource_type: Optional type of the related resource (e.g. guard_scan).
-        resource_id: Optional ID of the related resource.
-
-    Returns:
-        Notification: The newly created and persisted notification object.
-    """
     notification = Notification(
         user_id=user_id,
         notification_type=notification_type,
@@ -57,24 +43,12 @@ def create_notification(
 @router.get("", response_model=PaginatedResponse[NotificationResponse])
 def list_notifications(
     unread_only: bool = False,
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    skip: int = Query(0, ge=0, description="Items to skip"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return paginated notifications for the current user.
-
-    Args:
-        unread_only: If True, return only unread notifications (default: False).
-        page: Page number, 1-indexed (default: 1).
-        limit: Number of items per page, max 100 (default: 50).
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
-
-    Returns:
-        PaginatedResponse[NotificationResponse]: Paginated list of notifications
-            ordered by creation date descending.
-    """
+    """List the current user's notifications with optional unread filtering."""
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
 
     if unread_only:
@@ -84,7 +58,7 @@ def list_notifications(
 
     notifications = (
         query.order_by(Notification.created_at.desc())
-        .offset((page - 1) * limit)
+        .offset(skip)
         .limit(limit)
         .all()
     )
@@ -92,7 +66,7 @@ def list_notifications(
     return PaginatedResponse(
         items=notifications,
         total=total,
-        page=page,
+        skip=skip,
         limit=limit,
     )
 
@@ -103,16 +77,7 @@ def mark_notifications_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Mark a list of notifications as read for the current user.
-
-    Args:
-        body: Request body containing a list of notification IDs to mark read.
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
-
-    Returns:
-        None: HTTP 204 No Content on success.
-    """
+    """Mark the specified notifications as read."""
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.id.in_(body.ids),
@@ -131,19 +96,7 @@ def delete_notification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a single notification owned by the current user.
-
-    Args:
-        notification_id: The unique identifier of the notification to delete.
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
-
-    Returns:
-        None: HTTP 204 No Content on success.
-
-    Raises:
-        HTTPException: 404 if notification not found or not owned by user.
-    """
+    """Delete a notification owned by the current user."""
     notification = (
         db.query(Notification)
         .filter(
