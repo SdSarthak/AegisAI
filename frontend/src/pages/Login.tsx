@@ -122,12 +122,11 @@ export default function Login() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
+              className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white ${
                 errors.some((e: ValidationError) => e.field === 'email')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
             />
             {errors.some((e: ValidationError) => e.field === 'email') && (
               <p className="mt-1 text-sm text-red-600">
@@ -147,7 +146,7 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
+                className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white ${
                   errors.some((e: ValidationError) => e.field === 'password')
                     ? 'border-red-300 bg-red-50'
                     : 'border-gray-300'

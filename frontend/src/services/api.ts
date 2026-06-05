@@ -30,7 +30,10 @@ const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 // Handle 401 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: AxiosError) => {
+  (error: unknown) => {
+    if (!axios.isAxiosError(error)) {
+  return Promise.reject(error)
+}
     const url = error.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
     if (error.response?.status === 401 && !isAuthEndpoint) {
@@ -40,7 +43,7 @@ api.interceptors.response.use(
         window.history.pushState({}, '', '/login')
         // Notify router listeners (e.g., react-router) to handle navigation.
         window.dispatchEvent(new PopStateEvent('popstate'))
-      } catch {
+      } catch (e) {
         // Fallback: if SPA navigation fails, perform a safe replace.
         window.location.replace('/login')
       }
@@ -384,7 +387,8 @@ export const ragApi = {
     let buffer = ''
 
     try {
-      while (!signal?.aborted) {
+      for (;;) {
+        
         const { value, done } = await reader.read()
         if (done) break
         buffer += value
