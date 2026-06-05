@@ -24,13 +24,23 @@ export default function Login() {
       const user = await authApi.getMe()     
       setAuth(tokenData.access_token, user)  
       navigate('/')
-    } catch (err) {
-      if (axios.isAxiosError(err) && err.response?.data?.detail) {
-        setError(err.response.data.detail)
-      } else {
-        setError('Unable to sign in. Please check your credentials and try again.')
-      }
-    } finally {
+    } // ✅ Fix
+} catch (err) {
+  if (axios.isAxiosError(err)) {
+    const status = err.response?.status
+    if (status === 401 || status === 403) {
+      setError('Invalid email or password.')
+    } else if (status && status >= 500) {
+      setError('Server error, please try again later.')
+    } else if (!err.response) {
+      setError('Unable to connect to server.')
+    } else {
+      setError(err.response.data?.detail ?? 'Something went wrong. Please try again.')
+    }
+  } else {
+    setError('Something went wrong. Please try again.')
+  }
+}finally {
       setLoading(false)
     }
   }
