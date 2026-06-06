@@ -62,18 +62,7 @@ def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
 ):
-    """Ingest one or more regulatory PDFs and rebuild the FAISS index.
-
-    Args:
-        files: One or more PDF uploads to save, chunk, and index.
-        current_user: Authenticated user requesting the ingestion.
-
-    Returns:
-        RAGIngestResponse with file, chunk, and index size counts.
-
-    Raises:
-        HTTPException: If no valid PDFs are supplied or indexing fails.
-    """
+    """Ingest one or more regulatory PDFs and rebuild the FAISS index."""
     pdf_files = [
         f
         for f in files
