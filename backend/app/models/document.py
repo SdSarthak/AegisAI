@@ -29,6 +29,8 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     ai_system_id = Column(Integer, ForeignKey("ai_systems.id"), nullable=True)
+    # Org scope — populated automatically when the creating user belongs to an org
+    org_id = Column(Integer, ForeignKey("organisations.id"), nullable=True, index=True)
 
     # Document info
     title = Column(String(255), nullable=False)
@@ -49,6 +51,7 @@ class Document(Base):
     # Relationships
     owner = relationship("User", back_populates="documents")
     ai_system = relationship("AISystem", back_populates="documents")
+    organisation = relationship("Organisation", back_populates="documents")
 
 class DocumentVersion(Base):
     __tablename__ = "document_versions"

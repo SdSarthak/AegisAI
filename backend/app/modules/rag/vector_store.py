@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 import threading
+from pathlib import Path
 from langchain_community.vectorstores import FAISS
 from langchain_openai import OpenAIEmbeddings
 from langchain_community.embeddings import OllamaEmbeddings
@@ -59,7 +60,7 @@ def load_vector_store():
         FileNotFoundError: if the index has not been created yet
     """
     index_path = settings.FAISS_INDEX_PATH
-    if not os.path.exists(index_path):
+    if not Path(index_path).exists():
         raise FileNotFoundError(
             f"FAISS index not found at '{index_path}'. "
             "The RAG module requires regulatory documents to be ingested first. "
@@ -73,4 +74,4 @@ def load_vector_store():
 
 def check_index_exists():
     """Check if FAISS index exists on disk."""
-    return os.path.exists(settings.FAISS_INDEX_PATH)
+    return Path(settings.FAISS_INDEX_PATH).exists()

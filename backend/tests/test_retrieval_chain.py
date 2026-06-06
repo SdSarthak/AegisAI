@@ -1,7 +1,25 @@
-"""Tests for the RAG retrieval chain module with mocked FAISS and LLM."""
+import sys
+from unittest.mock import MagicMock
+# Create mock modules to prevent import and attribute errors
+mock_lc = MagicMock()
+mock_lc_chains = MagicMock()
+mock_lc_chains.RetrievalQA = MagicMock()
+mock_lc.chains = mock_lc_chains
+sys.modules["langchain"] = mock_lc
+sys.modules["langchain.chains"] = mock_lc_chains
+
+mock_lcc = MagicMock()
+mock_lcc_vs = MagicMock()
+mock_lcc.vectorstores = mock_lcc_vs
+sys.modules["langchain_community"] = mock_lcc
+sys.modules["langchain_community.vectorstores"] = mock_lcc_vs
+sys.modules["langchain_community.document_loaders"] = MagicMock()
+sys.modules["langchain_text_splitters"] = MagicMock()
+sys.modules["langchain_openai"] = MagicMock()
 
 import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+from app.core.config import settings
 from app.modules.rag.retrieval_chain import get_qa_chain
 from app.modules.rag.vector_store import load_vector_store
 
@@ -9,7 +27,7 @@ from app.modules.rag.vector_store import load_vector_store
 class TestVectorStore:
     """Tests for the vector store loading logic."""
 
-    @patch("os.path.exists")
+    @patch("app.modules.rag.vector_store.Path.exists")
     def test_load_vector_store_raises_file_not_found(self, mock_exists):
         """1. load_vector_store() should raise FileNotFoundError when the FAISS index does not exist."""
         # Setup: Simulate that the index path does NOT exist
@@ -20,9 +38,9 @@ class TestVectorStore:
         
         assert "FAISS index not found" in str(excinfo.value)
 
-    @patch("os.path.exists")
+    @patch("app.modules.rag.vector_store.Path.exists")
     @patch("app.modules.rag.vector_store.get_embeddings")
-    @patch("langchain_community.vectorstores.FAISS.load_local")
+    @patch("app.modules.rag.vector_store.FAISS.load_local")
     def test_load_vector_store_success(self, mock_load_local, mock_get_embeddings, mock_exists):
         """2. load_vector_store() should return the index when it exists."""
         # Setup: Simulate that the index path DOES exist
@@ -50,25 +68,29 @@ class TestRetrievalChain:
         """3. get_qa_chain() should return a chain when the index exists."""
         # Setup: Mock vector store and its retriever
         mock_vs = MagicMock()
+        mock_load_vs.return_value = mock_vs
         mock_retriever = MagicMock()
         mock_vs.as_retriever.return_value = mock_retriever
-        mock_load_vs.return_value = mock_vs
         
-        # Mock the chain instance
-        mock_chain = MagicMock()
-        mock_from_chain_type.return_value = mock_chain
-        
-        # Execute
+        # Call the function
         chain = get_qa_chain()
         
         # Assertions
-        assert chain == mock_chain
-        mock_from_chain_type.assert_called_once()
-        
-        # Verify it was built with return_source_documents=True
-        # This checks that we are following the project's requirement for source extraction
-        args, kwargs = mock_from_chain_type.call_args
-        assert kwargs["return_source_documents"] is True
+        assert chain is not None
+        mock_load_vs.assert_called_once()
+        mock_vs.as_retriever.assert_called_once_with(search_kwargs={"k": 5})
+        mock_llm.assert_called_once_with(
+            model=settings.LLM_MODEL,
+            openai_api_key=settings.LLM_API_KEY,
+            openai_api_base=settings.LLM_BASE_URL or None,
+            temperature=0,
+        )
+        mock_from_chain_type.assert_called_once_with(
+            llm=mock_llm.return_value,
+            chain_type="stuff",
+            retriever=mock_retriever,
+            return_source_documents=True,
+        )
 
     @patch("app.modules.rag.retrieval_chain.load_vector_store")
     @patch("app.modules.rag.retrieval_chain.ChatOpenAI")
