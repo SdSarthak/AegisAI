@@ -47,7 +47,21 @@ users_router = APIRouter()
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user account."""
+    """
+    Register a new user account.
+
+    Args:
+        user_data (UserCreate): Registration payload containing email,
+            password, full_name, and company_name.
+        db (Session): SQLAlchemy database session (injected).
+
+    Returns:
+        UserResponse: The newly created user object.
+
+    Raises:
+        HTTPException 400: If the email is already registered.
+        HTTPException 500: If a database error occurs during registration.
+    """
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
@@ -71,7 +85,6 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         return user
     except Exception:
         db.rollback()
-        # Generic database error handler
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -85,13 +98,27 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
-    """Authenticate a user and return an access token."""
+    """
+    Authenticate a user and return a JWT access token.
+
+    Performs a constant-time password comparison regardless of whether the
+    user exists, preventing timing-based email enumeration attacks.
+
+    Args:
+        form_data (OAuth2PasswordRequestForm): OAuth2 form with username
+            (email) and password fields.
+        db (Session): SQLAlchemy database session (injected).
+
+    Returns:
+        Token: A dict containing access_token (JWT string) and token_type
+            ("bearer").
+
+    Raises:
+        HTTPException 401: If the email is not found, the account is
+            inactive, or the password is incorrect.
+    """
     user = db.query(User).filter(User.email == form_data.username).first()
 
-    # Always run a constant-time bcrypt comparison regardless of whether the
-    # user exists.  Without this, an attacker can distinguish "user not found"
-    # (fast — no hash) from "wrong password" (slow — bcrypt verify) by
-    # measuring response latency.
     hashed = user.hashed_password if user else _DUMMY_HASH
     password_ok = verify_password(form_data.password, hashed)
 
@@ -115,7 +142,19 @@ def login(
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Return the authenticated user's profile."""
+    """
+    Return the authenticated user's profile.
+
+    Args:
+        current_user (User): The currently authenticated user,
+            resolved from the Bearer token (injected).
+
+    Returns:
+        UserResponse: Profile data for the authenticated user.
+
+    Raises:
+        HTTPException 401: If the token is missing, expired, or invalid.
+    """
     return current_user
 
 
@@ -125,7 +164,24 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Change the authenticated user's password."""
+    """
+    Change the authenticated user's password.
+
+    Args:
+        payload (ChangePasswordRequest): Request body containing
+            current_password and new_password.
+        current_user (User): The currently authenticated user (injected).
+        db (Session): SQLAlchemy database session (injected).
+
+    Returns:
+        dict: A confirmation message {"message": "Password updated
+            successfully"}.
+
+    Raises:
+        HTTPException 400: If current_password does not match the stored
+            hash.
+        HTTPException 401: If the token is missing, expired, or invalid.
+    """
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -147,7 +203,24 @@ def update_current_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update the authenticated user's profile details."""
+    """
+    Update the authenticated user's profile details.
+
+    Only fields explicitly provided in the request body are updated;
+    omitted fields are left unchanged.
+
+    Args:
+        user_data (UserUpdateSchema): Partial update payload. Supported
+            fields: full_name, company_name, onboarding_completed.
+        current_user (User): The currently authenticated user (injected).
+        db (Session): SQLAlchemy database session (injected).
+
+    Returns:
+        UserResponse: The updated user profile.
+
+    Raises:
+        HTTPException 401: If the token is missing, expired, or invalid.
+    """
     if user_data.full_name is not None:
         current_user.full_name = user_data.full_name
 
@@ -168,7 +241,24 @@ def get_current_user_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return summary statistics for the authenticated user."""
+    """
+    Return summary statistics for the authenticated user.
+
+    Aggregates data across the user's AI systems and documents,
+    including risk level breakdown and compliance counts.
+
+    Args:
+        current_user (User): The currently authenticated user (injected).
+        db (Session): SQLAlchemy database session (injected).
+
+    Returns:
+        UserStatsResponse: Summary containing total_systems,
+            total_documents, risk_breakdown (dict of risk level to count),
+            and compliant_systems count.
+
+    Raises:
+        HTTPException 401: If the token is missing, expired, or invalid.
+    """
     systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
 
     risk_breakdown: dict = {}
