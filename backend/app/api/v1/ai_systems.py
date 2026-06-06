@@ -7,6 +7,7 @@ from typing import List, Optional
 import csv
 import io
 
+from app.core.csv_utils import sanitize_csv_field
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.config import settings
@@ -22,6 +23,8 @@ from app.schemas.ai_system import (
 )
 from app.schemas.audit_log import AISystemAuditLogResponse
 from app.schemas.pagination import PaginatedResponse
+from app.modules.compliance.eu_ai_act import evaluate_compliance
+from app.schemas.compliance import ComplianceGapResponse, ComplianceRequirementItem
 
 router = APIRouter()
 
@@ -174,6 +177,9 @@ def list_ai_systems(
     order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
     skip: int = Query(0, ge=0, description="Items to skip"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
+    search: Optional[str] = Query(None, description="Search by name or description"),
+    risk_level: Optional[str] = Query(None, description="Filter by risk level: minimal, limited, high, unacceptable"),
+    compliance_status: Optional[str] = Query(None, description="Filter by compliance status: not_started, in_progress, under_review, compliant, non_compliant"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -193,6 +199,32 @@ def list_ai_systems(
     direction = asc(column) if order == "asc" else desc(column)
 
     base_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
+
+    if search:
+        search_filter = f"%{search}%"
+        base_query = base_query.filter(
+            (AISystem.name.ilike(search_filter)) |
+            (AISystem.description.ilike(search_filter))
+        )
+
+    if risk_level:
+        allowed_risk = {"minimal", "limited", "high", "unacceptable"}
+        if risk_level.lower() not in allowed_risk:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid risk_level '{risk_level}'. Allowed: {', '.join(sorted(allowed_risk))}",
+            )
+        base_query = base_query.filter(AISystem.risk_level == risk_level.lower())
+
+    if compliance_status:
+        allowed_compliance = {"not_started", "in_progress", "under_review", "compliant", "non_compliant"}
+        if compliance_status.lower() not in allowed_compliance:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid compliance_status '{compliance_status}'. Allowed: {', '.join(sorted(allowed_compliance))}",
+            )
+        base_query = base_query.filter(AISystem.compliance_status == compliance_status.lower())
+
     total = base_query.count()
 
     systems = (
@@ -291,11 +323,11 @@ def export_ai_systems(
     for s in systems:
         writer.writerow([
             s.id,
-            s.name,
-            s.description or "",
-            s.version or "",
-            s.use_case or "",
-            s.sector or "",
+            sanitize_csv_field(s.name),
+            sanitize_csv_field(s.description or ""),
+            sanitize_csv_field(s.version or ""),
+            sanitize_csv_field(s.use_case or ""),
+            sanitize_csv_field(s.sector or ""),
             s.risk_level.value if s.risk_level else "",
             s.compliance_status.value if s.compliance_status else "",
             s.compliance_score if s.compliance_score is not None else "",
@@ -402,7 +434,7 @@ def clone_ai_system(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Clone an existing AI system with '(copy)' appended to name and compliance reset."""
+    """Clone an existing AI system with a '(copy)' suffix and reset compliance status."""
     original = db.query(AISystem).filter(
         AISystem.id == system_id,
         AISystem.owner_id == current_user.id
@@ -505,3 +537,50 @@ def update_ai_system_status(
     db.commit()
     db.refresh(system)
     return system
+
+
+
+
+@router.get("/{system_id}/gaps", response_model=ComplianceGapResponse)
+def get_compliance_gaps(
+    system_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return unmet EU AI Act requirements for a given AI system based on its risk level."""
+    system = (
+        db.query(AISystem)
+        .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
+        .first()
+    )
+
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found",
+        )
+
+    risk_level = system.risk_level.value if system.risk_level else "minimal"
+    questionnaire_responses = system.questionnaire_responses or {}
+
+    all_items = evaluate_compliance(risk_level, questionnaire_responses)
+
+    return ComplianceGapResponse(
+        system_id=system.id,
+        system_name=system.name,
+        risk_level=risk_level,
+        compliance_status=system.compliance_status.value if system.compliance_status else "not_started",
+        total_requirements=len(all_items),
+        done_count=sum(1 for i in all_items if i.status == "done"),
+        partial_count=sum(1 for i in all_items if i.status == "partial"),
+        missing_count=sum(1 for i in all_items if i.status == "missing"),
+        requirements=[
+            ComplianceRequirementItem(
+                requirement=i.requirement,
+                article_reference=i.article_reference,
+                status=i.status,
+                action_needed=i.action_needed,
+            )
+            for i in all_items
+        ],
+    )

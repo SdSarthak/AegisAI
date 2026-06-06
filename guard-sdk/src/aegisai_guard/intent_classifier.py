@@ -151,8 +151,11 @@ class IntentClassifier:
         # Load model
         model_exists = model_path and os.path.exists(model_path)
         has_weights = model_exists and self._has_trained_weights(model_path)
+        trained_marker = model_exists and os.path.exists(
+            os.path.join(model_path, ".trained")
+        )
         
-        if model_exists and has_weights:
+        if model_exists and has_weights and trained_marker:
             print(f"[OK] Loading fine-tuned model from {model_path}")
             try:
                 self.tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -163,10 +166,15 @@ class IntentClassifier:
                 print(f"[WARNING] Failed to load model: {e}. Falling back to deterministic rules.")
                 self._load_heuristic_fallback()
         else:
+            if model_exists and has_weights and not trained_marker:
+                print(
+                    f"[WARNING] Model weights found at {model_path} but no .trained marker — "
+                    "the model has not been fine-tuned."
+                )
             print(f"[WARNING] Fine-tuned model not found at {model_path}")
             print(
-                "  Using deterministic heuristic fallback. Train or provide a fine-tuned "
-                "classifier for semantic coverage."
+                "  Using deterministic heuristic fallback. Run training pipeline to produce "
+                "a fine-tuned classifier for semantic coverage."
             )
             self._load_heuristic_fallback()
         
@@ -415,6 +423,15 @@ class IntentClassifier:
             os.makedirs(output_dir, exist_ok=True)
             self.model.save_pretrained(output_dir)
             self.tokenizer.save_pretrained(output_dir)
+            import datetime
+
+            trained_meta = {
+                "trained_at": datetime.datetime.now().isoformat(),
+                "epochs": epochs,
+                "classes": list(self.id_to_intent.values()),
+            }
+            with open(os.path.join(output_dir, ".trained"), "w") as f:
+                json.dump(trained_meta, f, indent=2)
             print(f"\nModel saved to {output_dir}")
 
         return metrics
