@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { classificationApi } from '../services/api'

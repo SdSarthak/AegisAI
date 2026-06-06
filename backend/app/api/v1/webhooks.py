@@ -79,12 +79,7 @@ def deliver_webhook(
     payload: dict[str, Any],
     background_tasks: BackgroundTasks,
 ) -> None:
-    """
-    Schedule delivery to active user webhooks subscribed to the event.
-
-    Delivery runs in FastAPI BackgroundTasks so webhook failures do not block
-    or fail the originating request.
-    """
+    """Schedule delivery to active user webhooks subscribed to the event."""
     webhooks = (
         db.query(WebhookConfig)
         .filter(
