@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import asc, desc
+from sqlalchemy import asc, desc, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
@@ -12,7 +12,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.config import settings
 from app.models.user import User
-from app.models.ai_system import AISystem, ComplianceStatus
+from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.audit_log import AISystemAuditLog
 from app.schemas.ai_system import (
     AISystemCreate,
@@ -27,6 +27,12 @@ from app.modules.compliance.eu_ai_act import evaluate_compliance
 from app.schemas.compliance import ComplianceGapResponse, ComplianceRequirementItem
 
 router = APIRouter()
+
+
+class AISystemListResponse(PaginatedResponse[AISystemResponse]):
+    """Paginated AI system list response with page metadata."""
+
+    page: int
 
 
 def _read_upload_file(file: UploadFile, max_bytes: int) -> str:
@@ -171,15 +177,16 @@ _SORTABLE_FIELDS = {
 }
 
 
-@router.get("/", response_model=PaginatedResponse[AISystemResponse])
+@router.get("/", response_model=AISystemListResponse)
 def list_ai_systems(
     sort_by: Optional[str] = Query("created_at", description="Sort field: name, risk_level, compliance_score, created_at"),
     order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
-    skip: int = Query(0, ge=0, description="Items to skip"),
+    search: Optional[str] = Query(None, description="Case-insensitive search across system name and description"),
+    risk_level: Optional[str] = Query(None, description="Filter by risk level"),
+    compliance_status: Optional[str] = Query(None, description="Filter by compliance status"),
+    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    skip: Optional[int] = Query(None, ge=0, description="Items to skip"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
-    search: Optional[str] = Query(None, description="Search by name or description"),
-    risk_level: Optional[str] = Query(None, description="Filter by risk level: minimal, limited, high, unacceptable"),
-    compliance_status: Optional[str] = Query(None, description="Filter by compliance status: not_started, in_progress, under_review, compliant, non_compliant"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -199,42 +206,53 @@ def list_ai_systems(
     direction = asc(column) if order == "asc" else desc(column)
 
     base_query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
-
     if search:
-        search_filter = f"%{search}%"
+        search_term = f"%{search.strip()}%"
         base_query = base_query.filter(
-            (AISystem.name.ilike(search_filter)) |
-            (AISystem.description.ilike(search_filter))
+            or_(
+                AISystem.name.ilike(search_term),
+                AISystem.description.ilike(search_term),
+            )
         )
-
-    if risk_level:
-        allowed_risk = {"minimal", "limited", "high", "unacceptable"}
-        if risk_level.lower() not in allowed_risk:
+    if risk_level is not None:
+        allowed_risk_levels = {level.value for level in RiskLevel}
+        normalized_risk_level = risk_level.strip().lower()
+        if normalized_risk_level not in allowed_risk_levels:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid risk_level '{risk_level}'. Allowed: {', '.join(sorted(allowed_risk))}",
+                detail=f"Invalid risk_level '{risk_level}'. Allowed: {', '.join(sorted(allowed_risk_levels))}",
             )
-        base_query = base_query.filter(AISystem.risk_level == risk_level.lower())
-
-    if compliance_status:
-        allowed_compliance = {"not_started", "in_progress", "under_review", "compliant", "non_compliant"}
-        if compliance_status.lower() not in allowed_compliance:
+        base_query = base_query.filter(AISystem.risk_level == normalized_risk_level)
+    if compliance_status is not None:
+        allowed_statuses = {status.value for status in ComplianceStatus}
+        normalized_compliance_status = compliance_status.strip().lower()
+        if normalized_compliance_status not in allowed_statuses:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid compliance_status '{compliance_status}'. Allowed: {', '.join(sorted(allowed_compliance))}",
+                detail=(
+                    f"Invalid compliance_status '{compliance_status}'. "
+                    f"Allowed: {', '.join(sorted(allowed_statuses))}"
+                ),
             )
-        base_query = base_query.filter(AISystem.compliance_status == compliance_status.lower())
+        base_query = base_query.filter(AISystem.compliance_status == normalized_compliance_status)
 
     total = base_query.count()
+    offset = skip if skip is not None else (page - 1) * limit
 
     systems = (
         base_query
         .order_by(direction)
-        .offset(skip)
+        .offset(offset)
         .limit(limit)
         .all()
     )
-    return PaginatedResponse(items=systems, total=total, skip=skip, limit=limit)
+    return AISystemListResponse(
+        items=systems,
+        total=total,
+        skip=offset,
+        limit=limit,
+        page=page,
+    )
 
 
 @router.post("/import", response_model=BulkImportResponse)
