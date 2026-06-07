@@ -9,10 +9,10 @@ import numpy as np
 
 import torch
 from torch.utils.data import DataLoader, Dataset
+from torch.optim import AdamW
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
-    AdamW,
     get_linear_schedule_with_warmup,
 )
 from sklearn.metrics import classification_report, confusion_matrix, f1_score

@@ -94,8 +94,6 @@ class BulkScanResponse(BaseModel):
 
 
 VALID_SANITIZATION_LEVELS = {"low", "medium", "high"}
-
-
 class UserGuardConfig(TypedDict):
     sanitization_level: str
     malicious_threshold: float

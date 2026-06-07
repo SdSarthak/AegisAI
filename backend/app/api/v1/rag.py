@@ -11,39 +11,33 @@ Contributor note:
   - TODO: Integrate MLflow tracking from modules/rag/ml_flow.py
 """
 
+import hashlib
 import os
 import shutil
 import tempfile
-from typing import List, Literal, Optional
+import time
 import mimetypes
+from typing import List, Optional, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.ingested_document import IngestedDocument, SourceType
 from app.models.rag_feedback import RAGFeedback
 from app.models.rag_query import RagQuery
 from app.models.user import SubscriptionTier, User
 from app.modules.llm.llm_client import LLMClient
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.streaming import stream_rag_answer
-from app.modules.rag.vector_store import create_vector_store, load_vector_store
+from app.modules.rag.vector_store import create_vector_store, load_vector_store, merge_into_vector_store
+from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
 
 router = APIRouter()
-
-
-class RAGQueryRequest(BaseModel):
-    question: str
-
-
-class RAGQueryResponse(BaseModel):
-    answer: str
-    sources: list[str] = []
-    answer_id: Optional[str] = None
 
 
 class RAGIngestResponse(BaseModel):
@@ -52,6 +46,36 @@ class RAGIngestResponse(BaseModel):
     files_processed: int
     chunks_created: int
     index_size_bytes: int
+
+
+class IngestedDocumentResponse(BaseModel):
+    """Schema for a single ingested document in the registry."""
+
+    id: int
+    filename: str
+    source_type: str
+    regulation_name: Optional[str] = None
+    file_hash: str
+    file_size_bytes: int
+    chunk_count: int
+    uploaded_by_id: Optional[int] = None
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _sha256_file(path: str) -> str:
+    """Compute the SHA-256 hex digest of a file on disk."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 16), b""):
+            h.update(block)
+    return h.hexdigest()
 
 
 # ---------------------------------------------------------------------------
@@ -66,14 +90,19 @@ class RAGIngestResponse(BaseModel):
 def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
-    """Accept one or more PDF uploads, process them through the document loader,"""
+    """
+    Accept one or more PDF uploads, process them through the document loader,
+    build (or rebuild) the FAISS vector index, and persist it to
+    ``settings.FAISS_INDEX_PATH``.
+    """
+    # 1. Validate: at least one PDF.
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"Too many files. Maximum allowed is {settings.RAG_MAX_FILES_PER_REQUEST}.",
         )
-
     pdf_files = [
         f for f in files
         if f.filename and mimetypes.guess_type(f.filename)[0] in ("application/pdf", "binary/octet-stream", None)
@@ -84,6 +113,7 @@ def ingest_documents(
             detail="No valid PDF files supplied. Please upload files with a .pdf extension.",
         )
 
+    # 2. Save uploads to a temporary directory.
     total_size = 0
     for upload in pdf_files:
         upload.file.seek(0, 2)
@@ -102,7 +132,6 @@ def ingest_documents(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
             detail=f"Total upload size exceeds the maximum budget of {settings.RAG_TOTAL_BUDGET_BYTES // (1024 * 1024)}MB.",
         )
-
     tmp_dir = tempfile.mkdtemp(prefix="aegis_ingest_")
     saved_paths: list[str] = []
 
@@ -113,10 +142,8 @@ def ingest_documents(
                 shutil.copyfileobj(upload.file, buf)
             saved_paths.append(dest)
 
-        # ── 3. Chunk documents (gives us the accurate chunk count) ────────
+        # 3. Chunk documents (gives us the accurate chunk count)
         raw_chunks = load_documents_from_paths(saved_paths)
-        
-        # Filter out chunks with empty or whitespace-only page_content
         chunks = [
             chunk for chunk in raw_chunks 
             if chunk.page_content and chunk.page_content.strip()
@@ -129,16 +156,38 @@ def ingest_documents(
                        "Ensure the files are not scanned images or password-protected.",
             )
 
-        # ── 4. Build / rebuild FAISS index and persist to disk ────────────
+        # 4. Merge into existing FAISS index or create a new one.
         try:
-            create_vector_store(chunks) # Pass the extracted Document objects!
+            merge_into_vector_store(saved_paths)
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Failed to build FAISS index: {exc}",
             )
 
-        # ── 5. Calculate on-disk index size ───────────────────────────────
+        # 5. Persist ingestion metadata.
+        # Count chunks per file so the registry is accurate
+        per_file_chunks: dict[str, int] = {}
+        for chunk in chunks:
+            src = chunk.metadata.get("source", "")
+            basename = os.path.basename(src)
+            per_file_chunks[basename] = per_file_chunks.get(basename, 0) + 1
+
+        for path in saved_paths:
+            fname = os.path.basename(path)
+            doc_record = IngestedDocument(
+                filename=fname,
+                source_type=SourceType.UPLOADED,
+                file_hash=_sha256_file(path),
+                file_size_bytes=os.path.getsize(path),
+                chunk_count=per_file_chunks.get(fname, 0),
+                uploaded_by_id=current_user.id,
+            )
+            db.add(doc_record)
+
+        db.commit()
+
+        # 6. Calculate on-disk index size
         index_path = settings.FAISS_INDEX_PATH
         index_size_bytes = 0
         for fname in ("index.faiss", "index.pkl"):
@@ -153,8 +202,89 @@ def ingest_documents(
         )
 
     finally:
-        # ── 6. Always clean up the temp directory ─────────────────────────
+        # 7. Always clean up the temp directory
         shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# GET /rag/documents
+# ---------------------------------------------------------------------------
+@router.get(
+    "/documents",
+    response_model=list[IngestedDocumentResponse],
+    summary="List all ingested regulatory documents",
+    tags=["RAG Intelligence"],
+)
+def list_ingested_documents(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return every document that has been ingested into the FAISS index."""
+    rows = (
+        db.query(IngestedDocument)
+        .order_by(IngestedDocument.created_at.desc())
+        .all()
+    )
+    return [
+        IngestedDocumentResponse(
+            id=r.id,
+            filename=r.filename,
+            source_type=r.source_type.value,
+            regulation_name=r.regulation_name,
+            file_hash=r.file_hash,
+            file_size_bytes=r.file_size_bytes,
+            chunk_count=r.chunk_count,
+            uploaded_by_id=r.uploaded_by_id,
+            created_at=r.created_at.isoformat(),
+        )
+        for r in rows
+    ]
+
+
+# ---------------------------------------------------------------------------
+# DELETE /rag/documents/{doc_id}
+# ---------------------------------------------------------------------------
+@router.delete(
+    "/documents/{doc_id}",
+    summary="Remove an ingested document from the registry",
+    tags=["RAG Intelligence"],
+)
+def delete_ingested_document(
+    doc_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete a document record from the ingested_documents registry."""
+    try:
+        if current_user.subscription_tier != SubscriptionTier.SCALE:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required to delete ingested documents.",
+            )
+    except AttributeError:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required to delete ingested documents.",
+        )
+
+    doc = db.query(IngestedDocument).filter(IngestedDocument.id == doc_id).first()
+    if not doc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Ingested document with id={doc_id} not found.",
+        )
+
+    filename = doc.filename
+    db.delete(doc)
+    db.commit()
+
+    return {
+        "status": "deleted",
+        "id": doc_id,
+        "filename": filename,
+        "note": "Metadata removed. Run a full index rebuild to purge "
+                "chunks from the FAISS vector store.",
+    }
 
 
 @router.post("/query", response_model=RAGQueryResponse)
@@ -166,32 +296,75 @@ def query_knowledge_base(
     """Ask a regulatory question and get an answer grounded in source documents."""
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
+        from app.modules.rag.groundedness import compute_groundedness
         from app.core.database import Base
 
         qa_chain = get_qa_chain()
+
+        t_start = time.monotonic()
         result = qa_chain({"query": request.question})
+        latency_ms = (time.monotonic() - t_start) * 1000
+
         source_docs = result.get("source_documents", [])
         sources = [str(doc.metadata.get("source", "")) for doc in source_docs]
+        chunk_texts = [str(getattr(doc, "page_content", "")) for doc in source_docs]
+        answer = str(result.get("result", ""))
+        groundedness_score = result.get("groundedness_score")
+        if groundedness_score is None:
+            groundedness_score = compute_groundedness(answer, chunk_texts)
+            low_confidence = groundedness_score < 0.70
+        else:
+            low_confidence = result.get("low_confidence", groundedness_score < 0.70)
 
         # Ensure tables exist on this DB bind (useful for test DB overrides)
         try:
             Base.metadata.create_all(bind=db.get_bind())
         except Exception:
-            # best-effort: ignore if bind not available
             pass
 
         # Persist an initial RAGFeedback row to capture the answer and contributing chunks
         feedback = RAGFeedback(
             question=request.question,
-            answer=str(result.get("result", "")),
+            answer=answer,
             source_chunks=sources,
         )
         db.add(feedback)
+        
+        # Track history
+        rag_query = RagQuery(
+            user_id=current_user.id,
+            question=request.question,
+            answer_summary=answer[:200],
+            source_count=len(sources),
+        )
+        db.add(rag_query)
         db.commit()
         db.refresh(feedback)
         answer_id = feedback.id
 
-        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
+        # Log to MLflow. Failures are swallowed inside log_query.
+        try:
+            from app.modules.rag.ml_flow import log_query
+
+            log_query(
+                question=request.question,
+                answer=answer,
+                sources=sources,
+                latency_ms=latency_ms,
+            )
+        except Exception:
+            pass
+
+        return RAGQueryResponse(
+            answer=answer,
+            sources=sources,
+            answer_id=answer_id,
+            groundedness_score=groundedness_score,
+            low_confidence=low_confidence,
+            confidence_tier=result.get("confidence_tier", "unknown"),
+            per_verifier_scores=result.get("per_verifier_scores", {}),
+            flagged_reason=result.get("flagged_reason"),
+        )
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -253,8 +426,6 @@ async def query_knowledge_base_stream(
         generator,
         media_type="text/event-stream",
         headers={
-            # Prevent intermediary buffering (nginx in particular) from
-            # holding back tokens until the response is "done".
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
             "Connection": "keep-alive",
@@ -323,7 +494,6 @@ def get_low_quality_chunks(
     except Exception:
         raise HTTPException(status_code=403, detail="Admin access required")
 
-    # Aggregate counts per chunk
     counts: dict[str, dict[str, int]] = {}
     rows = db.query(RAGFeedback).all()
     for r in rows:
@@ -344,6 +514,7 @@ def get_low_quality_chunks(
             low_quality.append({"chunk": chunk, "thumbs_down": c["thumbs_down"], "total": c["total"], "ratio": ratio})
 
     return {"threshold": threshold, "low_quality_chunks": low_quality}
+
 
 @router.get("/history")
 def get_rag_history(

@@ -457,6 +457,7 @@ def list_document_templates(
     ]
 
 
+
 @router.get("/{document_id}", response_model=DocumentResponse)
 def get_document(
     document_id: int,
@@ -502,6 +503,7 @@ def update_document(
     db.refresh(document)
     
     return document
+
 
 @router.post(
     "/generate",
@@ -585,7 +587,6 @@ def generate_document(
     db.refresh(document)
 
     return document
-
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(

@@ -17,10 +17,12 @@ class RAGQueryResponse(BaseModel):
         default=0.0,
         ge=0.0,
         le=1.0,
+        deprecated=True,
         description="Composite groundedness score (0.0-1.0). Higher = more grounded.",
     )
     low_confidence: bool = Field(
         default=False,
+        deprecated=True,
         description="True when groundedness_score is below the configured threshold.",
     )
     confidence_tier: str = Field(

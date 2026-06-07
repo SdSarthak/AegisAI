@@ -15,7 +15,16 @@ from functools import wraps
 from typing import Any, Callable, TypeVar
 
 from prometheus_client import Counter, Histogram
-from prometheus_fastapi_instrumentator import Instrumentator
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+except ImportError:
+    class Instrumentator:
+        def __init__(self, *args, **kwargs):
+            pass
+        def instrument(self, *args, **kwargs):
+            return self
+        def expose(self, *args, **kwargs):
+            return self
 
 _F = TypeVar("_F", bound=Callable[..., Any])
 
