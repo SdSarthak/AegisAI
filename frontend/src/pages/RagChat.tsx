@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState, type FormEvent, type ChangeEvent } from 'react'
 import {
   AlertCircle,
   Bot,
@@ -33,7 +33,7 @@ export default function RagChat() {
   const hasAnswer = tokens.length > 0
   const displayError = validationError ?? streamError
 
-  const handleAsk = (e: React.FormEvent) => {
+  const handleAsk = (e: FormEvent) => {
     e.preventDefault()
     const trimmed = question.trim()
     if (!trimmed) {
@@ -256,7 +256,7 @@ export default function RagChat() {
             <textarea
               id="rag-question"
               value={question}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setQuestion(e.target.value)}
+              onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setQuestion(e.target.value)}
               placeholder="Ask a compliance question..."
               rows={1}
               disabled={isStreaming}

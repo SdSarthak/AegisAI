@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import {
   Activity,
   AlertCircle,
@@ -86,7 +86,7 @@ export default function GuardConsole() {
     [metrics]
   )
 
-  const handleScan = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleScan = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     const trimmedPrompt = prompt.trim()

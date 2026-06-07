@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState, type FormEvent, type ChangeEvent, type MouseEvent } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
 import { authApi } from '../services/api'
@@ -68,8 +68,10 @@ export default function Register() {
   const [showPasswordRequirements, setShowPasswordRequirements] = useState(false)
 
   const passwordStrength = checkPasswordStrength(formData.password)
+  const getError = (field: string) => errors.find((error) => error.field === field)
+  const hasError = (field: string) => Boolean(getError(field))
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setErrors([])
 
@@ -153,11 +155,11 @@ export default function Register() {
         </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
-          {errors.some((e: any) => e.field === 'general') && (
+          {hasError('general') && (
             <div className="p-3 flex items-start gap-3 text-sm bg-red-50 rounded-lg border border-red-200">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="text-red-700">
-                {errors.find((e: any) => e.field === 'general')?.message}
+                {getError('general')?.message}
               </div>
             </div>
           )}
@@ -171,16 +173,16 @@ export default function Register() {
               type="email"
               required
               value={formData.email}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, email: e.target.value })}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, email: e.target.value })}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e: any) => e.field === 'email')
+                hasError('email')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e: any) => e.field === 'email') && (
+            {hasError('email') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e: any) => e.field === 'email')?.message}
+                {getError('email')?.message}
               </p>
             )}
           </div>
@@ -195,18 +197,18 @@ export default function Register() {
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={formData.password}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, password: e.target.value })}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, password: e.target.value })}
                 onFocus={() => setShowPasswordRequirements(true)}
                 onBlur={() => setShowPasswordRequirements(false)}
                 className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                  errors.some((e: any) => e.field === 'password')
+                  hasError('password')
                     ? 'border-red-300 bg-red-50'
                     : 'border-gray-300'
                 }`}
               />
               <button
                 type="button"
-                onMouseDown={(e: React.MouseEvent) => e.preventDefault()}
+                onMouseDown={(e: MouseEvent) => e.preventDefault()}
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
               >
@@ -241,9 +243,9 @@ export default function Register() {
               </div>
             )}
 
-            {errors.some((e: any) => e.field === 'password') && (
+            {hasError('password') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e: any) => e.field === 'password')?.message}
+                {getError('password')?.message}
               </p>
             )}
           </div>
@@ -257,16 +259,16 @@ export default function Register() {
               type="text"
               required
               value={formData.full_name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, full_name: e.target.value })}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, full_name: e.target.value })}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e: any) => e.field === 'full_name')
+                hasError('full_name')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e: any) => e.field === 'full_name') && (
+            {hasError('full_name') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e: any) => e.field === 'full_name')?.message}
+                {getError('full_name')?.message}
               </p>
             )}
           </div>
@@ -280,16 +282,16 @@ export default function Register() {
               type="text"
               required
               value={formData.company_name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, company_name: e.target.value })}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, company_name: e.target.value })}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e: any) => e.field === 'company_name')
+                hasError('company_name')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e: any) => e.field === 'company_name') && (
+            {hasError('company_name') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e: any) => e.field === 'company_name')?.message}
+                {getError('company_name')?.message}
               </p>
             )}
           </div>
