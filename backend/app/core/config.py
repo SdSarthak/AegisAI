@@ -57,6 +57,7 @@ class Settings(BaseSettings):
     RAG_CHUNK_SIZE: int = 1000
     RAG_CHUNK_OVERLAP: int = 200
     FAISS_INDEX_PATH: str = "faiss_index"
+    RAG_DOCUMENT_STORAGE_PATH: str = "rag_documents"
     MLFLOW_TRACKING_URI: str = ""
     EMBEDDINGS_MODEL: str = "nomic-embed-text"
     RAG_MAX_FILES_PER_REQUEST: int = 10
