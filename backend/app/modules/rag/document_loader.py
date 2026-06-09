@@ -23,9 +23,15 @@ def load_documents_from_s3():
 def load_documents_from_paths(file_paths: list[str]):
     """Load documents from a list of local PDF file paths."""
     documents = []
+    from langchain_community.document_loaders import TextLoader
     for path in file_paths:
-        loader = PyPDFLoader(path)
-        documents.extend(loader.load())
+        ext = os.path.splitext(path)[1].lower()
+        if ext == '.pdf':
+            loader = PyPDFLoader(path)
+            documents.extend(loader.load())
+        elif ext == '.txt':
+            loader = TextLoader(path, encoding='utf-8')
+            documents.extend(loader.load())
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=settings.RAG_CHUNK_SIZE,
         chunk_overlap=settings.RAG_CHUNK_OVERLAP,

@@ -55,6 +55,10 @@ async def lifespan(app: FastAPI):
     app.state.registry = init_registry(builtin_dir, custom_dir)
     logger.info("Regulation registry initialized.")
 
+    # Initialize RAG FAISS index in the background (if missing)
+    from app.modules.rag.init_rag import run_rag_initialization_in_background
+    run_rag_initialization_in_background()
+
     yield  # Control is passed to FastAPI and the application runs
 
     logger.info("Shutting down AegisAI backend...")
