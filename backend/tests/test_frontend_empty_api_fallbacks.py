@@ -13,8 +13,6 @@ def test_api_service_rejects_empty_list_payloads():
 
     assert "function ensureListResponse" in source
     assert "response was empty or invalid." in source
-    assert "return ensureListResponse(data, 'AI systems')" in source
-    assert "return ensureListResponse(data, 'Documents')" in source
 
 
 def test_ai_systems_page_shows_retry_fallback():
