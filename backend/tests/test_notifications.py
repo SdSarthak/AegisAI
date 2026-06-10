@@ -107,6 +107,131 @@ def test_list_notifications_supports_unread_only(tmp_path):
     db.close()
 
 
+def test_unread_count_returns_current_user_only(tmp_path):
+    client, db, user, other_user = _make_client(tmp_path)
+
+    db.add_all(
+        [
+            Notification(
+                user_id=user.id,
+                notification_type=NotificationType.GUARD_BLOCK.value,
+                title="Unread 1",
+                message="Unread notification one",
+                is_read=False,
+            ),
+            Notification(
+                user_id=user.id,
+                notification_type=NotificationType.GUARD_BLOCK.value,
+                title="Read",
+                message="Read notification",
+                is_read=True,
+            ),
+            Notification(
+                user_id=other_user.id,
+                notification_type=NotificationType.GUARD_BLOCK.value,
+                title="Other unread",
+                message="Other user unread notification",
+                is_read=False,
+            ),
+        ]
+    )
+    db.commit()
+
+    response = client.get("/api/v1/notifications/unread-count")
+
+    assert response.status_code == 200
+    assert response.json()["unread_count"] == 1
+
+    app.dependency_overrides.clear()
+    db.close()
+
+
+def test_mark_all_notifications_read_only_updates_current_user(tmp_path):
+    client, db, user, other_user = _make_client(tmp_path)
+
+    mine_unread = Notification(
+        user_id=user.id,
+        notification_type=NotificationType.GUARD_BLOCK.value,
+        title="Mine unread",
+        message="Mine unread",
+        is_read=False,
+    )
+    mine_read = Notification(
+        user_id=user.id,
+        notification_type=NotificationType.GUARD_BLOCK.value,
+        title="Mine read",
+        message="Mine read",
+        is_read=True,
+    )
+    other_unread = Notification(
+        user_id=other_user.id,
+        notification_type=NotificationType.GUARD_BLOCK.value,
+        title="Other unread",
+        message="Other unread",
+        is_read=False,
+    )
+    db.add_all([mine_unread, mine_read, other_unread])
+    db.commit()
+    db.refresh(mine_unread)
+    db.refresh(mine_read)
+    db.refresh(other_unread)
+
+    response = client.post("/api/v1/notifications/read-all")
+
+    assert response.status_code == 204
+    assert db.query(Notification).filter(Notification.id == mine_unread.id).first().is_read is True
+    assert db.query(Notification).filter(Notification.id == mine_read.id).first().is_read is True
+    assert db.query(Notification).filter(Notification.id == other_unread.id).first().is_read is False
+
+    app.dependency_overrides.clear()
+    db.close()
+
+
+def test_delete_read_notifications_only_deletes_current_user_read_items(tmp_path):
+    client, db, user, other_user = _make_client(tmp_path)
+
+    mine_read = Notification(
+        user_id=user.id,
+        notification_type=NotificationType.GUARD_BLOCK.value,
+        title="Mine read",
+        message="Mine read",
+        is_read=True,
+    )
+    mine_unread = Notification(
+        user_id=user.id,
+        notification_type=NotificationType.GUARD_BLOCK.value,
+        title="Mine unread",
+        message="Mine unread",
+        is_read=False,
+    )
+    other_read = Notification(
+        user_id=other_user.id,
+        notification_type=NotificationType.GUARD_BLOCK.value,
+        title="Other read",
+        message="Other read",
+        is_read=True,
+    )
+    db.add_all([mine_read, mine_unread, other_read])
+    db.commit()
+    db.refresh(mine_read)
+    db.refresh(mine_unread)
+    db.refresh(other_read)
+
+    mine_read_id = mine_read.id
+    mine_unread_id = mine_unread.id
+    other_read_id = other_read.id
+
+    response = client.delete("/api/v1/notifications/read")
+
+    assert response.status_code == 204
+    assert db.query(Notification).filter(Notification.id == mine_read_id).first() is None
+    assert db.query(Notification).filter(Notification.id == mine_unread_id).first() is not None
+    assert db.query(Notification).filter(Notification.id == other_read_id).first() is not None
+
+    app.dependency_overrides.clear()
+    db.close()
+
+
 def test_mark_notifications_read_only_updates_current_user(tmp_path):
     client, db, user, other_user = _make_client(tmp_path)
 

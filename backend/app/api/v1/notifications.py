@@ -71,6 +71,45 @@ def list_notifications(
     )
 
 
+@router.get("/unread-count")
+def get_unread_count(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the number of unread notifications for the current user."""
+    unread_count = (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == current_user.id,
+            Notification.is_read.is_(False),
+        )
+        .count()
+    )
+
+    return {"unread_count": unread_count}
+
+
+@router.post("/read-all", status_code=status.HTTP_204_NO_CONTENT)
+def mark_all_notifications_read(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mark all unread notifications for the current user as read."""
+    (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == current_user.id,
+            Notification.is_read.is_(False),
+        )
+        .update(
+            {Notification.is_read: True},
+            synchronize_session=False,
+        )
+    )
+    db.commit()
+    return None
+
+
 @router.post("/read", status_code=status.HTTP_204_NO_CONTENT)
 def mark_notifications_read(
     body: NotificationMarkRead,
@@ -86,6 +125,24 @@ def mark_notifications_read(
         synchronize_session=False,
     )
 
+    db.commit()
+    return None
+
+
+@router.delete("/read", status_code=status.HTTP_204_NO_CONTENT)
+def delete_read_notifications(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete all read notifications belonging to the current user."""
+    (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == current_user.id,
+            Notification.is_read.is_(True),
+        )
+        .delete(synchronize_session=False)
+    )
     db.commit()
     return None
 
