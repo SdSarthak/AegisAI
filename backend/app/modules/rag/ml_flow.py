@@ -30,14 +30,17 @@ def log_query(
     sources: list,
     latency_ms: float = 0.0,
 ) -> None:
-    """
-    Log a single RAG query as an MLflow run.
+    """Log a single RAG query as an MLflow run.
 
     Args:
-        question:    The user's question text.
-        answer:      The generated answer text.
-        sources:     List of source document identifiers used to ground the answer.
-        latency_ms:  End-to-end response latency in milliseconds.
+        question: The user's question text.
+        answer: The generated answer text.
+        sources: List of source document identifiers used to ground the answer.
+        latency_ms: End-to-end response latency in milliseconds.
+
+    Returns:
+        None. Metrics and artifacts are recorded in the configured MLflow
+        tracking backend.
     """
     tracking_uri = settings.MLFLOW_TRACKING_URI or ""
     if tracking_uri:

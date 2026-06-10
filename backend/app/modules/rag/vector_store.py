@@ -15,7 +15,11 @@ _rag_index_lock = threading.Lock()
 
 
 def get_embeddings():
-    """Return the configured embeddings model."""
+    """Return the configured embeddings model.
+
+    Returns:
+        The embeddings implementation configured for the current deployment.
+    """
     '''return OpenAIEmbeddings(
         openai_api_key=settings.LLM_API_KEY,
         openai_api_base=settings.LLM_BASE_URL or None,
@@ -28,11 +32,10 @@ def get_embeddings():
 
 
 def create_vector_store(documents: list[Document]):
-    """
-    Build a FAISS index from a list of LangChain Document objects and persist it to disk.
+    """Build a FAISS index from documents and persist it to disk.
 
     Args:
-        documents: A list of loaded/chunked Document objects.
+        documents: Loaded and chunked LangChain Document objects.
 
     Returns:
         The populated FAISS vector store.
@@ -52,11 +55,13 @@ def create_vector_store(documents: list[Document]):
 
 
 def load_vector_store():
-    """
-    Load an existing FAISS index from disk.
+    """Load an existing FAISS index from disk.
+
+    Returns:
+        The persisted FAISS vector store.
 
     Raises:
-        FileNotFoundError: if the index has not been created yet
+        FileNotFoundError: If the index has not been created yet.
     """
     index_path = settings.FAISS_INDEX_PATH
     if not os.path.exists(index_path):
@@ -72,5 +77,9 @@ def load_vector_store():
 
 
 def check_index_exists():
-    """Check if FAISS index exists on disk."""
+    """Check whether the FAISS index exists on disk.
+
+    Returns:
+        True when the persisted FAISS index directory exists, otherwise False.
+    """
     return os.path.exists(settings.FAISS_INDEX_PATH)

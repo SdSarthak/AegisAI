@@ -13,16 +13,32 @@ ChatOpenAI = None
 
 
 class GroundedRetrievalQA:
-    """Callable wrapper that adds groundedness scores to RetrievalQA results."""
+    """Callable wrapper that adds groundedness scores to RetrievalQA results.
+
+    The wrapper preserves the original LangChain interface while appending
+    groundedness metadata used by the RAG API.
+    """
 
     def __init__(self, qa_chain: Any, embeddings_fn: Any) -> None:
-        """Store the underlying chain and embedding callable."""
+        """Store the underlying chain and embedding callable.
+
+        Args:
+            qa_chain: LangChain RetrievalQA instance to execute.
+            embeddings_fn: Callable used by the groundedness checker.
+        """
         self.qa_chain = qa_chain
         self.embeddings_fn = embeddings_fn
 
     @instrument_rag
     def __call__(self, payload: Any) -> dict[str, Any]:
-        """Run the QA chain and append groundedness fields to the result dict."""
+        """Run the QA chain and append groundedness fields to the result dict.
+
+        Args:
+            payload: Query payload forwarded to the underlying QA chain.
+
+        Returns:
+            The chain result with groundedness metadata attached.
+        """
         result = self.qa_chain(payload)
         query = _extract_query(payload)
         answer = str(result.get("result", ""))
@@ -60,18 +76,24 @@ class GroundedRetrievalQA:
 
 
 def load_vector_store() -> Any:
-    """Lazy wrapper around vector-store loading for lighter module imports."""
+    """Lazy wrapper around vector-store loading for lighter module imports.
+
+    Returns:
+        The persisted vector store loaded from disk.
+    """
     from .vector_store import load_vector_store as loader
 
     return loader()
 
 
 def get_qa_chain():
-    """
-    Build and return a RetrievalQA chain backed by the persisted FAISS index.
+    """Build and return a RetrievalQA chain backed by the persisted FAISS index.
+
+    Returns:
+        A grounded retrieval wrapper around LangChain's RetrievalQA chain.
 
     Raises:
-        FileNotFoundError: if the vector store has not been ingested yet
+        FileNotFoundError: If the vector store has not been ingested yet.
     """
     global ChatOpenAI
 
@@ -104,6 +126,7 @@ def get_qa_chain():
 
 
 def _get_embeddings_fn(vector_store: Any) -> Any:
+    """Return a callable embeddings function from a vector store instance."""
     embeddings = vector_store.embedding_function
     if hasattr(embeddings, "embed_documents"):
         return embeddings.embed_documents
@@ -111,6 +134,7 @@ def _get_embeddings_fn(vector_store: Any) -> Any:
 
 
 def _extract_query(payload: Any) -> str:
+    """Extract the user query string from either dict or scalar payloads."""
     if isinstance(payload, dict):
         return str(payload.get("query", ""))
     return str(payload)
