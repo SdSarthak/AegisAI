@@ -369,6 +369,11 @@ def classify_ai_system(
     Returns:
         RiskClassificationResponse with the computed risk tier, rationale,
         requirements, and suggested next steps.
+
+    Notes:
+        The current user is required for authenticated access to the
+        classification endpoint, even though the classification itself is
+        stateless.
     """
     return classify_risk(data)    
 
@@ -440,6 +445,10 @@ def get_questionnaire_risk_factors(
 
     Returns:
         The list of questionnaire risk factors used by the classification UI.
+
+    Notes:
+        The response is static metadata and does not depend on the current
+        user's saved systems.
     """
     return QUESTIONNAIRE_RISK_FACTORS
 
@@ -459,6 +468,10 @@ def bulk_classify_systems(
 
     Returns:
         BulkClassificationResponse with per-system classification results.
+
+    Raises:
+        HTTPException: If any requested system cannot be loaded from the
+            current user's account.
     """
     results: List[BulkClassificationItem] = []
 
@@ -537,5 +550,9 @@ def explain_ai_system_risk(
 
     Returns:
         ExplainResponse with the generated explanation payload.
+
+    Notes:
+        This endpoint uses the text-only explanation flow and does not require
+        a stored AI system record.
     """
     return explain_risk(data)
