@@ -1,8 +1,7 @@
-"""Persist user-facing in-app notifications.
+"""Persist user-facing in-app notifications for backend events.
 
 The model stores the notification content, read state, and optional
-resource links for events like guard blocks, compliance drift, and
-reassessment reminders.
+resource links used by guard, compliance, and webhook flows.
 
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only

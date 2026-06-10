@@ -1,12 +1,7 @@
-"""
-NIST AI RMF 1.0 document ingestion into the AegisAI FAISS vector store.
+"""Ingest the NIST AI RMF PDF into the RAG FAISS index.
 
-Loads the NIST AI RMF PDF, splits it into chunks, embeds them with
-framework metadata tagging, and adds them to the existing FAISS index
-alongside EU AI Act, GDPR, and ISO 42001 documents.
-
-Run once:
-    python -m app.modules.rag.ingest_nist
+The helper loads the local NIST AI RMF document, chunks it, annotates the
+metadata, and merges the chunks into the existing vector store.
 """
 
 from __future__ import annotations
@@ -38,14 +33,7 @@ CHUNK_OVERLAP = 200
 
 
 def ingest_nist_ai_rmf() -> None:
-    """Ingest NIST AI RMF 1.0 into the existing FAISS vector store.
-
-    Returns:
-        None. The FAISS index is updated in place on disk.
-
-    Raises:
-        FileNotFoundError: If the NIST PDF is not present locally.
-    """
+    """Ingest NIST AI RMF 1.0 into the existing FAISS vector store."""
     if not NIST_PDF_PATH.exists():
         raise FileNotFoundError(
             f"NIST AI RMF PDF not found at {NIST_PDF_PATH}. "

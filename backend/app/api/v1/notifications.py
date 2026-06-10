@@ -1,8 +1,4 @@
-"""
-Notifications API — in-app event feed for users.
-Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
-SPDX-License-Identifier: AGPL-3.0-only
-"""
+"""API for the in-app notification feed and read-state updates."""
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -26,20 +22,7 @@ def create_notification(
     resource_type: str | None = None,
     resource_id: int | None = None,
 ) -> Notification:
-    """Create and persist a notification for a user.
-
-    Args:
-        db: Active database session used to persist the notification.
-        user_id: ID of the user who should receive the notification.
-        notification_type: Machine-readable notification category.
-        title: Notification title shown in the UI.
-        message: Notification body text.
-        resource_type: Optional resource type associated with the notification.
-        resource_id: Optional resource ID associated with the notification.
-
-    Returns:
-        The persisted Notification ORM row.
-    """
+    """Create and persist a notification for a user."""
     notification = Notification(
         user_id=user_id,
         notification_type=notification_type,
@@ -62,19 +45,7 @@ def list_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List the current user's notifications with optional unread filtering.
-
-    Args:
-        unread_only: If true, return only unread notifications.
-        skip: Number of records to skip for pagination.
-        limit: Maximum number of records to return.
-        current_user: Authenticated user whose notifications should be listed.
-        db: Active database session.
-
-    Returns:
-        PaginatedResponse containing the user's notifications ordered by
-        newest first.
-    """
+    """List the current user's notifications with optional unread filtering."""
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
 
     if unread_only:
@@ -103,16 +74,7 @@ def mark_notifications_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Mark a batch of notifications as read for the current user.
-
-    Args:
-        body: Request body containing the notification IDs to update.
-        current_user: Authenticated user who owns the notifications.
-        db: Active database session.
-
-    Returns:
-        None. The endpoint responds with HTTP 204 when the update succeeds.
-    """
+    """Mark a batch of notifications as read for the current user."""
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.id.in_(body.ids),
@@ -131,20 +93,7 @@ def delete_notification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete one notification owned by the current user.
-
-    Args:
-        notification_id: Database ID of the notification to delete.
-        current_user: Authenticated user who must own the notification.
-        db: Active database session.
-
-    Returns:
-        None. The endpoint responds with HTTP 204 when deletion succeeds.
-
-    Raises:
-        HTTPException: If the notification does not exist or is not owned by
-            the authenticated user.
-    """
+    """Delete one notification owned by the current user."""
     notification = (
         db.query(Notification)
         .filter(

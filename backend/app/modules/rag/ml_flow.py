@@ -1,18 +1,7 @@
-"""
-MLflow tracking helpers for RAG queries.
-Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
-SPDX-License-Identifier: AGPL-3.0-only
+"""Optional MLflow tracking helpers for RAG query runs.
 
-Each call to log_query() opens a new MLflow run and records:
-  - Params : question text
-  - Metrics: answer_length (chars), source_count, response_latency_ms
-  - Artifact: answer text saved as answer.txt
-
-To view the MLflow UI locally:
-  1. Set MLFLOW_TRACKING_URI in backend/.env (see .env.example).
-     Leave it empty to use the default local ./mlruns directory.
-  2. Run:  mlflow ui --port 5001
-  3. Open: http://localhost:5001
+The RAG pipeline can emit lightweight MLflow runs for offline analysis
+without making MLflow a hard dependency for the rest of the backend.
 """
 
 import logging
@@ -30,18 +19,7 @@ def log_query(
     sources: list,
     latency_ms: float = 0.0,
 ) -> None:
-    """Log a single RAG query as an MLflow run.
-
-    Args:
-        question: The user's question text.
-        answer: The generated answer text.
-        sources: List of source document identifiers used to ground the answer.
-        latency_ms: End-to-end response latency in milliseconds.
-
-    Returns:
-        None. Metrics and artifacts are recorded in the configured MLflow
-        tracking backend.
-    """
+    """Log a single RAG query as an MLflow run."""
     tracking_uri = settings.MLFLOW_TRACKING_URI or ""
     if tracking_uri:
         mlflow.set_tracking_uri(tracking_uri)
