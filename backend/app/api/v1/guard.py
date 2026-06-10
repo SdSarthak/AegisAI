@@ -320,7 +320,7 @@ def scan_prompt(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the Guard scan.",
-        )
+        ) from None
     
 
 # ---------------------------------------------------------------------------
@@ -411,7 +411,7 @@ async def explain_prompt(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
-        )
+        ) from exc
 
     try:
         # SHAP is CPU-bound and synchronous — run in a worker thread so
@@ -432,9 +432,9 @@ async def explain_prompt(
                 f"Explanation exceeded {_ExplainRateLimitConfig.TIMEOUT_SECONDS}s. "
                 "Try a shorter prompt or a lower `max_evals`."
             ),
-        )
+        ) from None
     except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except Exception:
         logger.exception(
             "guard.explain.failed", extra={"user_id": current_user.id}
@@ -442,7 +442,7 @@ async def explain_prompt(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while generating the explanation.",
-        )
+        ) from None
 
     return result
 
@@ -519,7 +519,7 @@ class CursorPagination:
             return dt, int(id_str)
 
         except Exception:
-            raise HTTPException(status_code=400, detail="Invalid cursor format")
+            raise HTTPException(status_code=400, detail="Invalid cursor format") from None
     
 
     @staticmethod
@@ -954,7 +954,7 @@ def bulk_scan_prompts(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
 
     batch_size = len(request.prompts)
     client_ip = http_request.client.host if http_request.client else None
@@ -1041,4 +1041,4 @@ def bulk_scan_prompts(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."
-        )
+        ) from None
