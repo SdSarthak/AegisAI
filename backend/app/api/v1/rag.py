@@ -7,14 +7,23 @@ Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
+import logging
+import mimetypes
 import os
 import shutil
 import tempfile
-import logging
 from typing import List, Literal, Optional
-import mimetypes
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -147,7 +156,7 @@ def ingest_documents(
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Failed to build FAISS index: {exc}",
-            )
+            ) from exc
 
         # ── 5. Calculate on-disk index size ───────────────────────────────
         index_path = settings.FAISS_INDEX_PATH
@@ -190,8 +199,8 @@ def query_knowledge_base(
             fails during retrieval or generation.
     """
     try:
-        from app.modules.rag.retrieval_chain import get_qa_chain
         from app.core.database import Base
+        from app.modules.rag.retrieval_chain import get_qa_chain
 
         qa_chain = get_qa_chain()
         result = qa_chain({"query": request.question})
@@ -220,12 +229,12 @@ def query_knowledge_base(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(e),
-        )
+        ) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"RAG module error: {str(e)}",
-        )
+        ) from e
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +282,7 @@ async def query_knowledge_base_stream(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
-        )
+        ) from exc
 
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
     llm_client = LLMClient()
@@ -389,7 +398,7 @@ def get_low_quality_chunks(
         if current_user.subscription_tier != SubscriptionTier.SCALE:
             raise HTTPException(status_code=403, detail="Admin access required")
     except Exception:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail="Admin access required") from None
 
     # Aggregate counts per chunk
     counts: dict[str, dict[str, int]] = {}
