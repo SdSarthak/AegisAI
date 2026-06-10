@@ -31,7 +31,6 @@ export default function Documents() {
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
   const [copiedDocId, setCopiedDocId] = useState<number | null>(null)
-  const [saveError, setSaveError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const limit = 10
 
@@ -125,14 +124,8 @@ export default function Documents() {
   const handleSaveDocument = async (content: string) => {
     if (!editingDoc) return
 
-    try {
-      setSaveError(null)
-      await documentsApi.update(editingDoc.id, { content })
-      queryClient.invalidateQueries({ queryKey: ['documents'] })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save document'
-      setSaveError(message)
-    }
+    await documentsApi.update(editingDoc.id, { content })
+    queryClient.invalidateQueries({ queryKey: ['documents'] })
   }
 
   const getStatusColor = (status: string) => {
@@ -497,13 +490,6 @@ export default function Documents() {
         </div>
       )}
 
-      {/* Editor Modal */}
-      {saveError && (
-        <div className="fixed top-4 right-4 z-50 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-lg">
-          {saveError}
-        </div>
-      )}
-
       {editingDoc && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
           <div className="bg-white rounded-xl w-full max-w-6xl h-[90vh]">
@@ -511,10 +497,7 @@ export default function Documents() {
               documentId={editingDoc.id}
               initialContent={editingDoc.content || ''}
               onSave={handleSaveDocument}
-              onClose={() => {
-                setEditingDoc(null)
-                setSaveError(null)
-              }}
+              onClose={() => setEditingDoc(null)}
             />
           </div>
         </div>

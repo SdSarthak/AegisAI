@@ -1,10 +1,9 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Save, Eye, EyeOff } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
-import api from '../services/api'
 
 interface DocumentEditorProps {
   documentId: number
@@ -22,7 +21,7 @@ export default function DocumentEditor({
   const [content, setContent] = useState(initialContent)
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
+  const saveTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
   const [saveError, setSaveError] = useState('')
   const previewHtml = useMemo(
     () => DOMPurify.sanitize(marked.parse(content, { async: false }) as string),
@@ -32,53 +31,61 @@ export default function DocumentEditor({
   const handleSave = useCallback(async () => {
     setIsSaving(true)
     try {
-      await api.put(`/documents/${documentId}`, { content })
-      onSave?.(content)
+      await onSave?.(content)
       setSaveError('')
     } catch (error) {
-  console.error('Save failed:', error)
-  setSaveError(
-    error instanceof Error
-      ? error.message
-      : 'Failed to save changes'
-  )
-}
-    setIsSaving(false)
-  }, [content, documentId, onSave])
+      setSaveError(
+        error instanceof Error ? error.message : 'Failed to save changes'
+      )
+    } finally {
+      setIsSaving(false)
+    }
+  }, [content, onSave])
 
   // Auto-save after 2 seconds
   useEffect(() => {
     if (content === initialContent) return
 
-    if (saveTimeout) clearTimeout(saveTimeout)
+    if (saveTimeoutRef.current !== null) {
+      window.clearTimeout(saveTimeoutRef.current)
+    }
 
-    const timeout = setTimeout(async () => {
-      setIsSaving(true)
-      await handleSave()
-      setIsSaving(false)
+    saveTimeoutRef.current = window.setTimeout(() => {
+      void handleSave()
     }, 2000)
 
-    setSaveTimeout(timeout)
-
     return () => {
-      if (timeout) clearTimeout(timeout)
+      if (saveTimeoutRef.current !== null) {
+        window.clearTimeout(saveTimeoutRef.current)
+      }
     }
-  }, [content, handleSave, initialContent, saveTimeout])
+  }, [content, handleSave, initialContent])
+
+  useEffect(() => {
+    setContent(initialContent)
+    setSaveError('')
+    setShowPreview(false)
+  }, [documentId, initialContent])
 
   return (
     <div className="flex flex-col h-full border border-gray-200 rounded-xl overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50">
-        <button
-          type="button"
-          onClick={() => setShowPreview((p) => !p)}
-          className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
-        >
-          {showPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-          {showPreview ? 'Edit' : 'Preview'}
-        </button>
         <div className="flex items-center gap-3">
-         {saveError && (
+          <span className="text-xs font-medium text-gray-400">
+            Document #{documentId}
+          </span>
+          <button
+            type="button"
+            onClick={() => setShowPreview((p) => !p)}
+            className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
+          >
+            {showPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            {showPreview ? 'Edit' : 'Preview'}
+          </button>
+        </div>
+        <div className="flex items-center gap-3">
+          {saveError && (
             <span className="text-sm text-red-500">
               {saveError}
             </span>
@@ -87,7 +94,7 @@ export default function DocumentEditor({
             <span className="text-sm text-gray-500">
               Saving...
             </span>
-          )} 
+          )}
           <button
             type="button"
             onClick={handleSave}
