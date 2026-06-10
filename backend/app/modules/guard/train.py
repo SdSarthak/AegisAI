@@ -5,8 +5,6 @@ work is delegated to the standardized pipeline implementation under
 ``app.modules.guard.training``.
 """
 
-from __future__ import annotations
-
 import argparse
 import logging
 from pathlib import Path

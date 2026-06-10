@@ -4,8 +4,6 @@ The training pipeline uses a dedicated logger so its progress messages stay
 separate from the main API logger and remain easy to scan in local runs.
 """
 
-from __future__ import annotations
-
 import logging
 
 

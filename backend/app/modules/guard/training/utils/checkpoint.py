@@ -7,8 +7,6 @@ backend root, create parent directories on demand, and keep the JSON output
 stable for deterministic diffs in CI.
 """
 
-from __future__ import annotations
-
 import json
 from datetime import datetime, timezone
 from pathlib import Path

@@ -4,8 +4,6 @@ These helpers keep experiment logging optional so the training pipeline can
 run cleanly whether or not MLflow is installed or configured.
 """
 
-from __future__ import annotations
-
 from contextlib import contextmanager
 from typing import Iterator
 

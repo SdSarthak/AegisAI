@@ -4,8 +4,6 @@ The guard training pipeline relies on deterministic splits and model
 initialisation when comparing runs, so this helper centralizes the seeding.
 """
 
-from __future__ import annotations
-
 import os
 import random
 

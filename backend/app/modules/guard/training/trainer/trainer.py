@@ -5,8 +5,6 @@ expects plain prompt and label lists. This facade bridges that gap and keeps
 the higher-level pipeline code compact.
 """
 
-from __future__ import annotations
-
 from dataclasses import dataclass
 from pathlib import Path
 
