@@ -1,4 +1,9 @@
-"""Decision engine for determining prompt handling: ALLOW, SANITIZE, or BLOCK."""
+"""Combine guard signals into a final prompt-handling decision.
+
+The decision engine takes the outputs of the regex filter and intent
+classifier and resolves them into a single action: allow the prompt,
+sanitize it, or block it outright.
+"""
 
 from enum import Enum
 from dataclasses import dataclass

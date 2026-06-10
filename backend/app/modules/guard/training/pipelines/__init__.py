@@ -1,4 +1,4 @@
-"""Executable guard training and evaluation pipelines."""
+"""Executable training and evaluation pipelines for the guard classifier."""
 
 __all__ = [
     "load_training_config",

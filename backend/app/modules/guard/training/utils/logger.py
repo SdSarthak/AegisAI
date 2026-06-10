@@ -1,4 +1,4 @@
-"""Logging setup for guard training pipelines."""
+"""Logging helpers for guard training and evaluation jobs."""
 
 from __future__ import annotations
 

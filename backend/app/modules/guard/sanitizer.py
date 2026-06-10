@@ -1,4 +1,9 @@
-"""Prompt sanitization layer for neutralizing injection risks while preserving UX."""
+"""Sanitize prompts by removing obvious injection cues.
+
+This layer strips common meta-instructions, role-play prompts, and noisy
+separators so the downstream LLM sees a cleaner prompt while the user
+experience stays as intact as possible.
+"""
 
 import re
 from typing import Tuple

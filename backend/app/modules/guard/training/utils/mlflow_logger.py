@@ -1,4 +1,4 @@
-"""Optional MLflow integration for guard training."""
+"""Optional MLflow helpers for guard training runs."""
 
 from __future__ import annotations
 

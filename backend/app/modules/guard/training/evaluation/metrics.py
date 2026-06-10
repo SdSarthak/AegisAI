@@ -1,4 +1,4 @@
-"""Metrics for safety classifier evaluation."""
+"""Compute evaluation metrics for the guard intent classifier."""
 
 from __future__ import annotations
 

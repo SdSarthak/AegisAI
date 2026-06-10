@@ -1,4 +1,10 @@
-"""Regex-based heuristic filter for detecting obvious prompt injection attempts."""
+"""Detect obvious prompt injection attempts with deterministic regex rules.
+
+This is the fastest guard layer and is intentionally conservative: it looks
+for unmistakable instruction overrides, role hijacking, prompt disclosure,
+and other patterns that are safe to flag before heavier model-based checks
+run.
+"""
 
 import re
 from typing import Dict, List

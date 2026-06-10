@@ -1,22 +1,9 @@
-"""
-Structured JSON logging for the AegisAI backend.
+"""JSON logging helpers for the AegisAI backend.
 
-Replaces the scattered ``logging.basicConfig`` calls with a single
-configurator that emits one JSON object per log line. Every line carries:
-
-    timestamp   ISO-8601 UTC, e.g. "2026-05-16T09:41:22.481Z"
-    level       INFO | WARNING | ERROR | ...
-    logger      full dotted logger name  (app.modules.guard.llm_guard)
-    module      Python module short name  (llm_guard)
-    message     the log message
-    request_id  per-request correlation id (when inside a request)
-    user_id     authenticated user id (when available)
-    service     "aegis-backend"
-    version     app version
-
-Any keyword args passed via ``logger.info("msg", extra={...})`` are merged
-into the JSON object, so structured fields land as first-class keys and are
-queryable as-is by Datadog, Loki, and CloudWatch — no regex grok needed.
+The backend emits structured logs instead of ad hoc text so request ids,
+user ids, service metadata, and caller-provided ``extra`` fields remain
+queryable by log aggregation tools without regex parsing. This module owns
+the formatter and root logger setup used by the API process.
 
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
@@ -56,7 +43,7 @@ _RESERVED_RECORD_ATTRS = frozenset(
 
 
 class JsonFormatter(jsonlogger.JsonFormatter):
-    """JSON formatter that injects request/service context into every record."""
+    """Inject service metadata and request context into each log record."""
 
     def add_fields(
         self,
@@ -102,14 +89,7 @@ def _build_handler() -> logging.Handler:
 
 
 def configure_logging(level: str = "INFO") -> None:
-    """Configure root and third-party loggers to emit JSON to stdout.
-
-    Args:
-        level: Root logging level name such as ``INFO`` or ``DEBUG``.
-
-    Returns:
-        None. Logging handlers and levels are configured in place.
-    """
+    """Configure the root logger and noisy third-party loggers for JSON."""
     log_level = getattr(logging, level.upper(), logging.INFO)
     handler = _build_handler()
 

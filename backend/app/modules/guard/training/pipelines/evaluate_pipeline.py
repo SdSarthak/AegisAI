@@ -1,4 +1,8 @@
-"""Evaluation pipeline for trained guard safety classifiers."""
+"""Run evaluation for a trained guard safety classifier.
+
+This pipeline loads the cached dataset, evaluates the current model, and
+writes both aggregate metrics and per-example predictions to artifact files.
+"""
 
 from __future__ import annotations
 

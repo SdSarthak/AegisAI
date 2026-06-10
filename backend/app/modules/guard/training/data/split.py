@@ -1,4 +1,4 @@
-"""Deterministic dataset splitting helpers."""
+"""Split normalized guard datasets into reproducible train and validation sets."""
 
 from __future__ import annotations
 

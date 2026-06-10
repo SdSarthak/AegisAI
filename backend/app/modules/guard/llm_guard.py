@@ -1,4 +1,9 @@
-"""Main application: LLM Guard orchestrator combining all defense layers."""
+"""Orchestrate the layered LLM Guard pipeline.
+
+This module glues together the regex filter, intent classifier, decision
+engine, sanitizer, and downstream LLM client into one call that returns a
+single structured decision payload for the API.
+"""
 
 import json
 import logging
@@ -31,13 +36,7 @@ class LLMGuard:
         classifier_model_path: Optional[str] = None,
         sanitization_level: SanitizationLevel = SanitizationLevel.MEDIUM,
     ):
-        """Initialize the guard with all defense layers.
-
-        Args:
-            classifier_model_path: Path to the fine-tuned classifier model. If
-                omitted, the path is auto-detected from configuration.
-            sanitization_level: How aggressively to sanitize prompts.
-        """
+        """Initialize the guard layers and their supporting clients."""
         logger.info("Initializing LLM Guard...")
 
         # Layer 1: Fast regex filter
@@ -73,14 +72,7 @@ class LLMGuard:
 
     @instrument_guard
     def guard(self, user_prompt: str) -> Dict:
-        """Run the complete guard pipeline on a user prompt.
-
-        Args:
-            user_prompt: Raw user input.
-
-        Returns:
-            A dictionary containing the decision, response, and metadata.
-        """
+        """Run the full guard flow and return the structured result."""
         timestamp = datetime.now().isoformat()
         logger.info(f"Processing prompt at {timestamp}")
 

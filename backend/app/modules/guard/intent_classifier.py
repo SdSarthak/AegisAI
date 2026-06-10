@@ -1,4 +1,9 @@
-"""Transformer-based intent classifier for detecting prompt injection attempts."""
+"""Classify prompts with a transformer-backed guard intent model.
+
+The classifier is the slower but higher-signal layer in the guard stack.
+It uses a fine-tuned DeBERTa checkpoint when available and falls back to
+deterministic heuristics when the trained weights are absent.
+"""
 
 import os
 import json

@@ -1,4 +1,9 @@
-"""LLM Guard package for prompt injection detection and mitigation."""
+"""Public package surface for the LLM Guard safety stack.
+
+Importing from this package gives callers a lightweight way to reach the
+regex filter, intent classifier, decision engine, sanitizer, and the full
+orchestrator without eagerly importing every submodule.
+"""
 
 from importlib import import_module
 from types import ModuleType

@@ -1,4 +1,10 @@
-"""Load and persist training datasets for the guard classifier."""
+"""Load and cache training data for the guard classifier.
+
+The training pipeline can source data either from a local CSV cache or from
+the Hugging Face dataset used by the project. These helpers normalize the
+result into a consistent dataframe shape and keep the local cache fresh
+when a download is requested.
+"""
 
 from __future__ import annotations
 

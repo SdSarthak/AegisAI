@@ -1,4 +1,9 @@
-"""End-to-end training pipeline for the guard safety classifier."""
+"""Run the end-to-end training pipeline for the guard safety classifier.
+
+The pipeline handles config loading, dataset acquisition, train/validation
+splitting, model training, optional MLflow logging, and artifact export in
+one place so the CLI and any automation can reuse the same path.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Seed helpers for reproducible training runs."""
+"""Seed the training stack for reproducible guard experiments."""
 
 from __future__ import annotations
 
