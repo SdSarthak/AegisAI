@@ -417,13 +417,13 @@ def get_shared_document(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Share link expired"
-        )
+        ) from None
 
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid share token"
-        )
+        ) from None
 
     if payload.get("type") != "document_share":
         raise HTTPException(

@@ -8,21 +8,27 @@ from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import (
-    verify_password,
-    get_password_hash,
     create_access_token,
     get_current_user,
+    get_password_hash,
+    verify_password,
 )
-from app.core.config import settings
-from app.models.user import User
 from app.models.ai_system import AISystem, ComplianceStatus
 from app.models.document import Document
-from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse, ChangePasswordRequest
+from app.models.user import User
+from app.schemas.user import (
+    ChangePasswordRequest,
+    Token,
+    UserCreate,
+    UserResponse,
+    UserStatsResponse,
+    UserUpdateSchema,
+)
 
 # Pre-computed bcrypt hash used when the looked-up user is None so that the
 # login endpoint always performs a constant-time hash comparison, closing
@@ -84,8 +90,8 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
             detail={
                 "field": "general",
                 "message": "An error occurred during registration. Please try again."
-            }
-        )
+            },
+        ) from None
 
 
 @router.post("/login", response_model=Token)
