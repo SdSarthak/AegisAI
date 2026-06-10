@@ -5,8 +5,6 @@ standardizes text and label columns, drops unusable rows, and maps label
 variants back to the canonical guard classes.
 """
 
-from __future__ import annotations
-
 from typing import Iterable
 
 import pandas as pd

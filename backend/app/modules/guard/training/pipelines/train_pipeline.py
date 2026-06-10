@@ -5,8 +5,6 @@ splitting, model training, optional MLflow logging, and artifact export in
 one place so the CLI and any automation can reuse the same path.
 """
 
-from __future__ import annotations
-
 import argparse
 from copy import deepcopy
 from pathlib import Path

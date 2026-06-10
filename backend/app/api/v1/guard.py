@@ -11,9 +11,8 @@ import hashlib
 import logging
 import base64
 
-from collections import Counter, defaultdict, deque
+from collections import Counter
 from datetime import datetime, timedelta, timezone
-from threading import Lock
 from typing import Optional, TypedDict
 
 from app.api.v1.webhooks import deliver_webhook

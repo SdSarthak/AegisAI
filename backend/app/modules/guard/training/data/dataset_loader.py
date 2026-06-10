@@ -6,8 +6,6 @@ result into a consistent dataframe shape and keep the local cache fresh
 when a download is requested.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 from typing import Iterable, Optional
 

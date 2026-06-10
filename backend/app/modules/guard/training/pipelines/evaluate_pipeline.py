@@ -4,8 +4,6 @@ This pipeline loads the cached dataset, evaluates the current model, and
 writes both aggregate metrics and per-example predictions to artifact files.
 """
 
-from __future__ import annotations
-
 import argparse
 from pathlib import Path
 
