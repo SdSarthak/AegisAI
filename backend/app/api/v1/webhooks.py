@@ -110,8 +110,16 @@ def create_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Register a new webhook endpoint for the current user.
 
-    """Register a new webhook endpoint for the current user."""
+    Args:
+        body: Webhook configuration supplied by the client.
+        current_user: Authenticated user who will own the webhook.
+        db: Active database session.
+
+    Returns:
+        The newly created webhook configuration.
+    """
     # Force the user_id to be the authenticated user to prevent spoofing
     webhook_data = body.model_dump()
     db_webhook = WebhookConfig(
@@ -131,8 +139,15 @@ def list_webhooks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """List all webhook configurations for the current user.
 
-    """List all webhook configurations for the current user."""
+    Args:
+        current_user: Authenticated user whose webhooks should be returned.
+        db: Active database session.
+
+    Returns:
+        The list of webhook configurations owned by the user.
+    """
     # Fetch webhooks strictly scoped to the authenticated user
     webhooks = db.query(WebhookConfig).filter(WebhookConfig.user_id == current_user.id).all()
     
@@ -145,8 +160,20 @@ def delete_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    """Delete a webhook configuration owned by the current user.
 
-    """Delete a webhook configuration owned by the current user."""
+    Args:
+        webhook_id: Database ID of the webhook to delete.
+        current_user: Authenticated user who must own the webhook.
+        db: Active database session.
+
+    Returns:
+        None. The endpoint responds with HTTP 204 when deletion succeeds.
+
+    Raises:
+        HTTPException: If the webhook does not exist or belongs to another
+            user.
+    """
     # Query checking BOTH the webhook ID and the user ID
     db_webhook = db.query(WebhookConfig).filter(
         WebhookConfig.id == webhook_id,
