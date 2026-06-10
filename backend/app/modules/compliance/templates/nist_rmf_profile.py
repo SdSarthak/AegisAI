@@ -4,8 +4,6 @@ The template maps an AI system's EU AI Act risk level to the NIST AI RMF
 core functions and renders the result as markdown for reports or exports.
 """
 
-from __future__ import annotations
-
 from app.modules.compliance.nist_mapping import (
     EU_TO_NIST_MAPPING,
     NIST_AI_RMF_METADATA,

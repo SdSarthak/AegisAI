@@ -4,8 +4,6 @@ The constants in this module power the compliance report generator and keep
 the NIST-facing language centralized in one place.
 """
 
-from __future__ import annotations
-
 EU_TO_NIST_MAPPING: dict[str, dict] = {
     "MINIMAL": {
         "primary_functions": ["GOVERN"],

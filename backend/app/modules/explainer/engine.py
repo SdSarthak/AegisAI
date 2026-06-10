@@ -6,8 +6,6 @@ external LLM. That makes it suitable for offline use and deterministic
 testing.
 """
 
-from __future__ import annotations
-
 import re
 from typing import List, Tuple
 

@@ -5,8 +5,6 @@ embedded in READMEs or dashboards to show system risk and compliance state
 at a glance.
 """
 
-from __future__ import annotations
-
 from xml.sax.saxutils import escape as _xml_escape
 
 STATUS_COLORS = {
