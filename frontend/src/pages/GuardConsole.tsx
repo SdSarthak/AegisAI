@@ -125,6 +125,12 @@ export default function GuardConsole() {
     }
   }
 
+  const handlePromptChange = (value: string) => {
+    setPrompt(value)
+    setError(null)
+    setExplanationError(null)
+  }
+
   const handleExplain = async () => {
     if (!submittedPrompt) return
     setIsExplaining(true)
@@ -174,10 +180,10 @@ export default function GuardConsole() {
             <label htmlFor="guard-prompt" className="sr-only">
               Prompt to scan
             </label>
-              <textarea
+            <textarea
               id="guard-prompt"
               value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
+              onChange={(event) => handlePromptChange(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
                   const form = (event.target as HTMLTextAreaElement).closest('form')

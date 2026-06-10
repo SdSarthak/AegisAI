@@ -65,6 +65,11 @@ export default function RagChat() {
     ask(trimmed)
   }
 
+  const handleQuestionChange = (value: string) => {
+    setQuestion(value)
+    setValidationError(null)
+  }
+
   const handleExport = () => {
     if (!hasAnswer) return
 
@@ -121,7 +126,10 @@ export default function RagChat() {
                   <button
                     key={example}
                     type="button"
-                    onClick={() => setQuestion(example)}
+                    onClick={() => {
+                      setQuestion(example)
+                      setValidationError(null)
+                    }}
                     className="text-left bg-white border border-gray-200 rounded-xl p-4 text-sm text-gray-700 hover:border-primary-200 hover:bg-primary-50 transition-colors"
                   >
                     {example}
@@ -271,7 +279,7 @@ export default function RagChat() {
             <textarea
               id="rag-question"
               value={question}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setQuestion(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleQuestionChange(e.target.value)}
               placeholder="Ask a compliance question..."
               rows={1}
               disabled={isStreaming}
