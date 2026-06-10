@@ -15,10 +15,8 @@ interface ComplianceChecklistProps {
 }
 
 export default function ComplianceChecklist({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  systemId: _systemId,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  riskLevel: _riskLevel,
+  systemId,
+  riskLevel,
   items,
 }: ComplianceChecklistProps) {
   const [checked, setChecked] = useState<Set<string>>(new Set())
@@ -44,6 +42,25 @@ export default function ComplianceChecklist({
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+          System #{systemId}
+        </span>
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+            riskLevel === 'unacceptable'
+              ? 'bg-red-100 text-red-700'
+              : riskLevel === 'high'
+                ? 'bg-orange-100 text-orange-700'
+                : riskLevel === 'limited'
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-green-100 text-green-700'
+          }`}
+        >
+          {riskLevel.replace('_', ' ')} risk
+        </span>
+      </div>
+
       {/* Progress Bar */}
       <div>
         <div className="flex justify-between text-sm text-gray-600 mb-1">
