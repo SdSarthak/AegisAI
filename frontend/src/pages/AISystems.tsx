@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import {
@@ -31,6 +31,7 @@ interface AISystem {
 
 export default function AISystems() {
   const queryClient = useQueryClient()
+  const exportMenuRef = useRef<HTMLDivElement>(null)
   const [showModal, setShowModal] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -148,6 +149,33 @@ export default function AISystems() {
 
   const filteredSystems = systems
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        exportMenuRef.current &&
+        !exportMenuRef.current.contains(event.target as Node)
+      ) {
+        setExportMenuOpen(false)
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setExportMenuOpen(false)
+      }
+    }
+
+    if (exportMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('keydown', handleEscape)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [exportMenuOpen])
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     createMutation.mutate(formData)
@@ -212,7 +240,7 @@ export default function AISystems() {
           <p className="text-gray-600">Manage your AI systems for compliance tracking</p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <div className="relative">
+          <div ref={exportMenuRef} className="relative">
             <button
               type="button"
               onClick={() => setExportMenuOpen((value) => !value)}
