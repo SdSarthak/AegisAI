@@ -156,6 +156,11 @@ const requirementContent: Record<string, RequirementContent> = {
 
 export default function Classification() {
   const { systemId } = useParams()
+  const parsedSystemId = systemId !== undefined ? Number(systemId) : null
+  const hasValidSystemId =
+    parsedSystemId !== null &&
+    Number.isInteger(parsedSystemId) &&
+    parsedSystemId > 0
   const [activeTab, setActiveTab] = useState<Tab>('questionnaire')
   const [result, setResult] = useState<ClassificationResult | null>(null)
   const [formData, setFormData] = useState({
@@ -180,9 +185,14 @@ export default function Classification() {
 
   const classifyMutation = useMutation({
     mutationFn: () => {
-      if (systemId) {
-        return classificationApi.classifyAndSave(parseInt(systemId), formData)
+      if (systemId !== undefined) {
+        if (!hasValidSystemId) {
+          throw new Error('Invalid system ID in the URL.')
+        }
+
+        return classificationApi.classifyAndSave(parsedSystemId, formData)
       }
+
       return classificationApi.classify(formData)
     },
     onSuccess: (data) => {
@@ -777,6 +787,14 @@ export default function Classification() {
             Determine your AI system's risk level under EU AI Act
           </p>
         </div>
+
+        {systemId !== undefined && !hasValidSystemId && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            The system ID in this URL is invalid. Use a numeric AI system ID to
+            classify and save the result, or open the page without an ID for a
+            one-off classification.
+          </div>
+        )}
 
         <div className="border-b border-gray-200">
           <div className="flex gap-2 overflow-x-auto">
