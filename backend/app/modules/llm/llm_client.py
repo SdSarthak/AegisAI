@@ -78,23 +78,22 @@ class LLMClient:
         retry_delay: float = 2.0,
         timeout: Optional[float] = None,
     ) -> str:
-        """
-        Send a prompt and return the response text.
+        """Send a prompt and return the response text.
 
         Args:
-            prompt: User message
-            system_prompt: Optional system instruction
-            temperature: Sampling temperature (0.0–2.0)
-            max_tokens: Maximum response tokens
-            max_retries: Retry attempts on transient API errors
-            retry_delay: Initial retry delay in seconds (exponential back-off)
-            timeout: Optional per-request timeout override
+            prompt: User message.
+            system_prompt: Optional system instruction.
+            temperature: Sampling temperature, from 0.0 to 2.0.
+            max_tokens: Maximum response tokens.
+            max_retries: Retry attempts on transient API errors.
+            retry_delay: Initial retry delay in seconds.
+            timeout: Optional per-request timeout override.
 
         Returns:
-            Model response as a string
+            The model response as a string.
 
         Raises:
-            Exception: If all retry attempts fail
+            Exception: If all retry attempts fail.
         """
         messages = []
         if system_prompt:
@@ -147,26 +146,23 @@ class LLMClient:
         retry_delay: float = 2.0,
         timeout: Optional[float] = None,
     ) -> Iterator[str]:
-        """
-        Stream a response token-by-token.
+        """Stream a response token by token.
 
         Args:
-            prompt: User message
-            system_prompt: Optional system instruction
-            temperature: Sampling temperature (0.0–2.0)
-            max_tokens: Maximum response tokens
-            max_retries: Retry attempts on transient API errors
-            retry_delay: Initial retry delay in seconds (exponential back-off)
-            timeout: Optional per-request timeout override
+            prompt: User message.
+            system_prompt: Optional system instruction.
+            temperature: Sampling temperature, from 0.0 to 2.0.
+            max_tokens: Maximum response tokens.
+            max_retries: Retry attempts on transient API errors.
+            retry_delay: Initial retry delay in seconds.
+            timeout: Optional per-request timeout override.
 
         Yields:
-            Text chunks as they arrive
+            Text chunks as they arrive.
 
-        Note:
-            Wraps the openai stream in try/finally so that when the consumer
-            closes this generator (e.g. on client disconnect), the underlying
-            HTTP response is released — otherwise tokens keep generating /
-            billing after nobody is listening.
+        Notes:
+            The underlying HTTP stream is closed when the consumer stops
+            iterating so token generation does not continue unnecessarily.
         """
         messages = []
         if system_prompt:
@@ -232,23 +228,22 @@ class LLMClient:
         retry_delay: float = 2.0,
         timeout: Optional[float] = None,
     ) -> str:
-        """
-        Send an async prompt and return the response text.
+        """Send an async prompt and return the response text.
 
         Args:
-            prompt: User message
-            system_prompt: Optional system instruction
-            temperature: Sampling temperature (0.0–2.0)
-            max_tokens: Maximum response tokens
-            max_retries: Retry attempts on transient API errors
-            retry_delay: Initial retry delay in seconds (exponential back-off)
-            timeout: Optional per-request timeout override
+            prompt: User message.
+            system_prompt: Optional system instruction.
+            temperature: Sampling temperature, from 0.0 to 2.0.
+            max_tokens: Maximum response tokens.
+            max_retries: Retry attempts on transient API errors.
+            retry_delay: Initial retry delay in seconds.
+            timeout: Optional per-request timeout override.
 
         Returns:
-            Model response as a string
+            The model response as a string.
 
         Raises:
-            Exception: If all retry attempts fail
+            Exception: If all retry attempts fail.
         """
         messages = []
         if system_prompt:
@@ -301,20 +296,19 @@ class LLMClient:
         retry_delay: float = 2.0,
         timeout: Optional[float] = None,
     ) -> AsyncIterator[str]:
-        """
-        Stream an async response token-by-token.
+        """Stream an async response token by token.
 
         Args:
-            prompt: User message
-            system_prompt: Optional system instruction
-            temperature: Sampling temperature (0.0–2.0)
-            max_tokens: Maximum response tokens
-            max_retries: Retry attempts on transient API errors
-            retry_delay: Initial retry delay in seconds (exponential back-off)
-            timeout: Optional per-request timeout override
+            prompt: User message.
+            system_prompt: Optional system instruction.
+            temperature: Sampling temperature, from 0.0 to 2.0.
+            max_tokens: Maximum response tokens.
+            max_retries: Retry attempts on transient API errors.
+            retry_delay: Initial retry delay in seconds.
+            timeout: Optional per-request timeout override.
 
         Yields:
-            Text chunks as they arrive
+            Text chunks as they arrive.
         """
         messages = []
         if system_prompt:

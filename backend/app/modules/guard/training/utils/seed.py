@@ -9,6 +9,11 @@ import numpy as np
 
 
 def set_seed(seed: int = 42) -> None:
+    """Seed Python, NumPy, and PyTorch for reproducible training runs.
+
+    Args:
+        seed: Integer seed value to apply across the supported libraries.
+    """
     os.environ["PYTHONHASHSEED"] = str(seed)
     random.seed(seed)
     np.random.seed(seed)
