@@ -221,17 +221,17 @@ def main():
     # Initialize guard
     guard = LLMGuard(sanitization_level=SanitizationLevel.MEDIUM)
 
-    print("\n" + "=" * 60)
-    print("LLM Prompt-Injection Guard")
-    print("=" * 60)
-    print("Enter prompts to test. Type 'quit' to exit.\n")
+    logger.info("%s", "=" * 60)
+    logger.info("LLM Prompt-Injection Guard")
+    logger.info("%s", "=" * 60)
+    logger.info("Enter prompts to test. Type 'quit' to exit.")
 
     while True:
         try:
             user_input = input(">>> ").strip()
 
             if user_input.lower() in ["quit", "exit", "q"]:
-                print("Exiting...")
+                logger.info("Exiting...")
                 break
 
             if not user_input:
@@ -241,21 +241,23 @@ def main():
             result = guard.guard(user_input)
 
             # Display results
-            print("\n" + "-" * 60)
-            print(f"Decision: {result['decision'].upper()}")
-            print(
-                f"Confidence: {result['metadata']['decision_reasoning']['confidence']:.2%}"
+            logger.info("%s", "-" * 60)
+            logger.info("Decision: %s", result["decision"].upper())
+            logger.info(
+                "Confidence: %.2f%%",
+                result["metadata"]["decision_reasoning"]["confidence"] * 100,
             )
-            print(f"Reasoning: {result['metadata']['decision_reasoning']['reasoning']}")
-            print(f"\nResponse:\n{result['response']}")
-            print("-" * 60 + "\n")
+            logger.info(
+                "Reasoning: %s", result["metadata"]["decision_reasoning"]["reasoning"]
+            )
+            logger.info("Response:\n%s", result["response"])
+            logger.info("%s", "-" * 60)
 
         except KeyboardInterrupt:
-            print("\nExiting...")
+            logger.info("Exiting...")
             break
         except Exception as e:
-            logger.error(f"Error: {e}")
-            print(f"Error: {e}\n")
+            logger.exception("Error while running the guard CLI")
 
 
 if __name__ == "__main__":
