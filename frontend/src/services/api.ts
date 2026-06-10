@@ -1,8 +1,16 @@
 import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
+const API_BASE_URL = configuredApiBaseUrl ? configuredApiBaseUrl.replace(/\/$/, '') : '/api/v1'
+
+function buildApiUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${API_BASE_URL}${normalizedPath}`
+}
+
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -341,7 +349,7 @@ export const ragApi = {
     signal?: AbortSignal,
   ): Promise<void> => {
     const token = useAuthStore.getState().token
-    const resp = await fetch('/api/v1/rag/query/stream', {
+    const resp = await fetch(buildApiUrl('/rag/query/stream'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

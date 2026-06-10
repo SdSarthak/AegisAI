@@ -91,6 +91,8 @@ npm install
 npm run dev
 ```
 
+For hosted frontend deployments, set `VITE_API_BASE_URL` to the backend API origin, for example `http://localhost:8000/api/v1` locally or your deployed backend URL in production.
+
 ### Option 3 — Ollama (free, no API key)
 
 ```bash
