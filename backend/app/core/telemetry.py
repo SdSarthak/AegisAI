@@ -7,8 +7,6 @@ also makes it easier to wire the /metrics endpoint into FastAPI with a
 single setup function.
 """
 
-from __future__ import annotations
-
 import time
 from functools import wraps
 from typing import Any, Callable, TypeVar
