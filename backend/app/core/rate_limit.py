@@ -1,4 +1,10 @@
-"""Shared rate limiting helpers."""
+"""Shared rate limiting helpers for the API stack.
+
+This module provides a Redis-backed fixed-window limiter with an
+in-process fallback so request throttling still works in local development
+or during brief Redis outages. The implementation also tracks a simple
+circuit breaker to avoid hammering Redis when the backend is unhealthy.
+"""
 
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
@@ -65,7 +71,7 @@ return {current, ttl}
         }
 
     def _get_redis_client(self) -> Optional[object]:
-        """Return a lazily initialized Redis client when configured."""
+        """Return a configured Redis client, creating it on first use."""
         if not settings.REDIS_URL or redis is None:
             return None
 
@@ -85,18 +91,7 @@ return {current, ttl}
         window_seconds: int,
         cost: int,
     ) -> tuple[bool, int]:
-        """Evaluate a rate limit against Redis state.
-
-        Args:
-            client: Redis client instance.
-            key: Rate limit key.
-            limit: Maximum allowed requests in the window.
-            window_seconds: Window size in seconds.
-            cost: Request cost to consume.
-
-        Returns:
-            A tuple of ``(limited, retry_after_seconds)``.
-        """
+        """Check the active window against Redis and return the retry delay."""
         if self._redis_script is None:
             self._redis_script = client.register_script(self._RATE_LIMIT_SCRIPT)  # type: ignore[attr-defined]
 
@@ -118,17 +113,7 @@ return {current, ttl}
         window_seconds: int,
         cost: int,
     ) -> tuple[bool, int]:
-        """Evaluate a rate limit against the local in-memory fallback.
-
-        Args:
-            key: Rate limit key.
-            limit: Maximum allowed requests in the window.
-            window_seconds: Window size in seconds.
-            cost: Request cost to consume.
-
-        Returns:
-            A tuple of ``(limited, retry_after_seconds)``.
-        """
+        """Check the in-memory fallback when Redis is unavailable."""
         now = datetime.now(timezone.utc)
         window_start = now - timedelta(seconds=window_seconds)
 
@@ -168,18 +153,7 @@ return {current, ttl}
         cost: int = 1,
         fail_closed: Optional[bool] = None,
     ) -> tuple[bool, int]:
-        """Return whether a request should be limited and the retry-after value.
-
-        Args:
-            key: Rate limit key.
-            limit: Maximum allowed requests in the window.
-            window_seconds: Window size in seconds.
-            cost: Request cost to consume.
-            fail_closed: Whether to block requests if Redis checking fails.
-
-        Returns:
-            A tuple of ``(limited, retry_after_seconds)``.
-        """
+        """Consume quota for one request and return the limiting decision."""
         if fail_closed is None:
             fail_closed = getattr(settings, "RATE_LIMIT_FAIL_CLOSED", False)
 
