@@ -1,9 +1,19 @@
 import React, { useState } from 'react'
-import {
- useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
-import { useAuthStore } from '../stores/authStore'
-import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Download } from 'lucide-react'
+import {
+  ArrowUpDown,
+  Bot,
+  ChevronDown,
+  Download,
+  Edit,
+  Filter,
+  Loader2,
+  Search,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 interface AISystem {
@@ -35,26 +45,41 @@ export default function AISystems() {
   const [systemToDelete, setSystemToDelete] = useState<AISystem | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [exporting, setExporting] = useState(false)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const [lastExportedAt, setLastExportedAt] = useState<string | null>(() => {
+    if (typeof window === 'undefined') {
+      return null
+    }
 
-  const handleExport = async () => {
+    return window.localStorage.getItem('ai-systems-last-exported-at')
+  })
+
+  const handleExport = async (format: 'csv' | 'json') => {
     setExporting(true)
+    setExportMenuOpen(false)
     try {
-      // Guarantee the loading state is visible for at least 1 second
-      const minDelay = new Promise((r) => setTimeout(r, 1000))
-      const fetchExport = async () => {
-        const token = useAuthStore.getState().token
-        const response = await fetch('/api/v1/ai-systems/export', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        return response.blob()
-      }
-      const [blob] = await Promise.all([fetchExport(), minDelay])
+      const [payload] = await Promise.all([
+        aiSystemsApi.export(format),
+        new Promise((resolve) => setTimeout(resolve, 500)),
+      ])
+
+      const blob =
+        format === 'csv'
+          ? (payload as Blob)
+          : new Blob([JSON.stringify(payload, null, 2)], {
+              type: 'application/json;charset=utf-8',
+            })
+
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'ai_systems.csv'
+      a.download = `ai_systems_export_${new Date().toISOString().split('T')[0]}.${format}`
       a.click()
-      URL.revokeObjectURL(url)
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+
+      const exportedAt = new Date().toISOString()
+      setLastExportedAt(exportedAt)
+      window.localStorage.setItem('ai-systems-last-exported-at', exportedAt)
     } catch (error) {
       console.error('Export failed:', error)
     } finally {
@@ -168,15 +193,49 @@ export default function AISystems() {
           <h1 className="text-2xl font-bold text-gray-900">AI Systems</h1>
           <p className="text-gray-600">Manage your AI systems for compliance tracking</p>
         </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="w-5 h-5" />
-            {exporting ? 'Exporting...' : 'Export CSV'}
-          </button>
+        <div className="flex flex-col items-end gap-2">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setExportMenuOpen((value) => !value)}
+              disabled={exporting}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-expanded={exportMenuOpen}
+              aria-haspopup="menu"
+            >
+              {exporting ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Download className="w-5 h-5" />
+              )}
+              {exporting ? 'Exporting...' : 'Export'}
+              {!exporting && <ChevronDown className="w-4 h-4 text-gray-500" />}
+            </button>
+
+            {exportMenuOpen && !exporting && (
+              <div className="absolute right-0 mt-2 w-44 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg z-20">
+                <button
+                  type="button"
+                  onClick={() => handleExport('csv')}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Download as CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExport('json')}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Download as JSON
+                </button>
+              </div>
+            )}
+          </div>
+          {lastExportedAt && (
+            <p className="text-xs text-gray-500">
+              Last exported {formatDistanceToNow(new Date(lastExportedAt), { addSuffix: true })}
+            </p>
+          )}
           <button
             onClick={() => setShowModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
@@ -330,14 +389,6 @@ export default function AISystems() {
           </p>
           {!searchTerm && !riskFilter && !complianceFilter && (
             <div className="flex items-center gap-3">
-              <button
-                onClick={handleExport}
-                disabled={exporting}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Download className="w-5 h-5" />
-                {exporting ? 'Exporting...' : 'Export CSV'}
-              </button>
               <button
                 onClick={() => setShowModal(true)}
                 className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"

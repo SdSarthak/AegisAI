@@ -1,5 +1,7 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -12,7 +14,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.config import settings
 from app.models.user import User
-from app.models.ai_system import AISystem, ComplianceStatus
+from app.models.ai_system import AISystem, ComplianceStatus, RiskAssessment
 from app.models.audit_log import AISystemAuditLog
 from app.schemas.ai_system import (
     AISystemCreate,
@@ -294,13 +296,45 @@ def bulk_import_systems(
     return BulkImportResponse(created=created_count, errors=errors)
 
 
+def _latest_risk_assessment(db: Session, system_id: int) -> RiskAssessment | None:
+    return (
+        db.query(RiskAssessment)
+        .filter(RiskAssessment.ai_system_id == system_id)
+        .order_by(RiskAssessment.assessed_at.desc(), RiskAssessment.id.desc())
+        .first()
+    )
+
+
+def _export_row(system: AISystem, valid_until: datetime | None) -> dict[str, object]:
+    risk_level = system.risk_level.value if system.risk_level else ""
+    compliance_status = (
+        system.compliance_status.value if system.compliance_status else ""
+    )
+
+    return {
+        "id": system.id,
+        "name": system.name,
+        "description": system.description or "",
+        "sector": system.sector or "",
+        "use_case": system.use_case or "",
+        "risk_classification": risk_level,
+        "risk_level": risk_level,
+        "compliance_status": compliance_status,
+        "compliance_score": system.compliance_score,
+        "valid_until": valid_until.isoformat() if valid_until else None,
+        "created_at": system.created_at.isoformat() if system.created_at else None,
+        "updated_at": system.updated_at.isoformat() if system.updated_at else None,
+    }
+
+
 @router.get("/export")
 def export_ai_systems(
+    format: str = Query("csv", description="Export format: csv or json"),
     risk_level: Optional[str] = Query(None, description="Filter by risk level: minimal, limited, high, unacceptable"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Export the authenticated user's AI systems registry as CSV."""
+    """Export the authenticated user's AI systems registry as CSV or JSON."""
     query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
 
     if risk_level is not None:
@@ -312,33 +346,78 @@ def export_ai_systems(
             )
         query = query.filter(AISystem.risk_level == risk_level.lower())
 
-    systems = query.all()
+    export_format = format.lower()
+    allowed_formats = {"csv", "json"}
+    if export_format not in allowed_formats:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid format '{format}'. Allowed: csv, json",
+        )
 
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow([
-        "id", "name", "description", "version", "use_case", "sector",
-        "risk_level", "compliance_status", "compliance_score", "created_at",
-    ])
-    for s in systems:
-        writer.writerow([
-            s.id,
-            sanitize_csv_field(s.name),
-            sanitize_csv_field(s.description or ""),
-            sanitize_csv_field(s.version or ""),
-            sanitize_csv_field(s.use_case or ""),
-            sanitize_csv_field(s.sector or ""),
-            s.risk_level.value if s.risk_level else "",
-            s.compliance_status.value if s.compliance_status else "",
-            s.compliance_score if s.compliance_score is not None else "",
-            s.created_at.isoformat() if s.created_at else "",
-        ])
+    systems = query.order_by(AISystem.created_at.desc()).yield_per(100)
 
-    output.seek(0)
+    if export_format == "json":
+        payload: list[dict[str, object]] = []
+        for system in systems:
+            assessment = _latest_risk_assessment(db, system.id)
+            payload.append(_export_row(system, assessment.valid_until if assessment else None))
+
+        filename = "ai_systems.json"
+        return JSONResponse(
+            content=payload,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+    headers = [
+        "id",
+        "name",
+        "description",
+        "sector",
+        "use_case",
+        "risk_classification",
+        "risk_level",
+        "compliance_status",
+        "compliance_score",
+        "valid_until",
+        "created_at",
+        "updated_at",
+    ]
+
+    def generate_csv():
+        yield "\ufeff"
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(headers)
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+        for system in systems:
+            assessment = _latest_risk_assessment(db, system.id)
+            row = _export_row(system, assessment.valid_until if assessment else None)
+            writer.writerow([
+                sanitize_csv_field(str(row["id"])),
+                sanitize_csv_field(str(row["name"])),
+                sanitize_csv_field(str(row["description"])),
+                sanitize_csv_field(str(row["sector"])),
+                sanitize_csv_field(str(row["use_case"])),
+                sanitize_csv_field(str(row["risk_classification"])),
+                sanitize_csv_field(str(row["risk_level"])),
+                sanitize_csv_field(str(row["compliance_status"])),
+                row["compliance_score"] if row["compliance_score"] is not None else "",
+                sanitize_csv_field(str(row["valid_until"] or "")),
+                sanitize_csv_field(str(row["created_at"] or "")),
+                sanitize_csv_field(str(row["updated_at"] or "")),
+            ])
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+    filename = "ai_systems.csv"
     return StreamingResponse(
-        iter([output.getvalue()]),
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=\"ai_systems.csv\""},
+        generate_csv(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
