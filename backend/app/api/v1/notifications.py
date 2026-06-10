@@ -26,6 +26,20 @@ def create_notification(
     resource_type: str | None = None,
     resource_id: int | None = None,
 ) -> Notification:
+    """Create and persist a notification for a user.
+
+    Args:
+        db: Active database session used to persist the notification.
+        user_id: ID of the user who should receive the notification.
+        notification_type: Machine-readable notification category.
+        title: Notification title shown in the UI.
+        message: Notification body text.
+        resource_type: Optional resource type associated with the notification.
+        resource_id: Optional resource ID associated with the notification.
+
+    Returns:
+        The persisted Notification ORM row.
+    """
     notification = Notification(
         user_id=user_id,
         notification_type=notification_type,
