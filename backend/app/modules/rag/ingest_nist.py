@@ -38,7 +38,14 @@ CHUNK_OVERLAP = 200
 
 
 def ingest_nist_ai_rmf() -> None:
-    """Ingest NIST AI RMF 1.0 into the existing FAISS vector store."""
+    """Ingest NIST AI RMF 1.0 into the existing FAISS vector store.
+
+    Returns:
+        None. The FAISS index is updated in place on disk.
+
+    Raises:
+        FileNotFoundError: If the NIST PDF is not present locally.
+    """
     if not NIST_PDF_PATH.exists():
         raise FileNotFoundError(
             f"NIST AI RMF PDF not found at {NIST_PDF_PATH}. "

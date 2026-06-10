@@ -1,4 +1,8 @@
-"""NIST AI RMF 1.0 mapping constants."""
+"""NIST AI RMF 1.0 mapping constants.
+
+This module maps EU AI Act risk tiers to the corresponding NIST AI RMF
+functions, subcategories, and narrative metadata used in generated reports.
+"""
 
 from __future__ import annotations
 

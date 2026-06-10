@@ -20,7 +20,17 @@ def generate_nist_rmf_profile(
     eu_risk_level: str,
     organization: str = "Your Organization",
 ) -> str:
-    """Generate a NIST AI RMF profile document as markdown."""
+    """Generate a NIST AI RMF profile document as markdown.
+
+    Args:
+        system_name: Name of the AI system.
+        system_description: Short description of the AI system.
+        eu_risk_level: EU AI Act risk tier to map from.
+        organization: Organization name to display in the report.
+
+    Returns:
+        A markdown document describing the system against NIST AI RMF.
+    """
     mapping = EU_TO_NIST_MAPPING.get(eu_risk_level.upper(), {})
     meta = NIST_AI_RMF_METADATA
 
