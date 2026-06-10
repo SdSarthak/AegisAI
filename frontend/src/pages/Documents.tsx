@@ -35,6 +35,12 @@ export default function Documents() {
   const [currentPage, setCurrentPage] = useState(1)
   const limit = 10
 
+  const closeGenerateModal = () => {
+    setShowModal(false)
+    setSelectedSystem(null)
+    setSelectedType('technical_documentation')
+  }
+
   const {
     data: documentsData,
     isLoading: documentsLoading,
@@ -79,7 +85,7 @@ export default function Documents() {
     mutationFn: documentsApi.generate,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
-      setShowModal(false)
+      closeGenerateModal()
       notify.success('Document generated')
     },
     onError: () => {
@@ -481,7 +487,7 @@ export default function Documents() {
               <div className="flex justify-end gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={closeGenerateModal}
                   className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
                 >
                   Cancel
