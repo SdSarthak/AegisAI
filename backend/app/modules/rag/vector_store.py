@@ -11,21 +11,15 @@ import shutil
 import tempfile
 import threading
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
 from langchain_community.embeddings import OllamaEmbeddings
 from langchain_core.documents import Document
 from app.core.config import settings
-from .document_loader import load_documents_from_paths
 
 _rag_index_lock = threading.Lock()
 
 
 def get_embeddings():
     """Return the embeddings backend configured for the current deployment."""
-    '''return OpenAIEmbeddings(
-        openai_api_key=settings.LLM_API_KEY,
-        openai_api_base=settings.LLM_BASE_URL or None,
-    )'''
     base = settings.LLM_BASE_URL or "http://ollama:11434"
     # OllamaEmbeddings wants the root URL, not the /v1 path
     if base.endswith("/v1"):

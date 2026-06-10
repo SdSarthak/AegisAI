@@ -7,7 +7,6 @@ sanitize it, or block it outright.
 
 from enum import Enum
 from dataclasses import dataclass
-from typing import Dict
 
 
 class Decision(Enum):

@@ -8,7 +8,7 @@ deterministic heuristics when the trained weights are absent.
 import os
 import json
 import re
-from typing import List, Tuple, Dict, Optional
+from typing import List, Dict, Optional
 from dataclasses import dataclass
 import numpy as np
 
@@ -20,7 +20,7 @@ from transformers import (
     AdamW,
     get_linear_schedule_with_warmup,
 )
-from sklearn.metrics import classification_report, confusion_matrix, f1_score
+from sklearn.metrics import f1_score
 
 from . import guard_config as config
 from .regex_rules import RegexFilter

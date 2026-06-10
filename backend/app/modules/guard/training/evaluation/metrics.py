@@ -1,7 +1,5 @@
 """Compute evaluation metrics for the guard intent classifier."""
 
-from __future__ import annotations
-
 from typing import Iterable
 
 from sklearn.metrics import accuracy_score, classification_report, f1_score
