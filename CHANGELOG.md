@@ -64,3 +64,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - No audit log for Guard decisions yet
 - Stripe billing wired up but not activated
 - Frontend pages for Guard and RAG not yet built
+
+## Unreleased
+
+### Added
+
+- **Notifications API**
+
+- Added `GET /api/v1/notifications/unread-count` endpoint to retrieve the current user's unread notification count.
+- Added `POST /api/v1/notifications/read-all` endpoint to mark all unread notifications as read.
+- Added `DELETE /api/v1/notifications/read` endpoint to delete all read notifications for the current user.
+- Added unit tests covering unread count retrieval, mark-all-read functionality, and bulk deletion of read notifications while preserving notification ownership boundaries.
