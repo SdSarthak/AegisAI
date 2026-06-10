@@ -1,7 +1,8 @@
 """Utility helpers shared across the guard training pipelines.
 
 This namespace collects the small support functions used by training and
-evaluation jobs while leaving heavier dependencies lazily imported.
+evaluation jobs while leaving heavier dependencies lazily imported until a
+run actually needs them.
 """
 
 from .checkpoint import save_json_artifact, save_predictions, utc_run_id

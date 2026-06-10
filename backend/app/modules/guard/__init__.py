@@ -2,7 +2,7 @@
 
 Importing from this package gives callers a lightweight way to reach the
 regex filter, intent classifier, decision engine, sanitizer, and the full
-orchestrator without eagerly importing every submodule.
+orchestrator without eagerly importing every submodule or ML dependency.
 """
 
 from importlib import import_module

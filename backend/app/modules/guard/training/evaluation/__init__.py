@@ -1,7 +1,8 @@
 """Evaluation helpers for guard classifier training.
 
 This package exposes the evaluation result types and metric helpers while
-keeping the heavier model imports lazy until the evaluator is needed.
+keeping the heavier model imports lazy until the evaluator is needed in a
+pipeline or CLI invocation.
 """
 
 from .metrics import compute_classification_metrics
