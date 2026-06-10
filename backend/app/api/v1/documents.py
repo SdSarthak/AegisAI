@@ -27,7 +27,6 @@ from app.schemas.document import (
     DocumentShareResponse,
     DocumentUpdateRequest,
     DocumentTemplateResponse,
-    DocumentUpdateRequest,
 )
 from app.schemas.pagination import PaginatedResponse
 
