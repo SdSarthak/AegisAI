@@ -1,32 +1,32 @@
-from datetime import datetime
-
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
-from fastapi.responses import JSONResponse, StreamingResponse
-from sqlalchemy import asc, desc
-from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
-from typing import Optional
 import csv
 import io
+from datetime import datetime
+from typing import Optional
 
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import JSONResponse, StreamingResponse
+from sqlalchemy import asc, desc
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
 from app.core.csv_utils import sanitize_csv_field
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.core.config import settings
-from app.models.user import User
 from app.models.ai_system import AISystem, ComplianceStatus, RiskAssessment
 from app.models.audit_log import AISystemAuditLog
+from app.models.user import User
+from app.modules.compliance.eu_ai_act import evaluate_compliance
 from app.schemas.ai_system import (
     AISystemCreate,
-    AISystemUpdate,
     AISystemResponse,
+    AISystemUpdate,
     BulkImportResponse,
     ComplianceStatusUpdateSchema,
 )
 from app.schemas.audit_log import AISystemAuditLogResponse
-from app.schemas.pagination import PaginatedResponse
-from app.modules.compliance.eu_ai_act import evaluate_compliance
 from app.schemas.compliance import ComplianceGapResponse, ComplianceRequirementItem
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
 
@@ -72,7 +72,7 @@ def _read_upload_file(file: UploadFile, max_bytes: int) -> str:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File must be UTF-8 encoded CSV",
-        )
+        ) from None
 
 
 def _process_import_rows(
@@ -198,7 +198,7 @@ def create_ai_system(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"AI system with name '{system_data.name}' already exists",
-        )
+        ) from None
     db.refresh(ai_system)
     return ai_system
 
@@ -351,7 +351,7 @@ def bulk_import_systems(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="File must be UTF-8 encoded CSV"
-        )
+        ) from None
     except HTTPException:
         raise
     except Exception as e:
@@ -359,7 +359,7 @@ def bulk_import_systems(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Error processing CSV: {str(e)}"
-        )
+        ) from e
 
     return BulkImportResponse(created=created_count, errors=errors)
 

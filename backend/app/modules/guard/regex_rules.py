@@ -96,7 +96,7 @@ class RegexFilter:
         Returns:
             A dictionary of compiled regex pattern groups.
         """
-        patterns = {
+        return {
             "high_override": [
                 re.compile(p, re.IGNORECASE) for p in self.INSTRUCTION_OVERRIDE_PATTERNS
             ],
@@ -116,7 +116,6 @@ class RegexFilter:
                 re.compile(p, re.IGNORECASE) for p in self.SUSPICIOUS_KEYWORDS
             ],
         }
-        return patterns
 
     def check(self, prompt: str) -> RegexResult:
         """Check a prompt against the configured regex patterns.
