@@ -304,7 +304,19 @@ def create_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new document for the authenticated user."""
+    """Create a new document for the authenticated user.
+
+    Args:
+        doc_data: Document creation payload including title, type, and content.
+        db: Active database session.
+        current_user: Authenticated user creating the document.
+
+    Returns:
+        The newly created document.
+
+    Raises:
+        HTTPException: If the referenced AI system does not belong to the user.
+    """
     if doc_data.ai_system_id is not None:
         ai_system = (
             db.query(AISystem)
@@ -340,7 +352,18 @@ def list_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List the current user's documents with pagination."""
+    """List the current user's documents with pagination.
+
+    Args:
+        skip: Number of documents to skip before returning results.
+        limit: Maximum number of documents to return.
+        db: Active database session.
+        current_user: Authenticated user whose documents should be listed.
+
+    Returns:
+        PaginatedResponse containing the user's documents ordered by
+        insertion order.
+    """
     base_query = db.query(Document).filter(Document.owner_id == current_user.id)
     total = base_query.count()
 
@@ -353,7 +376,19 @@ def get_shared_document(
     token: str,
     db: Session = Depends(get_db)
 ):
-    """Access shared document without authentication."""
+    """Access a shared document without authentication.
+
+    Args:
+        token: Signed share token generated for the document.
+        db: Active database session.
+
+    Returns:
+        The shared document referenced by the token.
+
+    Raises:
+        HTTPException: If the token is expired, invalid, revoked, or the
+            document cannot be found.
+    """
 
     try:
         payload = jwt.decode(
@@ -415,7 +450,20 @@ def share_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Generate share link for a document."""
+    """Generate a share link for a document.
+
+    Args:
+        document_id: ID of the document to make shareable.
+        db: Active database session.
+        current_user: Authenticated user who must own the document.
+
+    Returns:
+        A share URL and expiry information for the generated token.
+
+    Raises:
+        HTTPException: If the document does not exist or is not owned by the
+            authenticated user.
+    """
 
     document = db.query(Document).filter(
         Document.id == document_id,
@@ -438,7 +486,14 @@ def share_document(
 def list_document_templates(
     current_user: User = Depends(get_current_user),
 ):
-    """List available document templates for generation."""
+    """List available document templates for generation.
+
+    Args:
+        current_user: Authenticated user requesting the template catalog.
+
+    Returns:
+        The set of supported document templates and their descriptions.
+    """
     descriptions = {
         DocumentType.TECHNICAL_DOCUMENTATION: "Generate technical documentation for an AI system.",
         DocumentType.RISK_ASSESSMENT: "Generate a risk assessment report for an AI system.",
@@ -463,7 +518,19 @@ def get_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return a single document owned by the current user."""
+    """Return a single document owned by the current user.
+
+    Args:
+        document_id: ID of the document to fetch.
+        db: Active database session.
+        current_user: Authenticated user who must own the document.
+
+    Returns:
+        The requested document.
+
+    Raises:
+        HTTPException: If the document cannot be found for the user.
+    """
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -483,7 +550,21 @@ def update_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update the content of an existing document."""
+    """Update the content of an existing document.
+
+    Args:
+        document_id: ID of the document to update.
+        body: Payload containing the replacement document content.
+        db: Active database session.
+        current_user: Authenticated user who must own the document.
+
+    Returns:
+        The updated document.
+
+    Raises:
+        HTTPException: If the document does not exist or is not owned by the
+            authenticated user.
+    """
     # Fetch document
     document = db.query(Document).filter(
         Document.id == document_id,
@@ -513,7 +594,19 @@ def generate_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate a compliance document for a user's AI system."""
+    """Generate a compliance document for a user's AI system.
+
+    Args:
+        request: Generation request selecting the AI system and template.
+        db: Active database session.
+        current_user: Authenticated user requesting the generated document.
+
+    Returns:
+        The newly generated document.
+
+    Raises:
+        HTTPException: If the AI system or template is invalid.
+    """
     # Get the AI system
     ai_system = (
         db.query(AISystem)
@@ -593,7 +686,20 @@ def delete_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a document owned by the current user."""
+    """Delete a document owned by the current user.
+
+    Args:
+        document_id: ID of the document to delete.
+        db: Active database session.
+        current_user: Authenticated user who must own the document.
+
+    Returns:
+        None. The endpoint responds with HTTP 204 when deletion succeeds.
+
+    Raises:
+        HTTPException: If the document does not exist or is not owned by the
+            authenticated user.
+    """
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -615,7 +721,19 @@ def export_document_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Export a document as a PDF attachment."""
+    """Export a document as a PDF attachment.
+
+    Args:
+        document_id: ID of the document to export.
+        db: Active database session.
+        current_user: Authenticated user who must own the document.
+
+    Returns:
+        A PDF file response containing the document content.
+
+    Raises:
+        HTTPException: If the document does not exist or has no content.
+    """
     # Retrieve the document
     document = db.query(Document).filter(
         Document.id == document_id,
