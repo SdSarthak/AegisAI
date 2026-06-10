@@ -33,8 +33,20 @@ def get_compliance_badge(
     format: str = "svg",  # "svg" | "json"
     db: Session = Depends(get_db),
 ):
-    """
-    Return a public compliance badge for an AI system.
+    """Return a public compliance badge for an AI system.
+
+    Args:
+        system_id: ID of the AI system to render a badge for.
+        format: Response format to return. ``svg`` renders the badge as an
+            image, while ``json`` returns the badge metadata as a payload.
+        db: Active database session used to look up the AI system.
+
+    Returns:
+        Either a JSON payload with badge metadata or an SVG response.
+
+    Raises:
+        HTTPException: If rate limiting is exceeded or the AI system does not
+            exist.
     """
     # Rate limit: 5 requests per minute per system ID by default (sensitive, fail closed)
     limited, retry_after = badge_rate_limiter.check_and_consume(
