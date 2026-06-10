@@ -756,7 +756,7 @@ export default function Classification() {
           </ol>
         </div>
 
-        {riskLevel !== 'unacceptable' && (
+        {riskLevel !== 'unacceptable' && hasValidSystemId && (
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-gray-900">
@@ -768,10 +768,22 @@ export default function Classification() {
             </div>
 
             <ComplianceChecklist
-              systemId={Number(systemId || 0)}
+              systemId={parsedSystemId}
               riskLevel={riskLevel}
               items={CHECKLIST_ITEMS[riskLevel] || []}
             />
+          </div>
+        )}
+
+        {riskLevel !== 'unacceptable' && !hasValidSystemId && (
+          <div className="rounded-xl border border-gray-200 bg-white p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">
+              Interactive Compliance Checklist
+            </h3>
+            <p className="text-sm text-gray-600">
+              Save this classification against a numeric AI system ID to unlock
+              the interactive checklist for tracking obligations.
+            </p>
           </div>
         )}
       </div>
