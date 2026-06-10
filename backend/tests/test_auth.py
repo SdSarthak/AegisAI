@@ -40,6 +40,21 @@ def test_register_weak_password(client):
     assert isinstance(data["detail"], list) or "Password must contain" in str(data["detail"])
 
 
+def test_register_password_over_72_bytes_returns_422(client):
+    """Test registration rejects passwords that exceed bcrypt's 72-byte limit."""
+    long_password = ("é" * 36) + "A1!"
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "longpass@example.com",
+            "password": long_password,
+        }
+    )
+
+    assert response.status_code == 422
+    assert "72 bytes" in str(response.json())
+
+
 def test_register_duplicate_email(client):
     """Test registration fails when email already exists."""
     user_data = {

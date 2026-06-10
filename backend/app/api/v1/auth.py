@@ -21,7 +21,6 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import (
-    validate_password_strength,
     verify_password,
     get_password_hash,
     create_access_token,
