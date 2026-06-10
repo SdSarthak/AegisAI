@@ -131,6 +131,16 @@ export default function Documents() {
     })
   }
 
+  const handleSystemSelect = (value: string) => {
+    if (!value) {
+      setSelectedSystem(null)
+      return
+    }
+
+    const parsed = Number(value)
+    setSelectedSystem(Number.isInteger(parsed) && parsed > 0 ? parsed : null)
+  }
+
   const handleSaveDocument = async (
     content: string,
     source: 'manual' | 'autosave' = 'manual'
@@ -457,7 +467,7 @@ export default function Documents() {
                 </label>
                 <select
                   value={selectedSystem || ''}
-                  onChange={(e) => setSelectedSystem(parseInt(e.target.value))}
+                  onChange={(e) => handleSystemSelect(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
                   <option value="">Select AI system...</option>
