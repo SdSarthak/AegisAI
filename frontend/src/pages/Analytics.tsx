@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 
 import ComplianceRiskChart from "../components/ComplianceRiskChart";
+import { analyticsApi } from '../services/api'
 
 import {
   BarChart2,
@@ -76,6 +77,13 @@ type RiskData = {
   value: number;
 };
 
+const fallbackRiskData: RiskData[] = [
+  { name: 'Minimal Risk', value: 4 },
+  { name: 'Limited Risk', value: 3 },
+  { name: 'High Risk', value: 2 },
+  { name: 'Unacceptable Risk', value: 1 },
+]
+
 const chartThemes = {
   light: {
     grid: "rgb(229 231 235)",
@@ -108,20 +116,54 @@ export default function Analytics() {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    fetchRiskDistribution();
+    let cancelled = false
+
+    const fetchRiskDistribution = async () => {
+      try {
+        const summary = await analyticsApi.summary()
+        const mapped: RiskData[] = [
+          { name: 'Minimal Risk', value: summary.counts.minimal || 0 },
+          { name: 'Limited Risk', value: summary.counts.limited || 0 },
+          { name: 'High Risk', value: summary.counts.high || 0 },
+          { name: 'Unacceptable Risk', value: summary.counts.unacceptable || 0 },
+        ]
+
+        if (!cancelled) {
+          setRiskPieData(mapped)
+        }
+      } catch {
+        if (!cancelled) {
+          setRiskPieData(fallbackRiskData)
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+
+    void fetchRiskDistribution()
+
+    return () => {
+      cancelled = true
+    }
   }, []);
 
   useEffect(() => {
+    if (typeof document === 'undefined') {
+      return
+    }
+
     const checkTheme = () => {
-      setIsDark(document.documentElement.classList.contains("dark"));
-    };
+      setIsDark(document.documentElement.classList.contains('dark'))
+    }
 
     checkTheme();
 
     const observer = new MutationObserver(checkTheme);
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["class"],
+      attributeFilter: ['class'],
     });
 
     return () => observer.disconnect();
@@ -129,40 +171,6 @@ export default function Analytics() {
 
   const chartTheme = getChartTheme(isDark);
   const chartRemountKey = isDark ? "dark" : "light";
-
-  const fetchRiskDistribution = async () => {
-    try {
-      const res = await fetch("/api/v1/analytics/summary");
-
-      if (res.ok) {
-        const json = await res.json();
-        const mapped: RiskData[] = [
-          { name: "Minimal Risk", value: json.counts?.minimal || 0 },
-          { name: "Limited Risk", value: json.counts?.limited || 0 },
-          { name: "High Risk", value: json.counts?.high || 0 },
-          { name: "Unacceptable Risk", value: json.counts?.unacceptable || 0 },
-        ];
-
-        setRiskPieData(mapped);
-      } else {
-        setRiskPieData([
-          { name: "Minimal Risk", value: 4 },
-          { name: "Limited Risk", value: 3 },
-          { name: "High Risk", value: 2 },
-          { name: "Unacceptable Risk", value: 1 },
-        ]);
-      }
-    } catch {
-      setRiskPieData([
-        { name: "Minimal Risk", value: 4 },
-        { name: "Limited Risk", value: 3 },
-        { name: "High Risk", value: 2 },
-        { name: "Unacceptable Risk", value: 1 },
-      ]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div className="space-y-8">

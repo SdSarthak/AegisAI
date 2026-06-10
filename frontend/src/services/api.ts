@@ -515,10 +515,17 @@ export const guardApi = {
 }
 
 export const analyticsApi = {
-  summary: async () => {
+  summary: async (): Promise<AnalyticsSummaryResponse> => {
     const { data } = await api.get('/analytics/summary')
     return data
   },
+}
+
+export interface AnalyticsSummaryResponse {
+  total_systems: number
+  average_compliance_score: number
+  counts: Record<string, number>
+  compliance_statuses: Record<string, number>
 }
 
 export const guardHistoryApi = {
