@@ -20,8 +20,8 @@ from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.compliance_snapshot import ComplianceSnapshot
 from app.models.guard_scan_log import GuardScanLog
 from app.models.user import User
-from app.schemas.audit_log import GuardAuditLogResponse
 from app.schemas.analytics import ComplianceTimelineResponse
+from app.schemas.audit_log import GuardAuditLogResponse
 from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
@@ -66,7 +66,6 @@ def get_analytics_summary(
     db: Session = Depends(get_db),
 ):
     """Return aggregate compliance statistics for the current user."""
-    # FIX: use SQL GROUP BY instead of loading all rows into memory
     risk_rows = (
         db.query(AISystem.risk_level, func.count(AISystem.id))
         .filter(AISystem.owner_id == current_user.id)
