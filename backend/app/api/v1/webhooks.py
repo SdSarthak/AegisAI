@@ -37,7 +37,15 @@ logger = logging.getLogger(__name__)
 
 
 def _build_signature(secret: str, payload_body: bytes) -> str:
-    """Generate HMAC-SHA256 signature for webhook payload."""
+    """Generate an HMAC-SHA256 signature for a webhook payload.
+
+    Args:
+        secret: Shared secret used to sign the payload.
+        payload_body: Canonical JSON payload bytes.
+
+    Returns:
+        Hex-encoded HMAC signature string.
+    """
     return hmac.new(
         secret.encode("utf-8"),
         payload_body,
@@ -51,7 +59,18 @@ async def _post_webhook(
     payload: dict[str, Any],
     secret: str | None,
 ) -> None:
-    """Post webhook payload to a configured endpoint."""
+    """Post a webhook payload to a configured endpoint.
+
+    Args:
+        url: Destination webhook URL.
+        event: Event name used in the request headers.
+        payload: JSON-serializable payload to send.
+        secret: Optional signing secret used for request authentication.
+
+    Returns:
+        None. Errors are logged and suppressed so delivery continues for
+        other webhooks.
+    """
     try:
         payload_body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
 
@@ -79,7 +98,19 @@ def deliver_webhook(
     payload: dict[str, Any],
     background_tasks: BackgroundTasks,
 ) -> None:
-    """Schedule delivery to active user webhooks subscribed to the event."""
+    """Schedule delivery to active user webhooks subscribed to the event.
+
+    Args:
+        db: Active database session used to discover webhook subscriptions.
+        user_id: User whose webhooks should receive the event.
+        event: Event name to match against stored subscriptions.
+        payload: JSON-serializable event payload.
+        background_tasks: Task queue used to fan out delivery asynchronously.
+
+    Returns:
+        None. Matching webhook deliveries are scheduled on the background task
+        runner.
+    """
     webhooks = (
         db.query(WebhookConfig)
         .filter(
