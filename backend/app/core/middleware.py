@@ -48,14 +48,30 @@ def _resolve_request_id(headers: Headers) -> str:
 
 
 class RequestContextMiddleware:
-    """Bind a request id to the async context and emit a JSON access log."""
+    """Bind request context and emit structured access logs.
+
+    The middleware keeps request and user context available to downstream
+    handlers while also recording a consistent access log entry.
+    """
 
     def __init__(self, app: ASGIApp) -> None:
+        """Store the wrapped ASGI application.
+
+        Args:
+            app: Downstream ASGI application to invoke.
+        """
         self.app = app
 
     async def __call__(
         self, scope: Scope, receive: Receive, send: Send
     ) -> None:
+        """Handle a request lifecycle and emit request-scoped logs.
+
+        Args:
+            scope: ASGI scope for the incoming request.
+            receive: ASGI receive callable.
+            send: ASGI send callable.
+        """
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return

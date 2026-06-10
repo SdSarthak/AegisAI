@@ -14,7 +14,17 @@ __all__ = [
 
 
 def __getattr__(name):
-    """Lazily load guard components so lightweight modules do not require torch."""
+    """Lazily load guard components for lightweight imports.
+
+    Args:
+        name: Attribute name being requested from the package namespace.
+
+    Returns:
+        The requested guard component or fallback module.
+
+    Raises:
+        AttributeError: If the attribute does not exist on the package.
+    """
     if name == "RegexFilter":
         from .regex_rules import RegexFilter
 
