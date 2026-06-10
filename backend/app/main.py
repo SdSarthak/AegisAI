@@ -11,21 +11,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+import app.models  # ensure all ORM models are imported so tables are created
+from app.api.v1 import api_router, badge
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import Base, engine
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.core.telemetry import setup_telemetry
-from app.api.v1 import api_router, badge
 from app.plugins.regulation_loader import init_registry
-import app.models  # ensure all ORM models are imported so tables are created
 
 # -------------------------------------------------------------------
 # Logging Setup

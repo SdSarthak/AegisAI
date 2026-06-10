@@ -2,9 +2,8 @@ import logging
 from pathlib import Path
 
 import yaml
-from pydantic import ValidationError
-
 from app.plugins.schema import RegulationBody, RegulationFile
+from pydantic import ValidationError
 
 logger = logging.getLogger(__name__)
 

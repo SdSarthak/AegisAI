@@ -7,16 +7,15 @@ Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
-from datetime import datetime
 import enum
+from datetime import datetime
 
-from sqlalchemy import Column, Integer, DateTime, ForeignKey, JSON, event
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, event
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.attributes import get_history
 
 from app.core.database import Base
 from app.models.ai_system import AISystem
-
 
 TRACKED_FIELDS = [
     "name",
