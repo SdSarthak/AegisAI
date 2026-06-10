@@ -5,7 +5,6 @@ filesystem. This module normalizes both sources into split LangChain
 documents so downstream indexing sees a consistent shape.
 """
 
-import os
 from langchain_community.document_loaders import S3DirectoryLoader, PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.core.config import settings

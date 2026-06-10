@@ -15,8 +15,6 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, Dataset
 from transformers import (
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
     AdamW,
     get_linear_schedule_with_warmup,
 )

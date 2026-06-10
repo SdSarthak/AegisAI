@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from typing import List, Optional
+from typing import Optional
 import csv
 import io
 

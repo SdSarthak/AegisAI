@@ -6,7 +6,7 @@ recommended actions, and a classified risk level.
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List
 from app.models.ai_system import RiskLevel
 
 

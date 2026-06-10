@@ -5,7 +5,6 @@ engine, sanitizer, and downstream LLM client into one call that returns a
 single structured decision payload for the API.
 """
 
-import json
 import logging
 from datetime import datetime
 from typing import Dict, Optional
@@ -218,7 +217,6 @@ class LLMGuard:
 
 def main():
     """CLI interface for the guard."""
-    import sys
 
     # Initialize guard
     guard = LLMGuard(sanitization_level=SanitizationLevel.MEDIUM)

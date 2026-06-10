@@ -5,7 +5,7 @@ from jose import jwt, JWTError
 from jose.exceptions import ExpiredSignatureError
 
 
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
 from io import BytesIO
@@ -32,10 +32,10 @@ from app.schemas.document import (
 from app.schemas.pagination import PaginatedResponse
 
 # PDF generation
-from reportlab.lib.pagesizes import letter, A4
+from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
 
