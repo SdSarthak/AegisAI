@@ -1,4 +1,8 @@
-"""Evaluation helpers for guard classifier training."""
+"""Evaluation helpers for guard classifier training.
+
+This package exposes the evaluation result types and metric helpers while
+keeping the heavier model imports lazy.
+"""
 
 from .metrics import compute_classification_metrics
 
@@ -10,7 +14,14 @@ __all__ = [
 
 
 def __getattr__(name):
-    """Lazily load evaluator classes because they depend on the model stack."""
+    """Lazily load evaluator classes because they depend on the model stack.
+
+    Args:
+        name: Attribute requested from the package namespace.
+
+    Returns:
+        The lazily imported evaluation class or helper.
+    """
     if name in {"EvaluationResult", "SafetyClassifierEvaluator"}:
         from .evaluator import EvaluationResult, SafetyClassifierEvaluator
 

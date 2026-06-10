@@ -8,7 +8,16 @@ from typing import Iterator
 
 @contextmanager
 def mlflow_run(enabled: bool, experiment_name: str, run_name: str) -> Iterator[object | None]:
-    """Start an MLflow run when enabled, otherwise yield None."""
+    """Start an MLflow run when enabled, otherwise yield ``None``.
+
+    Args:
+        enabled: Whether MLflow logging should run.
+        experiment_name: Target MLflow experiment name.
+        run_name: MLflow run name.
+
+    Yields:
+        The active MLflow run object, or ``None`` when disabled.
+    """
     if not enabled:
         yield None
         return
@@ -21,6 +30,12 @@ def mlflow_run(enabled: bool, experiment_name: str, run_name: str) -> Iterator[o
 
 
 def log_metrics(metrics: dict, prefix: str = "") -> None:
+    """Log numeric metrics to MLflow with an optional key prefix.
+
+    Args:
+        metrics: Dictionary of metrics to log.
+        prefix: Optional prefix applied to every metric key.
+    """
     import mlflow
 
     for key, value in metrics.items():

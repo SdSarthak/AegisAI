@@ -29,7 +29,17 @@ def normalize_training_frame(
     label_column: str = "label",
     valid_labels: Iterable[str] | None = ("benign", "suspicious", "malicious"),
 ) -> pd.DataFrame:
-    """Return a clean DataFrame with standardized prompt and label columns."""
+    """Return a clean DataFrame with standardized prompt and label columns.
+
+    Args:
+        df: Raw training dataframe.
+        text_column: Name of the text column to normalize.
+        label_column: Name of the label column to normalize.
+        valid_labels: Optional iterable of allowed label values.
+
+    Returns:
+        A normalized dataframe with ``prompt`` and ``label`` columns.
+    """
     working = df.copy()
     valid_labels = tuple(valid_labels or ("benign", "suspicious", "malicious"))
 
