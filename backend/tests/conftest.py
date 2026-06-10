@@ -172,3 +172,13 @@ def clear_guard_rate_limits():
     guard_scan_rate_limiter._local_attempts_by_key.clear()
     if redis_client is not None:
         redis_client.flushdb()
+
+
+@pytest.fixture(autouse=True)
+def clear_auth_rate_limits():
+    """Keep in-memory auth rate limits isolated between tests."""
+    from app.api.v1.auth import clear_auth_rate_limits as reset_auth_rate_limits
+
+    reset_auth_rate_limits()
+    yield
+    reset_auth_rate_limits()
