@@ -184,7 +184,24 @@ def scan_prompt(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Scan a prompt for injection risks."""
+    """Scan a single prompt for injection risks.
+
+    Args:
+        request: Prompt payload to inspect with Guard.
+        background_tasks: Background task runner used for logging and
+            webhook delivery.
+        http_request: Incoming request used to capture the client IP.
+        db: Active database session.
+        current_user: Authenticated user submitting the prompt.
+
+    Returns:
+        ScanResponse containing the decision, confidence, reasoning, and
+        any matched patterns.
+
+    Raises:
+        HTTPException: If the request is rate-limited or the guard pipeline
+            fails unexpectedly.
+    """
     limited, retry_after = guard_scan_rate_limiter.check_and_consume(
         key=f"guard:scan:{current_user.id}",
         limit=settings.GUARD_RATE_LIMIT_REQUESTS,
@@ -537,7 +554,25 @@ def get_guard_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the current user's Guard scan history (cursor paginated)."""
+    """Return the current user's Guard scan history.
+
+    Args:
+        cursor: Cursor token for fetching the next page of results.
+        limit: Maximum number of log entries to return.
+        decision: Optional filter by final Guard decision.
+        intent: Optional filter by inferred intent category.
+        start_date: Optional inclusive lower bound for scan timestamps.
+        end_date: Optional inclusive upper bound for scan timestamps.
+        db: Active database session.
+        current_user: Authenticated user whose history should be returned.
+
+    Returns:
+        CursorPaginatedResponse of Guard scan logs ordered by recency.
+
+    Raises:
+        HTTPException: If the date range is invalid or a supplied filter is
+            outside the allowed values.
+    """
 
     if start_date and end_date and start_date > end_date:
         raise HTTPException(
@@ -575,7 +610,21 @@ def get_guard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return Guard scan statistics for a time window and user."""
+    """Return Guard scan statistics for a time window and user.
+
+    Args:
+        window: Aggregation window for the returned metrics.
+        user_id: Optional target user to inspect; defaults to the current user.
+        db: Active database session.
+        current_user: Authenticated user requesting stats.
+
+    Returns:
+        Aggregated Guard metrics including decisions, detection types,
+        top patterns, and scans per day.
+
+    Raises:
+        HTTPException: If a non-admin user requests another user's stats.
+    """
     target_user_id = user_id if user_id is not None else current_user.id
     is_admin = getattr(current_user, "role", None) == "admin"
 
@@ -709,7 +758,14 @@ def get_guard_stats(
 
 @router.get("/config", tags=["LLM Guard"])
 def get_guard_config(current_user: User = Depends(get_current_user)):
-    """Return the current user's Guard configuration."""
+    """Return the current user's Guard configuration.
+
+    Args:
+        current_user: Authenticated user whose Guard settings should be read.
+
+    Returns:
+        A configuration dictionary with sanitization and threshold values.
+    """
     default_config = {
         "sanitization_level": "medium",
         "malicious_threshold": 0.8,
@@ -724,7 +780,19 @@ def update_guard_config(
     config: GuardConfigRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Update the current user's Guard configuration."""
+    """Update the current user's Guard configuration.
+
+    Args:
+        config: New Guard settings supplied by the client.
+        current_user: Authenticated user whose settings should be updated.
+
+    Returns:
+        A confirmation payload containing the persisted configuration.
+
+    Raises:
+        HTTPException: If any configuration value is outside the accepted
+            range or set of allowed values.
+    """
     if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
         raise HTTPException(
             status_code=400,
@@ -763,7 +831,23 @@ def bulk_scan_prompts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Scan a batch of prompts for injection risks."""
+    """Scan a batch of prompts for injection risks.
+
+    Args:
+        request: Collection of prompts to scan in one request.
+        http_request: Incoming request used to capture the client IP.
+        background_tasks: Background task runner used for logging and
+            webhook delivery.
+        current_user: Authenticated user submitting the batch.
+        db: Active database session.
+
+    Returns:
+        BulkScanResponse containing one scan result per submitted prompt.
+
+    Raises:
+        HTTPException: If the batch is invalid, rate-limited, or the Guard
+            pipeline fails unexpectedly.
+    """
     try:
         request.validate_prompts()
     except ValueError as e:
