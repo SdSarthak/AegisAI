@@ -32,7 +32,19 @@ router = APIRouter()
 
 
 def _read_upload_file(file: UploadFile, max_bytes: int) -> str:
-    """Read a CSV upload with a hard byte cap."""
+    """Read a CSV upload with a hard byte cap.
+
+    Args:
+        file: Uploaded CSV file handle to read from.
+        max_bytes: Maximum number of bytes allowed for the upload.
+
+    Returns:
+        The decoded UTF-8 CSV content.
+
+    Raises:
+        HTTPException: If the file exceeds the allowed size or is not valid
+            UTF-8.
+    """
 
     file.file.seek(0)
     chunks: list[bytes] = []
@@ -69,7 +81,20 @@ def _process_import_rows(
     current_user: User,
     max_rows: int,
 ) -> tuple[int, list[dict[str, object]]]:
-    """Import CSV rows up to the configured maximum."""
+    """Import CSV rows up to the configured maximum.
+
+    Args:
+        csv_reader: CSV reader yielding parsed row dictionaries.
+        db: Active database session.
+        current_user: Authenticated user importing the systems.
+        max_rows: Maximum number of CSV rows accepted for import.
+
+    Returns:
+        Tuple of created row count and per-row validation errors.
+
+    Raises:
+        HTTPException: If the upload exceeds the configured row limit.
+    """
 
     errors: list[dict[str, object]] = []
     created_count = 0
@@ -340,6 +365,16 @@ def bulk_import_systems(
 
 
 def _latest_risk_assessment(db: Session, system_id: int) -> RiskAssessment | None:
+    """Return the most recent risk assessment for an AI system.
+
+    Args:
+        db: Active database session.
+        system_id: ID of the AI system whose latest assessment is needed.
+
+    Returns:
+        The newest RiskAssessment row for the system, or ``None`` if no
+        assessment exists.
+    """
     return (
         db.query(RiskAssessment)
         .filter(RiskAssessment.ai_system_id == system_id)
@@ -349,6 +384,15 @@ def _latest_risk_assessment(db: Session, system_id: int) -> RiskAssessment | Non
 
 
 def _export_row(system: AISystem, valid_until: datetime | None) -> dict[str, object]:
+    """Build a normalized export row for an AI system.
+
+    Args:
+        system: AI system record being exported.
+        valid_until: Expiry timestamp from the latest assessment, if any.
+
+    Returns:
+        Dictionary containing the stable CSV/JSON export fields.
+    """
     risk_level = system.risk_level.value if system.risk_level else ""
     compliance_status = (
         system.compliance_status.value if system.compliance_status else ""
