@@ -22,6 +22,7 @@ export default function DocumentEditor({
   onClose,
 }: DocumentEditorProps) {
   const [content, setContent] = useState(initialContent)
+  const [savedContent, setSavedContent] = useState(initialContent)
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const saveTimeoutRef = useRef<ReturnType<typeof window.setTimeout> | null>(null)
@@ -35,6 +36,7 @@ export default function DocumentEditor({
     setIsSaving(true)
     try {
       await onSave?.(content, source)
+      setSavedContent(content)
       setSaveError('')
     } catch (error) {
       setSaveError(
@@ -47,10 +49,13 @@ export default function DocumentEditor({
 
   // Auto-save after 2 seconds
   useEffect(() => {
-    if (content === initialContent) return
-
     if (saveTimeoutRef.current !== null) {
       window.clearTimeout(saveTimeoutRef.current)
+      saveTimeoutRef.current = null
+    }
+
+    if (content === savedContent) {
+      return
     }
 
     saveTimeoutRef.current = window.setTimeout(() => {
@@ -60,12 +65,14 @@ export default function DocumentEditor({
     return () => {
       if (saveTimeoutRef.current !== null) {
         window.clearTimeout(saveTimeoutRef.current)
+        saveTimeoutRef.current = null
       }
     }
-  }, [content, handleSave, initialContent])
+  }, [content, handleSave, savedContent])
 
   useEffect(() => {
     setContent(initialContent)
+    setSavedContent(initialContent)
     setSaveError('')
     setShowPreview(false)
   }, [documentId, initialContent])
