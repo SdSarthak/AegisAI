@@ -165,8 +165,16 @@ class BulkClassificationResponse(BaseModel):
 
 
 def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse:
-    """
-    Classify the risk level of an AI system based on EU AI Act criteria.
+    """Classify the risk level of an AI system based on EU AI Act criteria.
+
+    Args:
+        data: Questionnaire payload describing the AI system's features and
+            intended use.
+
+    Returns:
+        RiskClassificationResponse containing the computed risk tier,
+        confidence score, explanations, compliance requirements, and next
+        steps.
     """
     reasons = []
     requirements = []
