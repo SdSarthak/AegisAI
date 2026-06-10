@@ -7,24 +7,21 @@ Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timedelta
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
-from app.models.user import User
-from app.schemas.analytics import ComplianceTimelineResponse
 from app.models.compliance_snapshot import ComplianceSnapshot
-from sqlalchemy import func
-from datetime import datetime, timedelta
-from typing import Optional
-
-from fastapi import Query
-
 from app.models.guard_scan_log import GuardScanLog
+from app.models.user import User
 from app.schemas.audit_log import GuardAuditLogResponse
+from app.schemas.analytics import ComplianceTimelineResponse
 from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()

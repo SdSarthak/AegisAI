@@ -104,15 +104,12 @@ def create_webhook(
     """Register a new webhook endpoint for the current user."""
     # Force the user_id to be the authenticated user to prevent spoofing
     webhook_data = body.model_dump()
-    db_webhook = WebhookConfig(
-        **webhook_data,
-        user_id=current_user.id
-    )
-    
+    db_webhook = WebhookConfig(**webhook_data, user_id=current_user.id)
+
     db.add(db_webhook)
     db.commit()
     db.refresh(db_webhook)
-    
+
     return db_webhook
 
 
@@ -122,9 +119,12 @@ def list_webhooks(
     db: Session = Depends(get_db),
 ):
     """List all webhook configurations for the current user."""
-    # Fetch webhooks strictly scoped to the authenticated user
-    webhooks = db.query(WebhookConfig).filter(WebhookConfig.user_id == current_user.id).all()
-    
+    webhooks = (
+        db.query(WebhookConfig)
+        .filter(WebhookConfig.user_id == current_user.id)
+        .all()
+    )
+
     return webhooks
 
 
@@ -135,13 +135,11 @@ def delete_webhook(
     db: Session = Depends(get_db),
 ):
     """Delete a webhook configuration owned by the current user."""
-    # Query checking BOTH the webhook ID and the user ID
     db_webhook = db.query(WebhookConfig).filter(
         WebhookConfig.id == webhook_id,
         WebhookConfig.user_id == current_user.id
     ).first()
 
-    # Generic 404 error (hides existence of other users' webhooks)
     if not db_webhook:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
