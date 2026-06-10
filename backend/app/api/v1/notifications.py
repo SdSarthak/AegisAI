@@ -48,7 +48,19 @@ def list_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List the current user's notifications with optional unread filtering."""
+    """List the current user's notifications with optional unread filtering.
+
+    Args:
+        unread_only: If true, return only unread notifications.
+        skip: Number of records to skip for pagination.
+        limit: Maximum number of records to return.
+        current_user: Authenticated user whose notifications should be listed.
+        db: Active database session.
+
+    Returns:
+        PaginatedResponse containing the user's notifications ordered by
+        newest first.
+    """
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
 
     if unread_only:
@@ -77,7 +89,16 @@ def mark_notifications_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Mark the specified notifications as read."""
+    """Mark a batch of notifications as read for the current user.
+
+    Args:
+        body: Request body containing the notification IDs to update.
+        current_user: Authenticated user who owns the notifications.
+        db: Active database session.
+
+    Returns:
+        None. The endpoint responds with HTTP 204 when the update succeeds.
+    """
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.id.in_(body.ids),
@@ -96,7 +117,20 @@ def delete_notification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a notification owned by the current user."""
+    """Delete one notification owned by the current user.
+
+    Args:
+        notification_id: Database ID of the notification to delete.
+        current_user: Authenticated user who must own the notification.
+        db: Active database session.
+
+    Returns:
+        None. The endpoint responds with HTTP 204 when deletion succeeds.
+
+    Raises:
+        HTTPException: If the notification does not exist or is not owned by
+            the authenticated user.
+    """
     notification = (
         db.query(Notification)
         .filter(
