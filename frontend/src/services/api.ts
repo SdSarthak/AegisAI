@@ -22,7 +22,11 @@ const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 // Handle 401 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: any) => {
+  (error: unknown) => {
+    if (!axios.isAxiosError(error)) {
+      return Promise.reject(error)
+    }
+
     const url = error.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
     if (error.response?.status === 401 && !isAuthEndpoint) {
@@ -73,6 +77,17 @@ function ensureListResponse<T>(
   }
 
   throw new Error(`${resourceName} response was empty or invalid.`)
+}
+
+export interface NotificationResponse {
+  id: number
+  notification_type: string
+  title: string
+  message: string
+  is_read: boolean
+  resource_type?: string | null
+  resource_id?: number | null
+  created_at: string
 }
 
 function ensureStringField(
@@ -263,9 +278,13 @@ export const documentsApi = {
 // Notifications API
 export const notificationsApi = {
   list: (unreadOnly = false) =>
-    api.get(`/notifications?unread_only=${unreadOnly}`).then((r: AxiosResponse) => r.data),
+    api
+      .get(`/notifications?unread_only=${unreadOnly}`)
+      .then((r: AxiosResponse) => ensureListResponse<NotificationResponse>(r.data, 'Notifications')),
   markRead: (ids: number[]) =>
     api.post('/notifications/read', { ids }),
+  delete: (id: number) =>
+    api.delete(`/notifications/${id}`),
 }
 
 // ---------------------------------------------------------------------------
@@ -391,8 +410,7 @@ export const ragApi = {
     let buffer = ''
 
     try {
-      while (true) {
-        // eslint-disable-next-line no-constant-condition
+      while (!signal?.aborted) {
         const { value, done } = await reader.read()
         if (done) break
         buffer += value

@@ -66,6 +66,10 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showPasswordRequirements, setShowPasswordRequirements] = useState(false)
+  const hasError = (field: ValidationError['field']) =>
+    errors.some((error) => error.field === field)
+  const getErrorMessage = (field: ValidationError['field']) =>
+    errors.find((error) => error.field === field)?.message
 
   const passwordStrength = checkPasswordStrength(formData.password)
 
@@ -153,11 +157,11 @@ export default function Register() {
         </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
-          {errors.some((e: any) => e.field === 'general') && (
+          {hasError('general') && (
             <div className="p-3 flex items-start gap-3 text-sm bg-red-50 rounded-lg border border-red-200">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="text-red-700">
-                {errors.find((e: any) => e.field === 'general')?.message}
+                {getErrorMessage('general')}
               </div>
             </div>
           )}
@@ -173,14 +177,14 @@ export default function Register() {
               value={formData.email}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, email: e.target.value })}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e: any) => e.field === 'email')
+                hasError('email')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e: any) => e.field === 'email') && (
+            {hasError('email') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e: any) => e.field === 'email')?.message}
+                {getErrorMessage('email')}
               </p>
             )}
           </div>
@@ -196,10 +200,10 @@ export default function Register() {
                 required
                 value={formData.password}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, password: e.target.value })}
-                onFocus={() => setShowPasswordRequirements(true)}
-                onBlur={() => setShowPasswordRequirements(false)}
-                className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                  errors.some((e: any) => e.field === 'password')
+              onFocus={() => setShowPasswordRequirements(true)}
+              onBlur={() => setShowPasswordRequirements(false)}
+              className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
+                  hasError('password')
                     ? 'border-red-300 bg-red-50'
                     : 'border-gray-300'
                 }`}
@@ -241,9 +245,9 @@ export default function Register() {
               </div>
             )}
 
-            {errors.some((e: any) => e.field === 'password') && (
+            {hasError('password') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e: any) => e.field === 'password')?.message}
+                {getErrorMessage('password')}
               </p>
             )}
           </div>
@@ -259,14 +263,14 @@ export default function Register() {
               value={formData.full_name}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, full_name: e.target.value })}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e: any) => e.field === 'full_name')
+                hasError('full_name')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e: any) => e.field === 'full_name') && (
+            {hasError('full_name') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e: any) => e.field === 'full_name')?.message}
+                {getErrorMessage('full_name')}
               </p>
             )}
           </div>
@@ -282,14 +286,14 @@ export default function Register() {
               value={formData.company_name}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, company_name: e.target.value })}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e: any) => e.field === 'company_name')
+                hasError('company_name')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e: any) => e.field === 'company_name') && (
+            {hasError('company_name') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e: any) => e.field === 'company_name')?.message}
+                {getErrorMessage('company_name')}
               </p>
             )}
           </div>

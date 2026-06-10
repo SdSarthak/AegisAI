@@ -2,19 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Clock, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { notificationsApi } from '../services/api'
-
-// TODO: Wire to GET /api/v1/notifications via useQuery (Issue #113)
-
-interface NotificationPreview {
-  id: number
-  title: string
-  message: string
-  is_read: boolean
-  created_at: string               // ISO‑8601 date string
-  type: 'alert' | 'update' | 'ai' | 'news'
-}
-
+import { notificationsApi, type NotificationResponse } from '../services/api'
 
 /** Relative‑time formatter (e.g. "5m ago", "2h ago"). */
 function timeAgo(isoDate: string): string {
@@ -31,12 +19,21 @@ function timeAgo(isoDate: string): string {
 }
 
 /** Accent colour for the notification type stripe. */
-function typeColor(type: NotificationPreview['type']): string {
+function typeColor(type: string): string {
   switch (type) {
-    case 'alert':  return 'bg-red-500'
-    case 'update': return 'bg-green-500'
-    case 'ai':     return 'bg-purple-500'
-    case 'news':   return 'bg-primary-500'
+    case 'system_classified':
+    case 'risk_updated':
+      return 'bg-red-500'
+    case 'document_generated':
+    case 'document_reviewed':
+      return 'bg-green-500'
+    case 'compliance_alert':
+      return 'bg-amber-500'
+    case 'ai_response':
+    case 'ai_system_update':
+      return 'bg-purple-500'
+    default:
+      return 'bg-primary-500'
   }
 }
 
@@ -55,11 +52,11 @@ export default function NotificationBell() {
     refetchInterval: 60_000,
   })
 
-  const unreadCount = notifications.filter((n: NotificationPreview) => !n.is_read).length
+  const unreadCount = notifications.filter((n: NotificationResponse) => !n.is_read).length
 
   const handleNotificationClick = async (id: number) => {
     await notificationsApi.markRead([id])
-    queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] })
+    queryClient.invalidateQueries({ queryKey: ['notifications'] })
   }
 
   // Close dropdown on click outside
@@ -161,7 +158,7 @@ export default function NotificationBell() {
               <p className="text-sm text-gray-400">No notifications yet</p>
             </div>
           ) : (
-            notifications.slice(0, 5).map((notification: NotificationPreview) => (
+            notifications.slice(0, 5).map((notification: NotificationResponse) => (
               <button
                 key={notification.id}
                 type="button"
@@ -174,7 +171,7 @@ export default function NotificationBell() {
 
                 <div
                   className={`w-1 self-stretch rounded-full flex-shrink-0 ${typeColor(
-                    notification.type,
+                    notification.notification_type,
                   )}`}
                 />
 
