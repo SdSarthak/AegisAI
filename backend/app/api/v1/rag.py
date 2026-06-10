@@ -10,6 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import os
 import shutil
 import tempfile
+import logging
 from typing import List, Literal, Optional
 import mimetypes
 
@@ -30,6 +31,7 @@ from app.modules.rag.streaming import stream_rag_answer
 from app.modules.rag.vector_store import create_vector_store, load_vector_store
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class RAGQueryRequest(BaseModel):
@@ -200,8 +202,7 @@ def query_knowledge_base(
         try:
             Base.metadata.create_all(bind=db.get_bind())
         except Exception:
-            # best-effort: ignore if bind not available
-            pass
+            logger.debug("Skipping table bootstrap because the DB bind is unavailable")
 
         # Persist an initial RAGFeedback row to capture the answer and contributing chunks
         feedback = RAGFeedback(
