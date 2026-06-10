@@ -7,7 +7,14 @@ from app.core.config import settings
 
 
 def load_documents_from_s3():
-    """Load documents from the configured S3 bucket."""
+    """Load documents from the configured S3 bucket.
+
+    Returns:
+        A list of chunked LangChain documents from the configured bucket.
+
+    Raises:
+        ValueError: If the S3 bucket name is not configured.
+    """
     bucket = settings.S3_BUCKET_NAME
     if not bucket:
         raise ValueError("S3_BUCKET_NAME is not set in .env")
@@ -21,7 +28,14 @@ def load_documents_from_s3():
 
 
 def load_documents_from_paths(file_paths: list[str]):
-    """Load documents from a list of local PDF file paths."""
+    """Load documents from a list of local PDF file paths.
+
+    Args:
+        file_paths: Local filesystem paths to PDF documents.
+
+    Returns:
+        A list of chunked LangChain documents.
+    """
     documents = []
     for path in file_paths:
         loader = PyPDFLoader(path)

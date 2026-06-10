@@ -15,7 +15,17 @@ __all__ = [
 
 
 def __getattr__(name):
-    """Load optional or heavier utility dependencies only when requested."""
+    """Load optional or heavier utility dependencies only when requested.
+
+    Args:
+        name: Attribute name requested from the module namespace.
+
+    Returns:
+        The lazily imported utility function.
+
+    Raises:
+        AttributeError: If the requested attribute does not exist.
+    """
     if name == "set_seed":
         from .seed import set_seed
 
