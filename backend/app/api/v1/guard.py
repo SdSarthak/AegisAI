@@ -107,7 +107,16 @@ user_guard_configs: dict[int, UserGuardConfig] = {}
 
 
 def _infer_detection_type(regex_flag: bool, intent: str) -> str:
-    """Infer whether regex, ML, both, or neither triggered the scan decision."""
+    """Infer which detection paths contributed to the Guard decision.
+
+    Args:
+        regex_flag: Whether the regex layer matched a risky pattern.
+        intent: Final intent classification produced by the ML layer.
+
+    Returns:
+        A normalized detection label: ``none``, ``regex``, ``ml``, or
+        ``combined``.
+    """
     if not regex_flag and intent == "benign":
         return "none"
     if regex_flag and intent == "benign":
@@ -118,7 +127,17 @@ def _infer_detection_type(regex_flag: bool, intent: str) -> str:
 
 
 def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> GuardScanLog:
-    """Build a GuardScanLog row without storing raw prompt text."""
+    """Build a GuardScanLog row without storing raw prompt text.
+
+    Args:
+        user_id: Owning user ID for the scan record.
+        prompt: Raw prompt text that was analyzed.
+        result: Guard output containing decision metadata.
+        ip_address: Optional client IP address associated with the request.
+
+    Returns:
+        A populated GuardScanLog ORM instance ready for persistence.
+    """
     metadata = result.get("metadata", {})
     regex_analysis = metadata.get("regex_analysis", {})
     intent_analysis = metadata.get("intent_analysis", {})
@@ -147,7 +166,18 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: s
 
 
 def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> None:
-    """Log scan details and create block notification without storing raw prompt."""
+    """Log scan details and create a notification for block decisions.
+
+    Args:
+        user_id: Owning user ID for the scan record.
+        prompt: Raw prompt text that was analyzed.
+        result: Guard output containing decision metadata.
+        ip_address: Optional client IP address associated with the request.
+
+    Returns:
+        None. The scan is persisted and block notifications are created as
+        needed.
+    """
     db = SessionLocal()
 
     try:
