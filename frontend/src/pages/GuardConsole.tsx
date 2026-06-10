@@ -128,7 +128,11 @@ export default function GuardConsole() {
   const handlePromptChange = (value: string) => {
     setPrompt(value)
     setError(null)
+    setSubmittedPrompt('')
+    setResult(null)
+    setExplanation(null)
     setExplanationError(null)
+    setScannedAt('')
   }
 
   const handleExplain = async () => {
