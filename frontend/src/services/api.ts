@@ -210,9 +210,9 @@ export const classificationApi = {
 
 // Documents API
 export const documentsApi = {
-  list: async () => {
-    const { data } = await api.get('/documents/')
-    return data
+  list: async (params?: { skip?: number; limit?: number }) => {
+    const { data } = await api.get('/documents/', { params })
+    return Array.isArray(data?.items) ? data.items : data
   },
   get: async (id: number) => {
     const { data } = await api.get(`/documents/${id}`)
