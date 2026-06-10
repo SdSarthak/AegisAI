@@ -325,7 +325,11 @@ def scan_prompt(
 
 
 class _ExplainRateLimitConfig:
-    """Explanations are 50–100x more expensive than a scan — limit them"""
+    """Rate-limit configuration for Guard explanation requests.
+
+    The explanation path is much more expensive than a normal scan, so it is
+    capped separately from the prompt scanning limiter.
+    """
 
     LIMIT = 10
     WINDOW_SECONDS = 60
@@ -355,7 +359,21 @@ async def explain_prompt(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return per-token attribution scores for the Guard's verdict."""
+    """Return per-token attribution scores for the Guard's verdict.
+
+    Args:
+        request: Explainability request containing the input text and tuning
+            parameters.
+        db: Active database session.
+        current_user: Authenticated user requesting the explanation.
+
+    Returns:
+        Structured explainability output with token-level attribution data.
+
+    Raises:
+        HTTPException: If the explanation pipeline is unavailable, times out,
+            or encounters an invalid request.
+    """
     import asyncio
 
     from app.modules.guard.explainer import (
@@ -465,7 +483,11 @@ VALID_DECISIONS = {"allow", "sanitize", "block"}
 VALID_INTENTS = {"benign", "suspicious", "malicious"}
 
 class CursorPagination:
-    """Cursor helper for stable Guard history pagination."""
+    """Cursor helper for stable Guard history pagination.
+
+    The helper keeps pagination deterministic even as new Guard scan logs are
+    inserted between requests.
+    """
 
     @staticmethod
     def encode(scanned_at: datetime, log_id: int) -> str:
@@ -626,6 +648,10 @@ def get_guard_history(
     Raises:
         HTTPException: If the date range is invalid or a supplied filter is
             outside the allowed values.
+
+    Notes:
+        Results are paginated with a cursor token so the client can continue
+        scrolling without duplicates or gaps.
     """
 
     if start_date and end_date and start_date > end_date:
@@ -678,6 +704,10 @@ def get_guard_stats(
 
     Raises:
         HTTPException: If a non-admin user requests another user's stats.
+
+    Notes:
+        The summary is computed over the requested time window and is safe to
+        call repeatedly for dashboard refreshes.
     """
     target_user_id = user_id if user_id is not None else current_user.id
     is_admin = getattr(current_user, "role", None) == "admin"
@@ -819,6 +849,10 @@ def get_guard_config(current_user: User = Depends(get_current_user)):
 
     Returns:
         A configuration dictionary with sanitization and threshold values.
+
+    Notes:
+        If the user has never saved a configuration, sensible defaults are
+        returned instead.
     """
     default_config = {
         "sanitization_level": "medium",
@@ -846,6 +880,10 @@ def update_guard_config(
     Raises:
         HTTPException: If any configuration value is outside the accepted
             range or set of allowed values.
+
+    Notes:
+        The update is stored in the in-memory user configuration cache and is
+        applied immediately to subsequent requests.
     """
     if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
         raise HTTPException(
@@ -901,6 +939,10 @@ def bulk_scan_prompts(
     Raises:
         HTTPException: If the batch is invalid, rate-limited, or the Guard
             pipeline fails unexpectedly.
+
+    Notes:
+        Each prompt is scanned independently, but the request consumes rate
+        limit quota according to the total batch size.
     """
     try:
         request.validate_prompts()
