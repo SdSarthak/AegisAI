@@ -163,10 +163,10 @@ def decode_token(token: str) -> Dict[str, Any]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"field": "general", "message": "Token has expired. Please log in again."},
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
 
     except JWTError:
-        raise _get_credentials_exception()
+        raise _get_credentials_exception() from None
 
 
 async def get_current_user(
@@ -196,7 +196,7 @@ async def get_current_user(
     try:
         user_id = int(user_id_str)
     except (ValueError, TypeError):
-        raise _get_credentials_exception()
+        raise _get_credentials_exception() from None
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
