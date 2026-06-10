@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { notify } from '../utils/toast'
 
 interface AISystem {
   id: number
@@ -81,7 +82,9 @@ export default function AISystems() {
       setLastExportedAt(exportedAt)
       window.localStorage.setItem('ai-systems-last-exported-at', exportedAt)
     } catch (error) {
-      console.error('Export failed:', error)
+      notify.error(
+        error instanceof Error ? error.message : 'Export failed. Please try again.',
+      )
     } finally {
       setExporting(false)
     }

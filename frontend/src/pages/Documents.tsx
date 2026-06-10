@@ -4,6 +4,7 @@ import { aiSystemsApi, documentsApi } from '../services/api'
 import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
+import { notify } from '../utils/toast'
 
 interface Document {
   id: number
@@ -44,7 +45,9 @@ export default function Documents() {
         setCopiedDocId(null)
       }, 2000)
     } catch (error) {
-      console.error('Failed to copy content:', error)
+      notify.error(
+        error instanceof Error ? error.message : 'Failed to copy content.',
+      )
     }
   }
 
