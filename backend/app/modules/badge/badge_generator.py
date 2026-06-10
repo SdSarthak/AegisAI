@@ -42,6 +42,7 @@ STATUS_LABELS = {
 
 
 def _escape_svg_text(text: str) -> str:
+    """Escape SVG text so badge labels remain safe to embed."""
     return _xml_escape(text, {'"': "&quot;", "'": "&apos;"})
 
 
@@ -50,8 +51,15 @@ def generate_badge_svg(
     risk_level: str | None,
     compliance_status: str,
 ) -> str:
-    """
-    Generate an SVG compliance badge.
+    """Generate an SVG compliance badge.
+
+    Args:
+        system_name: Name to display on the badge.
+        risk_level: Optional risk level label for the badge.
+        compliance_status: Compliance status used to select the badge color.
+
+    Returns:
+        An SVG string suitable for direct embedding or download.
     """
     if compliance_status in STATUS_COLORS:
         status_key = compliance_status

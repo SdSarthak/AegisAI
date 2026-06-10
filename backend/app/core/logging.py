@@ -93,6 +93,7 @@ class JsonFormatter(jsonlogger.JsonFormatter):
 
 
 def _build_handler() -> logging.Handler:
+    """Build the stdout handler used by the JSON logging setup."""
     handler = logging.StreamHandler(sys.stdout)
     # The format string only declares which message field to use; all other
     # keys are produced by JsonFormatter.add_fields above.
@@ -101,11 +102,13 @@ def _build_handler() -> logging.Handler:
 
 
 def configure_logging(level: str = "INFO") -> None:
-    """
-    Configure root + third-party loggers to emit single-line JSON to stdout.
+    """Configure root and third-party loggers to emit JSON to stdout.
 
-    Idempotent: safe to call more than once (existing handlers are replaced,
-    not stacked). Call this once, early, before the app starts serving.
+    Args:
+        level: Root logging level name such as ``INFO`` or ``DEBUG``.
+
+    Returns:
+        None. Logging handlers and levels are configured in place.
     """
     log_level = getattr(logging, level.upper(), logging.INFO)
     handler = _build_handler()
@@ -126,13 +129,15 @@ def configure_logging(level: str = "INFO") -> None:
 
 
 def redact(value: str, *, level: int = logging.INFO, keep: int = 8) -> str:
-    """
-    Return ``value`` unchanged at DEBUG, otherwise a stable hash prefix.
+    """Return a stable hash prefix for sensitive values at non-DEBUG levels.
 
-    Use this for prompt text / PII before putting it in ``extra=`` so INFO
-    logs stay correlatable (same input -> same hash) without leaking content.
+    Args:
+        value: Sensitive string to redact.
+        level: Logging level for the call site.
+        keep: Number of hexadecimal characters to keep from the digest.
 
-        logger.info("guard.scan", extra={"prompt": redact(prompt)})
+    Returns:
+        The original value at DEBUG, otherwise a deterministic hash prefix.
     """
     if logging.getLogger().isEnabledFor(logging.DEBUG) or level <= logging.DEBUG:
         return value
