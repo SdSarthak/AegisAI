@@ -79,7 +79,15 @@ ANSWER:"""
 
 
 def sse(event: str, data: dict[str, Any]) -> str:
-    """Format a single Server-Sent Event frame."""
+    """Format a single Server-Sent Event frame.
+
+    Args:
+        event: SSE event name.
+        data: JSON-serializable payload for the frame.
+
+    Returns:
+        A formatted SSE frame string.
+    """
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
 
 
@@ -109,7 +117,14 @@ class _LLM(Protocol):
 def _build_context_and_citations(
     docs: list[_Document],
 ) -> tuple[str, list[dict[str, str]]]:
-    """Pack retrieved chunks into a context blob + citation cards."""
+    """Pack retrieved chunks into a context blob and citation cards.
+
+    Args:
+        docs: Retrieved documents from the retriever.
+
+    Returns:
+        A tuple containing the assembled prompt context and citation cards.
+    """
     citations: list[dict[str, str]] = []
     context_parts: list[str] = []
     used_chars = 0
@@ -136,7 +151,14 @@ def _build_context_and_citations(
 
 
 async def _aiter_sync(sync_iter: Iterator[str]) -> AsyncIterator[str]:
-    """Advance a sync iterator on a worker thread, yield results on the loop."""
+    """Advance a sync iterator on a worker thread and yield on the loop.
+
+    Args:
+        sync_iter: Blocking iterator producing token deltas.
+
+    Yields:
+        String chunks produced by the synchronous iterator.
+    """
     sentinel = object()
 
     def _next_or_sentinel() -> Any:
@@ -165,12 +187,17 @@ async def stream_rag_answer(
     db: Session,
     model_name: str | None = None,
 ) -> AsyncIterator[str]:
-    """
-    Yield SSE frames for ``question``: meta → token+ → done (or error).
+    """Yield SSE frames for a question as meta, token, done, or error events.
 
-    Persists a ``RAGFeedback`` row before streaming so the frontend gets a
-    stable ``answer_id`` in the very first frame. Updates that row with the
-    final answer text once streaming ends.
+    Args:
+        question: User question to answer from retrieved context.
+        retriever: Retriever used to fetch supporting documents.
+        llm: Streaming LLM client used to generate the response.
+        db: Active database session for persisting feedback rows.
+        model_name: Optional model name override for the meta event.
+
+    Yields:
+        SSE frames representing the streamed response lifecycle.
     """
     started = time.perf_counter()
     answer_buf: list[str] = []
