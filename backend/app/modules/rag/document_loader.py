@@ -1,4 +1,9 @@
-"""Document loader for ingesting regulatory PDFs from S3 or local disk."""
+"""Load and chunk documents for the RAG ingestion pipeline.
+
+The RAG system can read regulatory PDFs from either S3 or the local
+filesystem. This module normalizes both sources into split LangChain
+documents so downstream indexing sees a consistent shape.
+"""
 
 import os
 from langchain_community.document_loaders import S3DirectoryLoader, PyPDFLoader
@@ -7,14 +12,7 @@ from app.core.config import settings
 
 
 def load_documents_from_s3():
-    """Load documents from the configured S3 bucket.
-
-    Returns:
-        A list of chunked LangChain documents from the configured bucket.
-
-    Raises:
-        ValueError: If the S3 bucket name is not configured.
-    """
+    """Load documents from the configured S3 bucket."""
     bucket = settings.S3_BUCKET_NAME
     if not bucket:
         raise ValueError("S3_BUCKET_NAME is not set in .env")
@@ -28,14 +26,7 @@ def load_documents_from_s3():
 
 
 def load_documents_from_paths(file_paths: list[str]):
-    """Load documents from a list of local PDF file paths.
-
-    Args:
-        file_paths: Local filesystem paths to PDF documents.
-
-    Returns:
-        A list of chunked LangChain documents.
-    """
+    """Load documents from a list of local PDF file paths."""
     documents = []
     for path in file_paths:
         loader = PyPDFLoader(path)

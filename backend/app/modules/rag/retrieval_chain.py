@@ -1,4 +1,9 @@
-"""LangChain retrieval-augmented generation chain for regulatory queries."""
+"""Wrap LangChain retrieval with groundedness reporting for the RAG API.
+
+The retrieval chain delegates answer generation to LangChain, then enriches
+the result with groundedness metadata so the API can tell users how well the
+answer is supported by the retrieved documents.
+"""
 
 import logging
 from typing import Any
@@ -20,25 +25,13 @@ class GroundedRetrievalQA:
     """
 
     def __init__(self, qa_chain: Any, embeddings_fn: Any) -> None:
-        """Store the underlying chain and embedding callable.
-
-        Args:
-            qa_chain: LangChain RetrievalQA instance to execute.
-            embeddings_fn: Callable used by the groundedness checker.
-        """
+        """Store the wrapped chain and embeddings callable."""
         self.qa_chain = qa_chain
         self.embeddings_fn = embeddings_fn
 
     @instrument_rag
     def __call__(self, payload: Any) -> dict[str, Any]:
-        """Run the QA chain and append groundedness fields to the result dict.
-
-        Args:
-            payload: Query payload forwarded to the underlying QA chain.
-
-        Returns:
-            The chain result with groundedness metadata attached.
-        """
+        """Run the QA chain and append groundedness metadata to the result."""
         result = self.qa_chain(payload)
         query = _extract_query(payload)
         answer = str(result.get("result", ""))
@@ -76,25 +69,14 @@ class GroundedRetrievalQA:
 
 
 def load_vector_store() -> Any:
-    """Lazy wrapper around vector-store loading for lighter module imports.
-
-    Returns:
-        The persisted vector store loaded from disk.
-    """
+    """Lazy wrapper around vector-store loading for lighter module imports."""
     from .vector_store import load_vector_store as loader
 
     return loader()
 
 
 def get_qa_chain():
-    """Build and return a RetrievalQA chain backed by the persisted FAISS index.
-
-    Returns:
-        A grounded retrieval wrapper around LangChain's RetrievalQA chain.
-
-    Raises:
-        FileNotFoundError: If the vector store has not been ingested yet.
-    """
+    """Build and return a RetrievalQA chain backed by the persisted FAISS index."""
     global ChatOpenAI
 
     from langchain.chains import RetrievalQA

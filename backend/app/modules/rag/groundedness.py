@@ -1,4 +1,10 @@
-"""Groundedness scoring for RAG answers against retrieved source chunks."""
+"""Score how well a RAG answer is supported by its retrieved sources.
+
+The groundedness checker combines semantic, retrieval, and lexical
+verifiers into a single score that the API can surface alongside each
+answer. That gives the frontend a quick way to explain whether a response
+looks well supported or needs caution.
+"""
 
 import logging
 import re

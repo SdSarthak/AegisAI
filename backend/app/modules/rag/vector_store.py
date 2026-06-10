@@ -1,4 +1,10 @@
-"""FAISS vector store creation and persistence."""
+"""Build, persist, and reload the RAG vector store.
+
+The RAG stack uses FAISS for local similarity search and switches between
+OpenAI-compatible embeddings and Ollama embeddings based on runtime config.
+This module owns the index lifecycle so ingestion and query paths can share
+the same persistence logic.
+"""
 
 import os
 import shutil
@@ -15,11 +21,7 @@ _rag_index_lock = threading.Lock()
 
 
 def get_embeddings():
-    """Return the configured embeddings model.
-
-    Returns:
-        The embeddings implementation configured for the current deployment.
-    """
+    """Return the embeddings backend configured for the current deployment."""
     '''return OpenAIEmbeddings(
         openai_api_key=settings.LLM_API_KEY,
         openai_api_base=settings.LLM_BASE_URL or None,
@@ -32,14 +34,7 @@ def get_embeddings():
 
 
 def create_vector_store(documents: list[Document]):
-    """Build a FAISS index from documents and persist it to disk.
-
-    Args:
-        documents: Loaded and chunked LangChain Document objects.
-
-    Returns:
-        The populated FAISS vector store.
-    """
+    """Build a FAISS index from documents and persist it to disk."""
     embeddings = get_embeddings()
     vector_store = FAISS.from_documents(documents, embeddings)
 
@@ -55,14 +50,7 @@ def create_vector_store(documents: list[Document]):
 
 
 def load_vector_store():
-    """Load an existing FAISS index from disk.
-
-    Returns:
-        The persisted FAISS vector store.
-
-    Raises:
-        FileNotFoundError: If the index has not been created yet.
-    """
+    """Load an existing FAISS index from disk."""
     index_path = settings.FAISS_INDEX_PATH
     if not os.path.exists(index_path):
         raise FileNotFoundError(
@@ -77,9 +65,5 @@ def load_vector_store():
 
 
 def check_index_exists():
-    """Check whether the FAISS index exists on disk.
-
-    Returns:
-        True when the persisted FAISS index directory exists, otherwise False.
-    """
+    """Return True when the persisted FAISS index directory exists."""
     return os.path.exists(settings.FAISS_INDEX_PATH)
