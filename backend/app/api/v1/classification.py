@@ -352,7 +352,16 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
 def classify_ai_system(
     data: RiskClassificationRequest, current_user: User = Depends(get_current_user)
 ):
-    """Classify an AI system's risk level from the questionnaire payload."""
+    """Classify an AI system's risk level from questionnaire answers.
+
+    Args:
+        data: Structured questionnaire payload describing the AI system.
+        current_user: Authenticated user requesting the classification.
+
+    Returns:
+        RiskClassificationResponse with the computed risk tier, rationale,
+        requirements, and suggested next steps.
+    """
     return classify_risk(data)    
 
 
@@ -363,7 +372,21 @@ def classify_and_save(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Classify an AI system and persist the result."""
+    """Classify an AI system and persist the result.
+
+    Args:
+        system_id: ID of the AI system to classify.
+        data: Structured questionnaire payload describing the AI system.
+        db: Active database session.
+        current_user: Authenticated user who owns the target system.
+
+    Returns:
+        RiskClassificationResponse representing the saved assessment.
+
+    Raises:
+        HTTPException: If the AI system does not exist or does not belong to
+            the authenticated user.
+    """
     system = (
         db.query(AISystem)
         .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
@@ -402,7 +425,14 @@ def classify_and_save(
 def get_questionnaire_risk_factors(
     current_user: User = Depends(get_current_user),
 ):
-    """Return the static questionnaire metadata used by the classifier."""
+    """Return the static questionnaire metadata used by the classifier.
+
+    Args:
+        current_user: Authenticated user requesting the metadata.
+
+    Returns:
+        The list of questionnaire risk factors used by the classification UI.
+    """
     return QUESTIONNAIRE_RISK_FACTORS
 
 
@@ -412,7 +442,16 @@ def bulk_classify_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Classify multiple AI systems in a single request."""
+    """Classify multiple saved AI systems in a single request.
+
+    Args:
+        request: Payload containing the AI system IDs to classify.
+        db: Active database session.
+        current_user: Authenticated user who owns the systems.
+
+    Returns:
+        BulkClassificationResponse with per-system classification results.
+    """
     results: List[BulkClassificationItem] = []
 
     for system_id in request.system_ids:
@@ -481,5 +520,14 @@ def explain_ai_system_risk(
     data: ExplainRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Explain the risk classification of an AI system from a plain-text description."""
+    """Explain an AI system's risk classification from a text description.
+
+    Args:
+        data: Plain-text description and context used to generate the
+            explanation.
+        current_user: Authenticated user requesting the explanation.
+
+    Returns:
+        ExplainResponse with the generated explanation payload.
+    """
     return explain_risk(data)
