@@ -44,6 +44,7 @@ export default function AISystems() {
   const [sortBy, setSortBy] = useState('created_at')
   const [order, setOrder] = useState('desc')
   const [systemToDelete, setSystemToDelete] = useState<AISystem | null>(null)
+  const [deletingSystemId, setDeletingSystemId] = useState<number | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [exporting, setExporting] = useState(false)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
@@ -120,14 +121,28 @@ export default function AISystems() {
       queryClient.invalidateQueries({ queryKey: ['ai-systems'] })
       setShowModal(false)
       setFormData({ name: '', description: '', use_case: '', sector: '' })
+      notify.success('AI system added')
+    },
+    onError: () => {
+      notify.error('Unable to add the AI system right now')
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: aiSystemsApi.delete,
+    onMutate: (id) => {
+      setDeletingSystemId(id)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-systems'] })
       setSystemToDelete(null)
+      notify.success('AI system deleted')
+    },
+    onError: () => {
+      notify.error('Unable to delete the AI system right now')
+    },
+    onSettled: () => {
+      setDeletingSystemId(null)
     },
   })
 
@@ -524,16 +539,18 @@ export default function AISystems() {
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={() => deleteMutation.mutate(systemToDelete.id)}
-                disabled={deleteMutation.isPending}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
+                  <button
+                    type="button"
+                    onClick={() => deleteMutation.mutate(systemToDelete.id)}
+                    disabled={deleteMutation.isPending && deletingSystemId === systemToDelete.id}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {deleteMutation.isPending && deletingSystemId === systemToDelete.id
+                      ? 'Deleting...'
+                      : 'Delete'}
+                  </button>
+                </div>
+              </div>
         </div>
       )}
 
