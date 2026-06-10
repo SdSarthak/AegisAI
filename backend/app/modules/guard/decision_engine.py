@@ -5,8 +5,8 @@ classifier and resolves them into a single action: allow the prompt,
 sanitize it, or block it outright.
 """
 
-from enum import Enum
 from dataclasses import dataclass
+from enum import Enum
 
 
 class Decision(Enum):
@@ -72,11 +72,6 @@ class DecisionEngine:
         Returns:
             DecisionResult with the final decision, confidence, and reason.
         """
-        # Combine signals
-        combined_score = (self.regex_weight * regex_score) + (
-            self.intent_weight * intent_score
-        )
-
         # High-severity cases: Block if regex + malicious intent
         if regex_flag and regex_score >= 0.8 and intent == "malicious":
             return DecisionResult(

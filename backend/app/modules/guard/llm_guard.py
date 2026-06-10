@@ -9,13 +9,14 @@ import logging
 from datetime import datetime
 from typing import Dict, Optional
 
-from . import RegexFilter, IntentClassifier, DecisionEngine, PromptSanitizer
-from .decision_engine import Decision
-from .sanitizer import SanitizationLevel
-from .normalizer import normalize_prompt
-from ..llm.llm_client import LLMClient
-from . import guard_config as config
 from app.core.telemetry import instrument_guard
+
+from ..llm.llm_client import LLMClient
+from . import DecisionEngine, IntentClassifier, PromptSanitizer, RegexFilter
+from . import guard_config as config
+from .decision_engine import Decision
+from .normalizer import normalize_prompt
+from .sanitizer import SanitizationLevel
 
 # Logging is configured centrally in app.core.logging (configure_logging).
 # Importing this module must not call logging.basicConfig — doing so would
@@ -256,7 +257,7 @@ def main():
         except KeyboardInterrupt:
             logger.info("Exiting...")
             break
-        except Exception as e:
+        except Exception:
             logger.exception("Error while running the guard CLI")
 
 

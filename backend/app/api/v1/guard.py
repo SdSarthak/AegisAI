@@ -7,39 +7,46 @@ Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
+import base64
 import hashlib
 import logging
-import base64
-
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from typing import Optional, TypedDict
 
-from app.api.v1.webhooks import deliver_webhook
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    status,
+)
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, and_, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.api.v1.notifications import create_notification
+from app.api.v1.webhooks import deliver_webhook
 from app.core.config import settings
 from app.core.database import SessionLocal, get_db
-from app.core.security import get_current_user
 from app.core.rate_limit import guard_scan_rate_limiter
+from app.core.security import get_current_user
 from app.models.guard_scan_log import GuardScanLog
 from app.models.notification import NotificationType
 from app.models.user import User
-
-from app.schemas.guard_scan_log import GuardScanLogResponse
-from app.schemas.guard_stats import GuardStatsResponse
+from app.modules.guard import guard_config
 from app.schemas.guard_explain import (
     ExplainRequest as ExplainRequestModel,
+)
+from app.schemas.guard_explain import (
     ExplainResponse,
 )
+from app.schemas.guard_scan_log import GuardScanLogResponse
+from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.pagination import CursorPaginatedResponse
-
-from app.modules.guard import guard_config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -1028,7 +1035,7 @@ def bulk_scan_prompts(
             processed=len(results),
         )
 
-    except Exception as e:
+    except Exception:
         db.rollback()
         logger.exception("Bulk guard scan failed")
         raise HTTPException(

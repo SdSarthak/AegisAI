@@ -69,7 +69,7 @@ def generate_badge_svg(
     # Build SVG
     svg = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{total_width}" height="20">',
-        f'<linearGradient id="b" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>',
+        '<linearGradient id="b" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>',
         f'<mask id="a"><rect width="{total_width}" height="20" rx="3" fill="#fff"/></mask>',
         '<g mask="url(#a)">',
     ]
