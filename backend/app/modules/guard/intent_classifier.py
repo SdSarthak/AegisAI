@@ -8,6 +8,7 @@ deterministic heuristics when the trained weights are absent.
 import os
 import json
 import re
+import logging
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 import numpy as np
@@ -22,6 +23,9 @@ from sklearn.metrics import f1_score
 
 from . import guard_config as config
 from .regex_rules import RegexFilter
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -122,7 +126,7 @@ class IntentClassifier:
         )
 
         if model_exists and has_weights and trained_marker:
-            print(f"✓ Loading fine-tuned model from {model_path}")
+            logger.info("Loading fine-tuned model from %s", model_path)
             try:
                 from transformers import (
                     AutoTokenizer,
@@ -134,19 +138,22 @@ class IntentClassifier:
                     model_path
                 )
                 self.uses_heuristic_fallback = False
-                print(f"✓ Model and tokenizer loaded successfully")
+                logger.info("Model and tokenizer loaded successfully")
             except Exception as e:
-                print(f"⚠ Failed to load model: {e}. Falling back to deterministic rules.")
+                logger.warning(
+                    "Failed to load model: %s. Falling back to deterministic rules.",
+                    e,
+                )
                 self._load_heuristic_fallback()
         else:
             if model_exists and has_weights and not trained_marker:
-                print(
-                    f"⚠ Model weights found at {model_path} but no .trained marker — "
-                    "the model has not been fine-tuned."
+                logger.warning(
+                    "Model weights found at %s but no .trained marker - the model has not been fine-tuned.",
+                    model_path,
                 )
-            print(f"⚠ Fine-tuned model not found at {model_path}")
-            print(
-                "  Using deterministic heuristic fallback. Run training pipeline to produce "
+            logger.warning("Fine-tuned model not found at %s", model_path)
+            logger.warning(
+                "Using deterministic heuristic fallback. Run the training pipeline to produce "
                 "a fine-tuned classifier for semantic coverage."
             )
             self._load_heuristic_fallback()
@@ -178,7 +185,7 @@ class IntentClassifier:
 
     def _load_pretrained(self):
         """Load a pre-trained DeBERTa model for explicit fine-tuning only."""
-        print("Loading pre-trained DeBERTa v3 small...")
+        logger.info("Loading pre-trained DeBERTa v3 small...")
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
         model_name = "microsoft/deberta-v3-small"
@@ -343,7 +350,7 @@ class IntentClassifier:
         metrics = {"train_loss": [], "val_accuracy": [], "val_f1": []}
 
         for epoch in range(epochs):
-            print(f"\nEpoch {epoch + 1}/{epochs}")
+            logger.info("Epoch %s/%s", epoch + 1, epochs)
 
             # Training
             total_loss = 0
@@ -365,7 +372,7 @@ class IntentClassifier:
 
             avg_loss = total_loss / len(train_loader)
             metrics["train_loss"].append(avg_loss)
-            print(f"Training loss: {avg_loss:.4f}")
+            logger.info("Training loss: %.4f", avg_loss)
 
             # Validation
             self.model.eval()
@@ -393,7 +400,7 @@ class IntentClassifier:
             metrics["val_accuracy"].append(accuracy)
             metrics["val_f1"].append(f1)
 
-            print(f"Validation accuracy: {accuracy:.4f}, F1: {f1:.4f}")
+            logger.info("Validation accuracy: %.4f, F1: %.4f", accuracy, f1)
 
             self.model.train()
 
@@ -411,6 +418,6 @@ class IntentClassifier:
             }
             with open(os.path.join(output_dir, ".trained"), "w") as f:
                 json.dump(trained_meta, f, indent=2)
-            print(f"\nModel saved to {output_dir}")
+            logger.info("Model saved to %s", output_dir)
 
         return metrics
