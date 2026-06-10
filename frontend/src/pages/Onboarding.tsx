@@ -180,6 +180,10 @@ setRiskLevel(detectedRiskLevel)
     setCurrentStep((step) => Math.max(0, step - 1))
   }
 
+  const clearError = () => {
+    setError(null)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
       <div className="bg-white rounded-2xl border border-gray-200 p-8 w-full max-w-lg">
@@ -245,6 +249,7 @@ setRiskLevel(detectedRiskLevel)
                       name: event.target.value,
                     }))
                   }
+                  onInput={clearError}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Example: Resume Screening AI"
                 />
@@ -262,6 +267,7 @@ setRiskLevel(detectedRiskLevel)
                       description: event.target.value,
                     }))
                   }
+                  onInput={clearError}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Briefly describe your AI system"
                   rows={3}
@@ -281,6 +287,7 @@ setRiskLevel(detectedRiskLevel)
                       use_case: event.target.value,
                     }))
                   }
+                  onInput={clearError}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Example: Hiring, healthcare, education"
                 />
@@ -299,6 +306,7 @@ setRiskLevel(detectedRiskLevel)
                       sector: event.target.value,
                     }))
                   }
+                  onInput={clearError}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Example: HR Tech"
                 />
@@ -320,6 +328,7 @@ setRiskLevel(detectedRiskLevel)
                       intended_purpose: event.target.value,
                     }))
                   }
+                  onInput={clearError}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="What is this AI system used for?"
                   rows={3}
@@ -339,6 +348,7 @@ setRiskLevel(detectedRiskLevel)
                       target_users: event.target.value,
                     }))
                   }
+                  onInput={clearError}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Example: HR teams, compliance officers"
                 />
@@ -354,6 +364,7 @@ setRiskLevel(detectedRiskLevel)
                       uses_personal_data: event.target.checked,
                     }))
                   }
+                  onInput={clearError}
                 />
                 Uses personal data
               </label>
@@ -368,6 +379,7 @@ setRiskLevel(detectedRiskLevel)
                       affects_decision_making: event.target.checked,
                     }))
                   }
+                  onInput={clearError}
                 />
                 Affects decision-making about people
               </label>
@@ -393,9 +405,12 @@ setRiskLevel(detectedRiskLevel)
                 <label className="block text-sm font-medium text-gray-700">
                   Document Type
                 </label>
-                <select
+                  <select
                   value={documentType}
-                  onChange={(event) => setDocumentType(event.target.value)}
+                  onChange={(event) => {
+                    setDocumentType(event.target.value)
+                    clearError()
+                  }}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="technical_documentation">
