@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 
 import ComplianceRiskChart from "../components/ComplianceRiskChart";
 import { analyticsApi } from '../services/api'
+import { isDarkThemeActive } from '../utils/theme'
 
 import {
   BarChart2,
@@ -155,7 +156,7 @@ export default function Analytics() {
     }
 
     const checkTheme = () => {
-      setIsDark(document.documentElement.classList.contains('dark'))
+      setIsDark(isDarkThemeActive())
     }
 
     checkTheme();

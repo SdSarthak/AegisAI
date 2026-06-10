@@ -1,13 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Sun, Moon } from 'lucide-react'
+import { isDarkThemeActive, setDarkThemeEnabled } from '../utils/theme'
 
 export default function ThemeToggle() {
-  const [isDark, setIsDark] = useState(() => {
-    if (typeof document !== 'undefined') {
-      return document.documentElement.classList.contains('dark')
-    }
-    return false
-  })
+  const [isDark, setIsDark] = useState(() => isDarkThemeActive())
 
   // Keep state in sync with actual DOM (e.g. from system preference changes in App.tsx)
   useEffect(() => {
@@ -16,7 +12,7 @@ export default function ThemeToggle() {
     }
 
     const observer = new MutationObserver(() => {
-      setIsDark(document.documentElement.classList.contains('dark'))
+      setIsDark(isDarkThemeActive())
     })
 
     observer.observe(document.documentElement, {
@@ -30,14 +26,7 @@ export default function ThemeToggle() {
   const toggleTheme = () => {
     const newTheme = !isDark
     setIsDark(newTheme)
-
-    if (newTheme) {
-      document.documentElement.classList.add('dark')
-      localStorage.setItem('theme', 'dark')
-    } else {
-      document.documentElement.classList.remove('dark')
-      localStorage.setItem('theme', 'light')
-    }
+    setDarkThemeEnabled(newTheme)
   }
 
   return (

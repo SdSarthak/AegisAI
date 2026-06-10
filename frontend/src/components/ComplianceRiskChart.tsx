@@ -7,6 +7,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts'
+import { isDarkThemeActive } from '../utils/theme'
 
 type RiskData = {
   name: string
@@ -31,8 +32,7 @@ export default function ComplianceRiskChart({ data }: Props) {
 
   useEffect(() => {
     const checkTheme = () => {
-      if (typeof document === 'undefined') return
-      setIsDark(document.documentElement.classList.contains('dark'))
+      setIsDark(isDarkThemeActive())
     }
 
     if (typeof document === 'undefined') return
