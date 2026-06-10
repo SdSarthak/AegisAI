@@ -159,7 +159,7 @@ def clear_guard_rate_limits():
     from app.core.rate_limit import guard_scan_rate_limiter
     
     # 1. Clear local memory
-    guard_scan_rate_limiter._local_attempts_by_key.clear()
+    guard_scan_rate_limiter.clear_local_attempts()
     
     # 2. Clear Redis
     redis_client = guard_scan_rate_limiter._get_redis_client()
@@ -169,6 +169,6 @@ def clear_guard_rate_limits():
     yield
     
     # Clean up after the test completes
-    guard_scan_rate_limiter._local_attempts_by_key.clear()
+    guard_scan_rate_limiter.clear_local_attempts()
     if redis_client is not None:
         redis_client.flushdb()
