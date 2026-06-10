@@ -67,7 +67,20 @@ def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
 ):
-    """Accept one or more PDF uploads, process them through the document loader,"""
+    """Upload PDFs, rebuild the RAG index, and return ingestion stats.
+
+    Args:
+        files: One or more PDF uploads to ingest into the local FAISS index.
+        current_user: Authenticated user, used to enforce access control.
+
+    Returns:
+        RAGIngestResponse with counts for processed files, created chunks,
+        and current on-disk index size.
+
+    Raises:
+        HTTPException: If the upload is too large, not a valid PDF payload,
+            or the index rebuild fails.
+    """
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -163,7 +176,7 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Ask a regulatory question and get an answer grounded in source documents."""
+    """Answer a compliance question using the current vector store."""
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
         from app.core.database import Base
@@ -229,7 +242,7 @@ async def query_knowledge_base_stream(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Stream a regulatory answer as Server-Sent Events."""
+    """Stream a regulatory answer token-by-token as Server-Sent Events."""
     try:
         vector_store = load_vector_store()
     except FileNotFoundError as exc:
@@ -295,7 +308,7 @@ def rag_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Record a thumbs-up or thumbs-down for a previously returned answer."""
+    """Record feedback for a previously generated answer."""
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
@@ -315,7 +328,7 @@ def get_low_quality_chunks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Admin endpoint: aggregate feedback by source chunk and return low-quality candidates."""
+    """Aggregate feedback by source chunk and return low-quality candidates."""
     # Admin-only access: restrict to system owners / scale tier
     try:
         if current_user.subscription_tier != SubscriptionTier.SCALE:
