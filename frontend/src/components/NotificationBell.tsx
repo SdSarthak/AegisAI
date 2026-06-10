@@ -57,6 +57,7 @@ export default function NotificationBell() {
   const handleNotificationClick = async (id: number) => {
     await notificationsApi.markRead([id])
     queryClient.invalidateQueries({ queryKey: ['notifications'] })
+    setIsOpen(false)
   }
 
   // Close dropdown on click outside

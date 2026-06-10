@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { formatDistanceToNow } from 'date-fns'
 import { Bell, Check, Clock, Loader2, Trash2 } from 'lucide-react'
 
 import { notificationsApi, type NotificationResponse } from '../services/api'
+import { notify } from '../utils/toast'
 
 function typeLabel(notificationType: string): string {
   switch (notificationType) {
@@ -37,6 +39,7 @@ function typeTone(notificationType: string): string {
 
 export default function Notifications() {
   const queryClient = useQueryClient()
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const {
     data: notifications = [],
@@ -53,13 +56,27 @@ export default function Notifications() {
     mutationFn: (ids: number[]) => notificationsApi.markRead(ids),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      notify.success('Notifications marked as read')
+    },
+    onError: () => {
+      notify.error('Unable to mark notifications as read right now')
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => notificationsApi.delete(id),
+    onMutate: (id) => {
+      setDeletingId(id)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      notify.success('Notification deleted')
+    },
+    onError: () => {
+      notify.error('Unable to delete the notification right now')
+    },
+    onSettled: () => {
+      setDeletingId(null)
     },
   })
 
@@ -175,11 +192,11 @@ export default function Notifications() {
               <button
                 type="button"
                 onClick={() => deleteMutation.mutate(notification.id)}
-                disabled={deleteMutation.isPending}
+                disabled={deleteMutation.isPending && deletingId === notification.id}
                 className="rounded-md p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                 aria-label={`Delete notification ${notification.title}`}
               >
-                {deleteMutation.isPending ? (
+                {deleteMutation.isPending && deletingId === notification.id ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Trash2 className="h-4 w-4" />
