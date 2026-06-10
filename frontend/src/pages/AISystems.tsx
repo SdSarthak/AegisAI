@@ -137,6 +137,9 @@ export default function AISystems() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-systems'] })
       setSystemToDelete(null)
+      if (currentPage > 1 && systems.length === 1) {
+        setCurrentPage((page) => Math.max(page - 1, 1))
+      }
       notify.success('AI system deleted')
     },
     onError: () => {

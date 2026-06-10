@@ -95,6 +95,9 @@ export default function Documents() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       setDocumentToDelete(null)
+      if (currentPage > 1 && documents.length === 1) {
+        setCurrentPage((page) => Math.max(page - 1, 1))
+      }
       notify.success('Document deleted')
     },
     onError: () => {
