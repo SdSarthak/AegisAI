@@ -47,7 +47,19 @@ users_router = APIRouter()
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user account."""
+    """Register a new user account.
+
+    Args:
+        user_data: Registration payload containing email, password, and
+            optional profile metadata.
+        db: Active database session.
+
+    Returns:
+        The newly created user record.
+
+    Raises:
+        HTTPException: If the email already exists or a database error occurs.
+    """
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
@@ -85,7 +97,19 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
-    """Authenticate a user and return an access token."""
+    """Authenticate a user and return a bearer access token.
+
+    Args:
+        form_data: OAuth2 form payload containing the submitted email and
+            password.
+        db: Active database session.
+
+    Returns:
+        A token payload with ``access_token`` and ``token_type`` keys.
+
+    Raises:
+        HTTPException: If the credentials are invalid or the user is inactive.
+    """
     user = db.query(User).filter(User.email == form_data.username).first()
 
     # Always run a constant-time bcrypt comparison regardless of whether the
@@ -125,7 +149,19 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Change the authenticated user's password."""
+    """Update the authenticated user's password.
+
+    Args:
+        payload: Current and new password values supplied by the user.
+        current_user: Authenticated user whose password should be changed.
+        db: Active database session.
+
+    Returns:
+        A confirmation payload containing a success message.
+
+    Raises:
+        HTTPException: If the current password is incorrect.
+    """
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -147,7 +183,16 @@ def update_current_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update the authenticated user's profile details."""
+    """Update the authenticated user's profile details.
+
+    Args:
+        user_data: Partial profile update payload.
+        current_user: Authenticated user whose profile is being updated.
+        db: Active database session.
+
+    Returns:
+        The updated user record.
+    """
     if user_data.full_name is not None:
         current_user.full_name = user_data.full_name
 
@@ -168,7 +213,15 @@ def get_current_user_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return summary statistics for the authenticated user."""
+    """Return summary statistics for the authenticated user.
+
+    Args:
+        current_user: Authenticated user whose data should be summarized.
+        db: Active database session.
+
+    Returns:
+        UserStatsResponse with totals for systems, documents, and compliance.
+    """
     systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
 
     risk_breakdown: dict = {}
