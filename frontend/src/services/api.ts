@@ -106,6 +106,49 @@ function ensureStringArrayField(
   }
 }
 
+function unwrapPaginatedItems<T>(data: unknown): T[] | unknown {
+  if (isRecord(data) && Array.isArray((data as { items?: unknown }).items)) {
+    return (data as { items: T[] }).items
+  }
+
+  return data
+}
+
+export interface AiSystemListItem {
+  id: number
+  name: string
+  description: string | null
+  version: string | null
+  use_case: string | null
+  sector: string | null
+  risk_level: string | null
+  compliance_status: string
+  compliance_score: number | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AnalyticsSummaryResponse {
+  total_systems: number
+  average_compliance_score: number
+  counts: Record<string, number>
+  compliance_statuses: Record<string, number>
+}
+
+export interface AnalyticsTimelineSnapshot {
+  ai_system_id: number
+  compliance_score: number | null
+  compliance_status: string
+  risk_level: string | null
+  snapshotted_at: string
+}
+
+export interface AnalyticsTimelineResponse {
+  ai_system_id: number
+  ai_system_name: string
+  snapshots: AnalyticsTimelineSnapshot[]
+}
+
 // Auth API
 export const authApi = {
   login: async (email: string, password: string) => {
@@ -147,14 +190,24 @@ export const aiSystemsApi = {
   list: async (params?: {
     sort_by?: string
     order?: string
+    skip?: number
     page?: number
     limit?: number
     search?: string
     risk_level?: string
     compliance_status?: string
   }) => {
-    const { data } = await api.get('/ai-systems/', { params })
-    return data
+    const queryParams = params
+      ? {
+          ...params,
+          ...(typeof params.page === 'number'
+            ? { skip: Math.max(0, (params.page - 1) * (params.limit ?? 50)) }
+            : {}),
+        }
+      : undefined
+
+    const { data } = await api.get('/ai-systems/', { params: queryParams })
+    return unwrapPaginatedItems<AiSystemListItem>(data) as AiSystemListItem[]
   },
   get: async (id: number) => {
     const { data } = await api.get(`/ai-systems/${id}`)
@@ -210,9 +263,9 @@ export const classificationApi = {
 
 // Documents API
 export const documentsApi = {
-  list: async () => {
-    const { data } = await api.get('/documents/')
-    return data
+  list: async (params?: { skip?: number; limit?: number }) => {
+    const { data } = await api.get('/documents/', { params })
+    return unwrapPaginatedItems(data)
   },
   get: async (id: number) => {
     const { data } = await api.get(`/documents/${id}`)
@@ -471,8 +524,17 @@ export const guardApi = {
 }
 
 export const analyticsApi = {
-  summary: async () => {
+  summary: async (): Promise<AnalyticsSummaryResponse> => {
     const { data } = await api.get('/analytics/summary')
+    return data
+  },
+  timeline: async (
+    systemId: number,
+    days = 30,
+  ): Promise<AnalyticsTimelineResponse> => {
+    const { data } = await api.get('/analytics/compliance-timeline', {
+      params: { system_id: systemId, days },
+    })
     return data
   },
 }
