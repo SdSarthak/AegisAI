@@ -11,22 +11,26 @@ export default function ThemeToggle() {
 
   // Keep state in sync with actual DOM (e.g. from system preference changes in App.tsx)
   useEffect(() => {
+    if (typeof document === 'undefined') {
+      return
+    }
+
     const observer = new MutationObserver(() => {
       setIsDark(document.documentElement.classList.contains('dark'))
     })
-    
+
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ['class']
+      attributeFilter: ['class'],
     })
-    
+
     return () => observer.disconnect()
   }, [])
 
   const toggleTheme = () => {
     const newTheme = !isDark
-    setIsDark(newTheme) // Optimistic update
-    
+    setIsDark(newTheme)
+
     if (newTheme) {
       document.documentElement.classList.add('dark')
       localStorage.setItem('theme', 'dark')
