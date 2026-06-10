@@ -59,6 +59,10 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
     Raises:
         HTTPException: If the email already exists or a database error occurs.
+
+    Notes:
+        The password is always hashed before persistence; the plain text value
+        is never stored.
     """
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
@@ -168,6 +172,10 @@ def change_password(
 
     Raises:
         HTTPException: If the current password is incorrect.
+
+    Notes:
+        The current password must match before a new hash is written, which
+        prevents password changes from being used to bypass account access.
     """
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
@@ -199,6 +207,9 @@ def update_current_user_info(
 
     Returns:
         The updated user record.
+
+    Notes:
+        Only the supplied fields are updated; omitted fields are left as-is.
     """
     if user_data.full_name is not None:
         current_user.full_name = user_data.full_name
@@ -228,6 +239,10 @@ def get_current_user_stats(
 
     Returns:
         UserStatsResponse with totals for systems, documents, and compliance.
+
+    Notes:
+        Compliance counts are derived from the user's AI systems and only
+        count systems marked fully compliant.
     """
     systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
 
