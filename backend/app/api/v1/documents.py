@@ -61,18 +61,40 @@ def create_share_token(document_id: int):
     return token
 
 def _escape_pdf_text(value: str) -> str:
-    """Escape user-controlled text before ReportLab Paragraph parses it."""
+    """Escape user-controlled text before ReportLab parses it.
+
+    Args:
+        value: Raw text that may contain user-controlled characters.
+
+    Returns:
+        A version of the input with PDF/HTML-sensitive characters escaped.
+    """
     return html_escape(value, quote=False)
 
 
 def _render_inline_markdown(value: str) -> str:
-    """Render the small markdown subset supported by PDF export safely."""
+    """Render the small markdown subset supported by PDF export safely.
+
+    Args:
+        value: Raw document content that may contain lightweight markdown.
+
+    Returns:
+        Safe HTML-like markup with bold spans preserved for ReportLab.
+    """
     escaped = _escape_pdf_text(value.strip())
     return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', escaped)
 
 
 def _safe_pdf_filename(title: str) -> str:
-    """Return a header-safe PDF filename derived from a document title."""
+    """Return a header-safe PDF filename derived from a document title.
+
+    Args:
+        title: Source document title used to derive the filename.
+
+    Returns:
+        A sanitized filename ending in ``.pdf`` that is safe to send in
+        response headers.
+    """
     filename = re.sub(r"[\x00-\x1f\x7f]", "", title or "").strip()
     filename = re.sub(r'[/\\:*?"<>|]+', "_", filename)
     filename = re.sub(r"\s+", " ", filename).strip(" ._")
