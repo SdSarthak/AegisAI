@@ -70,6 +70,7 @@ export default function Onboarding() {
 
     setIsLoading(true)
     setError(null)
+    setRiskLevel(null)
 
     try {
       const createdSystem = await aiSystemsApi.create({
@@ -96,6 +97,7 @@ export default function Onboarding() {
 
     setIsLoading(true)
     setError(null)
+    setRiskLevel(null)
 
     try {
       const classification = await classificationApi.classifyAndSave(systemId, {
