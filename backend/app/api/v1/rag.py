@@ -176,7 +176,21 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Answer a compliance question using the current vector store."""
+    """Answer a compliance question using the current vector store.
+
+    Args:
+        request: Query payload containing the user's compliance question.
+        current_user: Authenticated user asking the question.
+        db: Active database session used to persist the generated answer.
+
+    Returns:
+        RAGQueryResponse containing the answer text, source references, and
+        the persisted answer ID.
+
+    Raises:
+        HTTPException: If the vector store is unavailable or the RAG pipeline
+            fails during retrieval or generation.
+    """
     try:
         from app.modules.rag.retrieval_chain import get_qa_chain
         from app.core.database import Base
@@ -242,7 +256,20 @@ async def query_knowledge_base_stream(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Stream a regulatory answer token-by-token as Server-Sent Events."""
+    """Stream a regulatory answer token-by-token as Server-Sent Events.
+
+    Args:
+        request: Incoming HTTP request used for SSE lifecycle handling.
+        payload: Query payload containing the user's compliance question.
+        current_user: Authenticated user requesting the streamed answer.
+        db: Active database session used to persist the generated answer.
+
+    Returns:
+        StreamingResponse that emits meta, token, error, and done events.
+
+    Raises:
+        HTTPException: If the vector store cannot be loaded.
+    """
     try:
         vector_store = load_vector_store()
     except FileNotFoundError as exc:
@@ -277,7 +304,12 @@ async def query_knowledge_base_stream(
 
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health():
-    """Check if the RAG module is available."""
+    """Check whether the RAG module is available.
+
+    Returns:
+        A small status payload indicating whether the FAISS index is loaded
+        and the RAG module can answer queries.
+    """
     from app.modules.rag.vector_store import check_index_exists
     
     index_loaded = check_index_exists()
@@ -308,7 +340,19 @@ def rag_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Record feedback for a previously generated answer."""
+    """Record feedback for a previously generated answer.
+
+    Args:
+        payload: Feedback payload containing the answer ID and vote.
+        current_user: Authenticated user submitting the feedback.
+        db: Active database session.
+
+    Returns:
+        Confirmation payload with the stored answer ID.
+
+    Raises:
+        HTTPException: If the answer cannot be found.
+    """
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
@@ -328,7 +372,21 @@ def get_low_quality_chunks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Aggregate feedback by source chunk and return low-quality candidates."""
+    """Aggregate feedback by source chunk and return low-quality candidates.
+
+    Args:
+        threshold: Downvote ratio above which a chunk is considered low
+            quality.
+        current_user: Authenticated user requesting the quality report.
+        db: Active database session.
+
+    Returns:
+        A report containing the configured threshold and the chunk list that
+        exceeds it.
+
+    Raises:
+        HTTPException: If the caller does not have the required admin tier.
+    """
     # Admin-only access: restrict to system owners / scale tier
     try:
         if current_user.subscription_tier != SubscriptionTier.SCALE:
@@ -365,7 +423,18 @@ def get_rag_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return the current user's paginated RAG query history."""
+    """Return the current user's paginated RAG query history.
+
+    Args:
+        page: Page number to retrieve, starting at 1.
+        page_size: Number of history records per page.
+        current_user: Authenticated user whose history should be returned.
+        db: Active database session.
+
+    Returns:
+        A paginated payload containing the user's prior RAG queries and
+        answer summaries.
+    """
     offset = (page - 1) * page_size
     queries = (
         db.query(RagQuery)
