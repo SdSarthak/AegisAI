@@ -1,12 +1,10 @@
-"""
-LLM Guard API — exposes prompt injection scanning as a REST endpoint.
+"""API for prompt injection scanning, stats, and explainability.
+
+This module exposes the guard pipeline over HTTP and records the resulting
+scan decisions for audit, notification, and analytics flows.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (medium difficulty):
-  - Add per-user rate limiting on POST /guard/scan
-  - Persist scan results to the database for audit logs (Completed)
-  - Add a GET /guard/stats endpoint returning block/allow/sanitize counts (Completed)
 """
 
 import hashlib

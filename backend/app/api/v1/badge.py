@@ -1,18 +1,10 @@
-"""
-Public Compliance Badge API — no authentication required.
+"""Public API for compliance badges that can be embedded externally.
+
+The badge endpoint is intentionally unauthenticated so a system's current
+status can be embedded in READMEs, dashboards, and public project pages.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (help wanted):
-  - Implement GET /badge/{system_id} — return an SVG badge showing the
-    AI system's current compliance status and risk level.
-    This endpoint is PUBLIC (no JWT required) so organisations can embed
-    the badge in their README or website.
-  - The badge should show: system name, risk level, compliance status,
-    and a color (green=compliant, yellow=in_progress, red=non_compliant).
-  - Optionally support ?format=json to return machine-readable JSON instead.
-  - Acceptance criteria: visiting /badge/{id} in a browser renders an
-    SVG badge without requiring a login.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status

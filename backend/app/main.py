@@ -1,5 +1,9 @@
-"""
-AegisAI — Open-source AI Governance, Risk & Compliance Platform
+"""FastAPI application bootstrap for the AegisAI backend.
+
+This module wires together logging, telemetry, middleware, routes, and the
+application lifespan hooks that prepare the database and regulation registry
+at startup.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
@@ -36,9 +40,7 @@ logger = logging.getLogger("aegisai.main")
 # -------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Handles startup and shutdown events for the FastAPI application.
-    """
+    """Handle FastAPI startup and shutdown events."""
     logger.info("Starting AegisAI backend...")
 
     try:
@@ -126,9 +128,7 @@ def root() -> Dict[str, Any]:
 
 @app.get("/health", tags=["Health"])
 def health_check() -> Dict[str, Any]:
-    """
-    Validates application health and verifies database connectivity.
-    """
+    """Return a lightweight health check response with DB status."""
     db_status = "connected"
     overall_status = "healthy"
 
@@ -151,9 +151,7 @@ def health_check() -> Dict[str, Any]:
 
 @app.get("/ready", tags=["Health"])
 def readiness_check() -> Dict[str, Any]:
-    """
-    Readiness probe — confirms the application can serve traffic.
-    """
+    """Return a readiness probe that confirms the database is reachable."""
     db_ready = False
     try:
         with engine.connect() as connection:

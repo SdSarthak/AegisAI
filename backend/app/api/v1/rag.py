@@ -1,14 +1,10 @@
-"""
-RAG Intelligence API — regulatory knowledge base query endpoint.
+"""API for ingesting regulatory documents and querying the RAG index.
+
+The routes here support PDF ingestion, single-shot question answering, and
+streaming answers from the regulatory knowledge base.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-Contributor note:
-  - POST /rag/ingest: multipart PDF upload, document_loader, FAISS rebuild
-  - POST /rag/query: single-shot JSON answer (backward compatible)
-  - POST /rag/query/stream: Server-Sent Events stream — see streaming.py
-  - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - TODO: Integrate MLflow tracking from modules/rag/ml_flow.py
 """
 
 import os

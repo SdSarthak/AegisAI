@@ -1,21 +1,12 @@
-"""
-Webhooks API — configure outbound event delivery URLs.
+"""API for managing outbound webhook delivery settings.
+
+The routes in this module let users register, list, and delete webhook
+endpoints that receive signed event payloads from the backend.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (help wanted):
-  - Implement webhook delivery: when a Guard block decision is made in
-    POST /guard/scan, call `deliver_webhook(db, user_id, event="guard_block", payload={...})`.
-    Use `httpx` (already in requirements) to POST the payload to the configured URL.
-    Sign the body with HMAC-SHA256 using the stored secret and set the
-    X-AegisAI-Signature header.
-  - Acceptance criteria: configuring a webhook URL and triggering a guard
-    block results in a POST request to that URL within 5 seconds.
 """
 
-from typing import List
-
-from fastapi import APIRouter, Depends, HTTPException, status
 import hashlib
 import hmac
 import json
@@ -29,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.models.webhook import WebhookConfig  # Assuming this is the SQLAlchemy model
+from app.models.webhook import WebhookConfig
 from app.schemas.webhook import WebhookCreate, WebhookResponse
 
 router = APIRouter()
@@ -37,15 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 def _build_signature(secret: str, payload_body: bytes) -> str:
-    """Generate an HMAC-SHA256 signature for a webhook payload.
-
-    Args:
-        secret: Shared secret used to sign the payload.
-        payload_body: Canonical JSON payload bytes.
-
-    Returns:
-        Hex-encoded HMAC signature string.
-    """
+    """Return the HMAC-SHA256 signature used for webhook authentication."""
     return hmac.new(
         secret.encode("utf-8"),
         payload_body,
@@ -59,18 +42,7 @@ async def _post_webhook(
     payload: dict[str, Any],
     secret: str | None,
 ) -> None:
-    """Post a webhook payload to a configured endpoint.
-
-    Args:
-        url: Destination webhook URL.
-        event: Event name used in the request headers.
-        payload: JSON-serializable payload to send.
-        secret: Optional signing secret used for request authentication.
-
-    Returns:
-        None. Errors are logged and suppressed so delivery continues for
-        other webhooks.
-    """
+    """Post a webhook payload to a configured endpoint."""
     try:
         payload_body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
 
@@ -98,19 +70,7 @@ def deliver_webhook(
     payload: dict[str, Any],
     background_tasks: BackgroundTasks,
 ) -> None:
-    """Schedule delivery to active user webhooks subscribed to the event.
-
-    Args:
-        db: Active database session used to discover webhook subscriptions.
-        user_id: User whose webhooks should receive the event.
-        event: Event name to match against stored subscriptions.
-        payload: JSON-serializable event payload.
-        background_tasks: Task queue used to fan out delivery asynchronously.
-
-    Returns:
-        None. Matching webhook deliveries are scheduled on the background task
-        runner.
-    """
+    """Schedule delivery to active user webhooks subscribed to the event."""
     webhooks = (
         db.query(WebhookConfig)
         .filter(
@@ -141,16 +101,7 @@ def create_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Register a new webhook endpoint for the current user.
-
-    Args:
-        body: Webhook configuration supplied by the client.
-        current_user: Authenticated user who will own the webhook.
-        db: Active database session.
-
-    Returns:
-        The newly created webhook configuration.
-    """
+    """Register a new webhook endpoint for the current user."""
     # Force the user_id to be the authenticated user to prevent spoofing
     webhook_data = body.model_dump()
     db_webhook = WebhookConfig(
@@ -170,15 +121,7 @@ def list_webhooks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List all webhook configurations for the current user.
-
-    Args:
-        current_user: Authenticated user whose webhooks should be returned.
-        db: Active database session.
-
-    Returns:
-        The list of webhook configurations owned by the user.
-    """
+    """List all webhook configurations for the current user."""
     # Fetch webhooks strictly scoped to the authenticated user
     webhooks = db.query(WebhookConfig).filter(WebhookConfig.user_id == current_user.id).all()
     
@@ -191,20 +134,7 @@ def delete_webhook(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a webhook configuration owned by the current user.
-
-    Args:
-        webhook_id: Database ID of the webhook to delete.
-        current_user: Authenticated user who must own the webhook.
-        db: Active database session.
-
-    Returns:
-        None. The endpoint responds with HTTP 204 when deletion succeeds.
-
-    Raises:
-        HTTPException: If the webhook does not exist or belongs to another
-            user.
-    """
+    """Delete a webhook configuration owned by the current user."""
     # Query checking BOTH the webhook ID and the user ID
     db_webhook = db.query(WebhookConfig).filter(
         WebhookConfig.id == webhook_id,
