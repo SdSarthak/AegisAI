@@ -9,12 +9,12 @@ Copyright (C) 2026 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
-import time
 import asyncio
 import logging
-from typing import Optional, Iterator, AsyncIterator
+import time
+from typing import AsyncIterator, Iterator, Optional
 
-from openai import OpenAI, AsyncOpenAI, APIError
+from openai import APIError, AsyncOpenAI, OpenAI
 
 from app.core.config import settings
 
@@ -126,6 +126,8 @@ class LLMClient:
                     raise Exception(
                         f"LLM API call failed after {max_retries} attempts: {e}"
                     ) from e
+
+        raise RuntimeError("LLM API call failed without raising an exception.")
 
     def stream(
         self,
@@ -276,6 +278,8 @@ class LLMClient:
                     raise Exception(
                         f"LLM API async call failed after {max_retries} attempts: {e}"
                     ) from e
+
+        raise RuntimeError("LLM API async call failed without raising an exception.")
 
     async def astream(
         self,
