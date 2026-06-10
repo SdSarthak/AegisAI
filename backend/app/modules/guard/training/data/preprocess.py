@@ -1,4 +1,9 @@
-"""Dataset normalization helpers for safety classifier training."""
+"""Normalize raw datasets into the guard classifier's expected schema.
+
+The training pipeline accepts a variety of source datasets, so this module
+standardizes text and label columns, drops unusable rows, and maps label
+variants back to the canonical guard classes.
+"""
 
 from __future__ import annotations
 

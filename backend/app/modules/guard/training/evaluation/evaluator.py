@@ -1,4 +1,9 @@
-"""Evaluate an IntentClassifier on normalized prompt datasets."""
+"""Evaluate the guard classifier on normalized prompt datasets.
+
+This module turns dataframe rows into classifier calls, collects per-row
+predictions, and aggregates the results into JSON-serializable metrics for
+pipeline artifacts.
+"""
 
 from __future__ import annotations
 

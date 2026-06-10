@@ -1,4 +1,8 @@
-"""Data loading, preprocessing, and split helpers for guard training."""
+"""Data loading, preprocessing, and splitting helpers for guard training.
+
+The data package wraps the steps needed to fetch, normalize, and partition
+training data into the shapes expected by the guard training pipeline.
+"""
 
 from .dataset_loader import (
     DEFAULT_HF_DATASET,

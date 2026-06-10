@@ -1,4 +1,9 @@
-"""Trainer facade for the guard intent classifier."""
+"""Expose a small trainer facade around the guard intent classifier.
+
+The surrounding pipelines work with pandas dataframes, while the classifier
+expects plain prompt and label lists. This facade bridges that gap and keeps
+the higher-level pipeline code compact.
+"""
 
 from __future__ import annotations
 

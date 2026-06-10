@@ -1,7 +1,7 @@
 """Trainer facade for guard safety prediction models.
 
 This package exposes the standardized training entrypoint while keeping the
-heavy classifier imports lazy.
+heavy classifier imports lazy until the trainer is actually requested.
 """
 
 __all__ = ["SafetyClassifierTrainer", "TrainingResult"]
