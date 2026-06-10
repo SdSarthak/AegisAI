@@ -4,6 +4,7 @@ import { aiSystemsApi, documentsApi } from '../services/api'
 import { FileText, Download, Trash2, Plus, Edit } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
+import { notify } from '../utils/toast'
 
 interface Document {
   id: number
@@ -30,6 +31,7 @@ export default function Documents() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
+  const [deletingDocumentId, setDeletingDocumentId] = useState<number | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const limit = 10
 
@@ -78,14 +80,28 @@ export default function Documents() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       setShowModal(false)
+      notify.success('Document generated')
+    },
+    onError: () => {
+      notify.error('Unable to generate the document right now')
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: documentsApi.delete,
+    onMutate: (id) => {
+      setDeletingDocumentId(id)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       setDocumentToDelete(null)
+      notify.success('Document deleted')
+    },
+    onError: () => {
+      notify.error('Unable to delete the document right now')
+    },
+    onSettled: () => {
+      setDeletingDocumentId(null)
     },
   })
 
@@ -106,11 +122,24 @@ export default function Documents() {
     })
   }
 
-  const handleSaveDocument = async (content: string) => {
+  const handleSaveDocument = async (
+    content: string,
+    source: 'manual' | 'autosave' = 'manual'
+  ) => {
     if (!editingDoc) return
 
-    await documentsApi.update(editingDoc.id, { content })
-    queryClient.invalidateQueries({ queryKey: ['documents'] })
+    try {
+      await documentsApi.update(editingDoc.id, { content })
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
+      if (source === 'manual') {
+        notify.success('Document saved')
+      }
+    } catch (error) {
+      if (source === 'manual') {
+        notify.error('Unable to save the document right now')
+      }
+      throw error
+    }
   }
 
   const getStatusColor = (status: string) => {
@@ -393,10 +422,12 @@ export default function Documents() {
               <button
                 type="button"
                 onClick={() => deleteMutation.mutate(documentToDelete.id)}
-                disabled={deleteMutation.isPending}
+                disabled={deleteMutation.isPending && deletingDocumentId === documentToDelete.id}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
-                Delete
+                {deleteMutation.isPending && deletingDocumentId === documentToDelete.id
+                  ? 'Deleting...'
+                  : 'Delete'}
               </button>
             </div>
           </div>

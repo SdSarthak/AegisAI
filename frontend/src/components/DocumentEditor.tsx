@@ -8,7 +8,10 @@ import DOMPurify from 'dompurify'
 interface DocumentEditorProps {
   documentId: number
   initialContent: string
-  onSave?: (content: string) => void
+  onSave?: (
+    content: string,
+    source?: 'manual' | 'autosave'
+  ) => Promise<void> | void
   onClose?: () => void
 }
 
@@ -28,10 +31,10 @@ export default function DocumentEditor({
     [content]
   )
 
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (source: 'manual' | 'autosave' = 'manual') => {
     setIsSaving(true)
     try {
-      await onSave?.(content)
+      await onSave?.(content, source)
       setSaveError('')
     } catch (error) {
       setSaveError(
@@ -51,7 +54,7 @@ export default function DocumentEditor({
     }
 
     saveTimeoutRef.current = window.setTimeout(() => {
-      void handleSave()
+      void handleSave('autosave')
     }, 2000)
 
     return () => {
@@ -97,7 +100,7 @@ export default function DocumentEditor({
           )}
           <button
             type="button"
-            onClick={handleSave}
+            onClick={() => void handleSave('manual')}
             disabled={isSaving}
             className="flex items-center gap-2 px-3 py-1.5 text-sm bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
           >
