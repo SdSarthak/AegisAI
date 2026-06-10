@@ -1,16 +1,8 @@
-"""
-Compliance badge generator — produces SVG badges for public embedding.
-Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
-SPDX-License-Identifier: AGPL-3.0-only
+"""Generate public compliance badges as SVG.
 
-TODO for contributors (good first issue):
-  - Implement `generate_badge_svg(system_name, risk_level, compliance_status)`
-    that returns a valid SVG string.
-  - Use the color map below to pick the right color per status.
-  - The SVG should look like a standard shields.io-style badge:
-    left label "AegisAI" | right value = compliance_status.
-  - Acceptance criteria: calling generate_badge_svg() returns a string
-    that starts with "<svg" and can be saved as a .svg file.
+The badge generator renders a small shields.io-style SVG that can be
+embedded in READMEs or dashboards to show system risk and compliance state
+at a glance.
 """
 
 from __future__ import annotations
@@ -51,16 +43,7 @@ def generate_badge_svg(
     risk_level: str | None,
     compliance_status: str,
 ) -> str:
-    """Generate an SVG compliance badge.
-
-    Args:
-        system_name: Name to display on the badge.
-        risk_level: Optional risk level label for the badge.
-        compliance_status: Compliance status used to select the badge color.
-
-    Returns:
-        An SVG string suitable for direct embedding or download.
-    """
+    """Generate an SVG compliance badge for the supplied system."""
     if compliance_status in STATUS_COLORS:
         status_key = compliance_status
         status_label = STATUS_LABELS.get(status_key, "Unknown")

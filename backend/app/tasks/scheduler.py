@@ -1,9 +1,8 @@
-"""Background scheduler for compliance snapshots and reassessment reminders.
+"""Background scheduler scaffold for compliance snapshots and reminders.
 
-This module is intentionally left as a scaffold for the periodic jobs that
-will capture daily compliance state and notify owners when reassessments are
-approaching. The TODO block is part of the implementation plan and keeps the
-required work visible to contributors.
+The scheduler is intentionally kept lightweight until the periodic jobs are
+fully wired in, but the module documents the intended cadence and keeps the
+implementation plan visible for contributors.
 
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
