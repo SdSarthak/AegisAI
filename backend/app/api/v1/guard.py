@@ -396,13 +396,22 @@ async def explain_prompt(
 
 @router.get("/health", tags=["LLM Guard"])
 def guard_health():
-    """Check whether the Guard module is available."""
+    """Check whether the Guard module is available.
+
+    Returns:
+        A minimal health payload indicating that the Guard module is ready.
+    """
     return {"module": "llm_guard", "status": "available"}
 
 
 @router.get("/info", tags=["LLM Guard"])
 def guard_info():
-    """Return diagnostic information about the Guard module."""
+    """Return diagnostic information about the Guard module.
+
+    Returns:
+        A payload describing the active device, model name, and current
+        sanitization level used by the Guard runtime.
+    """
 
     try:
         import torch
@@ -426,7 +435,7 @@ VALID_DECISIONS = {"allow", "sanitize", "block"}
 VALID_INTENTS = {"benign", "suspicious", "malicious"}
 
 class CursorPagination:
-    """Simple cursor-based pagination helper:"""
+    """Cursor helper for stable Guard history pagination."""
 
     @staticmethod
     def encode(scanned_at: datetime, log_id: int) -> str:
@@ -500,6 +509,21 @@ def build_history_filters(
     start_date: Optional[datetime],
     end_date: Optional[datetime],
 ):
+    """Build Guard history filters from the optional query parameters.
+
+    Args:
+        current_user_id: ID of the authenticated user whose logs are queried.
+        decision: Optional final decision filter.
+        intent: Optional inferred intent filter.
+        start_date: Optional inclusive lower timestamp bound.
+        end_date: Optional inclusive upper timestamp bound.
+
+    Returns:
+        A list of SQLAlchemy filter expressions for the history query.
+
+    Raises:
+        HTTPException: If a supplied decision or intent value is invalid.
+    """
     filters = [GuardScanLog.user_id == current_user_id]
 
     # -----------------------
