@@ -15,7 +15,11 @@ class RegexResult:
 
 
 class RegexFilter:
-    """Fast first-pass filter using regex patterns to catch obvious attacks."""
+    """Fast first-pass filter using regex patterns to catch obvious attacks.
+
+    The filter is intentionally simple and deterministic so it can serve as a
+    cheap first gate before heavier classifier or LLM-based checks run.
+    """
 
     # High-severity patterns: instruction override attempts
     INSTRUCTION_OVERRIDE_PATTERNS = [
@@ -73,11 +77,19 @@ class RegexFilter:
     ]
 
     def __init__(self):
-        """Initialize compiled regex patterns with flags."""
+        """Initialize compiled regex patterns with flags.
+
+        Returns:
+            None. Compiled patterns are stored on the instance for reuse.
+        """
         self.patterns = self._compile_patterns()
 
     def _compile_patterns(self) -> Dict[str, List[re.Pattern]]:
-        """Compile all regex patterns with appropriate flags."""
+        """Compile all regex patterns with appropriate flags.
+
+        Returns:
+            A dictionary of compiled regex pattern groups.
+        """
         patterns = {
             "high_override": [
                 re.compile(p, re.IGNORECASE) for p in self.INSTRUCTION_OVERRIDE_PATTERNS
@@ -101,14 +113,13 @@ class RegexFilter:
         return patterns
 
     def check(self, prompt: str) -> RegexResult:
-        """
-        Check prompt against regex patterns.
+        """Check a prompt against the configured regex patterns.
 
         Args:
-            prompt: User input prompt to check
+            prompt: User input prompt to check.
 
         Returns:
-            RegexResult with flag, matched patterns, and risk score
+            RegexResult with a boolean flag, matched patterns, and risk score.
         """
         matched_patterns = []
         severity_scores = []

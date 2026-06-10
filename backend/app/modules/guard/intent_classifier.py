@@ -64,7 +64,11 @@ class PromptDataset(Dataset):
 
 
 class IntentClassifier:
-    """Fine-tuned DeBERTa classifier for prompt injection intent detection."""
+    """Fine-tuned DeBERTa classifier for prompt injection intent detection.
+
+    The classifier falls back to deterministic heuristics when no fine-tuned
+    model is available on disk.
+    """
 
     EXTRA_MALICIOUS_PATTERNS = [
         r"\bdo\s+anything\s+now\b",
@@ -86,16 +90,12 @@ class IntentClassifier:
     ]
 
     def __init__(self, model_path: Optional[str] = None, device: Optional[str] = None):
-        """
-        Initialize classifier with a fine-tuned model or deterministic fallback.
-
-        Tries to load a fine-tuned model first. If none is available, uses
-        deterministic heuristics instead of a base DeBERTa model with random
-        classification head weights.
+        """Initialize the classifier with a fine-tuned model or fallback.
 
         Args:
-            model_path: Path to trained model directory. If None, auto-detects using config.
-            device: Device to use ('cpu' or 'cuda'). Auto-detects GPU if None.
+            model_path: Path to the trained model directory. If omitted, the
+                configured model path is auto-detected.
+            device: Device to use (`cpu` or `cuda`). Auto-detects when omitted.
         """
         # Auto-detect device
         if device is None:
@@ -174,7 +174,7 @@ class IntentClassifier:
         self.uses_heuristic_fallback = True
 
     def _load_pretrained(self):
-        """Load pre-trained DeBERTa model for explicit fine-tuning only."""
+        """Load a pre-trained DeBERTa model for explicit fine-tuning only."""
         print("Loading pre-trained DeBERTa v3 small...")
         from transformers import AutoTokenizer, AutoModelForSequenceClassification
 

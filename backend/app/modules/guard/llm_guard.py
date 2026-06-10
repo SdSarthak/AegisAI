@@ -20,23 +20,23 @@ logger = logging.getLogger(__name__)
 
 
 class LLMGuard:
-    """Complete prompt injection guard pipeline."""
+    """Complete prompt injection guard pipeline.
+
+    The guard layers regex filtering, intent classification, decision logic,
+    sanitization, and LLM execution into one orchestrated flow.
+    """
 
     def __init__(
         self,
         classifier_model_path: Optional[str] = None,
         sanitization_level: SanitizationLevel = SanitizationLevel.MEDIUM,
     ):
-        """
-        Initialize the guard with all defense layers.
-
-        The classifier automatically loads the fine-tuned model trained by the notebook
-        if available, otherwise falls back to deterministic heuristics.
+        """Initialize the guard with all defense layers.
 
         Args:
-            classifier_model_path: Path to fine-tuned classifier model.
-                                  If None, auto-detects using config.get_trained_model_path()
-            sanitization_level: How aggressively to sanitize prompts
+            classifier_model_path: Path to the fine-tuned classifier model. If
+                omitted, the path is auto-detected from configuration.
+            sanitization_level: How aggressively to sanitize prompts.
         """
         logger.info("Initializing LLM Guard...")
 
@@ -73,14 +73,13 @@ class LLMGuard:
 
     @instrument_guard
     def guard(self, user_prompt: str) -> Dict:
-        """
-        Run the complete guard pipeline on a user prompt.
+        """Run the complete guard pipeline on a user prompt.
 
         Args:
-            user_prompt: Raw user input
+            user_prompt: Raw user input.
 
         Returns:
-            Dictionary with decision, response, and metadata
+            A dictionary containing the decision, response, and metadata.
         """
         timestamp = datetime.now().isoformat()
         logger.info(f"Processing prompt at {timestamp}")
@@ -194,15 +193,14 @@ class LLMGuard:
         return result
 
     def evaluate_on_test_set(self, test_prompts: list, true_labels: list) -> Dict:
-        """
-        Evaluate the guard on a test set.
+        """Evaluate the guard on a test set.
 
         Args:
-            test_prompts: List of test prompts
-            true_labels: Ground truth labels ("allow", "sanitize", "block")
+            test_prompts: List of test prompts.
+            true_labels: Ground truth labels (`allow`, `sanitize`, `block`).
 
         Returns:
-            Evaluation metrics
+            Evaluation metrics for the current guard configuration.
         """
         predictions = []
 
