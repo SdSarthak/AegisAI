@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
+import { FileText, Download, Trash2, Plus, Edit } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
-import { notify } from '../utils/toast'
 
 interface Document {
   id: number
@@ -31,25 +30,8 @@ export default function Documents() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
-  const [copiedDocId, setCopiedDocId] = useState<number | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const limit = 10
-
-  const handleCopy = async (docId: number, content: string) => {
-    try {
-      await navigator.clipboard.writeText(content)
-
-      setCopiedDocId(docId)
-
-      setTimeout(() => {
-        setCopiedDocId(null)
-      }, 2000)
-    } catch (error) {
-      notify.error(
-        error instanceof Error ? error.message : 'Failed to copy content.',
-      )
-    }
-  }
 
   const {
     data: documentsData,
@@ -326,20 +308,8 @@ export default function Documents() {
                   </button>
 
                   <button
-                    onClick={() => handleCopy(doc.id, doc.content || '')}
-                    className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
-                    title={copiedDocId === doc.id ? 'Copied!' : 'Copy Markdown'}
-                  >
-                    {copiedDocId === doc.id ? (
-                      <Check className="w-5 h-5" />
-                    ) : (
-                      <Copy className="w-5 h-5" />
-                    )}
-                  </button>
-
-                  <button
+                    type="button"
                     onClick={() => {
-                      // Download as text file
                       const blob = new Blob([doc.content || ''], {
                         type: 'text/markdown',
                       })
@@ -348,8 +318,10 @@ export default function Documents() {
                       a.href = url
                       a.download = `${doc.title}.md`
                       a.click()
+                      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
                     }}
-                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                    className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
+                    title="Download Markdown"
                   >
                     <Download className="w-5 h-5" />
                   </button>
