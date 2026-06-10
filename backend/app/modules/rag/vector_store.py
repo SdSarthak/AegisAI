@@ -10,9 +10,11 @@ import os
 import shutil
 import tempfile
 import threading
-from langchain_community.vectorstores import FAISS
+
 from langchain_community.embeddings import OllamaEmbeddings
+from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
+
 from app.core.config import settings
 
 _rag_index_lock = threading.Lock()
@@ -32,13 +34,12 @@ def create_vector_store(documents: list[Document]):
     embeddings = get_embeddings()
     vector_store = FAISS.from_documents(documents, embeddings)
 
-    with _rag_index_lock:
-        with tempfile.TemporaryDirectory(prefix="faiss_") as tmp_dir:
-            vector_store.save_local(tmp_dir)
-            FAISS.load_local(tmp_dir, embeddings, allow_dangerous_deserialization=True)
-            if os.path.exists(settings.FAISS_INDEX_PATH):
-                shutil.rmtree(settings.FAISS_INDEX_PATH, ignore_errors=True)
-            shutil.move(tmp_dir, settings.FAISS_INDEX_PATH)
+    with _rag_index_lock, tempfile.TemporaryDirectory(prefix="faiss_") as tmp_dir:
+        vector_store.save_local(tmp_dir)
+        FAISS.load_local(tmp_dir, embeddings, allow_dangerous_deserialization=True)
+        if os.path.exists(settings.FAISS_INDEX_PATH):
+            shutil.rmtree(settings.FAISS_INDEX_PATH, ignore_errors=True)
+        shutil.move(tmp_dir, settings.FAISS_INDEX_PATH)
 
     return vector_store
 

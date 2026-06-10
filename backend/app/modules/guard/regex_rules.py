@@ -7,8 +7,8 @@ run.
 """
 
 import re
-from typing import Dict, List
 from dataclasses import dataclass
+from typing import Dict, List
 
 
 @dataclass

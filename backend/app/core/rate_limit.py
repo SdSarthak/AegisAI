@@ -6,9 +6,9 @@ or during brief Redis outages. The implementation also tracks a simple
 circuit breaker to avoid hammering Redis when the backend is unhealthy.
 """
 
+import logging
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
-import logging
 from threading import Lock
 from typing import Optional
 
@@ -220,8 +220,7 @@ return {current, ttl}
                     if fail_closed:
                         self.metrics["failures_closed"] += 1
                         return True, window_seconds
-                    else:
-                        self.metrics["failures_open"] += 1
+                    self.metrics["failures_open"] += 1
 
         # Fallback to Local Tracking
         with self._local_lock:

@@ -119,13 +119,11 @@ def list_webhooks(
     db: Session = Depends(get_db),
 ):
     """List all webhook configurations for the current user."""
-    webhooks = (
+    return (
         db.query(WebhookConfig)
         .filter(WebhookConfig.user_id == current_user.id)
         .all()
     )
-
-    return webhooks
 
 
 @router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -149,4 +147,4 @@ def delete_webhook(
     db.delete(db_webhook)
     db.commit()
     
-    return None
+    return

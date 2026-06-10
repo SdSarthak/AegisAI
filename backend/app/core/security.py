@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, TYPE_CHECKING
 import re
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
-from jose import ExpiredSignatureError, JWTError, jwt
-from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from jose import ExpiredSignatureError, JWTError, jwt
+from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -112,10 +112,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         "iat": now,
         "nbf": now,
     })
-    encoded_jwt = jwt.encode(
+    return jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
-    return encoded_jwt
 
 
 def decode_token(token: str) -> Dict[str, Any]:

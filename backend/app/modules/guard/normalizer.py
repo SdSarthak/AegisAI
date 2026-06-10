@@ -90,7 +90,4 @@ def normalize_prompt(text: str) -> str:
     """Run the full normalization pipeline used by the guard stack."""
     if not text:
         return ""
-    text = remove_zero_width_chars(text)
-    text = normalize_unicode(text)
-    text = canonicalize_homoglyphs(text)
-    return text
+    return canonicalize_homoglyphs(normalize_unicode(remove_zero_width_chars(text)))

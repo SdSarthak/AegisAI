@@ -75,7 +75,7 @@ def generate_badge_svg(
     ]
 
     current_x = 0
-    for i, (text, bg_color) in enumerate(segments):
+    for i, (_, bg_color) in enumerate(segments):
         w = segment_widths[i]
         svg.append(f'<path fill="{bg_color}" d="M{current_x} 0h{w}v20H{current_x}z"/>')
         current_x += w

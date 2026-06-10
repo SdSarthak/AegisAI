@@ -1,6 +1,7 @@
 from app.modules.llm.llm_client import LLMClient
 from app.modules.rag.vector_store import load_vector_store
 
+
 def generate_compliance_narrative(document_type, ai_system, risk_assessment, company_name):
     """Generate a professional compliance narrative using LLM and RAG.
 
@@ -61,6 +62,4 @@ def generate_compliance_narrative(document_type, ai_system, risk_assessment, com
     
     # 4. Call the LLM
     client = LLMClient()
-    final_document = client.call(prompt=prompt, system_prompt=system_prompt,max_tokens=2500)
-    
-    return final_document
+    return client.call(prompt=prompt, system_prompt=system_prompt, max_tokens=2500)

@@ -1,42 +1,39 @@
-from datetime import datetime, timedelta, timezone
-
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from jose import jwt, JWTError
-from jose.exceptions import ExpiredSignatureError
-
-
-from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
-from typing import List
-from io import BytesIO
-from html import escape as html_escape
-from urllib.parse import quote
 import re
+from datetime import datetime, timedelta, timezone
+from html import escape as html_escape
+from io import BytesIO
+from typing import List
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from jose import JWTError, jwt
+from jose.exceptions import ExpiredSignatureError
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+
+# PDF generation
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models.user import User
 from app.models.ai_system import AISystem
-from app.models.document import Document, DocumentType, DocumentStatus
+from app.models.document import Document, DocumentStatus, DocumentType
+from app.models.user import User
 from app.modules.llm.document_generator import generate_compliance_narrative
 from app.schemas.document import (
     DocumentCreate,
-    DocumentResponse,
     DocumentGenerateRequest,
+    DocumentResponse,
     DocumentShareResponse,
-    DocumentUpdateRequest,
     DocumentTemplateResponse,
+    DocumentUpdateRequest,
 )
 from app.schemas.pagination import PaginatedResponse
-
-# PDF generation
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
-
 
 router = APIRouter()
 
@@ -51,13 +48,11 @@ def create_share_token(document_id: int):
         "exp": expire
     }
 
-    token = jwt.encode(
+    return jwt.encode(
         payload,
         settings.SECRET_KEY,
-        algorithm=settings.ALGORITHM
+        algorithm=settings.ALGORITHM,
     )
-
-    return token
 
 def _escape_pdf_text(value: str) -> str:
     """Escape user-controlled text before ReportLab parses it.
