@@ -131,7 +131,20 @@ def create_ai_system(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new AI system for compliance tracking."""
+    """Create a new AI system for compliance tracking.
+
+    Args:
+        system_data: Payload describing the AI system to create.
+        db: Active database session.
+        current_user: Authenticated user creating the system.
+
+    Returns:
+        The newly created AI system.
+
+    Raises:
+        HTTPException: If another system with the same name already exists
+            for the current user.
+    """
     # Enforce per-user uniqueness of AI system names to match bulk import behavior
     existing = db.query(AISystem).filter(
         AISystem.owner_id == current_user.id,
@@ -185,7 +198,25 @@ def list_ai_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """List the current user's AI systems with sorting and pagination."""
+    """List the current user's AI systems with sorting and pagination.
+
+    Args:
+        sort_by: Field used for ordering results.
+        order: Sort direction, ascending or descending.
+        skip: Number of records to skip before returning results.
+        limit: Maximum number of results to return.
+        search: Optional free-text filter applied to name and description.
+        risk_level: Optional risk-level filter.
+        compliance_status: Optional compliance-status filter.
+        db: Active database session.
+        current_user: Authenticated user whose systems should be listed.
+
+    Returns:
+        PaginatedResponse containing the user's AI systems.
+
+    Raises:
+        HTTPException: If any sort or filter value is invalid.
+    """
     if sort_by not in _SORTABLE_FIELDS:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -245,7 +276,19 @@ def bulk_import_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Import AI systems from a CSV file."""
+    """Import AI systems from a CSV file.
+
+    Args:
+        file: Uploaded CSV file containing AI system rows.
+        db: Active database session.
+        current_user: Authenticated user importing the systems.
+
+    Returns:
+        BulkImportResponse summarizing imported rows and validation errors.
+
+    Raises:
+        HTTPException: If the file is missing, malformed, or cannot be parsed.
+    """
     if not file.filename or not file.filename.lower().endswith('.csv'):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -334,7 +377,20 @@ def export_ai_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Export the authenticated user's AI systems registry as CSV or JSON."""
+    """Export the authenticated user's AI systems registry as CSV or JSON.
+
+    Args:
+        format: Response format to generate, either ``csv`` or ``json``.
+        risk_level: Optional risk-level filter applied before exporting.
+        db: Active database session.
+        current_user: Authenticated user exporting the systems registry.
+
+    Returns:
+        A streaming CSV response or a JSON response attachment.
+
+    Raises:
+        HTTPException: If the requested format or filter value is invalid.
+    """
     query = db.query(AISystem).filter(AISystem.owner_id == current_user.id)
 
     if risk_level is not None:
@@ -433,7 +489,22 @@ def get_ai_system_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return paginated audit history for a specific AI system."""
+    """Return paginated audit history for a specific AI system.
+
+    Args:
+        system_id: ID of the AI system whose audit trail should be returned.
+        order: Sort direction for the audit entries.
+        skip: Number of audit rows to skip.
+        limit: Maximum number of audit rows to return.
+        db: Active database session.
+        current_user: Authenticated user who must own the system.
+
+    Returns:
+        PaginatedResponse containing the system's audit log entries.
+
+    Raises:
+        HTTPException: If the sort order is invalid or the system is missing.
+    """
     
     # 1. Validate sorting parameter
     if order not in ("asc", "desc"):
@@ -493,7 +564,19 @@ def get_ai_system(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return a single AI system owned by the current user."""
+    """Return a single AI system owned by the current user.
+
+    Args:
+        system_id: ID of the AI system to retrieve.
+        db: Active database session.
+        current_user: Authenticated user who must own the system.
+
+    Returns:
+        The requested AI system.
+
+    Raises:
+        HTTPException: If the system does not exist for the current user.
+    """
     system = (
         db.query(AISystem)
         .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
@@ -513,7 +596,19 @@ def clone_ai_system(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Clone an existing AI system with a '(copy)' suffix and reset compliance status."""
+    """Clone an existing AI system and reset its compliance status.
+
+    Args:
+        system_id: ID of the AI system to clone.
+        db: Active database session.
+        current_user: Authenticated user who must own the system.
+
+    Returns:
+        The newly cloned AI system.
+
+    Raises:
+        HTTPException: If the source system does not exist for the user.
+    """
     original = db.query(AISystem).filter(
         AISystem.id == system_id,
         AISystem.owner_id == current_user.id
@@ -548,7 +643,20 @@ def update_ai_system(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update an existing AI system."""
+    """Update an existing AI system.
+
+    Args:
+        system_id: ID of the AI system to update.
+        system_data: Partial update payload for the system.
+        db: Active database session.
+        current_user: Authenticated user who must own the system.
+
+    Returns:
+        The updated AI system.
+
+    Raises:
+        HTTPException: If the system does not exist for the current user.
+    """
     system = (
         db.query(AISystem)
         .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
@@ -576,7 +684,19 @@ def delete_ai_system(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete an AI system owned by the current user."""
+    """Delete an AI system owned by the current user.
+
+    Args:
+        system_id: ID of the AI system to delete.
+        db: Active database session.
+        current_user: Authenticated user who must own the system.
+
+    Returns:
+        None. The endpoint responds with HTTP 204 when deletion succeeds.
+
+    Raises:
+        HTTPException: If the system does not exist for the current user.
+    """
     system = (
         db.query(AISystem)
         .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
@@ -599,7 +719,20 @@ def update_ai_system_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Update only the compliance status of an AI system."""
+    """Update only the compliance status of an AI system.
+
+    Args:
+        system_id: ID of the AI system to update.
+        payload: Compliance status update payload.
+        db: Active database session.
+        current_user: Authenticated user who must own the system.
+
+    Returns:
+        The AI system after the compliance status update.
+
+    Raises:
+        HTTPException: If the system does not exist for the current user.
+    """
     system = db.query(AISystem).filter(
         AISystem.id == system_id,
         AISystem.owner_id == current_user.id,
@@ -626,7 +759,20 @@ def get_compliance_gaps(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return unmet EU AI Act requirements for a given AI system based on its risk level."""
+    """Return unmet EU AI Act requirements for a given AI system.
+
+    Args:
+        system_id: ID of the AI system to evaluate.
+        db: Active database session.
+        current_user: Authenticated user who must own the system.
+
+    Returns:
+        ComplianceGapResponse describing missing, partial, and completed
+        requirements for the system's current risk level.
+
+    Raises:
+        HTTPException: If the system does not exist for the current user.
+    """
     system = (
         db.query(AISystem)
         .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
