@@ -1,13 +1,11 @@
-"""
-Notification model — stores in-app events for users.
+"""Persist user-facing in-app notifications.
+
+The model stores the notification content, read state, and optional
+resource links for events like guard blocks, compliance drift, and
+reassessment reminders.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (good first issue):
-  - This model is complete. Register it in app/models/__init__.py and
-    create an Alembic migration so the table is created.
-  - Acceptance criteria: `alembic revision --autogenerate` produces a
-    migration that creates the `notifications` table.
 """
 
 from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey

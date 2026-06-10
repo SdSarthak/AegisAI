@@ -1,5 +1,8 @@
-"""
-Pydantic schemas for the Notification resource.
+"""Pydantic schemas for notification payloads and update actions.
+
+These models define the response body for notification APIs and the request
+shape used when marking notifications as read.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
@@ -24,6 +27,6 @@ class NotificationResponse(BaseModel):
 
 
 class NotificationMarkRead(BaseModel):
-    """Body for marking one or more notifications as read."""
+    """Request body used to mark one or more notifications as read."""
 
     ids: list[int]

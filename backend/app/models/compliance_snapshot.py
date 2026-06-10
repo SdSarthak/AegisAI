@@ -1,13 +1,10 @@
-"""
-ComplianceSnapshot model — daily point-in-time compliance score per AI system.
+"""Capture a point-in-time compliance snapshot for one AI system.
+
+Each row stores the score, status, and risk level observed at a specific
+moment so compliance trends can be tracked over time.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (good first issue):
-  - This model is complete. Register it in app/models/__init__.py and
-    create an Alembic migration.
-  - Acceptance criteria: `alembic revision --autogenerate` produces a
-    migration that creates the `compliance_snapshots` table.
 """
 
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey

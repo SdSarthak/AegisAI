@@ -1,12 +1,9 @@
-"""
-Risk Classification Explainer Engine
+"""Explain EU AI Act risk classifications from plain-text system descriptions.
 
-Converts a plain-text AI system description into a structured
-RiskClassificationRequest by extracting keywords and mapping them
-to EU AI Act risk factors — then enriches the result with
-legal article references and plain-English explanations.
-
-No external LLM or API required — pure Python, works offline.
+The engine maps keyword matches in a system description to risk factors,
+relevant legal articles, and practical recommendations without calling an
+external LLM. That makes it suitable for offline use and deterministic
+testing.
 """
 
 from __future__ import annotations

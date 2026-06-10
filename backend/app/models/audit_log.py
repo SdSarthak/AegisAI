@@ -1,5 +1,8 @@
-"""
-AISystemAuditLog model — records every field change on an AISystem row.
+"""Audit log entries for changes made to AI system records.
+
+Each row stores the before/after values for tracked fields so compliance and
+administrative changes can be reviewed later without diffing the source row.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
@@ -82,4 +85,3 @@ def after_ai_system_update(mapper, connection, target):
                 changed_at=datetime.utcnow(),
             )
         )
-        

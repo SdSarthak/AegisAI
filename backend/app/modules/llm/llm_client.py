@@ -1,12 +1,9 @@
-"""
-Provider-agnostic LLM client using the OpenAI-compatible API.
+"""Provider-agnostic LLM client using the OpenAI-compatible API.
 
-Works with any OpenAI-compatible backend — set LLM_BASE_URL in .env to switch:
-  - OpenAI (default): leave LLM_BASE_URL empty
-  - Ollama (local, free): LLM_BASE_URL=http://localhost:11434/v1  LLM_API_KEY=ollama
-  - Groq (free tier): LLM_BASE_URL=https://api.groq.com/openai/v1
-  - Together AI: LLM_BASE_URL=https://api.together.xyz/v1
-  - Any vLLM / LM Studio endpoint
+The client is configured entirely from environment variables so the backend
+can switch between OpenAI, Ollama, Groq, Together, or any compatible local
+endpoint without code changes. It exposes sync and streaming helpers with
+basic retry logic for transient API failures.
 
 Copyright (C) 2026 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
@@ -25,13 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class LLMClient:
-    """
-    Thin, provider-agnostic LLM wrapper supporting both sync and async operations.
-
-    Uses the OpenAI chat-completions interface, which is supported by OpenAI,
-    Ollama, Groq, Together AI, vLLM, LM Studio, and most OSS inference servers.
-    Configure via environment variables — no code change needed to switch providers.
-    """
+    """Thin wrapper around an OpenAI-compatible chat completions provider."""
 
     def __init__(
         self,
