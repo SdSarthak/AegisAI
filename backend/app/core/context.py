@@ -26,10 +26,18 @@ user_id_ctx: ContextVar[Optional[int]] = ContextVar("user_id", default=None)
 
 
 def get_request_id() -> Optional[str]:
-    """Return the current request id, or ``None`` if not inside a request."""
+    """Return the current request id, or ``None`` if not inside a request.
+
+    Returns:
+        The active request id propagated by the ASGI middleware.
+    """
     return request_id_ctx.get()
 
 
 def get_user_id() -> Optional[int]:
-    """Return the authenticated user id, or ``None`` if unauthenticated."""
+    """Return the authenticated user id, or ``None`` if unauthenticated.
+
+    Returns:
+        The authenticated user id attached by the auth dependency.
+    """
     return user_id_ctx.get()

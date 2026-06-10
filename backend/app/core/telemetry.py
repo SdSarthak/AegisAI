@@ -87,7 +87,14 @@ instrumentator = Instrumentator(
 
 
 def instrument_guard(fn: _F) -> _F:
-    """Time guard inference and record decision counters."""
+    """Time guard inference and record decision counters.
+
+    Args:
+        fn: Guard inference callable to wrap.
+
+    Returns:
+        The wrapped callable with Prometheus instrumentation applied.
+    """
 
     @wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -107,7 +114,14 @@ def instrument_guard(fn: _F) -> _F:
 
 
 def instrument_rag(fn: _F) -> _F:
-    """Time RAG retrieval calls."""
+    """Time RAG retrieval calls.
+
+    Args:
+        fn: RAG retrieval callable to wrap.
+
+    Returns:
+        The wrapped callable with Prometheus instrumentation applied.
+    """
 
     @wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -127,5 +141,9 @@ def instrument_rag(fn: _F) -> _F:
 
 
 def setup_telemetry(app: Any) -> None:
-    """Initialise all observability instrumentation on the FastAPI app."""
+    """Initialise all observability instrumentation on the FastAPI app.
+
+    Args:
+        app: FastAPI application instance to instrument.
+    """
     instrumentator.instrument(app).expose(app, endpoint="/metrics")

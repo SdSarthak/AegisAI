@@ -17,7 +17,12 @@ except ImportError:  # pragma: no cover - exercised only when the dependency is 
 
 
 class DistributedRateLimiter:
-    """Fixed-window rate limiter with Redis backing when available, featuring a circuit breaker."""
+    """Fixed-window rate limiter with Redis backing when available.
+
+    The limiter prefers Redis for distributed consistency and falls back to a
+    local in-memory tracker when Redis is unavailable or the circuit breaker
+    opens.
+    """
 
     _RATE_LIMIT_SCRIPT = """
 local current = redis.call('INCRBY', KEYS[1], ARGV[1])
@@ -60,6 +65,7 @@ return {current, ttl}
         }
 
     def _get_redis_client(self) -> Optional[object]:
+        """Return a lazily initialized Redis client when configured."""
         if not settings.REDIS_URL or redis is None:
             return None
 
@@ -79,6 +85,18 @@ return {current, ttl}
         window_seconds: int,
         cost: int,
     ) -> tuple[bool, int]:
+        """Evaluate a rate limit against Redis state.
+
+        Args:
+            client: Redis client instance.
+            key: Rate limit key.
+            limit: Maximum allowed requests in the window.
+            window_seconds: Window size in seconds.
+            cost: Request cost to consume.
+
+        Returns:
+            A tuple of ``(limited, retry_after_seconds)``.
+        """
         if self._redis_script is None:
             self._redis_script = client.register_script(self._RATE_LIMIT_SCRIPT)  # type: ignore[attr-defined]
 
@@ -100,6 +118,17 @@ return {current, ttl}
         window_seconds: int,
         cost: int,
     ) -> tuple[bool, int]:
+        """Evaluate a rate limit against the local in-memory fallback.
+
+        Args:
+            key: Rate limit key.
+            limit: Maximum allowed requests in the window.
+            window_seconds: Window size in seconds.
+            cost: Request cost to consume.
+
+        Returns:
+            A tuple of ``(limited, retry_after_seconds)``.
+        """
         now = datetime.now(timezone.utc)
         window_start = now - timedelta(seconds=window_seconds)
 
@@ -139,7 +168,18 @@ return {current, ttl}
         cost: int = 1,
         fail_closed: Optional[bool] = None,
     ) -> tuple[bool, int]:
-        """Return whether a request should be limited and the retry-after value."""
+        """Return whether a request should be limited and the retry-after value.
+
+        Args:
+            key: Rate limit key.
+            limit: Maximum allowed requests in the window.
+            window_seconds: Window size in seconds.
+            cost: Request cost to consume.
+            fail_closed: Whether to block requests if Redis checking fails.
+
+        Returns:
+            A tuple of ``(limited, retry_after_seconds)``.
+        """
         if fail_closed is None:
             fail_closed = getattr(settings, "RATE_LIMIT_FAIL_CLOSED", False)
 
