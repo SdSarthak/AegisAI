@@ -56,6 +56,10 @@ def get_compliance_timeline(
     Raises:
         HTTPException: If the requested AI system does not belong to the
             authenticated user.
+
+    Notes:
+        The snapshots are returned in ascending order so the client can render
+        the compliance trend chronologically.
     """
     system = db.query(AISystem).filter(
         AISystem.id == system_id,
@@ -96,6 +100,10 @@ def get_analytics_summary(
     Returns:
         Dictionary containing system counts, average compliance score, and
         breakdowns by risk level and compliance status.
+
+    Notes:
+        The response is intentionally lightweight so dashboard views can fetch
+        it alongside more granular charts without extra transformation.
     """
     # FIX: use SQL GROUP BY instead of loading all rows into memory
     risk_rows = (
@@ -182,6 +190,10 @@ def get_audit_logs(
 
     Raises:
         HTTPException: If the caller is not allowed to query another user.
+
+    Notes:
+        Admin users may inspect other users' logs, while regular users are
+        always scoped to their own history.
     """
     is_admin = getattr(current_user, "role", None) == "admin"
     if user_id is not None and user_id != current_user.id and not is_admin:
