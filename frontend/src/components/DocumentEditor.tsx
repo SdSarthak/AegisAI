@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Save, Eye, EyeOff } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
 import api from '../services/api'
+import CopyButton from './CopyButton'
 
 interface DocumentEditorProps {
   documentId: number
@@ -36,13 +37,11 @@ export default function DocumentEditor({
       onSave?.(content)
       setSaveError('')
     } catch (error) {
-  console.error('Save failed:', error)
-  setSaveError(
-    error instanceof Error
-      ? error.message
-      : 'Failed to save changes'
-  )
-}
+      console.error('Save failed:', error)
+      setSaveError(
+        error instanceof Error ? error.message : 'Failed to save changes'
+      )
+    }
     setIsSaving(false)
   }, [content, documentId, onSave])
 
@@ -78,7 +77,14 @@ export default function DocumentEditor({
           {showPreview ? 'Edit' : 'Preview'}
         </button>
         <div className="flex items-center gap-3">
-         {saveError && (
+          <CopyButton
+            text={content}
+            label="Copy"
+            copiedLabel="Copied!"
+            successMessage="Document copied!"
+            iconOnly
+          />
+          {saveError && (
             <span className="text-sm text-red-500">
               {saveError}
             </span>
@@ -87,7 +93,7 @@ export default function DocumentEditor({
             <span className="text-sm text-gray-500">
               Saving...
             </span>
-          )} 
+          )}
           <button
             type="button"
             onClick={handleSave}
