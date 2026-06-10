@@ -11,7 +11,15 @@ def compute_classification_metrics(
     true_labels: Iterable[str],
     predicted_labels: Iterable[str],
 ) -> dict:
-    """Compute common classification metrics as JSON-serializable values."""
+    """Compute common classification metrics as JSON-serializable values.
+
+    Args:
+        true_labels: Ground-truth labels.
+        predicted_labels: Predicted labels from the classifier.
+
+    Returns:
+        A JSON-serializable metrics dictionary.
+    """
     y_true = list(true_labels)
     y_pred = list(predicted_labels)
     return {

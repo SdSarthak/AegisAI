@@ -13,14 +13,27 @@ from app.modules.guard.training.data.dataset_loader import resolve_backend_path
 
 @dataclass
 class TrainingResult:
+    """Training outputs returned by the standardized trainer facade."""
+
     metrics: dict
     model_output_dir: Path
 
 
 class SafetyClassifierTrainer:
-    """Standardized wrapper around IntentClassifier.train."""
+    """Standardized wrapper around IntentClassifier.train.
+
+    The trainer keeps the training entrypoint small and stable for the
+    surrounding pipelines and scripts.
+    """
 
     def __init__(self, model_output_dir: str | Path, device: str | None = None):
+        """Initialize the trainer with an output directory and device choice.
+
+        Args:
+            model_output_dir: Directory where trained model artifacts are saved.
+            device: Optional device override, or ``auto``/``None`` for default
+                resolution.
+        """
         self.model_output_dir = resolve_backend_path(model_output_dir)
         self.device = None if device in (None, "auto") else device
 
@@ -32,6 +45,18 @@ class SafetyClassifierTrainer:
         batch_size: int = 16,
         learning_rate: float = 2e-5,
     ) -> TrainingResult:
+        """Train the classifier on the supplied datasets.
+
+        Args:
+            train_df: Training dataframe containing ``prompt`` and ``label``.
+            val_df: Validation dataframe containing ``prompt`` and ``label``.
+            epochs: Number of training epochs.
+            batch_size: Mini-batch size.
+            learning_rate: Optimizer learning rate.
+
+        Returns:
+            TrainingResult with model metrics and the output directory.
+        """
         classifier = IntentClassifier(device=self.device)
         metrics = classifier.train(
             train_texts=train_df["prompt"].tolist(),
