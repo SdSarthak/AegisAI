@@ -71,6 +71,12 @@ export default function Register() {
   const getErrorMessage = (field: ValidationError['field']) =>
     errors.find((error) => error.field === field)?.message
 
+  const clearFieldErrors = (field: ValidationError['field']) => {
+    setErrors((prev) =>
+      prev.filter((error) => error.field !== field && error.field !== 'general')
+    )
+  }
+
   const passwordStrength = checkPasswordStrength(formData.password)
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -175,7 +181,10 @@ export default function Register() {
               type="email"
               required
               value={formData.email}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, email: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setFormData({ ...formData, email: e.target.value })
+                clearFieldErrors('email')
+              }}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
                 hasError('email')
                   ? 'border-red-300 bg-red-50'
@@ -199,7 +208,10 @@ export default function Register() {
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={formData.password}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, password: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setFormData({ ...formData, password: e.target.value })
+                  clearFieldErrors('password')
+                }}
               onFocus={() => setShowPasswordRequirements(true)}
               onBlur={() => setShowPasswordRequirements(false)}
               className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
@@ -261,7 +273,10 @@ export default function Register() {
               type="text"
               required
               value={formData.full_name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, full_name: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setFormData({ ...formData, full_name: e.target.value })
+                clearFieldErrors('full_name')
+              }}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
                 hasError('full_name')
                   ? 'border-red-300 bg-red-50'
@@ -284,7 +299,10 @@ export default function Register() {
               type="text"
               required
               value={formData.company_name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, company_name: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setFormData({ ...formData, company_name: e.target.value })
+                clearFieldErrors('company_name')
+              }}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
                 hasError('company_name')
                   ? 'border-red-300 bg-red-50'

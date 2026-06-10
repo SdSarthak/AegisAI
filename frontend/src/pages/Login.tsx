@@ -28,6 +28,12 @@ export default function Login() {
   const getErrorMessage = (field: ValidationError['field']) =>
     errors.find((error) => error.field === field)?.message
 
+  const clearFieldErrors = (field: ValidationError['field']) => {
+    setErrors((prev) =>
+      prev.filter((error) => error.field !== field && error.field !== 'general')
+    )
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrors([])
@@ -124,7 +130,10 @@ export default function Login() {
               type="email"
               required
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                clearFieldErrors('email')
+              }}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
                 hasError('email')
                   ? 'border-red-300 bg-red-50'
@@ -148,7 +157,10 @@ export default function Login() {
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                onChange={(e) => {
+                  setPassword(e.target.value)
+                  clearFieldErrors('password')
+                }}
                 className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
                   hasError('password')
                     ? 'border-red-300 bg-red-50'
