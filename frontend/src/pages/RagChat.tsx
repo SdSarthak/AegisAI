@@ -10,7 +10,24 @@ import {
   User,
 } from 'lucide-react'
 
+import CopyButton from '../components/CopyButton'
 import { useRagStream } from '../hooks/useRagStream'
+
+function buildExportText(
+  answer: string,
+  citations: Array<{ source: string; excerpt: string }>
+): string {
+  return [
+    'AI Response',
+    answer,
+    '',
+    'Source citations',
+    ...citations.map(
+      (citation, index) =>
+        `${index + 1}. ${citation.source}\n${citation.excerpt}`
+    ),
+  ].join('\n')
+}
 
 export default function RagChat() {
   const [question, setQuestion] = useState('')
@@ -32,6 +49,7 @@ export default function RagChat() {
   const isAwaitingFirstToken = isStreaming && tokens.length === 0
   const hasAnswer = tokens.length > 0
   const displayError = validationError ?? streamError
+  const exportText = buildExportText(tokens, citations)
 
   const handleAsk = (e: React.FormEvent) => {
     e.preventDefault()
@@ -49,17 +67,6 @@ export default function RagChat() {
 
   const handleExport = () => {
     if (!hasAnswer) return
-
-    const exportText = [
-      'AI Response',
-      tokens,
-      '',
-      'Source citations',
-      ...citations.map(
-        (citation, index) =>
-          `${index + 1}. ${citation.source}\n${citation.excerpt}`
-      ),
-    ].join('\n')
 
     const blob = new Blob([exportText], {
       type: 'text/plain;charset=utf-8',
@@ -209,14 +216,22 @@ export default function RagChat() {
                                 Sources
                               </h3>
                               {!isStreaming && (
-                                <button
-                                  type="button"
-                                  onClick={handleExport}
-                                  className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700"
-                                >
-                                  <FileText className="w-3.5 h-3.5" />
-                                  Export
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <CopyButton
+                                    text={exportText}
+                                    label="Copy"
+                                    successMessage="Answer copied!"
+                                    disabled={!hasAnswer}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={handleExport}
+                                    className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                    Export
+                                  </button>
+                                </div>
                               )}
                             </div>
                             <div className="space-y-3">
