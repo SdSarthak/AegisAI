@@ -1,4 +1,8 @@
-"""Executable training and evaluation pipelines for the guard classifier."""
+"""Executable training and evaluation pipelines for the guard classifier.
+
+This package lazily exposes the main pipeline entry points so importing it
+doesn't immediately pull in the full model stack.
+"""
 
 __all__ = [
     "load_training_config",
