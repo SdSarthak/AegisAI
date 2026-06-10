@@ -139,7 +139,14 @@ def login(
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Return the authenticated user's profile."""
+    """Return the authenticated user's profile.
+
+    Args:
+        current_user: Authenticated user whose profile should be returned.
+
+    Returns:
+        The current user's full profile record.
+    """
     return current_user
 
 
