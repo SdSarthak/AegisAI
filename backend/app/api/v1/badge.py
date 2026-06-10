@@ -10,6 +10,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limit import badge_rate_limiter

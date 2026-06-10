@@ -5,8 +5,10 @@ that analyzes an AI system description and returns legal context,
 recommended actions, and a classified risk level.
 """
 
-from pydantic import BaseModel, Field
 from typing import List
+
+from pydantic import BaseModel, Field
+
 from app.models.ai_system import RiskLevel
 
 

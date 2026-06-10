@@ -5,25 +5,24 @@ It uses a fine-tuned DeBERTa checkpoint when available and falls back to
 deterministic heuristics when the trained weights are absent.
 """
 
-import os
 import json
-import re
 import logging
-from typing import List, Dict, Optional
+import os
+import re
 from dataclasses import dataclass
-import numpy as np
+from typing import Dict, List, Optional
 
+import numpy as np
 import torch
+from sklearn.metrics import f1_score
 from torch.utils.data import DataLoader, Dataset
 from transformers import (
     AdamW,
     get_linear_schedule_with_warmup,
 )
-from sklearn.metrics import f1_score
 
 from . import guard_config as config
 from .regex_rules import RegexFilter
-
 
 logger = logging.getLogger(__name__)
 
@@ -129,8 +128,8 @@ class IntentClassifier:
             logger.info("Loading fine-tuned model from %s", model_path)
             try:
                 from transformers import (
-                    AutoTokenizer,
                     AutoModelForSequenceClassification,
+                    AutoTokenizer,
                 )
 
                 self.tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -186,7 +185,7 @@ class IntentClassifier:
     def _load_pretrained(self):
         """Load a pre-trained DeBERTa model for explicit fine-tuning only."""
         logger.info("Loading pre-trained DeBERTa v3 small...")
-        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
         model_name = "microsoft/deberta-v3-small"
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)

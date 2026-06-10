@@ -1,8 +1,9 @@
 import time
 
 from sqlalchemy import create_engine, event
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy.pool import StaticPool
+
 from app.core.config import settings
 from app.core.telemetry import DB_QUERY_LATENCY
 

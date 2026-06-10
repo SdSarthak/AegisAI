@@ -1,14 +1,14 @@
 """API for the in-app notification feed and read-state updates."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models.user import User
 from app.models.notification import Notification
-from app.schemas.notification import NotificationResponse, NotificationMarkRead
+from app.models.user import User
+from app.schemas.notification import NotificationMarkRead, NotificationResponse
 from app.schemas.pagination import PaginatedResponse
-
 
 router = APIRouter()
 
@@ -84,7 +84,7 @@ def mark_notifications_read(
     )
 
     db.commit()
-    return None
+    return
 
 
 @router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -111,4 +111,4 @@ def delete_notification(
 
     db.delete(notification)
     db.commit()
-    return None
+    return

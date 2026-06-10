@@ -14,7 +14,6 @@ from app.modules.guard.training.data.dataset_loader import load_or_download_data
 from app.modules.guard.training.data.split import train_validation_split
 from app.modules.guard.training.pipelines.train_pipeline import run_training_pipeline
 
-
 logger = logging.getLogger(__name__)
 
 HF_DATASET_NAME = "xTRam1/safe-guard-prompt-injection"

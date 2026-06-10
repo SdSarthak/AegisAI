@@ -12,8 +12,8 @@ from typing import Iterable, Optional
 import pandas as pd
 
 from app.modules.guard import guard_config as config
-from .preprocess import normalize_training_frame
 
+from .preprocess import normalize_training_frame
 
 DEFAULT_HF_DATASET = "xTRam1/safe-guard-prompt-injection"
 

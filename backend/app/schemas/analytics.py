@@ -7,9 +7,10 @@ Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
-from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+
+from pydantic import BaseModel
 
 
 class ComplianceSnapshotResponse(BaseModel):

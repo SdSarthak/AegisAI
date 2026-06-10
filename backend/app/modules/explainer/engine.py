@@ -18,7 +18,6 @@ from app.schemas.explain import (
     TriggeredFactor,
 )
 
-
 # ── Keyword → Risk Factor mapping ──
 # Each entry maps a risk factor ID to a list of keyword patterns
 # that indicate this factor is relevant.

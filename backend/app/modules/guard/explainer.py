@@ -106,7 +106,7 @@ class GuardExplainer:
     def __init__(self) -> None:
         # Lazy import — heavy ML stack only loads when an explainer is
         # actually instantiated (not on module import).
-        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
         from transformers import pipeline as hf_pipeline
 
         model_path = guard_config.CLASSIFIER_MODEL_PATH

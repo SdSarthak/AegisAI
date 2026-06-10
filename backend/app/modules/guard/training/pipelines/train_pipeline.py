@@ -21,7 +21,6 @@ from app.modules.guard.training.utils.logger import get_training_logger
 from app.modules.guard.training.utils.mlflow_logger import log_metrics, mlflow_run
 from app.modules.guard.training.utils.seed import set_seed
 
-
 LOGGER = get_training_logger(__name__)
 
 

@@ -1,21 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from typing import List, Optional
-from app.modules.compliance.nist_mapping import EU_TO_NIST_MAPPING
-from app.schemas.ai_system import NISTMapping
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.ai_system import AISystem, ComplianceStatus, RiskAssessment, RiskLevel
 from app.models.user import User
-from app.models.ai_system import AISystem, RiskLevel, RiskAssessment, ComplianceStatus
+from app.modules.compliance.nist_mapping import EU_TO_NIST_MAPPING
+from app.modules.explainer.engine import explain_risk
 from app.schemas.ai_system import (
+    NISTMapping,
+    QuestionnaireRiskFactor,
     RiskClassificationRequest,
     RiskClassificationResponse,
-    QuestionnaireRiskFactor,
 )
 from app.schemas.explain import ExplainRequest, ExplainResponse
-from app.modules.explainer.engine import explain_risk
 
 router = APIRouter()
 

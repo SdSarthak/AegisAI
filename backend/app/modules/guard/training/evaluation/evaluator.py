@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import pandas as pd
 
 from app.modules.guard.intent_classifier import IntentClassifier
+
 from .metrics import compute_classification_metrics
 
 

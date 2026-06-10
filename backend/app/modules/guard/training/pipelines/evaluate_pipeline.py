@@ -21,7 +21,6 @@ from app.modules.guard.training.utils.checkpoint import (
 )
 from app.modules.guard.training.utils.logger import get_training_logger
 
-
 LOGGER = get_training_logger(__name__)
 
 

@@ -6,8 +6,8 @@ experience stays as intact as possible.
 """
 
 import re
-from typing import Tuple
 from enum import Enum
+from typing import Tuple
 
 
 class SanitizationLevel(Enum):

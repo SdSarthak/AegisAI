@@ -5,9 +5,9 @@ regex filter, intent classifier, decision engine, sanitizer, and the full
 orchestrator without eagerly importing every submodule or ML dependency.
 """
 
+import sys
 from importlib import import_module
 from types import ModuleType
-import sys
 
 __all__ = [
     "RegexFilter",

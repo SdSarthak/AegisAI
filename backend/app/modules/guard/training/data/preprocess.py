@@ -9,7 +9,6 @@ from typing import Iterable
 
 import pandas as pd
 
-
 LABEL_MAP = {
     0: "benign",
     1: "malicious",
