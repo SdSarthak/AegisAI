@@ -137,7 +137,10 @@ export default function DocumentEditor({
               value={content}
               height="100%"
               extensions={[markdown()]}
-              onChange={(value) => setContent(value)}
+              onChange={(value) => {
+                setContent(value)
+                setSaveError('')
+              }}
               className="h-full"
             />
           </div>
