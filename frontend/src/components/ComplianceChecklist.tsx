@@ -78,6 +78,11 @@ export default function ComplianceChecklist({
                 : 'bg-primary-600'
             }`}
             style={{ width: `${progress}%` }}
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progress}
+            aria-label={`Checklist progress ${progress}% complete`}
           />
         </div>
       </div>
