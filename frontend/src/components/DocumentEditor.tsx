@@ -92,6 +92,9 @@ export default function DocumentEditor({
           <button
             type="button"
             onClick={() => setShowPreview((p) => !p)}
+            aria-pressed={showPreview}
+            aria-label={showPreview ? 'Switch to edit mode' : 'Switch to preview mode'}
+            title={showPreview ? 'Switch to edit mode' : 'Switch to preview mode'}
             className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900"
           >
             {showPreview ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
