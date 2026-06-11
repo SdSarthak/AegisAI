@@ -40,6 +40,11 @@ export default function Documents() {
   const [deletingDocumentId, setDeletingDocumentId] = useState<number | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const limit = 10
+  const searchInputId = 'documents-search'
+  const filterTypeId = 'documents-filter-type'
+  const filterStatusId = 'documents-filter-status'
+  const generateSystemId = 'documents-generate-system'
+  const generateTypeId = 'documents-generate-type'
 
   const closeGenerateModal = useCallback(() => {
     setShowModal(false)
@@ -277,7 +282,11 @@ export default function Documents() {
 
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex flex-col md:flex-row gap-4">
+          <label htmlFor={searchInputId} className="sr-only">
+            Search documents
+          </label>
           <input
+            id={searchInputId}
             type="text"
             placeholder="Search documents..."
             value={searchQuery}
@@ -285,7 +294,11 @@ export default function Documents() {
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
 
+          <label htmlFor={filterTypeId} className="sr-only">
+            Filter documents by type
+          </label>
           <select
+            id={filterTypeId}
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg"
@@ -299,7 +312,11 @@ export default function Documents() {
             ))}
           </select>
 
+          <label htmlFor={filterStatusId} className="sr-only">
+            Filter documents by status
+          </label>
           <select
+            id={filterStatusId}
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg"
@@ -571,10 +588,14 @@ export default function Documents() {
             </h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={generateSystemId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   AI System
                 </label>
                 <select
+                  id={generateSystemId}
                   value={selectedSystem || ''}
                   onChange={(e) => handleSystemSelect(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"
@@ -588,10 +609,14 @@ export default function Documents() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={generateTypeId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Document Type
                 </label>
                 <select
+                  id={generateTypeId}
                   value={selectedType}
                   onChange={(e) => setSelectedType(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"
