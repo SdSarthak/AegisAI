@@ -113,6 +113,7 @@ export default function Layout() {
             </div>
 
             <button
+              type="button"
               onClick={logout}
               className="p-2 text-gray-400 dark:text-gray-300 hover:text-gray-600 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
               aria-label="Log out"
