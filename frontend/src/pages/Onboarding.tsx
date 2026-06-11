@@ -62,6 +62,16 @@ export default function Onboarding() {
   const isLastStep = currentStep === STEPS.length - 1
   const StepIcon = STEPS[currentStep].icon
 
+  const systemNameId = 'onboarding-system-name'
+  const systemDescriptionId = 'onboarding-system-description'
+  const useCaseId = 'onboarding-use-case'
+  const sectorId = 'onboarding-sector'
+  const intendedPurposeId = 'onboarding-intended-purpose'
+  const targetUsersId = 'onboarding-target-users'
+  const usesPersonalDataId = 'onboarding-uses-personal-data'
+  const affectsDecisionMakingId = 'onboarding-affects-decision-making'
+  const documentTypeId = 'onboarding-document-type'
+
   const handleCreateSystem = async () => {
     if (!systemForm.name.trim()) {
       setError('Please enter an AI system name.')
@@ -192,10 +202,12 @@ setRiskLevel(detectedRiskLevel)
           <h1 className="text-xl font-semibold text-gray-900">Welcome to AegisAI</h1>
         </div>
 
-        <div className="flex items-center gap-2 mb-8">
+        <div className="flex items-center gap-2 mb-8" aria-label="Onboarding progress">
           {STEPS.map((step, index) => (
             <div key={step.label} className="flex items-center gap-2 flex-1">
               <div
+                aria-current={index === currentStep ? 'step' : undefined}
+                aria-label={`${step.label}, step ${index + 1} of ${STEPS.length}`}
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                   index < currentStep
                     ? 'bg-primary-600 text-white'
@@ -237,10 +249,14 @@ setRiskLevel(detectedRiskLevel)
           {currentStep === 0 && (
             <div className="mt-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={systemNameId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   AI System Name
                 </label>
                 <input
+                  id={systemNameId}
                   type="text"
                   value={systemForm.name}
                   onChange={(event) =>
@@ -256,10 +272,14 @@ setRiskLevel(detectedRiskLevel)
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={systemDescriptionId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Description
                 </label>
                 <textarea
+                  id={systemDescriptionId}
                   value={systemForm.description}
                   onChange={(event) =>
                     setSystemForm((form) => ({
@@ -275,10 +295,14 @@ setRiskLevel(detectedRiskLevel)
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={useCaseId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Use Case
                 </label>
                 <input
+                  id={useCaseId}
                   type="text"
                   value={systemForm.use_case}
                   onChange={(event) =>
@@ -294,10 +318,14 @@ setRiskLevel(detectedRiskLevel)
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={sectorId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Sector
                 </label>
                 <input
+                  id={sectorId}
                   type="text"
                   value={systemForm.sector}
                   onChange={(event) =>
@@ -317,10 +345,14 @@ setRiskLevel(detectedRiskLevel)
           {currentStep === 1 && (
             <div className="mt-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={intendedPurposeId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Intended Purpose
                 </label>
                 <textarea
+                  id={intendedPurposeId}
                   value={classificationForm.intended_purpose}
                   onChange={(event) =>
                     setClassificationForm((form) => ({
@@ -336,10 +368,14 @@ setRiskLevel(detectedRiskLevel)
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={targetUsersId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Target Users
                 </label>
                 <input
+                  id={targetUsersId}
                   type="text"
                   value={classificationForm.target_users}
                   onChange={(event) =>
@@ -354,8 +390,12 @@ setRiskLevel(detectedRiskLevel)
                 />
               </div>
 
-              <label className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm">
+              <label
+                htmlFor={usesPersonalDataId}
+                className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm"
+              >
                 <input
+                  id={usesPersonalDataId}
                   type="checkbox"
                   checked={classificationForm.uses_personal_data}
                   onChange={(event) =>
@@ -369,8 +409,12 @@ setRiskLevel(detectedRiskLevel)
                 Uses personal data
               </label>
 
-              <label className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm">
+              <label
+                htmlFor={affectsDecisionMakingId}
+                className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm"
+              >
                 <input
+                  id={affectsDecisionMakingId}
                   type="checkbox"
                   checked={classificationForm.affects_decision_making}
                   onChange={(event) =>
@@ -402,10 +446,14 @@ setRiskLevel(detectedRiskLevel)
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={documentTypeId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Document Type
                 </label>
-                  <select
+                <select
+                  id={documentTypeId}
                   value={documentType}
                   onChange={(event) => {
                     setDocumentType(event.target.value)
