@@ -13,7 +13,12 @@ export default function BackendStatus() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center gap-2 text-sm text-gray-400">
+      <div
+        className="flex items-center gap-2 text-sm text-gray-400"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
         <span className="h-2.5 w-2.5 rounded-full bg-gray-400 animate-pulse" />
         Checking backend…
       </div>
@@ -22,7 +27,12 @@ export default function BackendStatus() {
 
   if (isError) {
     return (
-      <div className="flex items-center gap-2 text-sm text-red-500">
+      <div
+        className="flex items-center gap-2 text-sm text-red-500"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
         <span className="h-2.5 w-2.5 rounded-full bg-red-500" />
         Backend unreachable
       </div>
@@ -40,7 +50,13 @@ export default function BackendStatus() {
       : 'Backend degraded'
 
   return (
-    <div className="flex items-center gap-3 text-sm" aria-label="Backend health status">
+    <div
+      className="flex items-center gap-3 text-sm"
+      aria-label="Backend health status"
+      role="status"
+      aria-live="polite"
+      aria-atomic="true"
+    >
       <div className="flex items-center gap-1.5">
         <span className={`h-2.5 w-2.5 rounded-full ${badgeTone}`} />
         <span className={labelTone}>{label}</span>
