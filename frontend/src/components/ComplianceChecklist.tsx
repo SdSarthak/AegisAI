@@ -93,7 +93,7 @@ export default function ComplianceChecklist({
               type="button"
               onClick={() => toggle(item.id)}
               aria-pressed={isChecked}
-              aria-label={`${isChecked ? 'Unmark' : 'Mark'} checklist item: ${item.label}`}
+              aria-label={`${isChecked ? 'Unmark' : 'Mark'} checklist item: ${item.label}${item.article ? `, ${item.article}` : ''}${item.required ? ', required' : ', recommended'}`}
               className="w-full flex items-start gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50 text-left transition-colors"
             >
               {/* Checkbox Icon */}
