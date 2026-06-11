@@ -33,6 +33,15 @@ export default function CopyButton({
     }
   }, [])
 
+  useEffect(() => {
+    setCopied(false)
+
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+  }, [text])
+
   const handleCopy = async () => {
     if (disabled) {
       return
