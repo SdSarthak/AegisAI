@@ -86,6 +86,22 @@ export default function GuardConsole() {
     [metrics]
   )
 
+  const scanStatusMessage = isLoading
+    ? 'Running guard scan.'
+    : error
+      ? `Scan failed. ${error}`
+      : result
+        ? `Scan complete. Decision ${result.decision}.`
+        : ''
+
+  const explanationStatusMessage = isExplaining
+    ? 'Generating explanation.'
+    : explanationError
+      ? `Explanation failed. ${explanationError}`
+      : explanation
+        ? 'Explanation ready.'
+        : ''
+
   const handleScan = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -419,6 +435,15 @@ export default function GuardConsole() {
           </aside>
         </div>
       )}
+
+      <div
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {scanStatusMessage || explanationStatusMessage}
+      </div>
     </div>
   )
 }
