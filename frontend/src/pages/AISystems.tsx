@@ -54,6 +54,7 @@ export default function AISystems() {
   const [currentPage, setCurrentPage] = useState(1)
   const [exporting, setExporting] = useState(false)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const exportMenuId = 'ai-systems-export-menu'
   const [lastExportedAt, setLastExportedAt] = useState<string | null>(() => {
     if (typeof window === 'undefined') {
       return null
@@ -320,6 +321,7 @@ export default function AISystems() {
               className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               aria-expanded={exportMenuOpen}
               aria-haspopup="menu"
+              aria-controls={exportMenuId}
             >
               {exporting ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -331,7 +333,10 @@ export default function AISystems() {
             </button>
 
             {exportMenuOpen && !exporting && (
-              <div className="absolute right-0 mt-2 w-44 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg z-20">
+              <div
+                id={exportMenuId}
+                className="absolute right-0 mt-2 w-44 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg z-20"
+              >
                 <button
                   type="button"
                   onClick={() => handleExport('csv')}
