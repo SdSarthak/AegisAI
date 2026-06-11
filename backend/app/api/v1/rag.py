@@ -11,6 +11,7 @@ import logging
 import mimetypes
 import os
 import shutil
+import time
 import tempfile
 from typing import List, Literal, Optional
 
@@ -51,6 +52,11 @@ class RAGQueryResponse(BaseModel):
     answer: str
     sources: list[str] = []
     answer_id: Optional[str] = None
+    groundedness_score: float = 0.0
+    low_confidence: bool = False
+    confidence_tier: Optional[str] = None
+    per_verifier_scores: dict[str, float] = {}
+    flagged_reason: Optional[str] = None
 
 
 class RAGIngestResponse(BaseModel):
@@ -224,7 +230,16 @@ def query_knowledge_base(
         db.refresh(feedback)
         answer_id = feedback.id
 
-        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
+        return RAGQueryResponse(
+            answer=result["result"],
+            sources=sources,
+            answer_id=answer_id,
+            groundedness_score=float(result.get("groundedness_score", 0.0)),
+            low_confidence=bool(result.get("low_confidence", False)),
+            confidence_tier=result.get("confidence_tier"),
+            per_verifier_scores=dict(result.get("per_verifier_scores", {})),
+            flagged_reason=result.get("flagged_reason"),
+        )
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
