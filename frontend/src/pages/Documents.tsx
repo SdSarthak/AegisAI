@@ -228,6 +228,13 @@ export default function Documents() {
     setSelectedSystem(Number.isInteger(parsed) && parsed > 0 ? parsed : null)
   }
 
+  const clearFilters = () => {
+    setSearchQuery('')
+    setFilterType('all')
+    setFilterStatus('all')
+    setCurrentPage(1)
+  }
+
   const handleSaveDocument = async (
     content: string,
     source: 'manual' | 'autosave' = 'manual'
@@ -404,6 +411,15 @@ export default function Documents() {
           <p className="text-gray-500 mt-1">
             Try adjusting your search or filters
           </p>
+          {(searchQuery || filterType !== 'all' || filterStatus !== 'all') && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="mt-4 inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid gap-4">
