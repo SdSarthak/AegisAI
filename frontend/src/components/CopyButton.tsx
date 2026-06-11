@@ -86,6 +86,9 @@ export default function CopyButton({
       disabled={disabled}
     >
       {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {buttonTitle}
+      </span>
       {!iconOnly && <span>{copied ? copiedLabel : label}</span>}
     </button>
   )
