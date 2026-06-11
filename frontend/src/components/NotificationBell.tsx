@@ -44,6 +44,7 @@ export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false)
 
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const menuId = 'notification-menu'
 
   // Live data via useQuery
   const queryClient = useQueryClient()
@@ -108,7 +109,8 @@ export default function NotificationBell() {
         className="relative p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
         aria-expanded={isOpen}
-        aria-haspopup="true"
+        aria-haspopup="menu"
+        aria-controls={menuId}
       >
         <Bell className="w-5 h-5" />
 
@@ -126,6 +128,7 @@ export default function NotificationBell() {
 
       {/* Dropdown panel */}
       <div
+        id={menuId}
         className={`absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl border border-gray-200 shadow-xl z-50 transition-all duration-200 ease-out origin-top-right ${
           isOpen
             ? 'opacity-100 translate-y-0 pointer-events-auto'
@@ -133,6 +136,7 @@ export default function NotificationBell() {
         }`}
         role="menu"
         aria-label="Notifications panel"
+        aria-hidden={!isOpen}
       >
 
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -149,6 +153,7 @@ export default function NotificationBell() {
           <button
             type="button"
             onClick={() => setIsOpen(false)}
+            tabIndex={isOpen ? 0 : -1}
             className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
             aria-label="Close notifications"
           >
@@ -169,6 +174,7 @@ export default function NotificationBell() {
                 key={notification.id}
                 type="button"
                 onClick={() => handleNotificationClick(notification.id)}
+                tabIndex={isOpen ? 0 : -1}
                 className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 focus:outline-none focus:bg-gray-50 ${
                   !notification.is_read ? 'bg-primary-50/40' : ''
                 }`}
@@ -216,6 +222,7 @@ export default function NotificationBell() {
           <Link
             to="/notifications"
             onClick={() => setIsOpen(false)}
+            tabIndex={isOpen ? 0 : -1}
             className="block px-4 py-3 text-center text-sm font-medium text-primary-600 hover:text-primary-700 hover:bg-gray-50 transition-colors rounded-b-xl"
           >
             View all notifications
