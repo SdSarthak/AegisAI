@@ -102,16 +102,18 @@ export default function DocumentEditor({
           </button>
         </div>
         <div className="flex items-center gap-3">
-          {saveError && (
-            <span className="text-sm text-red-500">
-              {saveError}
-            </span>
-          )}
-          {isSaving && (
-            <span className="text-sm text-gray-500">
-              Saving...
-            </span>
-          )}
+          <span
+            className="text-sm"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {saveError ? (
+              <span className="text-red-500">{saveError}</span>
+            ) : isSaving ? (
+              <span className="text-gray-500">Saving...</span>
+            ) : null}
+          </span>
           <button
             type="button"
             onClick={() => void handleSave('manual')}
