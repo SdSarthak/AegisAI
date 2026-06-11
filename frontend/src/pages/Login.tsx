@@ -128,6 +128,7 @@ export default function Login() {
             <input
               id="email"
               type="email"
+              autoComplete="email"
               required
               value={email}
               onChange={(e) => {
@@ -155,6 +156,7 @@ export default function Login() {
               <input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
                 required
                 value={password}
                 onChange={(e) => {

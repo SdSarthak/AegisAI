@@ -179,6 +179,7 @@ export default function Register() {
             <input
               id="email"
               type="email"
+              autoComplete="email"
               required
               value={formData.email}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -206,6 +207,7 @@ export default function Register() {
               <input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
                 required
                 value={formData.password}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -274,6 +276,7 @@ export default function Register() {
             <input
               id="full_name"
               type="text"
+              autoComplete="name"
               required
               value={formData.full_name}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
@@ -300,6 +303,7 @@ export default function Register() {
             <input
               id="company_name"
               type="text"
+              autoComplete="organization"
               required
               value={formData.company_name}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
