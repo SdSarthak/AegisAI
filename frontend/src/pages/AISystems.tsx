@@ -55,6 +55,10 @@ export default function AISystems() {
   const [exporting, setExporting] = useState(false)
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const exportMenuId = 'ai-systems-export-menu'
+  const addSystemNameId = 'add-ai-system-name'
+  const addSystemDescriptionId = 'add-ai-system-description'
+  const addSystemSectorId = 'add-ai-system-sector'
+  const addSystemUseCaseId = 'add-ai-system-use-case'
   const [lastExportedAt, setLastExportedAt] = useState<string | null>(() => {
     if (typeof window === 'undefined') {
       return null
@@ -372,8 +376,12 @@ export default function AISystems() {
       {/* Search and Filters */}
       <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
         <div className="relative flex-1">
+          <label htmlFor="ai-system-search" className="sr-only">
+            Search AI systems
+          </label>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
+            id="ai-system-search"
             type="text"
             placeholder="Search AI systems..."
             value={searchTerm}
@@ -387,7 +395,11 @@ export default function AISystems() {
         <div className="flex flex-wrap gap-3">
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <label htmlFor="risk-filter" className="sr-only">
+              Filter by risk level
+            </label>
             <select
+              id="risk-filter"
               value={riskFilter}
               onChange={(e) => {
                 setRiskFilter(e.target.value)
@@ -404,7 +416,11 @@ export default function AISystems() {
           </div>
           <div className="relative">
             <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <label htmlFor="compliance-filter" className="sr-only">
+              Filter by compliance status
+            </label>
             <select
+              id="compliance-filter"
               value={complianceFilter}
               onChange={(e) => {
                 setComplianceFilter(e.target.value)
@@ -422,6 +438,9 @@ export default function AISystems() {
           </div>
           <div className="relative">
             <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <label htmlFor="sort-by-select" className="sr-only">
+              Sort AI systems by
+            </label>
             <select
               id="sort-by-select"
               value={sortBy}
@@ -435,6 +454,9 @@ export default function AISystems() {
             </select>
           </div>
           <div className="relative">
+            <label htmlFor="sort-order-select" className="sr-only">
+              Sort order
+            </label>
             <select
               id="sort-order-select"
               value={order}
@@ -571,6 +593,8 @@ export default function AISystems() {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={(event) => openDeleteModal(system, event.currentTarget)}
+                    aria-label={`Delete AI system ${system.name}`}
+                    title={`Delete AI system ${system.name}`}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
                   >
                     <Trash2 className="w-5 h-5" />
@@ -689,10 +713,14 @@ export default function AISystems() {
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={addSystemNameId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   System Name *
                 </label>
                 <input
+                  id={addSystemNameId}
                   type="text"
                   required
                   value={formData.name}
@@ -702,10 +730,14 @@ export default function AISystems() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={addSystemDescriptionId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Description
                 </label>
                 <textarea
+                  id={addSystemDescriptionId}
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
@@ -714,10 +746,14 @@ export default function AISystems() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={addSystemSectorId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Sector
                 </label>
                 <select
+                  id={addSystemSectorId}
                   value={formData.sector}
                   onChange={(e) => setFormData({ ...formData, sector: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
@@ -729,10 +765,14 @@ export default function AISystems() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={addSystemUseCaseId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Use Case
                 </label>
                 <select
+                  id={addSystemUseCaseId}
                   value={formData.use_case}
                   onChange={(e) => setFormData({ ...formData, use_case: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
