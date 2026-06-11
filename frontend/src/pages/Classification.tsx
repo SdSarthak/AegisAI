@@ -295,8 +295,12 @@ export default function Classification() {
           }
         }}
         disabled={locked}
-        aria-pressed={isActive}
+        role="tab"
+        id={`classification-tab-${tab}`}
+        aria-controls={`classification-panel-${tab}`}
+        aria-selected={isActive}
         aria-disabled={locked}
+        tabIndex={isActive ? 0 : -1}
         className={`flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
           isActive
             ? 'border-primary-600 text-primary-700'
@@ -826,7 +830,7 @@ export default function Classification() {
         )}
 
         <div className="border-b border-gray-200">
-          <div className="flex gap-2 overflow-x-auto">
+          <div className="flex gap-2 overflow-x-auto" role="tablist" aria-label="Classification views">
             {renderTabButton('questionnaire', 'Questionnaire', ClipboardList, false)}
             {renderTabButton('results', 'Results', BarChart2, !result)}
             {renderTabButton('requirements', 'Requirements', ShieldCheck, !result)}
@@ -834,9 +838,30 @@ export default function Classification() {
         </div>
       </div>
 
-      {activeTab === 'questionnaire' && renderQuestionnaire()}
-      {activeTab === 'results' && renderResults()}
-      {activeTab === 'requirements' && renderRequirements()}
+      <div
+        id="classification-panel-questionnaire"
+        role="tabpanel"
+        aria-labelledby="classification-tab-questionnaire"
+        hidden={activeTab !== 'questionnaire'}
+      >
+        {renderQuestionnaire()}
+      </div>
+      <div
+        id="classification-panel-results"
+        role="tabpanel"
+        aria-labelledby="classification-tab-results"
+        hidden={activeTab !== 'results'}
+      >
+        {renderResults()}
+      </div>
+      <div
+        id="classification-panel-requirements"
+        role="tabpanel"
+        aria-labelledby="classification-tab-requirements"
+        hidden={activeTab !== 'requirements'}
+      >
+        {renderRequirements()}
+      </div>
     </div>
   )
 }
