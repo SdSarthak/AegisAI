@@ -107,6 +107,7 @@ export default function Notifications() {
           type="button"
           onClick={handleMarkAllRead}
           disabled={unreadCount === 0 || markAllReadMutation.isPending}
+          aria-busy={markAllReadMutation.isPending}
           className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {markAllReadMutation.isPending ? (
@@ -118,7 +119,12 @@ export default function Notifications() {
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-2">
+      <div
+        className="flex flex-wrap gap-2"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
         <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200">
           <Bell className="h-3.5 w-3.5 text-primary-500" />
           {notifications.length} total
