@@ -248,6 +248,8 @@ export default function RagChat() {
                                     type="button"
                                     onClick={handleExport}
                                     className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700"
+                                    aria-label="Export answer and citations"
+                                    title="Export answer and citations"
                                   >
                                     <FileText className="w-3.5 h-3.5" />
                                     Export
