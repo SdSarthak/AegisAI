@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { CheckSquare, Square } from 'lucide-react'
 
 export interface ChecklistItem {
@@ -15,10 +15,8 @@ interface ComplianceChecklistProps {
 }
 
 export default function ComplianceChecklist({
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  systemId: _systemId,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  riskLevel: _riskLevel,
+  systemId,
+  riskLevel,
   items,
 }: ComplianceChecklistProps) {
   const [checked, setChecked] = useState<Set<string>>(new Set())
@@ -44,6 +42,25 @@ export default function ComplianceChecklist({
 
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-700">
+          System #{systemId}
+        </span>
+        <span
+          className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${
+            riskLevel === 'unacceptable'
+              ? 'bg-red-100 text-red-700'
+              : riskLevel === 'high'
+                ? 'bg-orange-100 text-orange-700'
+                : riskLevel === 'limited'
+                  ? 'bg-amber-100 text-amber-700'
+                  : 'bg-green-100 text-green-700'
+          }`}
+        >
+          {riskLevel.replace('_', ' ')} risk
+        </span>
+      </div>
+
       {/* Progress Bar */}
       <div>
         <div className="flex justify-between text-sm text-gray-600 mb-1">
@@ -61,6 +78,11 @@ export default function ComplianceChecklist({
                 : 'bg-primary-600'
             }`}
             style={{ width: `${progress}%` }}
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={progress}
+            aria-label={`Checklist progress ${progress}% complete`}
           />
         </div>
       </div>
@@ -75,6 +97,8 @@ export default function ComplianceChecklist({
               key={item.id}
               type="button"
               onClick={() => toggle(item.id)}
+              aria-pressed={isChecked}
+              aria-label={`${isChecked ? 'Unmark' : 'Mark'} checklist item: ${item.label}${item.article ? `, ${item.article}` : ''}${item.required ? ', required' : ', recommended'}`}
               className="w-full flex items-start gap-3 p-3 rounded-lg border border-gray-100 hover:bg-gray-50 text-left transition-colors"
             >
               {/* Checkbox Icon */}

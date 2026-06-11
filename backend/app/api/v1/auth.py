@@ -1,37 +1,34 @@
-"""
-Authentication API — JWT-based user registration, login, and token management.
+"""Authentication API for registration, login, and profile management.
 
-This module populates two FastAPI routers:
-  - ``router``       — mounted at /api/v1/auth  (register, login, me, change-password)
-  - ``users_router`` — mounted at /api/v1/users (PATCH /me for profile updates)
-
-Dependencies:
-  - python-jose  : JWT creation and verification
-  - bcrypt        : password hashing via passlib
-  - SQLAlchemy    : ORM session for User persistence
-  - pydantic      : request/response schema validation
+This module provides the JWT-backed auth flows and the user profile update
+route used by the frontend.
 """
 
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
-
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import (
-    validate_password_strength,
-    verify_password,
-    get_password_hash,
     create_access_token,
     get_current_user,
+    get_password_hash,
+    verify_password,
 )
-from app.core.config import settings
-from app.models.user import User
 from app.models.ai_system import AISystem, ComplianceStatus
 from app.models.document import Document
-from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse, ChangePasswordRequest
+from app.models.user import User
+from app.schemas.user import (
+    ChangePasswordRequest,
+    Token,
+    UserCreate,
+    UserResponse,
+    UserStatsResponse,
+    UserUpdateSchema,
+)
 
 # Pre-computed bcrypt hash used when the looked-up user is None so that the
 # login endpoint always performs a constant-time hash comparison, closing
@@ -47,7 +44,23 @@ users_router = APIRouter()
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user account."""
+    """Register a new user account.
+
+    Args:
+        user_data: Registration payload containing email, password, and
+            optional profile metadata.
+        db: Active database session.
+
+    Returns:
+        The newly created user record.
+
+    Raises:
+        HTTPException: If the email already exists or a database error occurs.
+
+    Notes:
+        The password is always hashed before persistence; the plain text value
+        is never stored.
+    """
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
@@ -77,15 +90,27 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
             detail={
                 "field": "general",
                 "message": "An error occurred during registration. Please try again."
-            }
-        )
+            },
+        ) from None
 
 
 @router.post("/login", response_model=Token)
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
-    """Authenticate a user and return an access token."""
+    """Authenticate a user and return a bearer access token.
+
+    Args:
+        form_data: OAuth2 form payload containing the submitted email and
+            password.
+        db: Active database session.
+
+    Returns:
+        A token payload with ``access_token`` and ``token_type`` keys.
+
+    Raises:
+        HTTPException: If the credentials are invalid or the user is inactive.
+    """
     user = db.query(User).filter(User.email == form_data.username).first()
 
     # Always run a constant-time bcrypt comparison regardless of whether the
@@ -115,7 +140,14 @@ def login(
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Return the authenticated user's profile."""
+    """Return the authenticated user's profile.
+
+    Args:
+        current_user: Authenticated user whose profile should be returned.
+
+    Returns:
+        The current user's full profile record.
+    """
     return current_user
 
 
@@ -125,7 +157,23 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Change the authenticated user's password."""
+    """Update the authenticated user's password.
+
+    Args:
+        payload: Current and new password values supplied by the user.
+        current_user: Authenticated user whose password should be changed.
+        db: Active database session.
+
+    Returns:
+        A confirmation payload containing a success message.
+
+    Raises:
+        HTTPException: If the current password is incorrect.
+
+    Notes:
+        The current password must match before a new hash is written, which
+        prevents password changes from being used to bypass account access.
+    """
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -147,7 +195,19 @@ def update_current_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update the authenticated user's profile details."""
+    """Update the authenticated user's profile details.
+
+    Args:
+        user_data: Partial profile update payload.
+        current_user: Authenticated user whose profile is being updated.
+        db: Active database session.
+
+    Returns:
+        The updated user record.
+
+    Notes:
+        Only the supplied fields are updated; omitted fields are left as-is.
+    """
     if user_data.full_name is not None:
         current_user.full_name = user_data.full_name
 
@@ -168,7 +228,19 @@ def get_current_user_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return summary statistics for the authenticated user."""
+    """Return summary statistics for the authenticated user.
+
+    Args:
+        current_user: Authenticated user whose data should be summarized.
+        db: Active database session.
+
+    Returns:
+        UserStatsResponse with totals for systems, documents, and compliance.
+
+    Notes:
+        Compliance counts are derived from the user's AI systems and only
+        count systems marked fully compliant.
+    """
     systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
 
     risk_breakdown: dict = {}

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Shield,
@@ -62,6 +62,16 @@ export default function Onboarding() {
   const isLastStep = currentStep === STEPS.length - 1
   const StepIcon = STEPS[currentStep].icon
 
+  const systemNameId = 'onboarding-system-name'
+  const systemDescriptionId = 'onboarding-system-description'
+  const useCaseId = 'onboarding-use-case'
+  const sectorId = 'onboarding-sector'
+  const intendedPurposeId = 'onboarding-intended-purpose'
+  const targetUsersId = 'onboarding-target-users'
+  const usesPersonalDataId = 'onboarding-uses-personal-data'
+  const affectsDecisionMakingId = 'onboarding-affects-decision-making'
+  const documentTypeId = 'onboarding-document-type'
+
   const handleCreateSystem = async () => {
     if (!systemForm.name.trim()) {
       setError('Please enter an AI system name.')
@@ -70,6 +80,7 @@ export default function Onboarding() {
 
     setIsLoading(true)
     setError(null)
+    setRiskLevel(null)
 
     try {
       const createdSystem = await aiSystemsApi.create({
@@ -96,6 +107,7 @@ export default function Onboarding() {
 
     setIsLoading(true)
     setError(null)
+    setRiskLevel(null)
 
     try {
       const classification = await classificationApi.classifyAndSave(systemId, {
@@ -178,6 +190,10 @@ setRiskLevel(detectedRiskLevel)
     setCurrentStep((step) => Math.max(0, step - 1))
   }
 
+  const clearError = () => {
+    setError(null)
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
       <div className="bg-white rounded-2xl border border-gray-200 p-8 w-full max-w-lg">
@@ -186,10 +202,12 @@ setRiskLevel(detectedRiskLevel)
           <h1 className="text-xl font-semibold text-gray-900">Welcome to AegisAI</h1>
         </div>
 
-        <div className="flex items-center gap-2 mb-8">
+        <div className="flex items-center gap-2 mb-8" aria-label="Onboarding progress">
           {STEPS.map((step, index) => (
             <div key={step.label} className="flex items-center gap-2 flex-1">
               <div
+                aria-current={index === currentStep ? 'step' : undefined}
+                aria-label={`${step.label}, step ${index + 1} of ${STEPS.length}`}
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                   index < currentStep
                     ? 'bg-primary-600 text-white'
@@ -231,10 +249,14 @@ setRiskLevel(detectedRiskLevel)
           {currentStep === 0 && (
             <div className="mt-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={systemNameId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   AI System Name
                 </label>
                 <input
+                  id={systemNameId}
                   type="text"
                   value={systemForm.name}
                   onChange={(event) =>
@@ -243,16 +265,21 @@ setRiskLevel(detectedRiskLevel)
                       name: event.target.value,
                     }))
                   }
+                  onInput={clearError}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Example: Resume Screening AI"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={systemDescriptionId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Description
                 </label>
                 <textarea
+                  id={systemDescriptionId}
                   value={systemForm.description}
                   onChange={(event) =>
                     setSystemForm((form) => ({
@@ -260,6 +287,7 @@ setRiskLevel(detectedRiskLevel)
                       description: event.target.value,
                     }))
                   }
+                  onInput={clearError}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Briefly describe your AI system"
                   rows={3}
@@ -267,10 +295,14 @@ setRiskLevel(detectedRiskLevel)
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={useCaseId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Use Case
                 </label>
                 <input
+                  id={useCaseId}
                   type="text"
                   value={systemForm.use_case}
                   onChange={(event) =>
@@ -279,16 +311,21 @@ setRiskLevel(detectedRiskLevel)
                       use_case: event.target.value,
                     }))
                   }
+                  onInput={clearError}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Example: Hiring, healthcare, education"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={sectorId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Sector
                 </label>
                 <input
+                  id={sectorId}
                   type="text"
                   value={systemForm.sector}
                   onChange={(event) =>
@@ -297,6 +334,7 @@ setRiskLevel(detectedRiskLevel)
                       sector: event.target.value,
                     }))
                   }
+                  onInput={clearError}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Example: HR Tech"
                 />
@@ -307,10 +345,14 @@ setRiskLevel(detectedRiskLevel)
           {currentStep === 1 && (
             <div className="mt-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={intendedPurposeId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Intended Purpose
                 </label>
                 <textarea
+                  id={intendedPurposeId}
                   value={classificationForm.intended_purpose}
                   onChange={(event) =>
                     setClassificationForm((form) => ({
@@ -318,6 +360,7 @@ setRiskLevel(detectedRiskLevel)
                       intended_purpose: event.target.value,
                     }))
                   }
+                  onInput={clearError}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="What is this AI system used for?"
                   rows={3}
@@ -325,10 +368,14 @@ setRiskLevel(detectedRiskLevel)
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={targetUsersId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Target Users
                 </label>
                 <input
+                  id={targetUsersId}
                   type="text"
                   value={classificationForm.target_users}
                   onChange={(event) =>
@@ -337,13 +384,18 @@ setRiskLevel(detectedRiskLevel)
                       target_users: event.target.value,
                     }))
                   }
+                  onInput={clearError}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                   placeholder="Example: HR teams, compliance officers"
                 />
               </div>
 
-              <label className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm">
+              <label
+                htmlFor={usesPersonalDataId}
+                className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm"
+              >
                 <input
+                  id={usesPersonalDataId}
                   type="checkbox"
                   checked={classificationForm.uses_personal_data}
                   onChange={(event) =>
@@ -352,12 +404,17 @@ setRiskLevel(detectedRiskLevel)
                       uses_personal_data: event.target.checked,
                     }))
                   }
+                  onInput={clearError}
                 />
                 Uses personal data
               </label>
 
-              <label className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm">
+              <label
+                htmlFor={affectsDecisionMakingId}
+                className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm"
+              >
                 <input
+                  id={affectsDecisionMakingId}
                   type="checkbox"
                   checked={classificationForm.affects_decision_making}
                   onChange={(event) =>
@@ -366,6 +423,7 @@ setRiskLevel(detectedRiskLevel)
                       affects_decision_making: event.target.checked,
                     }))
                   }
+                  onInput={clearError}
                 />
                 Affects decision-making about people
               </label>
@@ -388,12 +446,19 @@ setRiskLevel(detectedRiskLevel)
               )}
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={documentTypeId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Document Type
                 </label>
                 <select
+                  id={documentTypeId}
                   value={documentType}
-                  onChange={(event) => setDocumentType(event.target.value)}
+                  onChange={(event) => {
+                    setDocumentType(event.target.value)
+                    clearError()
+                  }}
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
                 >
                   <option value="technical_documentation">

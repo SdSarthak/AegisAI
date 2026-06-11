@@ -1,7 +1,9 @@
-from pydantic import BaseModel
-from typing import Optional, Dict, Any, List
 from datetime import datetime
-from app.models.ai_system import RiskLevel, ComplianceStatus
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel
+
+from app.models.ai_system import ComplianceStatus, RiskLevel
 
 
 class AISystemCreate(BaseModel):

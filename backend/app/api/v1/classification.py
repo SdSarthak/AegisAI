@@ -1,21 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from typing import List, Optional
-from app.modules.compliance.nist_mapping import EU_TO_NIST_MAPPING
-from app.schemas.ai_system import NISTMapping
+
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.ai_system import AISystem, ComplianceStatus, RiskAssessment, RiskLevel
 from app.models.user import User
-from app.models.ai_system import AISystem, RiskLevel, RiskAssessment, ComplianceStatus
+from app.modules.compliance.nist_mapping import EU_TO_NIST_MAPPING
+from app.modules.explainer.engine import explain_risk
 from app.schemas.ai_system import (
+    NISTMapping,
+    QuestionnaireRiskFactor,
     RiskClassificationRequest,
     RiskClassificationResponse,
-    QuestionnaireRiskFactor,
 )
 from app.schemas.explain import ExplainRequest, ExplainResponse
-from app.modules.explainer.engine import explain_risk
 
 router = APIRouter()
 
@@ -165,8 +166,16 @@ class BulkClassificationResponse(BaseModel):
 
 
 def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse:
-    """
-    Classify the risk level of an AI system based on EU AI Act criteria.
+    """Classify the risk level of an AI system based on EU AI Act criteria.
+
+    Args:
+        data: Questionnaire payload describing the AI system's features and
+            intended use.
+
+    Returns:
+        RiskClassificationResponse containing the computed risk tier,
+        confidence score, explanations, compliance requirements, and next
+        steps.
     """
     reasons = []
     requirements = []
@@ -352,7 +361,21 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
 def classify_ai_system(
     data: RiskClassificationRequest, current_user: User = Depends(get_current_user)
 ):
-    """Classify an AI system's risk level from the questionnaire payload."""
+    """Classify an AI system's risk level from questionnaire answers.
+
+    Args:
+        data: Structured questionnaire payload describing the AI system.
+        current_user: Authenticated user requesting the classification.
+
+    Returns:
+        RiskClassificationResponse with the computed risk tier, rationale,
+        requirements, and suggested next steps.
+
+    Notes:
+        The current user is required for authenticated access to the
+        classification endpoint, even though the classification itself is
+        stateless.
+    """
     return classify_risk(data)    
 
 
@@ -363,7 +386,21 @@ def classify_and_save(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Classify an AI system and persist the result."""
+    """Classify an AI system and persist the result.
+
+    Args:
+        system_id: ID of the AI system to classify.
+        data: Structured questionnaire payload describing the AI system.
+        db: Active database session.
+        current_user: Authenticated user who owns the target system.
+
+    Returns:
+        RiskClassificationResponse representing the saved assessment.
+
+    Raises:
+        HTTPException: If the AI system does not exist or does not belong to
+            the authenticated user.
+    """
     system = (
         db.query(AISystem)
         .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
@@ -402,7 +439,18 @@ def classify_and_save(
 def get_questionnaire_risk_factors(
     current_user: User = Depends(get_current_user),
 ):
-    """Return the static questionnaire metadata used by the classifier."""
+    """Return the static questionnaire metadata used by the classifier.
+
+    Args:
+        current_user: Authenticated user requesting the metadata.
+
+    Returns:
+        The list of questionnaire risk factors used by the classification UI.
+
+    Notes:
+        The response is static metadata and does not depend on the current
+        user's saved systems.
+    """
     return QUESTIONNAIRE_RISK_FACTORS
 
 
@@ -412,7 +460,20 @@ def bulk_classify_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Classify multiple AI systems in a single request."""
+    """Classify multiple saved AI systems in a single request.
+
+    Args:
+        request: Payload containing the AI system IDs to classify.
+        db: Active database session.
+        current_user: Authenticated user who owns the systems.
+
+    Returns:
+        BulkClassificationResponse with per-system classification results.
+
+    Raises:
+        HTTPException: If any requested system cannot be loaded from the
+            current user's account.
+    """
     results: List[BulkClassificationItem] = []
 
     for system_id in request.system_ids:
@@ -481,5 +542,18 @@ def explain_ai_system_risk(
     data: ExplainRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Explain the risk classification of an AI system from a plain-text description."""
+    """Explain an AI system's risk classification from a text description.
+
+    Args:
+        data: Plain-text description and context used to generate the
+            explanation.
+        current_user: Authenticated user requesting the explanation.
+
+    Returns:
+        ExplainResponse with the generated explanation payload.
+
+    Notes:
+        This endpoint uses the text-only explanation flow and does not require
+        a stored AI system record.
+    """
     return explain_risk(data)

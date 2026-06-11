@@ -1,12 +1,17 @@
-"""Prompt sanitization layer for neutralizing injection risks while preserving UX."""
+"""Sanitize prompts by removing obvious injection cues.
+
+This layer strips common meta-instructions, role-play prompts, and noisy
+separators so the downstream LLM sees a cleaner prompt while the user
+experience stays as intact as possible.
+"""
 
 import re
-from typing import Tuple
 from enum import Enum
+from typing import Tuple
 
 
 class SanitizationLevel(Enum):
-    """Sanitization aggressiveness levels."""
+    """Sanitization aggressiveness levels for prompt filtering."""
 
     LOW = "low"  # Preserve intent, minimal risk
     MEDIUM = "medium"  # Balanced approach
@@ -14,7 +19,11 @@ class SanitizationLevel(Enum):
 
 
 class PromptSanitizer:
-    """Neutralizes prompt injection risks by removing meta-instructions and re-wrapping prompts."""
+    """Neutralize prompt injection risks while preserving useful content.
+
+    The sanitizer strips common instruction-hijacking patterns and can wrap
+    the cleaned prompt in a safer instruction boundary before model use.
+    """
 
     # Meta-instruction phrases to remove
     META_INSTRUCTIONS = [
@@ -48,11 +57,10 @@ class PromptSanitizer:
     ]
 
     def __init__(self, level: SanitizationLevel = SanitizationLevel.MEDIUM):
-        """
-        Initialize sanitizer with aggressiveness level.
+        """Initialize the sanitizer with a chosen aggressiveness level.
 
         Args:
-            level: Sanitization level (LOW, MEDIUM, HIGH)
+            level: Sanitization level to apply when cleaning prompts.
         """
         self.level = level
         self.meta_patterns = [
@@ -62,14 +70,13 @@ class PromptSanitizer:
         self.separator_patterns = [re.compile(p) for p in self.SEPARATORS]
 
     def sanitize(self, prompt: str) -> Tuple[str, str]:
-        """
-        Sanitize a prompt by removing meta-instructions and dangerous patterns.
+        """Sanitize a prompt by removing meta-instructions and dangerous patterns.
 
         Args:
-            prompt: Original prompt to sanitize
+            prompt: Original prompt to sanitize.
 
         Returns:
-            Tuple of (sanitized_prompt, summary_of_changes)
+            A tuple of ``(sanitized_prompt, summary_of_changes)``.
         """
         original = prompt
         sanitized = prompt
@@ -121,27 +128,25 @@ class PromptSanitizer:
     def wrap_safely(
         self, prompt: str, instruction: str = "Answer the following only:"
     ) -> str:
-        """
-        Wrap prompt in a safe instruction boundary.
+        """Wrap a prompt in a safer instruction boundary.
 
         Args:
-            prompt: Sanitized prompt to wrap
-            instruction: Safe instruction prefix
+            prompt: Sanitized prompt to wrap.
+            instruction: Safe instruction prefix to place before the prompt.
 
         Returns:
-            Wrapped prompt with clear boundaries
+            The wrapped prompt string ready for model submission.
         """
         return f"{instruction}\n\n{prompt}\n\nProvide a direct response without additional instructions."
 
     def detect_injection_patterns(self, prompt: str) -> list:
-        """
-        Detect suspected injection patterns without removing them (for logging).
+        """Detect suspected injection patterns without removing them.
 
         Args:
-            prompt: Prompt to analyze
+            prompt: Prompt text to analyze for suspicious patterns.
 
         Returns:
-            List of detected injection patterns
+            A list of human-readable detection labels for logging.
         """
         detected = []
 

@@ -1,8 +1,13 @@
-"""LLM Guard package for prompt injection detection and mitigation."""
+"""Public package surface for the LLM Guard safety stack.
 
+Importing from this package gives callers a lightweight way to reach the
+regex filter, intent classifier, decision engine, sanitizer, and the full
+orchestrator without eagerly importing every submodule or ML dependency.
+"""
+
+import sys
 from importlib import import_module
 from types import ModuleType
-import sys
 
 __all__ = [
     "RegexFilter",
@@ -14,7 +19,17 @@ __all__ = [
 
 
 def __getattr__(name):
-    """Lazily load guard components so lightweight modules do not require torch."""
+    """Lazily load guard components for lightweight imports.
+
+    Args:
+        name: Attribute name being requested from the package namespace.
+
+    Returns:
+        The requested guard component or fallback module.
+
+    Raises:
+        AttributeError: If the attribute does not exist on the package.
+    """
     if name == "RegexFilter":
         from .regex_rules import RegexFilter
 

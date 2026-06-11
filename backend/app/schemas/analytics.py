@@ -1,12 +1,16 @@
-"""
-Pydantic schemas for compliance analytics / timeline data.
+"""Pydantic schemas for compliance analytics and timeline responses.
+
+These models capture point-in-time snapshot data and per-system snapshot
+series used by the compliance analytics endpoints.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
-from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+
+from pydantic import BaseModel
 
 
 class ComplianceSnapshotResponse(BaseModel):

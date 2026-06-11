@@ -1,4 +1,9 @@
-"""Standardized training pipeline for the guard safety classifier."""
+"""Standardized training namespace for the guard safety classifier.
+
+The package exposes the training and evaluation pipeline entrypoints while
+keeping heavyweight imports deferred until they are actually used by a
+pipeline run or CLI command.
+"""
 
 __all__ = ["run_training_pipeline", "run_evaluation_pipeline"]
 

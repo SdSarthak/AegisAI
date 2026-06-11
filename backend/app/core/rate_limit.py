@@ -1,8 +1,14 @@
-"""Shared rate limiting helpers."""
+"""Shared rate limiting helpers for the API stack.
 
+This module provides a Redis-backed fixed-window limiter with an
+in-process fallback so request throttling still works in local development
+or during brief Redis outages. The implementation also tracks a simple
+circuit breaker to avoid hammering Redis when the backend is unhealthy.
+"""
+
+import logging
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
-import logging
 from threading import Lock
 from typing import Optional
 
@@ -17,7 +23,12 @@ except ImportError:  # pragma: no cover - exercised only when the dependency is 
 
 
 class DistributedRateLimiter:
-    """Fixed-window rate limiter with Redis backing when available, featuring a circuit breaker."""
+    """Fixed-window rate limiter with Redis backing when available.
+
+    The limiter prefers Redis for distributed consistency and falls back to a
+    local in-memory tracker when Redis is unavailable or the circuit breaker
+    opens.
+    """
 
     _RATE_LIMIT_SCRIPT = """
 local current = redis.call('INCRBY', KEYS[1], ARGV[1])
@@ -60,6 +71,7 @@ return {current, ttl}
         }
 
     def _get_redis_client(self) -> Optional[object]:
+        """Return a configured Redis client, creating it on first use."""
         if not settings.REDIS_URL or redis is None:
             return None
 
@@ -79,6 +91,7 @@ return {current, ttl}
         window_seconds: int,
         cost: int,
     ) -> tuple[bool, int]:
+        """Check the active window against Redis and return the retry delay."""
         if self._redis_script is None:
             self._redis_script = client.register_script(self._RATE_LIMIT_SCRIPT)  # type: ignore[attr-defined]
 
@@ -100,6 +113,7 @@ return {current, ttl}
         window_seconds: int,
         cost: int,
     ) -> tuple[bool, int]:
+        """Check the in-memory fallback when Redis is unavailable."""
         now = datetime.now(timezone.utc)
         window_start = now - timedelta(seconds=window_seconds)
 
@@ -139,7 +153,7 @@ return {current, ttl}
         cost: int = 1,
         fail_closed: Optional[bool] = None,
     ) -> tuple[bool, int]:
-        """Return whether a request should be limited and the retry-after value."""
+        """Consume quota for one request and return the limiting decision."""
         if fail_closed is None:
             fail_closed = getattr(settings, "RATE_LIMIT_FAIL_CLOSED", False)
 
@@ -206,8 +220,7 @@ return {current, ttl}
                     if fail_closed:
                         self.metrics["failures_closed"] += 1
                         return True, window_seconds
-                    else:
-                        self.metrics["failures_open"] += 1
+                    self.metrics["failures_open"] += 1
 
         # Fallback to Local Tracking
         with self._local_lock:

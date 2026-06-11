@@ -1,43 +1,39 @@
-from datetime import datetime, timedelta, timezone
-
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from jose import jwt, JWTError
-from jose.exceptions import ExpiredSignatureError
-
-
-from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy.orm import Session
-from typing import List
-from io import BytesIO
-from html import escape as html_escape
-from urllib.parse import quote
 import re
+from datetime import datetime, timedelta, timezone
+from html import escape as html_escape
+from io import BytesIO
+from typing import List
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from jose import JWTError, jwt
+from jose.exceptions import ExpiredSignatureError
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+
+# PDF generation
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models.user import User
 from app.models.ai_system import AISystem
-from app.models.document import Document, DocumentType, DocumentStatus
+from app.models.document import Document, DocumentStatus, DocumentType
+from app.models.user import User
 from app.modules.llm.document_generator import generate_compliance_narrative
 from app.schemas.document import (
     DocumentCreate,
-    DocumentResponse,
     DocumentGenerateRequest,
+    DocumentResponse,
     DocumentShareResponse,
-    DocumentUpdateRequest,
     DocumentTemplateResponse,
     DocumentUpdateRequest,
 )
 from app.schemas.pagination import PaginatedResponse
-
-# PDF generation
-from reportlab.lib.pagesizes import letter, A4
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.units import inch
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
-from reportlab.lib.enums import TA_LEFT, TA_CENTER
-
 
 router = APIRouter()
 
@@ -52,27 +48,47 @@ def create_share_token(document_id: int):
         "exp": expire
     }
 
-    token = jwt.encode(
+    return jwt.encode(
         payload,
         settings.SECRET_KEY,
-        algorithm=settings.ALGORITHM
+        algorithm=settings.ALGORITHM,
     )
 
-    return token
-
 def _escape_pdf_text(value: str) -> str:
-    """Escape user-controlled text before ReportLab Paragraph parses it."""
+    """Escape user-controlled text before ReportLab parses it.
+
+    Args:
+        value: Raw text that may contain user-controlled characters.
+
+    Returns:
+        A version of the input with PDF/HTML-sensitive characters escaped.
+    """
     return html_escape(value, quote=False)
 
 
 def _render_inline_markdown(value: str) -> str:
-    """Render the small markdown subset supported by PDF export safely."""
+    """Render the small markdown subset supported by PDF export safely.
+
+    Args:
+        value: Raw document content that may contain lightweight markdown.
+
+    Returns:
+        Safe HTML-like markup with bold spans preserved for ReportLab.
+    """
     escaped = _escape_pdf_text(value.strip())
     return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', escaped)
 
 
 def _safe_pdf_filename(title: str) -> str:
-    """Return a header-safe PDF filename derived from a document title."""
+    """Return a header-safe PDF filename derived from a document title.
+
+    Args:
+        title: Source document title used to derive the filename.
+
+    Returns:
+        A sanitized filename ending in ``.pdf`` that is safe to send in
+        response headers.
+    """
     filename = re.sub(r"[\x00-\x1f\x7f]", "", title or "").strip()
     filename = re.sub(r'[/\\:*?"<>|]+', "_", filename)
     filename = re.sub(r"\s+", " ", filename).strip(" ._")
@@ -304,7 +320,19 @@ def create_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new document for the authenticated user."""
+    """Create a new document for the authenticated user.
+
+    Args:
+        doc_data: Document creation payload including title, type, and content.
+        db: Active database session.
+        current_user: Authenticated user creating the document.
+
+    Returns:
+        The newly created document.
+
+    Raises:
+        HTTPException: If the referenced AI system does not belong to the user.
+    """
     if doc_data.ai_system_id is not None:
         ai_system = (
             db.query(AISystem)
@@ -340,7 +368,18 @@ def list_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List the current user's documents with pagination."""
+    """List the current user's documents with pagination.
+
+    Args:
+        skip: Number of documents to skip before returning results.
+        limit: Maximum number of documents to return.
+        db: Active database session.
+        current_user: Authenticated user whose documents should be listed.
+
+    Returns:
+        PaginatedResponse containing the user's documents ordered by
+        insertion order.
+    """
     base_query = db.query(Document).filter(Document.owner_id == current_user.id)
     total = base_query.count()
 
@@ -353,7 +392,19 @@ def get_shared_document(
     token: str,
     db: Session = Depends(get_db)
 ):
-    """Access shared document without authentication."""
+    """Access a shared document without authentication.
+
+    Args:
+        token: Signed share token generated for the document.
+        db: Active database session.
+
+    Returns:
+        The shared document referenced by the token.
+
+    Raises:
+        HTTPException: If the token is expired, invalid, revoked, or the
+            document cannot be found.
+    """
 
     try:
         payload = jwt.decode(
@@ -366,13 +417,13 @@ def get_shared_document(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Share link expired"
-        )
+        ) from None
 
     except JWTError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid share token"
-        )
+        ) from None
 
     if payload.get("type") != "document_share":
         raise HTTPException(
@@ -415,7 +466,20 @@ def share_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Generate share link for a document."""
+    """Generate a share link for a document.
+
+    Args:
+        document_id: ID of the document to make shareable.
+        db: Active database session.
+        current_user: Authenticated user who must own the document.
+
+    Returns:
+        A share URL and expiry information for the generated token.
+
+    Raises:
+        HTTPException: If the document does not exist or is not owned by the
+            authenticated user.
+    """
 
     document = db.query(Document).filter(
         Document.id == document_id,
@@ -438,7 +502,14 @@ def share_document(
 def list_document_templates(
     current_user: User = Depends(get_current_user),
 ):
-    """List available document templates for generation."""
+    """List available document templates for generation.
+
+    Args:
+        current_user: Authenticated user requesting the template catalog.
+
+    Returns:
+        The set of supported document templates and their descriptions.
+    """
     descriptions = {
         DocumentType.TECHNICAL_DOCUMENTATION: "Generate technical documentation for an AI system.",
         DocumentType.RISK_ASSESSMENT: "Generate a risk assessment report for an AI system.",
@@ -463,7 +534,19 @@ def get_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return a single document owned by the current user."""
+    """Return a single document owned by the current user.
+
+    Args:
+        document_id: ID of the document to fetch.
+        db: Active database session.
+        current_user: Authenticated user who must own the document.
+
+    Returns:
+        The requested document.
+
+    Raises:
+        HTTPException: If the document cannot be found for the user.
+    """
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -483,7 +566,21 @@ def update_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update the content of an existing document."""
+    """Update the content of an existing document.
+
+    Args:
+        document_id: ID of the document to update.
+        body: Payload containing the replacement document content.
+        db: Active database session.
+        current_user: Authenticated user who must own the document.
+
+    Returns:
+        The updated document.
+
+    Raises:
+        HTTPException: If the document does not exist or is not owned by the
+            authenticated user.
+    """
     # Fetch document
     document = db.query(Document).filter(
         Document.id == document_id,
@@ -513,7 +610,19 @@ def generate_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate a compliance document for a user's AI system."""
+    """Generate a compliance document for a user's AI system.
+
+    Args:
+        request: Generation request selecting the AI system and template.
+        db: Active database session.
+        current_user: Authenticated user requesting the generated document.
+
+    Returns:
+        The newly generated document.
+
+    Raises:
+        HTTPException: If the AI system or template is invalid.
+    """
     # Get the AI system
     ai_system = (
         db.query(AISystem)
@@ -593,7 +702,20 @@ def delete_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a document owned by the current user."""
+    """Delete a document owned by the current user.
+
+    Args:
+        document_id: ID of the document to delete.
+        db: Active database session.
+        current_user: Authenticated user who must own the document.
+
+    Returns:
+        None. The endpoint responds with HTTP 204 when deletion succeeds.
+
+    Raises:
+        HTTPException: If the document does not exist or is not owned by the
+            authenticated user.
+    """
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -615,7 +737,19 @@ def export_document_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Export a document as a PDF attachment."""
+    """Export a document as a PDF attachment.
+
+    Args:
+        document_id: ID of the document to export.
+        db: Active database session.
+        current_user: Authenticated user who must own the document.
+
+    Returns:
+        A PDF file response containing the document content.
+
+    Raises:
+        HTTPException: If the document does not exist or has no content.
+    """
     # Retrieve the document
     document = db.query(Document).filter(
         Document.id == document_id,

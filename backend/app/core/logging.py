@@ -1,28 +1,13 @@
-"""
-Structured JSON logging for the AegisAI backend.
+"""JSON logging helpers for the AegisAI backend.
 
-Replaces the scattered ``logging.basicConfig`` calls with a single
-configurator that emits one JSON object per log line. Every line carries:
-
-    timestamp   ISO-8601 UTC, e.g. "2026-05-16T09:41:22.481Z"
-    level       INFO | WARNING | ERROR | ...
-    logger      full dotted logger name  (app.modules.guard.llm_guard)
-    module      Python module short name  (llm_guard)
-    message     the log message
-    request_id  per-request correlation id (when inside a request)
-    user_id     authenticated user id (when available)
-    service     "aegis-backend"
-    version     app version
-
-Any keyword args passed via ``logger.info("msg", extra={...})`` are merged
-into the JSON object, so structured fields land as first-class keys and are
-queryable as-is by Datadog, Loki, and CloudWatch — no regex grok needed.
+The backend emits structured logs instead of ad hoc text so request ids,
+user ids, service metadata, and caller-provided ``extra`` fields remain
+queryable by log aggregation tools without regex parsing. This module owns
+the formatter and root logger setup used by the API process.
 
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
-
-from __future__ import annotations
 
 import hashlib
 import logging
@@ -56,7 +41,7 @@ _RESERVED_RECORD_ATTRS = frozenset(
 
 
 class JsonFormatter(jsonlogger.JsonFormatter):
-    """JSON formatter that injects request/service context into every record."""
+    """Inject service metadata and request context into each log record."""
 
     def add_fields(
         self,
@@ -93,6 +78,7 @@ class JsonFormatter(jsonlogger.JsonFormatter):
 
 
 def _build_handler() -> logging.Handler:
+    """Build the stdout handler used by the JSON logging setup."""
     handler = logging.StreamHandler(sys.stdout)
     # The format string only declares which message field to use; all other
     # keys are produced by JsonFormatter.add_fields above.
@@ -101,12 +87,7 @@ def _build_handler() -> logging.Handler:
 
 
 def configure_logging(level: str = "INFO") -> None:
-    """
-    Configure root + third-party loggers to emit single-line JSON to stdout.
-
-    Idempotent: safe to call more than once (existing handlers are replaced,
-    not stacked). Call this once, early, before the app starts serving.
-    """
+    """Configure the root logger and noisy third-party loggers for JSON."""
     log_level = getattr(logging, level.upper(), logging.INFO)
     handler = _build_handler()
 
@@ -126,13 +107,15 @@ def configure_logging(level: str = "INFO") -> None:
 
 
 def redact(value: str, *, level: int = logging.INFO, keep: int = 8) -> str:
-    """
-    Return ``value`` unchanged at DEBUG, otherwise a stable hash prefix.
+    """Return a stable hash prefix for sensitive values at non-DEBUG levels.
 
-    Use this for prompt text / PII before putting it in ``extra=`` so INFO
-    logs stay correlatable (same input -> same hash) without leaking content.
+    Args:
+        value: Sensitive string to redact.
+        level: Logging level for the call site.
+        keep: Number of hexadecimal characters to keep from the digest.
 
-        logger.info("guard.scan", extra={"prompt": redact(prompt)})
+    Returns:
+        The original value at DEBUG, otherwise a deterministic hash prefix.
     """
     if logging.getLogger().isEnabledFor(logging.DEBUG) or level <= logging.DEBUG:
         return value

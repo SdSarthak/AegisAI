@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { notify } from '../utils/toast'
 import { copyTextToClipboard } from '../utils/clipboard'
@@ -32,6 +32,15 @@ export default function CopyButton({
       }
     }
   }, [])
+
+  useEffect(() => {
+    setCopied(false)
+
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current)
+      timeoutRef.current = null
+    }
+  }, [text])
 
   const handleCopy = async () => {
     if (disabled) {
@@ -77,6 +86,9 @@ export default function CopyButton({
       disabled={disabled}
     >
       {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+      <span className="sr-only" aria-live="polite" aria-atomic="true">
+        {buttonTitle}
+      </span>
       {!iconOnly && <span>{copied ? copiedLabel : label}</span>}
     </button>
   )

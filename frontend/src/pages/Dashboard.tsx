@@ -1,4 +1,3 @@
-import React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { aiSystemsApi, documentsApi } from '../services/api'
@@ -207,6 +206,7 @@ export default function Dashboard() {
                 <Link
                   to={`/classification/${system.id}`}
                   className="text-sm text-primary-600 hover:text-primary-500"
+                  aria-label={`View classification details for ${system.name}`}
                 >
                   View →
                 </Link>

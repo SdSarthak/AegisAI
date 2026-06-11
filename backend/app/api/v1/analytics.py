@@ -1,33 +1,26 @@
-"""
-Analytics API — compliance score timelines and aggregate stats.
+"""Analytics API for compliance timelines and guard statistics.
+
+This module serves the compliance dashboards by exposing timeline data,
+summary metrics, and guard audit-log queries in one place.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (help wanted):
-  - Implement GET /analytics/compliance-timeline?system_id={id}&days=30
-    Return the last N daily ComplianceSnapshot rows for one AI system.
-  - Acceptance criteria: after the daily snapshot scheduler runs (see
-    backend/app/tasks/scheduler.py), the timeline endpoint returns at
-    least one data point per system.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timedelta
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
+from app.models.compliance_snapshot import ComplianceSnapshot
+from app.models.guard_scan_log import GuardScanLog
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
-from app.models.compliance_snapshot import ComplianceSnapshot
-from sqlalchemy import func
-from datetime import datetime, timedelta
-from typing import Optional
-
-from fastapi import Query
-
-from app.models.guard_scan_log import GuardScanLog
 from app.schemas.audit_log import GuardAuditLogResponse
 from app.schemas.pagination import PaginatedResponse
 
@@ -73,7 +66,6 @@ def get_analytics_summary(
     db: Session = Depends(get_db),
 ):
     """Return aggregate compliance statistics for the current user."""
-    # FIX: use SQL GROUP BY instead of loading all rows into memory
     risk_rows = (
         db.query(AISystem.risk_level, func.count(AISystem.id))
         .filter(AISystem.owner_id == current_user.id)

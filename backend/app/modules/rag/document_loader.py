@@ -1,8 +1,13 @@
-"""Document loader for ingesting regulatory PDFs from S3 or local disk."""
+"""Load and chunk documents for the RAG ingestion pipeline.
 
-import os
-from langchain_community.document_loaders import S3DirectoryLoader, PyPDFLoader
+The RAG system can read regulatory PDFs from either S3 or the local
+filesystem. This module normalizes both sources into split LangChain
+documents so downstream indexing sees a consistent shape.
+"""
+
+from langchain_community.document_loaders import PyPDFLoader, S3DirectoryLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
 from app.core.config import settings
 
 

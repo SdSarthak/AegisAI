@@ -1,5 +1,9 @@
-"""
-AegisAI — Open-source AI Governance, Risk & Compliance Platform
+"""FastAPI application bootstrap for the AegisAI backend.
+
+This module wires together logging, telemetry, middleware, routes, and the
+application lifespan hooks that prepare the database and regulation registry
+at startup.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
@@ -7,21 +11,21 @@ SPDX-License-Identifier: AGPL-3.0-only
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any, Dict
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
+import app.models  # ensure all ORM models are imported so tables are created
+from app.api.v1 import api_router, badge
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import Base, engine
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.core.telemetry import setup_telemetry
-from app.api.v1 import api_router, badge
 from app.plugins.regulation_loader import init_registry
-import app.models  # ensure all ORM models are imported so tables are created
 
 # -------------------------------------------------------------------
 # Logging Setup
@@ -36,9 +40,7 @@ logger = logging.getLogger("aegisai.main")
 # -------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Handles startup and shutdown events for the FastAPI application.
-    """
+    """Handle FastAPI startup and shutdown events."""
     logger.info("Starting AegisAI backend...")
 
     try:
@@ -126,9 +128,7 @@ def root() -> Dict[str, Any]:
 
 @app.get("/health", tags=["Health"])
 def health_check() -> Dict[str, Any]:
-    """
-    Validates application health and verifies database connectivity.
-    """
+    """Return a lightweight health check response with DB status."""
     db_status = "connected"
     overall_status = "healthy"
 
@@ -151,9 +151,7 @@ def health_check() -> Dict[str, Any]:
 
 @app.get("/ready", tags=["Health"])
 def readiness_check() -> Dict[str, Any]:
-    """
-    Readiness probe — confirms the application can serve traffic.
-    """
+    """Return a readiness probe that confirms the database is reachable."""
     db_ready = False
     try:
         with engine.connect() as connection:

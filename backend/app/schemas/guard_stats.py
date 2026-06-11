@@ -1,11 +1,16 @@
-"""
-Pydantic schemas for Guard scan statistics.
+"""Pydantic schemas for guard scan statistics responses.
+
+The API uses these models to present aggregate scan counts, match patterns,
+and daily decision breakdowns in a structure that is easy for the frontend
+to render.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
+from typing import Dict, List
+
 from pydantic import BaseModel
-from typing import List, Dict
 
 
 class StatsBreakdown(BaseModel):

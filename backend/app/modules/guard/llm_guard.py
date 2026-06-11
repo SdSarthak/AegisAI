@@ -1,17 +1,22 @@
-"""Main application: LLM Guard orchestrator combining all defense layers."""
+"""Orchestrate the layered LLM Guard pipeline.
 
-import json
+This module glues together the regex filter, intent classifier, decision
+engine, sanitizer, and downstream LLM client into one call that returns a
+single structured decision payload for the API.
+"""
+
 import logging
 from datetime import datetime
 from typing import Dict, Optional
 
-from . import RegexFilter, IntentClassifier, DecisionEngine, PromptSanitizer
-from .decision_engine import Decision
-from .sanitizer import SanitizationLevel
-from .normalizer import normalize_prompt
-from ..llm.llm_client import LLMClient
-from . import guard_config as config
 from app.core.telemetry import instrument_guard
+
+from ..llm.llm_client import LLMClient
+from . import DecisionEngine, IntentClassifier, PromptSanitizer, RegexFilter
+from . import guard_config as config
+from .decision_engine import Decision
+from .normalizer import normalize_prompt
+from .sanitizer import SanitizationLevel
 
 # Logging is configured centrally in app.core.logging (configure_logging).
 # Importing this module must not call logging.basicConfig — doing so would
@@ -20,24 +25,18 @@ logger = logging.getLogger(__name__)
 
 
 class LLMGuard:
-    """Complete prompt injection guard pipeline."""
+    """Complete prompt injection guard pipeline.
+
+    The guard layers regex filtering, intent classification, decision logic,
+    sanitization, and LLM execution into one orchestrated flow.
+    """
 
     def __init__(
         self,
         classifier_model_path: Optional[str] = None,
         sanitization_level: SanitizationLevel = SanitizationLevel.MEDIUM,
     ):
-        """
-        Initialize the guard with all defense layers.
-
-        The classifier automatically loads the fine-tuned model trained by the notebook
-        if available, otherwise falls back to deterministic heuristics.
-
-        Args:
-            classifier_model_path: Path to fine-tuned classifier model.
-                                  If None, auto-detects using config.get_trained_model_path()
-            sanitization_level: How aggressively to sanitize prompts
-        """
+        """Initialize the guard layers and their supporting clients."""
         logger.info("Initializing LLM Guard...")
 
         # Layer 1: Fast regex filter
@@ -73,15 +72,7 @@ class LLMGuard:
 
     @instrument_guard
     def guard(self, user_prompt: str) -> Dict:
-        """
-        Run the complete guard pipeline on a user prompt.
-
-        Args:
-            user_prompt: Raw user input
-
-        Returns:
-            Dictionary with decision, response, and metadata
-        """
+        """Run the full guard flow and return the structured result."""
         timestamp = datetime.now().isoformat()
         logger.info(f"Processing prompt at {timestamp}")
 
@@ -153,7 +144,7 @@ class LLMGuard:
             sanitized_prompt, sanitization_summary = self.sanitizer.sanitize(
                 normalized_prompt
             )
-            result["sanitized_prompt"] = sanitized_prompt  # FIX: expose sanitized text to API layer
+            result["sanitized_prompt"] = sanitized_prompt
             result["metadata"]["sanitization"] = {
                 "original_length": len(user_prompt),
                 "sanitized_length": len(sanitized_prompt),
@@ -194,15 +185,14 @@ class LLMGuard:
         return result
 
     def evaluate_on_test_set(self, test_prompts: list, true_labels: list) -> Dict:
-        """
-        Evaluate the guard on a test set.
+        """Evaluate the guard on a test set.
 
         Args:
-            test_prompts: List of test prompts
-            true_labels: Ground truth labels ("allow", "sanitize", "block")
+            test_prompts: List of test prompts.
+            true_labels: Ground truth labels (`allow`, `sanitize`, `block`).
 
         Returns:
-            Evaluation metrics
+            Evaluation metrics for the current guard configuration.
         """
         predictions = []
 
@@ -228,22 +218,21 @@ class LLMGuard:
 
 def main():
     """CLI interface for the guard."""
-    import sys
 
     # Initialize guard
     guard = LLMGuard(sanitization_level=SanitizationLevel.MEDIUM)
 
-    print("\n" + "=" * 60)
-    print("LLM Prompt-Injection Guard")
-    print("=" * 60)
-    print("Enter prompts to test. Type 'quit' to exit.\n")
+    logger.info("%s", "=" * 60)
+    logger.info("LLM Prompt-Injection Guard")
+    logger.info("%s", "=" * 60)
+    logger.info("Enter prompts to test. Type 'quit' to exit.")
 
     while True:
         try:
             user_input = input(">>> ").strip()
 
             if user_input.lower() in ["quit", "exit", "q"]:
-                print("Exiting...")
+                logger.info("Exiting...")
                 break
 
             if not user_input:
@@ -253,21 +242,23 @@ def main():
             result = guard.guard(user_input)
 
             # Display results
-            print("\n" + "-" * 60)
-            print(f"Decision: {result['decision'].upper()}")
-            print(
-                f"Confidence: {result['metadata']['decision_reasoning']['confidence']:.2%}"
+            logger.info("%s", "-" * 60)
+            logger.info("Decision: %s", result["decision"].upper())
+            logger.info(
+                "Confidence: %.2f%%",
+                result["metadata"]["decision_reasoning"]["confidence"] * 100,
             )
-            print(f"Reasoning: {result['metadata']['decision_reasoning']['reasoning']}")
-            print(f"\nResponse:\n{result['response']}")
-            print("-" * 60 + "\n")
+            logger.info(
+                "Reasoning: %s", result["metadata"]["decision_reasoning"]["reasoning"]
+            )
+            logger.info("Response:\n%s", result["response"])
+            logger.info("%s", "-" * 60)
 
         except KeyboardInterrupt:
-            print("\nExiting...")
+            logger.info("Exiting...")
             break
-        except Exception as e:
-            logger.error(f"Error: {e}")
-            print(f"Error: {e}\n")
+        except Exception:
+            logger.exception("Error while running the guard CLI")
 
 
 if __name__ == "__main__":

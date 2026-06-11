@@ -1,15 +1,10 @@
+"""Explain EU AI Act risk classifications from plain-text system descriptions.
+
+The engine maps keyword matches in a system description to risk factors,
+relevant legal articles, and practical recommendations without calling an
+external LLM. That makes it suitable for offline use and deterministic
+testing.
 """
-Risk Classification Explainer Engine
-
-Converts a plain-text AI system description into a structured
-RiskClassificationRequest by extracting keywords and mapping them
-to EU AI Act risk factors — then enriches the result with
-legal article references and plain-English explanations.
-
-No external LLM or API required — pure Python, works offline.
-"""
-
-from __future__ import annotations
 
 import re
 from typing import List, Tuple
@@ -22,7 +17,6 @@ from app.schemas.explain import (
     RelevantArticle,
     TriggeredFactor,
 )
-
 
 # ── Keyword → Risk Factor mapping ──
 # Each entry maps a risk factor ID to a list of keyword patterns
@@ -219,12 +213,26 @@ RECOMMENDATIONS: dict[RiskLevel, List[str]] = {
 
 
 def _normalize(text: str) -> str:
-    """Lowercase and normalize text for keyword matching."""
+    """Lowercase and normalize text for keyword matching.
+
+    Args:
+        text: Input text to normalize.
+
+    Returns:
+        A lowercased, trimmed version of the text.
+    """
     return text.lower().strip()
 
 
 def _extract_keywords(description: str) -> List[str]:
-    """Extract meaningful keywords from the description."""
+    """Extract meaningful keywords from a description.
+
+    Args:
+        description: Natural-language AI system description.
+
+    Returns:
+        A list of filtered keyword tokens useful for matching.
+    """
     normalized = _normalize(description)
     # Remove common stop words, keep meaningful terms
     stop_words = {
@@ -243,9 +251,14 @@ def _extract_keywords(description: str) -> List[str]:
 def _match_factors(
     description: str,
 ) -> List[Tuple[str, List[str]]]:
-    """
-    Match description against all risk factor keyword patterns.
-    Returns list of (factor_id, matched_keywords) tuples.
+    """Match a description against the known risk factor keyword patterns.
+
+    Args:
+        description: Natural-language AI system description.
+
+    Returns:
+        A list of ``(factor_id, matched_keywords)`` tuples for every matched
+        factor.
     """
     normalized = _normalize(description)
     matched = []
@@ -264,9 +277,13 @@ def _match_factors(
 def _build_questionnaire(
     matched_factor_ids: List[str],
 ) -> RiskClassificationRequest:
-    """
-    Build a RiskClassificationRequest from matched factor IDs.
-    All factors default to False; matched ones are set to True.
+    """Build a questionnaire payload from matched risk factor IDs.
+
+    Args:
+        matched_factor_ids: Risk factor IDs detected in the description.
+
+    Returns:
+        A RiskClassificationRequest with matched factors enabled.
     """
     kwargs = {
          "use_case_category"           : "other",
@@ -293,9 +310,14 @@ def _compute_confidence(
     matched_factors: List[Tuple[str, List[str]]],
     risk_level: RiskLevel,
 ) -> float:
-    """
-    Compute confidence score based on number of matched factors
-    and keyword match strength.
+    """Compute a heuristic confidence score from the matched factors.
+
+    Args:
+        matched_factors: Matched risk factors and their keyword hits.
+        risk_level: Final risk level chosen by the classifier.
+
+    Returns:
+        A confidence score between 0.0 and 1.0.
     """
     if not matched_factors:
         return 0.75  # minimal risk with no matches = moderate confidence
@@ -320,12 +342,14 @@ def _compute_confidence(
 
 
 def explain_risk(request: ExplainRequest) -> ExplainResponse:
-    """
-    Main explainer function.
+    """Generate a full explainability report from a plain-text description.
 
-    Takes a plain-text AI system description and returns a full
-    explainability report including risk level, triggered factors,
-    relevant EU AI Act articles, and actionable recommendations.
+    Args:
+        request: Explainability request containing the system description.
+
+    Returns:
+        ExplainResponse with risk level, triggered factors, articles, and
+        recommendations.
     """
     description = request.description
 

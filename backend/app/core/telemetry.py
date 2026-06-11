@@ -1,14 +1,11 @@
-"""OpenTelemetry + Prometheus instrumentation for observability.
+"""Prometheus instrumentation helpers for the AegisAI backend.
 
-Exposes:
-  - FastAPI request latency histograms (via prometheus-fastapi-instrumentator)
-  - Guard inference pipeline latency & counters
-  - RAG retrieval latency
-  - SQLAlchemy query duration
-  - /metrics endpoint (Prometheus scrape target)
+This module centralizes the metrics used across the API so endpoints,
+guard inference, RAG retrieval, and database queries all report into the
+same Prometheus namespace. Keeping the counters and histograms in one place
+also makes it easier to wire the /metrics endpoint into FastAPI with a
+single setup function.
 """
-
-from __future__ import annotations
 
 import time
 from functools import wraps
@@ -87,7 +84,7 @@ instrumentator = Instrumentator(
 
 
 def instrument_guard(fn: _F) -> _F:
-    """Time guard inference and record decision counters."""
+    """Wrap guard inference and record latency plus decision metrics."""
 
     @wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -107,7 +104,7 @@ def instrument_guard(fn: _F) -> _F:
 
 
 def instrument_rag(fn: _F) -> _F:
-    """Time RAG retrieval calls."""
+    """Wrap RAG retrieval calls with latency and success counters."""
 
     @wraps(fn)
     def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -127,5 +124,5 @@ def instrument_rag(fn: _F) -> _F:
 
 
 def setup_telemetry(app: Any) -> None:
-    """Initialise all observability instrumentation on the FastAPI app."""
+    """Attach request metrics and expose the Prometheus scrape endpoint."""
     instrumentator.instrument(app).expose(app, endpoint="/metrics")

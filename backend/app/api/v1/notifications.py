@@ -1,18 +1,14 @@
-"""
-Notifications API — in-app event feed for users.
-Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
-SPDX-License-Identifier: AGPL-3.0-only
-"""
+"""API for the in-app notification feed and read-state updates."""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.models.user import User
 from app.models.notification import Notification
-from app.schemas.notification import NotificationResponse, NotificationMarkRead
+from app.models.user import User
+from app.schemas.notification import NotificationMarkRead, NotificationResponse
 from app.schemas.pagination import PaginatedResponse
-
 
 router = APIRouter()
 
@@ -26,6 +22,7 @@ def create_notification(
     resource_type: str | None = None,
     resource_id: int | None = None,
 ) -> Notification:
+    """Create and persist a notification for a user."""
     notification = Notification(
         user_id=user_id,
         notification_type=notification_type,
@@ -77,7 +74,7 @@ def mark_notifications_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Mark the specified notifications as read."""
+    """Mark a batch of notifications as read for the current user."""
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.id.in_(body.ids),
@@ -87,7 +84,7 @@ def mark_notifications_read(
     )
 
     db.commit()
-    return None
+    return
 
 
 @router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -96,7 +93,7 @@ def delete_notification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a notification owned by the current user."""
+    """Delete one notification owned by the current user."""
     notification = (
         db.query(Notification)
         .filter(
@@ -114,4 +111,4 @@ def delete_notification(
 
     db.delete(notification)
     db.commit()
-    return None
+    return

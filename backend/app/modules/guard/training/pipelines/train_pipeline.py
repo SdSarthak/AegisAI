@@ -1,6 +1,9 @@
-"""End-to-end training pipeline for the guard safety classifier."""
+"""Run the end-to-end training pipeline for the guard safety classifier.
 
-from __future__ import annotations
+The pipeline handles config loading, dataset acquisition, train/validation
+splitting, model training, optional MLflow logging, and artifact export in
+one place so the CLI and any automation can reuse the same path.
+"""
 
 import argparse
 from copy import deepcopy
@@ -17,7 +20,6 @@ from app.modules.guard.training.utils.checkpoint import save_json_artifact, utc_
 from app.modules.guard.training.utils.logger import get_training_logger
 from app.modules.guard.training.utils.mlflow_logger import log_metrics, mlflow_run
 from app.modules.guard.training.utils.seed import set_seed
-
 
 LOGGER = get_training_logger(__name__)
 

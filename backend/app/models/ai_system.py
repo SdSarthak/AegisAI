@@ -1,7 +1,20 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, Enum, ForeignKey, JSON, Float, UniqueConstraint
-from sqlalchemy.orm import relationship
-from datetime import datetime
 import enum
+from datetime import datetime
+
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 
 

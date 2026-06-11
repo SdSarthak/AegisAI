@@ -1,6 +1,8 @@
-"""Evaluation pipeline for trained guard safety classifiers."""
+"""Run evaluation for a trained guard safety classifier.
 
-from __future__ import annotations
+This pipeline loads the cached dataset, evaluates the current model, and
+writes both aggregate metrics and per-example predictions to artifact files.
+"""
 
 import argparse
 from pathlib import Path
@@ -18,7 +20,6 @@ from app.modules.guard.training.utils.checkpoint import (
     utc_run_id,
 )
 from app.modules.guard.training.utils.logger import get_training_logger
-
 
 LOGGER = get_training_logger(__name__)
 

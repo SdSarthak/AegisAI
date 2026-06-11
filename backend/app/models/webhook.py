@@ -1,18 +1,17 @@
-"""
-WebhookConfig model — user-configured endpoints for event delivery.
+"""Store webhook delivery settings for user-configured endpoints.
+
+The model tracks the target URL, signing secret, enabled state, and event
+subscriptions so background jobs can deliver notifications consistently.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (good first issue):
-  - This model is complete. Register it in app/models/__init__.py and
-    create an Alembic migration.
-  - Acceptance criteria: `alembic revision --autogenerate` produces a
-    migration that creates the `webhook_configs` table.
 """
 
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON
-from sqlalchemy.orm import relationship
 from datetime import datetime
+
+from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import relationship
+
 from app.core.database import Base
 
 

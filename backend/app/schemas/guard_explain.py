@@ -1,13 +1,14 @@
-"""
-Pydantic schemas for Guard explanation (issue #77).
+"""Pydantic schemas for guard explanation responses.
+
+These models define the contract used by the prompt explainability endpoint
+so the UI can render token attributions, latency, and the classifier output
+in a consistent format.
 
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
-from __future__ import annotations
-
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 

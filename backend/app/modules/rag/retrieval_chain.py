@@ -1,4 +1,9 @@
-"""LangChain retrieval-augmented generation chain for regulatory queries."""
+"""Wrap LangChain retrieval with groundedness reporting for the RAG API.
+
+The retrieval chain delegates answer generation to LangChain, then enriches
+the result with groundedness metadata so the API can tell users how well the
+answer is supported by the retrieved documents.
+"""
 
 import logging
 from typing import Any
@@ -13,16 +18,20 @@ ChatOpenAI = None
 
 
 class GroundedRetrievalQA:
-    """Callable wrapper that adds groundedness scores to RetrievalQA results."""
+    """Callable wrapper that adds groundedness scores to RetrievalQA results.
+
+    The wrapper preserves the original LangChain interface while appending
+    groundedness metadata used by the RAG API.
+    """
 
     def __init__(self, qa_chain: Any, embeddings_fn: Any) -> None:
-        """Store the underlying chain and embedding callable."""
+        """Store the wrapped chain and embeddings callable."""
         self.qa_chain = qa_chain
         self.embeddings_fn = embeddings_fn
 
     @instrument_rag
     def __call__(self, payload: Any) -> dict[str, Any]:
-        """Run the QA chain and append groundedness fields to the result dict."""
+        """Run the QA chain and append groundedness metadata to the result."""
         result = self.qa_chain(payload)
         query = _extract_query(payload)
         answer = str(result.get("result", ""))
@@ -67,12 +76,7 @@ def load_vector_store() -> Any:
 
 
 def get_qa_chain():
-    """
-    Build and return a RetrievalQA chain backed by the persisted FAISS index.
-
-    Raises:
-        FileNotFoundError: if the vector store has not been ingested yet
-    """
+    """Build and return a RetrievalQA chain backed by the persisted FAISS index."""
     global ChatOpenAI
 
     from langchain.chains import RetrievalQA
@@ -104,6 +108,7 @@ def get_qa_chain():
 
 
 def _get_embeddings_fn(vector_store: Any) -> Any:
+    """Return a callable embeddings function from a vector store instance."""
     embeddings = vector_store.embedding_function
     if hasattr(embeddings, "embed_documents"):
         return embeddings.embed_documents
@@ -111,6 +116,7 @@ def _get_embeddings_fn(vector_store: Any) -> Any:
 
 
 def _extract_query(payload: Any) -> str:
+    """Extract the user query string from either dict or scalar payloads."""
     if isinstance(payload, dict):
         return str(payload.get("query", ""))
     return str(payload)

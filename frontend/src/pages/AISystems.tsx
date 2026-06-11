@@ -1,10 +1,20 @@
-import React, { useState } from 'react'
-import {
- useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
-import { useAuthStore } from '../stores/authStore'
-import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Download } from 'lucide-react'
+import {
+  ArrowUpDown,
+  Bot,
+  ChevronDown,
+  Download,
+  Filter,
+  Loader2,
+  Search,
+  Plus,
+  Trash2,
+  X,
+} from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { notify } from '../utils/toast'
 
 interface AISystem {
   id: number
@@ -20,6 +30,13 @@ interface AISystem {
 
 export default function AISystems() {
   const queryClient = useQueryClient()
+  const exportMenuRef = useRef<HTMLDivElement>(null)
+  const exportButtonRef = useRef<HTMLButtonElement>(null)
+  const previousExportMenuOpenRef = useRef(false)
+  const createModalTriggerRef = useRef<HTMLElement | null>(null)
+  const deleteModalTriggerRef = useRef<HTMLElement | null>(null)
+  const previousShowModalRef = useRef(false)
+  const previousSystemToDeleteRef = useRef<AISystem | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -33,30 +50,73 @@ export default function AISystems() {
   const [sortBy, setSortBy] = useState('created_at')
   const [order, setOrder] = useState('desc')
   const [systemToDelete, setSystemToDelete] = useState<AISystem | null>(null)
+  const [deletingSystemId, setDeletingSystemId] = useState<number | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const [exporting, setExporting] = useState(false)
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const exportMenuId = 'ai-systems-export-menu'
+  const addSystemNameId = 'add-ai-system-name'
+  const addSystemDescriptionId = 'add-ai-system-description'
+  const addSystemSectorId = 'add-ai-system-sector'
+  const addSystemUseCaseId = 'add-ai-system-use-case'
+  const [lastExportedAt, setLastExportedAt] = useState<string | null>(() => {
+    if (typeof window === 'undefined') {
+      return null
+    }
 
-  const handleExport = async () => {
+    return window.localStorage.getItem('ai-systems-last-exported-at')
+  })
+
+  const resetCreateForm = useCallback(() => {
+    setFormData({ name: '', description: '', use_case: '', sector: '' })
+  }, [])
+
+  const openCreateModal = useCallback((trigger?: HTMLElement | null) => {
+    createModalTriggerRef.current = trigger ?? null
+    resetCreateForm()
+    setShowModal(true)
+  }, [resetCreateForm])
+
+  const closeCreateModal = useCallback(() => {
+    setShowModal(false)
+    resetCreateForm()
+  }, [resetCreateForm])
+
+  const openDeleteModal = useCallback((system: AISystem, trigger?: HTMLElement | null) => {
+    deleteModalTriggerRef.current = trigger ?? null
+    setSystemToDelete(system)
+  }, [])
+
+  const handleExport = async (format: 'csv' | 'json') => {
     setExporting(true)
+    setExportMenuOpen(false)
     try {
-      // Guarantee the loading state is visible for at least 1 second
-      const minDelay = new Promise((r) => setTimeout(r, 1000))
-      const fetchExport = async () => {
-        const token = useAuthStore.getState().token
-        const response = await fetch('/api/v1/ai-systems/export', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        return response.blob()
-      }
-      const [blob] = await Promise.all([fetchExport(), minDelay])
+      const [payload] = await Promise.all([
+        aiSystemsApi.export(format),
+        new Promise((resolve) => setTimeout(resolve, 500)),
+      ])
+
+      const blob =
+        format === 'csv'
+          ? (payload as Blob)
+          : new Blob([JSON.stringify(payload, null, 2)], {
+              type: 'application/json;charset=utf-8',
+            })
+
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = 'ai_systems.csv'
+      a.download = `ai_systems_export_${new Date().toISOString().split('T')[0]}.${format}`
       a.click()
-      URL.revokeObjectURL(url)
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
+
+      const exportedAt = new Date().toISOString()
+      setLastExportedAt(exportedAt)
+      window.localStorage.setItem('ai-systems-last-exported-at', exportedAt)
     } catch (error) {
-      console.error('Export failed:', error)
+      notify.error(
+        error instanceof Error ? error.message : 'Export failed. Please try again.',
+      )
     } finally {
       setExporting(false)
     }
@@ -90,20 +150,107 @@ export default function AISystems() {
     mutationFn: aiSystemsApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-systems'] })
-      setShowModal(false)
-      setFormData({ name: '', description: '', use_case: '', sector: '' })
+      closeCreateModal()
+      notify.success('AI system added')
+    },
+    onError: () => {
+      notify.error('Unable to add the AI system right now')
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: aiSystemsApi.delete,
+    onMutate: (id) => {
+      setDeletingSystemId(id)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-systems'] })
       setSystemToDelete(null)
+      if (currentPage > 1 && systems.length === 1) {
+        setCurrentPage((page) => Math.max(page - 1, 1))
+      }
+      notify.success('AI system deleted')
+    },
+    onError: () => {
+      notify.error('Unable to delete the AI system right now')
+    },
+    onSettled: () => {
+      setDeletingSystemId(null)
     },
   })
 
   const filteredSystems = systems
+
+  useEffect(() => {
+    if (previousExportMenuOpenRef.current && !exportMenuOpen) {
+      exportButtonRef.current?.focus()
+    }
+    previousExportMenuOpenRef.current = exportMenuOpen
+
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        exportMenuRef.current &&
+        !exportMenuRef.current.contains(event.target as Node)
+      ) {
+        setExportMenuOpen(false)
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setExportMenuOpen(false)
+      }
+    }
+
+    if (exportMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside)
+      document.addEventListener('keydown', handleEscape)
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [exportMenuOpen])
+
+  useEffect(() => {
+    if (previousShowModalRef.current && !showModal) {
+      createModalTriggerRef.current?.focus()
+      createModalTriggerRef.current = null
+    }
+    previousShowModalRef.current = showModal
+  }, [showModal])
+
+  useEffect(() => {
+    if (previousSystemToDeleteRef.current && !systemToDelete) {
+      deleteModalTriggerRef.current?.focus()
+      deleteModalTriggerRef.current = null
+    }
+    previousSystemToDeleteRef.current = systemToDelete
+  }, [systemToDelete])
+
+  useEffect(() => {
+    if (!showModal && !systemToDelete) {
+      return
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+
+      if (showModal) {
+        closeCreateModal()
+        return
+      }
+
+      setSystemToDelete(null)
+    }
+
+    document.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [closeCreateModal, showModal, systemToDelete])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -168,17 +315,56 @@ export default function AISystems() {
           <h1 className="text-2xl font-bold text-gray-900">AI Systems</h1>
           <p className="text-gray-600">Manage your AI systems for compliance tracking</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col items-end gap-2">
+          <div ref={exportMenuRef} className="relative">
+            <button
+              ref={exportButtonRef}
+              type="button"
+              onClick={() => setExportMenuOpen((value) => !value)}
+              disabled={exporting}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-expanded={exportMenuOpen}
+              aria-haspopup="menu"
+              aria-controls={exportMenuId}
+            >
+              {exporting ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Download className="w-5 h-5" />
+              )}
+              {exporting ? 'Exporting...' : 'Export'}
+              {!exporting && <ChevronDown className="w-4 h-4 text-gray-500" />}
+            </button>
+
+            {exportMenuOpen && !exporting && (
+              <div
+                id={exportMenuId}
+                className="absolute right-0 mt-2 w-44 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg z-20"
+              >
+                <button
+                  type="button"
+                  onClick={() => handleExport('csv')}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Download as CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExport('json')}
+                  className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                >
+                  Download as JSON
+                </button>
+              </div>
+            )}
+          </div>
+          {lastExportedAt && (
+            <p className="text-xs text-gray-500">
+              Last exported {formatDistanceToNow(new Date(lastExportedAt), { addSuffix: true })}
+            </p>
+          )}
           <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Download className="w-5 h-5" />
-            {exporting ? 'Exporting...' : 'Export CSV'}
-          </button>
-          <button
-            onClick={() => setShowModal(true)}
+            onClick={(event) => openCreateModal(event.currentTarget)}
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
           >
             <Plus className="w-5 h-5" />
@@ -190,8 +376,12 @@ export default function AISystems() {
       {/* Search and Filters */}
       <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
         <div className="relative flex-1">
+          <label htmlFor="ai-system-search" className="sr-only">
+            Search AI systems
+          </label>
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
+            id="ai-system-search"
             type="text"
             placeholder="Search AI systems..."
             value={searchTerm}
@@ -205,7 +395,11 @@ export default function AISystems() {
         <div className="flex flex-wrap gap-3">
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <label htmlFor="risk-filter" className="sr-only">
+              Filter by risk level
+            </label>
             <select
+              id="risk-filter"
               value={riskFilter}
               onChange={(e) => {
                 setRiskFilter(e.target.value)
@@ -222,7 +416,11 @@ export default function AISystems() {
           </div>
           <div className="relative">
             <Bot className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <label htmlFor="compliance-filter" className="sr-only">
+              Filter by compliance status
+            </label>
             <select
+              id="compliance-filter"
               value={complianceFilter}
               onChange={(e) => {
                 setComplianceFilter(e.target.value)
@@ -240,6 +438,9 @@ export default function AISystems() {
           </div>
           <div className="relative">
             <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <label htmlFor="sort-by-select" className="sr-only">
+              Sort AI systems by
+            </label>
             <select
               id="sort-by-select"
               value={sortBy}
@@ -253,6 +454,9 @@ export default function AISystems() {
             </select>
           </div>
           <div className="relative">
+            <label htmlFor="sort-order-select" className="sr-only">
+              Sort order
+            </label>
             <select
               id="sort-order-select"
               value={order}
@@ -328,18 +532,10 @@ export default function AISystems() {
               ? 'Try adjusting your filters or search term'
               : 'Add your first AI system to start tracking compliance'}
           </p>
-          {!searchTerm && !riskFilter && !complianceFilter && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleExport}
-                disabled={exporting}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Download className="w-5 h-5" />
-                {exporting ? 'Exporting...' : 'Export CSV'}
-              </button>
-              <button
-                onClick={() => setShowModal(true)}
+              {!searchTerm && !riskFilter && !complianceFilter && (
+                <div className="flex items-center gap-3">
+                  <button
+                onClick={(event) => openCreateModal(event.currentTarget)}
                 className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
               >
                 <Plus className="w-5 h-5" />
@@ -395,11 +591,10 @@ export default function AISystems() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
-                    <Edit className="w-5 h-5" />
-                  </button>
                   <button
-                    onClick={() => setSystemToDelete(system)}
+                    onClick={(event) => openDeleteModal(system, event.currentTarget)}
+                    aria-label={`Delete AI system ${system.name}`}
+                    title={`Delete AI system ${system.name}`}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
                   >
                     <Trash2 className="w-5 h-5" />
@@ -454,9 +649,21 @@ export default function AISystems() {
 
       {/* Delete Confirmation Modal */}
       {systemToDelete && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-ai-system-title"
+          onClick={() => setSystemToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-xl p-6 w-full max-w-md"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2
+              id="delete-ai-system-title"
+              className="text-lg font-semibold text-gray-900 mb-2"
+            >
               Delete AI System
             </h2>
             <p className="text-gray-600">
@@ -470,32 +677,50 @@ export default function AISystems() {
               >
                 Cancel
               </button>
-              <button
-                type="button"
-                onClick={() => deleteMutation.mutate(systemToDelete.id)}
-                disabled={deleteMutation.isPending}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
+                  <button
+                    type="button"
+                    onClick={() => deleteMutation.mutate(systemToDelete.id)}
+                    disabled={deleteMutation.isPending && deletingSystemId === systemToDelete.id}
+                    className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                  >
+                    {deleteMutation.isPending && deletingSystemId === systemToDelete.id
+                      ? 'Deleting...'
+                      : 'Delete'}
+                  </button>
+                </div>
+              </div>
         </div>
       )}
 
       {/* Add Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="add-ai-system-title"
+          onClick={closeCreateModal}
+        >
+          <div
+            className="bg-white rounded-xl p-6 w-full max-w-md"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2
+              id="add-ai-system-title"
+              className="text-lg font-semibold text-gray-900 mb-4"
+            >
               Add AI System
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={addSystemNameId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   System Name *
                 </label>
                 <input
+                  id={addSystemNameId}
                   type="text"
                   required
                   value={formData.name}
@@ -505,10 +730,14 @@ export default function AISystems() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={addSystemDescriptionId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Description
                 </label>
                 <textarea
+                  id={addSystemDescriptionId}
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
@@ -517,10 +746,14 @@ export default function AISystems() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={addSystemSectorId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Sector
                 </label>
                 <select
+                  id={addSystemSectorId}
                   value={formData.sector}
                   onChange={(e) => setFormData({ ...formData, sector: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
@@ -532,10 +765,14 @@ export default function AISystems() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={addSystemUseCaseId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Use Case
                 </label>
                 <select
+                  id={addSystemUseCaseId}
                   value={formData.use_case}
                   onChange={(e) => setFormData({ ...formData, use_case: e.target.value })}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
@@ -549,7 +786,7 @@ export default function AISystems() {
               <div className="flex justify-end gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={closeCreateModal}
                   className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
                 >
                   Cancel

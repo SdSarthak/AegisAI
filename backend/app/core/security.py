@@ -1,11 +1,11 @@
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional, TYPE_CHECKING
 import re
+from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
-from jose import ExpiredSignatureError, JWTError, jwt
-from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from jose import ExpiredSignatureError, JWTError, jwt
+from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -20,7 +20,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_PREFIX}/auth/lo
 
 
 def _get_credentials_exception() -> HTTPException:
-    """Helper to return a standardized 401 Unauthorized exception."""
+    """Build a standardized 401 Unauthorized exception."""
     return HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail={"field": "general", "message": "Could not validate credentials"},
@@ -29,6 +29,18 @@ def _get_credentials_exception() -> HTTPException:
 
 
 def validate_password_strength(password: str) -> str:
+    """Validate that a password meets the project strength policy.
+
+    Args:
+        password: Plain-text password to validate.
+
+    Returns:
+        The original password when it passes all checks.
+
+    Raises:
+        ValueError: If the password is too short or missing required
+            character classes.
+    """
     errors = []
     if len(password) > 128:
         raise ValueError("Password must not exceed 128 characters")
@@ -46,7 +58,15 @@ def validate_password_strength(password: str) -> str:
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify a plain password against its hashed version."""
+    """Verify a plain password against its hashed version.
+
+    Args:
+        plain_password: Candidate password to verify.
+        hashed_password: Stored bcrypt hash to compare against.
+
+    Returns:
+        True when the password matches and is safe to verify.
+    """
     if len(plain_password.encode("utf-8")) > 72:
         return False
 
@@ -57,12 +77,27 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def get_password_hash(password: str) -> str:
-    """Securely hash a password using bcrypt."""
+    """Securely hash a password using bcrypt.
+
+    Args:
+        password: Plain-text password to hash.
+
+    Returns:
+        A bcrypt password hash string.
+    """
     return pwd_context.hash(password)
 
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
-    """Create a JWT access token with an expiration payload."""
+    """Create a JWT access token with an expiration payload.
+
+    Args:
+        data: Token claims to encode.
+        expires_delta: Optional custom lifetime for the token.
+
+    Returns:
+        A signed JWT access token.
+    """
     to_encode = data.copy()
     
     # Use timezone-aware UTC datetime to prevent standard library deprecation warnings
@@ -77,14 +112,23 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         "iat": now,
         "nbf": now,
     })
-    encoded_jwt = jwt.encode(
+    return jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
-    return encoded_jwt
 
 
 def decode_token(token: str) -> Dict[str, Any]:
-    """Decode and strictly validate a JWT token payload."""
+    """Decode and strictly validate a JWT token payload.
+
+    Args:
+        token: Encoded JWT string to decode.
+
+    Returns:
+        The validated token payload.
+
+    Raises:
+        HTTPException: If the token is invalid, expired, or malformed.
+    """
     try:
         payload = jwt.decode(
             token,
@@ -119,16 +163,27 @@ def decode_token(token: str) -> Dict[str, Any]:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={"field": "general", "message": "Token has expired. Please log in again."},
             headers={"WWW-Authenticate": "Bearer"},
-        )
+        ) from None
 
     except JWTError:
-        raise _get_credentials_exception()
+        raise _get_credentials_exception() from None
 
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)
 ) -> "User":
-    """Dependency to get the current authenticated user from a JWT."""
+    """Dependency to get the current authenticated user from a JWT.
+
+    Args:
+        token: OAuth2 bearer token extracted from the request.
+        db: Active database session.
+
+    Returns:
+        The authenticated User ORM object.
+
+    Raises:
+        HTTPException: If the token is invalid or the user cannot be loaded.
+    """
     from app.models.user import User  # Local import to avoid circular dependencies
 
     payload = decode_token(token)
@@ -141,7 +196,7 @@ async def get_current_user(
     try:
         user_id = int(user_id_str)
     except (ValueError, TypeError):
-        raise _get_credentials_exception()
+        raise _get_credentials_exception() from None
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:

@@ -1,9 +1,10 @@
-from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional, Dict
 from datetime import datetime
-from app.models.user import SubscriptionTier
+from typing import Dict, Optional
+
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from app.core.security import validate_password_strength
+from app.models.user import SubscriptionTier
 
 
 class UserCreate(BaseModel):

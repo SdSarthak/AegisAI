@@ -1,11 +1,14 @@
-"""Logging setup for guard training pipelines."""
+"""Logging helpers for guard training and evaluation jobs.
 
-from __future__ import annotations
+The training pipeline uses a dedicated logger so its progress messages stay
+separate from the main API logger and remain easy to scan in local runs.
+"""
 
 import logging
 
 
 def get_training_logger(name: str = "aegisai.guard.training") -> logging.Logger:
+    """Return a configured training logger for guard pipeline runs."""
     logger = logging.getLogger(name)
     if not logger.handlers:
         handler = logging.StreamHandler()

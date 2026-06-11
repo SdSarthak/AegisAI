@@ -1,5 +1,8 @@
-"""
-Pydantic schemas for WebhookConfig resource.
+"""Pydantic schemas for webhook configuration resources.
+
+The API uses these models to validate webhook creation requests and to
+serialize stored webhook settings back to clients.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """

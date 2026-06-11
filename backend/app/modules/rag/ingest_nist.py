@@ -1,15 +1,8 @@
+"""Ingest the NIST AI RMF PDF into the RAG FAISS index.
+
+The helper loads the local NIST AI RMF document, chunks it, annotates the
+metadata, and merges the chunks into the existing vector store.
 """
-NIST AI RMF 1.0 document ingestion into the AegisAI FAISS vector store.
-
-Loads the NIST AI RMF PDF, splits it into chunks, embeds them with
-framework metadata tagging, and adds them to the existing FAISS index
-alongside EU AI Act, GDPR, and ISO 42001 documents.
-
-Run once:
-    python -m app.modules.rag.ingest_nist
-"""
-
-from __future__ import annotations
 
 import logging
 import os
@@ -44,7 +37,8 @@ def ingest_nist_ai_rmf() -> None:
             f"NIST AI RMF PDF not found at {NIST_PDF_PATH}. "
             "Download it from: https://nvlpubs.nist.gov/nistpubs/ai/NIST.AI.100-1.pdf"
         )
-# TODO: add support for NIST AI RMF 2.0 when published
+
+    # NIST AI RMF 2.0 can be added here once the final publication is available.
     logger.info("Loading NIST AI RMF PDF from %s", NIST_PDF_PATH)
     loader = PyPDFLoader(str(NIST_PDF_PATH))
     pages = loader.load()

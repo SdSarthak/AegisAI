@@ -1,4 +1,9 @@
-"""Pydantic schemas for RAG Intelligence endpoints."""
+"""Pydantic schemas for the RAG intelligence endpoints.
+
+These request and response models define the contract used by the RAG API
+so the frontend can rely on stable field names for answers, sources, and
+groundedness metadata.
+"""
 
 from typing import Optional
 

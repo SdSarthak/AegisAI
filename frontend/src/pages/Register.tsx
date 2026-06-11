@@ -66,6 +66,16 @@ export default function Register() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [showPasswordRequirements, setShowPasswordRequirements] = useState(false)
+  const hasError = (field: ValidationError['field']) =>
+    errors.some((error) => error.field === field)
+  const getErrorMessage = (field: ValidationError['field']) =>
+    errors.find((error) => error.field === field)?.message
+
+  const clearFieldErrors = (field: ValidationError['field']) => {
+    setErrors((prev) =>
+      prev.filter((error) => error.field !== field && error.field !== 'general')
+    )
+  }
 
   const passwordStrength = checkPasswordStrength(formData.password)
 
@@ -153,11 +163,11 @@ export default function Register() {
         </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
-          {errors.some((e: any) => e.field === 'general') && (
+          {hasError('general') && (
             <div className="p-3 flex items-start gap-3 text-sm bg-red-50 rounded-lg border border-red-200">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="text-red-700">
-                {errors.find((e: any) => e.field === 'general')?.message}
+                {getErrorMessage('general')}
               </div>
             </div>
           )}
@@ -169,18 +179,22 @@ export default function Register() {
             <input
               id="email"
               type="email"
+              autoComplete="email"
               required
               value={formData.email}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, email: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setFormData({ ...formData, email: e.target.value })
+                clearFieldErrors('email')
+              }}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e: any) => e.field === 'email')
+                hasError('email')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e: any) => e.field === 'email') && (
+            {hasError('email') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e: any) => e.field === 'email')?.message}
+                {getErrorMessage('email')}
               </p>
             )}
           </div>
@@ -193,13 +207,18 @@ export default function Register() {
               <input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="new-password"
                 required
+                aria-describedby="password-requirements"
                 value={formData.password}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, password: e.target.value })}
-                onFocus={() => setShowPasswordRequirements(true)}
-                onBlur={() => setShowPasswordRequirements(false)}
-                className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                  errors.some((e: any) => e.field === 'password')
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setFormData({ ...formData, password: e.target.value })
+                  clearFieldErrors('password')
+                }}
+              onFocus={() => setShowPasswordRequirements(true)}
+              onBlur={() => setShowPasswordRequirements(false)}
+              className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
+                  hasError('password')
                     ? 'border-red-300 bg-red-50'
                     : 'border-gray-300'
                 }`}
@@ -208,6 +227,10 @@ export default function Register() {
                 type="button"
                 onMouseDown={(e: React.MouseEvent) => e.preventDefault()}
                 onClick={() => setShowPassword(!showPassword)}
+                aria-pressed={showPassword}
+                aria-controls="password"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                title={showPassword ? 'Hide password' : 'Show password'}
                 className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
               >
                 {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
@@ -216,7 +239,10 @@ export default function Register() {
 
             {/* Password strength requirements feedback */}
             {(showPasswordRequirements || formData.password) && (
-              <div className="mt-3 space-y-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div
+                id="password-requirements"
+                className="mt-3 space-y-2 p-3 bg-gray-50 rounded-lg border border-gray-200"
+              >
                 <p className="text-xs font-semibold text-gray-700">
                   Password requirements:
                 </p>
@@ -241,9 +267,9 @@ export default function Register() {
               </div>
             )}
 
-            {errors.some((e: any) => e.field === 'password') && (
+            {hasError('password') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e: any) => e.field === 'password')?.message}
+                {getErrorMessage('password')}
               </p>
             )}
           </div>
@@ -255,18 +281,22 @@ export default function Register() {
             <input
               id="full_name"
               type="text"
+              autoComplete="name"
               required
               value={formData.full_name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, full_name: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setFormData({ ...formData, full_name: e.target.value })
+                clearFieldErrors('full_name')
+              }}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e: any) => e.field === 'full_name')
+                hasError('full_name')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e: any) => e.field === 'full_name') && (
+            {hasError('full_name') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e: any) => e.field === 'full_name')?.message}
+                {getErrorMessage('full_name')}
               </p>
             )}
           </div>
@@ -278,18 +308,22 @@ export default function Register() {
             <input
               id="company_name"
               type="text"
+              autoComplete="organization"
               required
               value={formData.company_name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, company_name: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                setFormData({ ...formData, company_name: e.target.value })
+                clearFieldErrors('company_name')
+              }}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e: any) => e.field === 'company_name')
+                hasError('company_name')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e: any) => e.field === 'company_name') && (
+            {hasError('company_name') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e: any) => e.field === 'company_name')?.message}
+                {getErrorMessage('company_name')}
               </p>
             )}
           </div>

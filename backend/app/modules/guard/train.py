@@ -1,6 +1,9 @@
-"""Compatibility CLI for the standardized guard training pipeline."""
+"""Compatibility CLI for the standardized guard training pipeline.
 
-from __future__ import annotations
+The legacy entrypoint stays available for older commands, but the actual
+work is delegated to the standardized pipeline implementation under
+``app.modules.guard.training``.
+"""
 
 import argparse
 import logging
@@ -10,7 +13,6 @@ from app.modules.guard import guard_config as config
 from app.modules.guard.training.data.dataset_loader import load_or_download_dataset
 from app.modules.guard.training.data.split import train_validation_split
 from app.modules.guard.training.pipelines.train_pipeline import run_training_pipeline
-
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,7 @@ def download_and_process_dataset(
     output_path: str = str(LOCAL_CSV_PATH),
     force_download: bool = False,
 ):
-    """Download or load the standardized prompt-injection training dataset."""
+    """Download or reuse the standardized prompt-injection dataset."""
     df = load_or_download_dataset(
         local_csv_path=output_path,
         dataset_name=HF_DATASET_NAME,
@@ -39,7 +41,7 @@ def train_classifier(
     epochs: int = 3,
     force_retrain: bool = False,
 ):
-    """Train the intent classifier using the standardized trainer facade."""
+    """Train the intent classifier through the standardized trainer facade."""
     dataset = download_and_process_dataset(dataset_path, force_download=force_retrain)
     train_df, val_df = train_validation_split(
         dataset,
@@ -63,6 +65,7 @@ def train_classifier(
 
 
 def main():
+    """Parse CLI arguments and route them into the training pipeline."""
     parser = argparse.ArgumentParser(description="Train LLM Guard Intent Classifier")
     parser.add_argument(
         "--download-only", action="store_true", help="Only download and process data"

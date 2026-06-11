@@ -1,113 +1,214 @@
-import React from 'react'
-import { Bell, Check, Trash2 } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { formatDistanceToNow } from 'date-fns'
+import { Bell, Check, Clock, Loader2, Trash2 } from 'lucide-react'
 
-/**
- * Notifications page — full list of in-app events.
- *
- * TODO (good first issue — static layout):
- *   - Build the static page shell with a header and a list of placeholder
- *     notification cards (icon, title, message, timestamp, read/unread dot).
- *   - No API calls needed — use hardcoded dummy data.
- *   - Acceptance criteria: page renders a list of at least 3 dummy notifications.
- *
- * TODO (help wanted — API wiring):
- *   - Replace dummy data with useQuery to GET /api/v1/notifications.
- *   - Wire the "Mark all read" button to POST /api/v1/notifications/read.
- *   - Wire individual delete buttons to DELETE /api/v1/notifications/{id}.
- *   - Acceptance criteria: after marking as read, unread count in
- *     NotificationBell updates to 0.
- */
+import { notificationsApi, type NotificationResponse } from '../services/api'
+import { notify } from '../utils/toast'
 
-interface Notification {
-  id: number
-  notification_type: string
-  title: string
-  message: string
-  is_read: boolean
-  created_at: string
+function typeLabel(notificationType: string): string {
+  switch (notificationType) {
+    case 'system_classified':
+      return 'System'
+    case 'document_generated':
+      return 'Document'
+    case 'document_reviewed':
+      return 'Review'
+    case 'compliance_alert':
+      return 'Compliance'
+    default:
+      return notificationType
+        .split('_')
+        .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+        .join(' ')
+  }
 }
 
-// TODO (help wanted): implement this API service object
-// const notificationsApi = {
-//   list: () => axios.get('/api/v1/notifications').then(r => r.data),
-//   markRead: (ids: number[]) => axios.post('/api/v1/notifications/read', { ids }),
-//   delete: (id: number) => axios.delete(`/api/v1/notifications/${id}`),
-// }
-
-const DUMMY_NOTIFICATIONS: Notification[] = [
-  {
-    id: 1,
-    notification_type: 'system_classified',
-    title: 'AI system classified',
-    message: 'CV Screening AI was classified as High Risk under the EU AI Act.',
-    is_read: false,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    notification_type: 'document_generated',
-    title: 'Document generated',
-    message: 'Technical Documentation for CV Screening AI is ready to review.',
-    is_read: true,
-    created_at: new Date().toISOString(),
-  },
-]
+function typeTone(notificationType: string): string {
+  switch (notificationType) {
+    case 'system_classified':
+    case 'compliance_alert':
+      return 'bg-red-100 text-red-700'
+    case 'document_generated':
+    case 'document_reviewed':
+      return 'bg-green-100 text-green-700'
+    default:
+      return 'bg-primary-100 text-primary-700'
+  }
+}
 
 export default function Notifications() {
+  const queryClient = useQueryClient()
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
-  // TODO (help wanted): replace dummy data with real query
+  const {
+    data: notifications = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ['notifications'],
+    queryFn: () => notificationsApi.list(false),
+    refetchInterval: 60_000,
+  })
 
-  // const { data: notifications = [] } = useQuery({ queryKey: ['notifications'], queryFn: notificationsApi.list })
-  const notifications = DUMMY_NOTIFICATIONS
+  const markAllReadMutation = useMutation({
+    mutationFn: (ids: number[]) => notificationsApi.markRead(ids),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      notify.success('Notifications marked as read')
+    },
+    onError: () => {
+      notify.error('Unable to mark notifications as read right now')
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => notificationsApi.delete(id),
+    onMutate: (id) => {
+      setDeletingId(id)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      notify.success('Notification deleted')
+    },
+    onError: () => {
+      notify.error('Unable to delete the notification right now')
+    },
+    onSettled: () => {
+      setDeletingId(null)
+    },
+  })
+
+  const unreadIds = notifications
+    .filter((notification: NotificationResponse) => !notification.is_read)
+    .map((notification: NotificationResponse) => notification.id)
+  const unreadCount = unreadIds.length
+
+  const handleMarkAllRead = () => {
+    if (unreadIds.length === 0) {
+      return
+    }
+
+    markAllReadMutation.mutate(unreadIds)
+  }
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
           <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
-          <p className="text-gray-600">Your recent compliance and system events</p>
+          <p className="text-gray-600">
+            Your recent compliance and system events
+          </p>
         </div>
-        {/* TODO (help wanted): wire to POST /notifications/read with all unread IDs */}
-        <button className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg border border-gray-200">
-          <Check className="w-4 h-4" />
+
+        <button
+          type="button"
+          onClick={handleMarkAllRead}
+          disabled={unreadCount === 0 || markAllReadMutation.isPending}
+          aria-busy={markAllReadMutation.isPending}
+          className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {markAllReadMutation.isPending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Check className="h-4 w-4" />
+          )}
           Mark all read
         </button>
       </div>
 
-      {/* Notification list */}
-      {notifications.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <Bell className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+      <div
+        className="flex flex-wrap gap-2"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200">
+          <Bell className="h-3.5 w-3.5 text-primary-500" />
+          {notifications.length} total
+        </span>
+        <span className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1 text-xs font-medium text-gray-700 ring-1 ring-gray-200">
+          <Clock className="h-3.5 w-3.5 text-amber-500" />
+          {unreadCount} unread
+        </span>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-3">
+          {[...Array(4)].map((_, index) => (
+            <div
+              key={index}
+              className="h-24 animate-pulse rounded-xl border border-gray-200 bg-white"
+            />
+          ))}
+        </div>
+      ) : isError ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+          {(error instanceof Error && error.message) || 'Unable to load notifications.'}
+        </div>
+      ) : notifications.length === 0 ? (
+        <div className="rounded-xl border border-gray-200 bg-white px-6 py-12 text-center">
+          <Bell className="mx-auto mb-4 h-16 w-16 text-gray-300" />
           <h3 className="text-lg font-medium text-gray-900">No notifications</h3>
-          <p className="text-gray-500 mt-1">You're all caught up.</p>
+          <p className="mt-1 text-gray-500">You're all caught up.</p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {notifications.map((n) => (
-            <div
-              key={n.id}
-              className={`bg-white rounded-xl border p-4 flex items-start gap-4 ${
-                n.is_read ? 'border-gray-200' : 'border-primary-200 bg-primary-50'
+        <div className="space-y-3">
+          {notifications.map((notification: NotificationResponse) => (
+            <article
+              key={notification.id}
+              className={`flex items-start gap-4 rounded-xl border bg-white p-4 ${
+                notification.is_read
+                  ? 'border-gray-200'
+                  : 'border-primary-200 bg-primary-50/40'
               }`}
             >
               <div
-                className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${
-                  n.is_read ? 'bg-gray-300' : 'bg-primary-600'
+                className={`mt-2 h-2.5 w-2.5 flex-shrink-0 rounded-full ${
+                  notification.is_read ? 'bg-gray-300' : 'bg-primary-600'
                 }`}
               />
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 text-sm">{n.title}</p>
-                <p className="text-gray-600 text-sm mt-0.5">{n.message}</p>
-                <p className="text-gray-400 text-xs mt-1">
-                  {new Date(n.created_at).toLocaleString()}
+
+              <div className="min-w-0 flex-1 space-y-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-sm font-semibold text-gray-900">
+                    {notification.title}
+                  </p>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${typeTone(
+                      notification.notification_type,
+                    )}`}
+                  >
+                    {typeLabel(notification.notification_type)}
+                  </span>
+                  {!notification.is_read && (
+                    <span className="inline-flex h-2 w-2 rounded-full bg-primary-500" />
+                  )}
+                </div>
+                <p className="text-sm text-gray-600">{notification.message}</p>
+                <p className="text-xs text-gray-400">
+                  {formatDistanceToNow(new Date(notification.created_at), {
+                    addSuffix: true,
+                  })}
                 </p>
               </div>
-              {/* TODO (help wanted): wire to DELETE /notifications/{id} */}
-              <button className="p-1 text-gray-400 hover:text-red-500 rounded">
-                <Trash2 className="w-4 h-4" />
+
+              <button
+                type="button"
+                onClick={() => deleteMutation.mutate(notification.id)}
+                disabled={deleteMutation.isPending && deletingId === notification.id}
+                className="rounded-md p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={`Delete notification ${notification.title}`}
+              >
+                {deleteMutation.isPending && deletingId === notification.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
               </button>
-            </div>
+            </article>
           ))}
         </div>
       )}

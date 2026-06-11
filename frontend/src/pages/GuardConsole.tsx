@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   Activity,
   AlertCircle,
@@ -86,6 +86,22 @@ export default function GuardConsole() {
     [metrics]
   )
 
+  const scanStatusMessage = isLoading
+    ? 'Running guard scan.'
+    : error
+      ? `Scan failed. ${error}`
+      : result
+        ? `Scan complete. Decision ${result.decision}.`
+        : ''
+
+  const explanationStatusMessage = isExplaining
+    ? 'Generating explanation.'
+    : explanationError
+      ? `Explanation failed. ${explanationError}`
+      : explanation
+        ? 'Explanation ready.'
+        : ''
+
   const handleScan = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
@@ -112,11 +128,6 @@ export default function GuardConsole() {
     try {
       const data = await guardApi.scan(trimmedPrompt)
 
-      if (!data || typeof data !== 'object' || !data.decision) {
-        setError('The server returned an empty or invalid response. Please try again.')
-        return
-      }
-
       setResult(data)
       setScannedAt(new Date().toISOString())
     } catch (scanError: unknown) {
@@ -128,6 +139,16 @@ export default function GuardConsole() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handlePromptChange = (value: string) => {
+    setPrompt(value)
+    setError(null)
+    setSubmittedPrompt('')
+    setResult(null)
+    setExplanation(null)
+    setExplanationError(null)
+    setScannedAt('')
   }
 
   const handleExplain = async () => {
@@ -179,10 +200,10 @@ export default function GuardConsole() {
             <label htmlFor="guard-prompt" className="sr-only">
               Prompt to scan
             </label>
-              <textarea
+            <textarea
               id="guard-prompt"
               value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
+              onChange={(event) => handlePromptChange(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
                   const form = (event.target as HTMLTextAreaElement).closest('form')
@@ -414,6 +435,15 @@ export default function GuardConsole() {
           </aside>
         </div>
       )}
+
+      <div
+        className="sr-only"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        {scanStatusMessage || explanationStatusMessage}
+      </div>
     </div>
   )
 }

@@ -62,13 +62,11 @@ def _has_model_weights(path: str) -> bool:
 
 
 def get_trained_model_path() -> str:
-    """
-    Detect trained model location. Checks multiple paths:
-    1. Environment variable CLASSIFIER_MODEL_PATH
-    2. Local models directory (guard/models/classifier)
-    3. Current directory (intent_classifier)
-    Returns default path if not found (the classifier will use deterministic
-    heuristic fallback until a fine-tuned model is available).
+    """Detect the trained model location across supported fallback paths.
+
+    Returns:
+        The first directory containing fine-tuned classifier weights, or the
+        configured default path if no model is available yet.
     """
     if os.path.exists(CLASSIFIER_MODEL_PATH):
         return CLASSIFIER_MODEL_PATH

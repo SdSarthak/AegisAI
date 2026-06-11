@@ -1,26 +1,14 @@
-"""
-Request context middleware.
+"""ASGI middleware that binds request context and emits access logs.
 
-A pure ASGI middleware (not ``BaseHTTPMiddleware``) so the ContextVars it
-sets propagate correctly into route handlers and their dependencies — the
-well-known Starlette gotcha is that ``BaseHTTPMiddleware`` runs the endpoint
-in a separate anyio task, which breaks ContextVar propagation. Implementing
-the middleware at the ASGI layer keeps everything in one context.
-
-Responsibilities:
-  * Read an inbound ``X-Request-ID`` (or mint a new one) and bind it to the
-    ``request_id`` ContextVar for the lifetime of the request.
-  * Echo the id back as the ``X-Request-ID`` response header.
-  * Emit a structured ``request.completed`` access log with method, path,
-    status, and duration — in JSON, with request_id and (if the auth
-    dependency ran) user_id attached automatically by the log formatter.
-  * Log unhandled exceptions with the request id before re-raising.
+The implementation stays at the ASGI layer instead of using
+``BaseHTTPMiddleware`` so the ContextVars it sets remain visible to route
+handlers and downstream dependencies. Each request gets a stable request id,
+that id is echoed back to the client, and the middleware records a single
+structured completion log with timing and status information.
 
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
-
-from __future__ import annotations
 
 import logging
 import re
@@ -48,14 +36,16 @@ def _resolve_request_id(headers: Headers) -> str:
 
 
 class RequestContextMiddleware:
-    """Bind a request id to the async context and emit a JSON access log."""
+    """Bind request and user context for the lifetime of each HTTP request."""
 
     def __init__(self, app: ASGIApp) -> None:
+        """Store the downstream ASGI application."""
         self.app = app
 
     async def __call__(
         self, scope: Scope, receive: Receive, send: Send
     ) -> None:
+        """Handle an ASGI call, binding request context and logging once."""
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return

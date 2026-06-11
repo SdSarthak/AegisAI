@@ -1,11 +1,8 @@
-"""
-NIST AI RMF Profile document template.
+"""Generate a NIST AI RMF profile document for an AI system.
 
-Generates a NIST AI RMF profile document for an AI system,
-mapping its EU AI Act classification to NIST core functions.
+The template maps an AI system's EU AI Act risk level to the NIST AI RMF
+core functions and renders the result as markdown for reports or exports.
 """
-
-from __future__ import annotations
 
 from app.modules.compliance.nist_mapping import (
     EU_TO_NIST_MAPPING,
@@ -20,7 +17,7 @@ def generate_nist_rmf_profile(
     eu_risk_level: str,
     organization: str = "Your Organization",
 ) -> str:
-    """Generate a NIST AI RMF profile document as markdown."""
+    """Generate a markdown NIST AI RMF profile for the supplied system."""
     mapping = EU_TO_NIST_MAPPING.get(eu_risk_level.upper(), {})
     meta = NIST_AI_RMF_METADATA
 

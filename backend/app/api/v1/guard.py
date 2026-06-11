@@ -1,48 +1,52 @@
-"""
-LLM Guard API — exposes prompt injection scanning as a REST endpoint.
+"""API for prompt injection scanning, stats, and explainability.
+
+This module exposes the guard pipeline over HTTP and records the resulting
+scan decisions for audit, notification, and analytics flows.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (medium difficulty):
-  - Add per-user rate limiting on POST /guard/scan
-  - Persist scan results to the database for audit logs (Completed)
-  - Add a GET /guard/stats endpoint returning block/allow/sanitize counts (Completed)
 """
 
+import base64
 import hashlib
 import logging
-import base64
-
-from collections import Counter, defaultdict, deque
+from collections import Counter
 from datetime import datetime, timedelta, timezone
-from threading import Lock
 from typing import Optional, TypedDict
 
-from app.api.v1.webhooks import deliver_webhook
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Query, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    HTTPException,
+    Query,
+    Request,
+    status,
+)
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import func, and_, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from app.api.v1.notifications import create_notification
+from app.api.v1.webhooks import deliver_webhook
 from app.core.config import settings
 from app.core.database import SessionLocal, get_db
-from app.core.security import get_current_user
 from app.core.rate_limit import guard_scan_rate_limiter
+from app.core.security import get_current_user
 from app.models.guard_scan_log import GuardScanLog
 from app.models.notification import NotificationType
 from app.models.user import User
-
-from app.schemas.guard_scan_log import GuardScanLogResponse
-from app.schemas.guard_stats import GuardStatsResponse
+from app.modules.guard import guard_config
 from app.schemas.guard_explain import (
     ExplainRequest as ExplainRequestModel,
+)
+from app.schemas.guard_explain import (
     ExplainResponse,
 )
+from app.schemas.guard_scan_log import GuardScanLogResponse
+from app.schemas.guard_stats import GuardStatsResponse
 from app.schemas.pagination import CursorPaginatedResponse
-
-from app.modules.guard import guard_config
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -107,7 +111,16 @@ user_guard_configs: dict[int, UserGuardConfig] = {}
 
 
 def _infer_detection_type(regex_flag: bool, intent: str) -> str:
-    """Infer whether regex, ML, both, or neither triggered the scan decision."""
+    """Infer which detection paths contributed to the Guard decision.
+
+    Args:
+        regex_flag: Whether the regex layer matched a risky pattern.
+        intent: Final intent classification produced by the ML layer.
+
+    Returns:
+        A normalized detection label: ``none``, ``regex``, ``ml``, or
+        ``combined``.
+    """
     if not regex_flag and intent == "benign":
         return "none"
     if regex_flag and intent == "benign":
@@ -118,7 +131,17 @@ def _infer_detection_type(regex_flag: bool, intent: str) -> str:
 
 
 def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> GuardScanLog:
-    """Build a GuardScanLog row without storing raw prompt text."""
+    """Build a GuardScanLog row without storing raw prompt text.
+
+    Args:
+        user_id: Owning user ID for the scan record.
+        prompt: Raw prompt text that was analyzed.
+        result: Guard output containing decision metadata.
+        ip_address: Optional client IP address associated with the request.
+
+    Returns:
+        A populated GuardScanLog ORM instance ready for persistence.
+    """
     metadata = result.get("metadata", {})
     regex_analysis = metadata.get("regex_analysis", {})
     intent_analysis = metadata.get("intent_analysis", {})
@@ -147,7 +170,18 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: s
 
 
 def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = None) -> None:
-    """Log scan details and create block notification without storing raw prompt."""
+    """Log scan details and create a notification for block decisions.
+
+    Args:
+        user_id: Owning user ID for the scan record.
+        prompt: Raw prompt text that was analyzed.
+        result: Guard output containing decision metadata.
+        ip_address: Optional client IP address associated with the request.
+
+    Returns:
+        None. The scan is persisted and block notifications are created as
+        needed.
+    """
     db = SessionLocal()
 
     try:
@@ -184,7 +218,24 @@ def scan_prompt(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Scan a prompt for injection risks."""
+    """Scan a single prompt for injection risks.
+
+    Args:
+        request: Prompt payload to inspect with Guard.
+        background_tasks: Background task runner used for logging and
+            webhook delivery.
+        http_request: Incoming request used to capture the client IP.
+        db: Active database session.
+        current_user: Authenticated user submitting the prompt.
+
+    Returns:
+        ScanResponse containing the decision, confidence, reasoning, and
+        any matched patterns.
+
+    Raises:
+        HTTPException: If the request is rate-limited or the guard pipeline
+            fails unexpectedly.
+    """
     limited, retry_after = guard_scan_rate_limiter.check_and_consume(
         key=f"guard:scan:{current_user.id}",
         limit=settings.GUARD_RATE_LIMIT_REQUESTS,
@@ -269,7 +320,7 @@ def scan_prompt(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the Guard scan.",
-        )
+        ) from None
     
 
 # ---------------------------------------------------------------------------
@@ -278,7 +329,11 @@ def scan_prompt(
 
 
 class _ExplainRateLimitConfig:
-    """Explanations are 50–100x more expensive than a scan — limit them"""
+    """Rate-limit configuration for Guard explanation requests.
+
+    The explanation path is much more expensive than a normal scan, so it is
+    capped separately from the prompt scanning limiter.
+    """
 
     LIMIT = 10
     WINDOW_SECONDS = 60
@@ -308,7 +363,21 @@ async def explain_prompt(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return per-token attribution scores for the Guard's verdict."""
+    """Return per-token attribution scores for the Guard's verdict.
+
+    Args:
+        request: Explainability request containing the input text and tuning
+            parameters.
+        db: Active database session.
+        current_user: Authenticated user requesting the explanation.
+
+    Returns:
+        Structured explainability output with token-level attribution data.
+
+    Raises:
+        HTTPException: If the explanation pipeline is unavailable, times out,
+            or encounters an invalid request.
+    """
     import asyncio
 
     from app.modules.guard.explainer import (
@@ -342,7 +411,7 @@ async def explain_prompt(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
-        )
+        ) from exc
 
     try:
         # SHAP is CPU-bound and synchronous — run in a worker thread so
@@ -363,9 +432,9 @@ async def explain_prompt(
                 f"Explanation exceeded {_ExplainRateLimitConfig.TIMEOUT_SECONDS}s. "
                 "Try a shorter prompt or a lower `max_evals`."
             ),
-        )
+        ) from None
     except ValueError as exc:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from exc
     except Exception:
         logger.exception(
             "guard.explain.failed", extra={"user_id": current_user.id}
@@ -373,19 +442,28 @@ async def explain_prompt(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while generating the explanation.",
-        )
+        ) from None
 
     return result
 
 @router.get("/health", tags=["LLM Guard"])
 def guard_health():
-    """Check whether the Guard module is available."""
+    """Check whether the Guard module is available.
+
+    Returns:
+        A minimal health payload indicating that the Guard module is ready.
+    """
     return {"module": "llm_guard", "status": "available"}
 
 
 @router.get("/info", tags=["LLM Guard"])
 def guard_info():
-    """Return diagnostic information about the Guard module."""
+    """Return diagnostic information about the Guard module.
+
+    Returns:
+        A payload describing the active device, model name, and current
+        sanitization level used by the Guard runtime.
+    """
 
     try:
         import torch
@@ -409,7 +487,11 @@ VALID_DECISIONS = {"allow", "sanitize", "block"}
 VALID_INTENTS = {"benign", "suspicious", "malicious"}
 
 class CursorPagination:
-    """Simple cursor-based pagination helper:"""
+    """Cursor helper for stable Guard history pagination.
+
+    The helper keeps pagination deterministic even as new Guard scan logs are
+    inserted between requests.
+    """
 
     @staticmethod
     def encode(scanned_at: datetime, log_id: int) -> str:
@@ -437,7 +519,7 @@ class CursorPagination:
             return dt, int(id_str)
 
         except Exception:
-            raise HTTPException(status_code=400, detail="Invalid cursor format")
+            raise HTTPException(status_code=400, detail="Invalid cursor format") from None
     
 
     @staticmethod
@@ -483,6 +565,21 @@ def build_history_filters(
     start_date: Optional[datetime],
     end_date: Optional[datetime],
 ):
+    """Build Guard history filters from the optional query parameters.
+
+    Args:
+        current_user_id: ID of the authenticated user whose logs are queried.
+        decision: Optional final decision filter.
+        intent: Optional inferred intent filter.
+        start_date: Optional inclusive lower timestamp bound.
+        end_date: Optional inclusive upper timestamp bound.
+
+    Returns:
+        A list of SQLAlchemy filter expressions for the history query.
+
+    Raises:
+        HTTPException: If a supplied decision or intent value is invalid.
+    """
     filters = [GuardScanLog.user_id == current_user_id]
 
     # -----------------------
@@ -537,7 +634,29 @@ def get_guard_history(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the current user's Guard scan history (cursor paginated)."""
+    """Return the current user's Guard scan history.
+
+    Args:
+        cursor: Cursor token for fetching the next page of results.
+        limit: Maximum number of log entries to return.
+        decision: Optional filter by final Guard decision.
+        intent: Optional filter by inferred intent category.
+        start_date: Optional inclusive lower bound for scan timestamps.
+        end_date: Optional inclusive upper bound for scan timestamps.
+        db: Active database session.
+        current_user: Authenticated user whose history should be returned.
+
+    Returns:
+        CursorPaginatedResponse of Guard scan logs ordered by recency.
+
+    Raises:
+        HTTPException: If the date range is invalid or a supplied filter is
+            outside the allowed values.
+
+    Notes:
+        Results are paginated with a cursor token so the client can continue
+        scrolling without duplicates or gaps.
+    """
 
     if start_date and end_date and start_date > end_date:
         raise HTTPException(
@@ -575,7 +694,25 @@ def get_guard_stats(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return Guard scan statistics for a time window and user."""
+    """Return Guard scan statistics for a time window and user.
+
+    Args:
+        window: Aggregation window for the returned metrics.
+        user_id: Optional target user to inspect; defaults to the current user.
+        db: Active database session.
+        current_user: Authenticated user requesting stats.
+
+    Returns:
+        Aggregated Guard metrics including decisions, detection types,
+        top patterns, and scans per day.
+
+    Raises:
+        HTTPException: If a non-admin user requests another user's stats.
+
+    Notes:
+        The summary is computed over the requested time window and is safe to
+        call repeatedly for dashboard refreshes.
+    """
     target_user_id = user_id if user_id is not None else current_user.id
     is_admin = getattr(current_user, "role", None) == "admin"
 
@@ -709,7 +846,18 @@ def get_guard_stats(
 
 @router.get("/config", tags=["LLM Guard"])
 def get_guard_config(current_user: User = Depends(get_current_user)):
-    """Return the current user's Guard configuration."""
+    """Return the current user's Guard configuration.
+
+    Args:
+        current_user: Authenticated user whose Guard settings should be read.
+
+    Returns:
+        A configuration dictionary with sanitization and threshold values.
+
+    Notes:
+        If the user has never saved a configuration, sensible defaults are
+        returned instead.
+    """
     default_config = {
         "sanitization_level": "medium",
         "malicious_threshold": 0.8,
@@ -724,7 +872,23 @@ def update_guard_config(
     config: GuardConfigRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """Update the current user's Guard configuration."""
+    """Update the current user's Guard configuration.
+
+    Args:
+        config: New Guard settings supplied by the client.
+        current_user: Authenticated user whose settings should be updated.
+
+    Returns:
+        A confirmation payload containing the persisted configuration.
+
+    Raises:
+        HTTPException: If any configuration value is outside the accepted
+            range or set of allowed values.
+
+    Notes:
+        The update is stored in the in-memory user configuration cache and is
+        applied immediately to subsequent requests.
+    """
     if config.sanitization_level not in VALID_SANITIZATION_LEVELS:
         raise HTTPException(
             status_code=400,
@@ -763,14 +927,34 @@ def bulk_scan_prompts(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Scan a batch of prompts for injection risks."""
+    """Scan a batch of prompts for injection risks.
+
+    Args:
+        request: Collection of prompts to scan in one request.
+        http_request: Incoming request used to capture the client IP.
+        background_tasks: Background task runner used for logging and
+            webhook delivery.
+        current_user: Authenticated user submitting the batch.
+        db: Active database session.
+
+    Returns:
+        BulkScanResponse containing one scan result per submitted prompt.
+
+    Raises:
+        HTTPException: If the batch is invalid, rate-limited, or the Guard
+            pipeline fails unexpectedly.
+
+    Notes:
+        Each prompt is scanned independently, but the request consumes rate
+        limit quota according to the total batch size.
+    """
     try:
         request.validate_prompts()
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e),
-        )
+        ) from e
 
     batch_size = len(request.prompts)
     client_ip = http_request.client.host if http_request.client else None
@@ -851,10 +1035,10 @@ def bulk_scan_prompts(
             processed=len(results),
         )
 
-    except Exception as e:
+    except Exception:
         db.rollback()
         logger.exception("Bulk guard scan failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."
-        )
+        ) from None

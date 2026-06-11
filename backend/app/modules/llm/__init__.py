@@ -1,4 +1,8 @@
-"""LLM client module for OpenAI-compatible API integration."""
+"""Expose the provider-agnostic LLM client used across backend flows.
+
+Importing from this package keeps the OpenAI-compatible client available in
+one place for the RAG and document-generation subsystems.
+"""
 
 from .llm_client import LLMClient
 

@@ -1,4 +1,9 @@
-"""Utility helpers for guard training pipelines."""
+"""Utility helpers shared across the guard training pipelines.
+
+This namespace collects the small support functions used by training and
+evaluation jobs while leaving heavier dependencies lazily imported until a
+run actually needs them.
+"""
 
 from .checkpoint import save_json_artifact, save_predictions, utc_run_id
 from .logger import get_training_logger
@@ -15,7 +20,17 @@ __all__ = [
 
 
 def __getattr__(name):
-    """Load optional or heavier utility dependencies only when requested."""
+    """Load optional or heavier utility dependencies only when requested.
+
+    Args:
+        name: Attribute name requested from the module namespace.
+
+    Returns:
+        The lazily imported utility function.
+
+    Raises:
+        AttributeError: If the requested attribute does not exist.
+    """
     if name == "set_seed":
         from .seed import set_seed
 

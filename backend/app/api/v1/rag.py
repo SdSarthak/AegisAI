@@ -1,23 +1,30 @@
-"""
-RAG Intelligence API — regulatory knowledge base query endpoint.
+"""API for ingesting regulatory documents and querying the RAG index.
+
+The routes here support PDF ingestion, single-shot question answering, and
+streaming answers from the regulatory knowledge base.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-Contributor note:
-  - POST /rag/ingest: multipart PDF upload, document_loader, FAISS rebuild
-  - POST /rag/query: single-shot JSON answer (backward compatible)
-  - POST /rag/query/stream: Server-Sent Events stream — see streaming.py
-  - TODO: Pre-load the EU AI Act, GDPR, ISO 42001, and NIST AI RMF as source documents
-  - TODO: Integrate MLflow tracking from modules/rag/ml_flow.py
 """
 
+import logging
+import mimetypes
 import os
 import shutil
+import time
 import tempfile
 from typing import List, Literal, Optional
-import mimetypes
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -34,6 +41,7 @@ from app.modules.rag.streaming import stream_rag_answer
 from app.modules.rag.vector_store import create_vector_store, load_vector_store
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 class RAGQueryRequest(BaseModel):
@@ -44,6 +52,11 @@ class RAGQueryResponse(BaseModel):
     answer: str
     sources: list[str] = []
     answer_id: Optional[str] = None
+    groundedness_score: float = 0.0
+    low_confidence: bool = False
+    confidence_tier: Optional[str] = None
+    per_verifier_scores: dict[str, float] = {}
+    flagged_reason: Optional[str] = None
 
 
 class RAGIngestResponse(BaseModel):
@@ -67,7 +80,20 @@ def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
 ):
-    """Accept one or more PDF uploads, process them through the document loader,"""
+    """Upload PDFs, rebuild the RAG index, and return ingestion stats.
+
+    Args:
+        files: One or more PDF uploads to ingest into the local FAISS index.
+        current_user: Authenticated user, used to enforce access control.
+
+    Returns:
+        RAGIngestResponse with counts for processed files, created chunks,
+        and current on-disk index size.
+
+    Raises:
+        HTTPException: If the upload is too large, not a valid PDF payload,
+            or the index rebuild fails.
+    """
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -136,7 +162,7 @@ def ingest_documents(
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Failed to build FAISS index: {exc}",
-            )
+            ) from exc
 
         # ── 5. Calculate on-disk index size ───────────────────────────────
         index_path = settings.FAISS_INDEX_PATH
@@ -163,10 +189,24 @@ def query_knowledge_base(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Ask a regulatory question and get an answer grounded in source documents."""
+    """Answer a compliance question using the current vector store.
+
+    Args:
+        request: Query payload containing the user's compliance question.
+        current_user: Authenticated user asking the question.
+        db: Active database session used to persist the generated answer.
+
+    Returns:
+        RAGQueryResponse containing the answer text, source references, and
+        the persisted answer ID.
+
+    Raises:
+        HTTPException: If the vector store is unavailable or the RAG pipeline
+            fails during retrieval or generation.
+    """
     try:
-        from app.modules.rag.retrieval_chain import get_qa_chain
         from app.core.database import Base
+        from app.modules.rag.retrieval_chain import get_qa_chain
 
         qa_chain = get_qa_chain()
         result = qa_chain({"query": request.question})
@@ -177,8 +217,7 @@ def query_knowledge_base(
         try:
             Base.metadata.create_all(bind=db.get_bind())
         except Exception:
-            # best-effort: ignore if bind not available
-            pass
+            logger.debug("Skipping table bootstrap because the DB bind is unavailable")
 
         # Persist an initial RAGFeedback row to capture the answer and contributing chunks
         feedback = RAGFeedback(
@@ -191,17 +230,26 @@ def query_knowledge_base(
         db.refresh(feedback)
         answer_id = feedback.id
 
-        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
+        return RAGQueryResponse(
+            answer=result["result"],
+            sources=sources,
+            answer_id=answer_id,
+            groundedness_score=float(result.get("groundedness_score", 0.0)),
+            low_confidence=bool(result.get("low_confidence", False)),
+            confidence_tier=result.get("confidence_tier"),
+            per_verifier_scores=dict(result.get("per_verifier_scores", {})),
+            flagged_reason=result.get("flagged_reason"),
+        )
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(e),
-        )
+        ) from e
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"RAG module error: {str(e)}",
-        )
+        ) from e
 
 
 # ---------------------------------------------------------------------------
@@ -229,14 +277,27 @@ async def query_knowledge_base_stream(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Stream a regulatory answer as Server-Sent Events."""
+    """Stream a regulatory answer token-by-token as Server-Sent Events.
+
+    Args:
+        request: Incoming HTTP request used for SSE lifecycle handling.
+        payload: Query payload containing the user's compliance question.
+        current_user: Authenticated user requesting the streamed answer.
+        db: Active database session used to persist the generated answer.
+
+    Returns:
+        StreamingResponse that emits meta, token, error, and done events.
+
+    Raises:
+        HTTPException: If the vector store cannot be loaded.
+    """
     try:
         vector_store = load_vector_store()
     except FileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=str(exc),
-        )
+        ) from exc
 
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
     llm_client = LLMClient()
@@ -264,7 +325,12 @@ async def query_knowledge_base_stream(
 
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health():
-    """Check if the RAG module is available."""
+    """Check whether the RAG module is available.
+
+    Returns:
+        A small status payload indicating whether the FAISS index is loaded
+        and the RAG module can answer queries.
+    """
     from app.modules.rag.vector_store import check_index_exists
     
     index_loaded = check_index_exists()
@@ -295,7 +361,19 @@ def rag_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Record a thumbs-up or thumbs-down for a previously returned answer."""
+    """Record feedback for a previously generated answer.
+
+    Args:
+        payload: Feedback payload containing the answer ID and vote.
+        current_user: Authenticated user submitting the feedback.
+        db: Active database session.
+
+    Returns:
+        Confirmation payload with the stored answer ID.
+
+    Raises:
+        HTTPException: If the answer cannot be found.
+    """
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
         raise HTTPException(status_code=404, detail="Answer not found")
@@ -315,13 +393,27 @@ def get_low_quality_chunks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Admin endpoint: aggregate feedback by source chunk and return low-quality candidates."""
+    """Aggregate feedback by source chunk and return low-quality candidates.
+
+    Args:
+        threshold: Downvote ratio above which a chunk is considered low
+            quality.
+        current_user: Authenticated user requesting the quality report.
+        db: Active database session.
+
+    Returns:
+        A report containing the configured threshold and the chunk list that
+        exceeds it.
+
+    Raises:
+        HTTPException: If the caller does not have the required admin tier.
+    """
     # Admin-only access: restrict to system owners / scale tier
     try:
         if current_user.subscription_tier != SubscriptionTier.SCALE:
             raise HTTPException(status_code=403, detail="Admin access required")
     except Exception:
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=403, detail="Admin access required") from None
 
     # Aggregate counts per chunk
     counts: dict[str, dict[str, int]] = {}
@@ -352,7 +444,18 @@ def get_rag_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return the current user's paginated RAG query history."""
+    """Return the current user's paginated RAG query history.
+
+    Args:
+        page: Page number to retrieve, starting at 1.
+        page_size: Number of history records per page.
+        current_user: Authenticated user whose history should be returned.
+        db: Active database session.
+
+    Returns:
+        A paginated payload containing the user's prior RAG queries and
+        answer summaries.
+    """
     offset = (page - 1) * page_size
     queries = (
         db.query(RagQuery)

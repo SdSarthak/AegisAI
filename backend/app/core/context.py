@@ -1,17 +1,12 @@
-"""
-Request-scoped context propagated through async call stacks.
+"""Request-scoped context shared across async call stacks.
 
-These ContextVars are populated by ``RequestContextMiddleware`` (request_id)
-and by ``get_current_user`` in ``app.core.security`` (user_id). The JSON log
-formatter in ``app.core.logging`` reads them so every log line emitted while
-handling a request carries the same ``request_id`` and, when authenticated,
-the ``user_id`` — without threading those values through every function call.
+The middleware layer stores a request id here and the auth dependency stores
+the current user id here. Logging, telemetry, and request handlers can then
+read the same values without explicitly threading them through every call.
 
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
-
-from __future__ import annotations
 
 from contextvars import ContextVar
 from typing import Optional
@@ -26,10 +21,10 @@ user_id_ctx: ContextVar[Optional[int]] = ContextVar("user_id", default=None)
 
 
 def get_request_id() -> Optional[str]:
-    """Return the current request id, or ``None`` if not inside a request."""
+    """Return the active request id, or ``None`` outside a request."""
     return request_id_ctx.get()
 
 
 def get_user_id() -> Optional[int]:
-    """Return the authenticated user id, or ``None`` if unauthenticated."""
+    """Return the current user id, or ``None`` for anonymous requests."""
     return user_id_ctx.get()

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from 'react'
 import {
   PieChart,
   Pie,
@@ -6,50 +6,64 @@ import {
   Tooltip,
   Legend,
   ResponsiveContainer,
-} from "recharts";
+} from 'recharts'
+import { isDarkThemeActive } from '../utils/theme'
 
 type RiskData = {
-  name: string;
-  value: number;
-};
+  name: string
+  value: number
+}
 
 type Props = {
-  data: RiskData[];
-};
+  data: RiskData[]
+}
 
 const riskCategoryTheme: Record<string, { fill: string }> = {
-  "Minimal Risk": { fill: "rgb(34 197 94)" },
-  "Limited Risk": { fill: "rgb(234 179 8)" },
-  "High Risk": { fill: "rgb(249 115 22)" },
-  "Unacceptable Risk": { fill: "rgb(239 68 68)" },
-};
+  'Minimal Risk': { fill: 'rgb(34 197 94)' },
+  'Limited Risk': { fill: 'rgb(234 179 8)' },
+  'High Risk': { fill: 'rgb(249 115 22)' },
+  'Unacceptable Risk': { fill: 'rgb(239 68 68)' },
+}
+
+const defaultRiskFill = 'rgb(156 163 175)'
 
 export default function ComplianceRiskChart({ data }: Props) {
-  const [isDark, setIsDark] = useState(false);
+  const [isDark, setIsDark] = useState(false)
 
   useEffect(() => {
     const checkTheme = () => {
-      if (typeof document === "undefined") return;
-      setIsDark(document.documentElement.classList.contains("dark"));
-    };
+      setIsDark(isDarkThemeActive())
+    }
 
-    checkTheme();
+    if (typeof document === 'undefined') return
 
-    const observer = new MutationObserver(checkTheme);
+    checkTheme()
+
+    const observer = new MutationObserver(checkTheme)
     observer.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["class"],
-    });
+      attributeFilter: ['class'],
+    })
 
-    return () => observer.disconnect();
-  }, []);
+    return () => observer.disconnect()
+  }, [])
 
-  const chartTheme = isDark
-    ? { text: "#e5e7eb", tooltipBg: "#111827", tooltipBorder: "#4b5563" }
-    : { text: "#374151", tooltipBg: "#ffffff", tooltipBorder: "#d1d5db" };
+  const chartTheme = useMemo(
+    () =>
+      isDark
+        ? { text: '#e5e7eb', tooltipBg: '#111827', tooltipBorder: '#4b5563' }
+        : { text: '#374151', tooltipBg: '#ffffff', tooltipBorder: '#d1d5db' },
+    [isDark],
+  )
 
-  const visibleData = data.filter((item) => item.value > 0);
-  const hasRiskData = visibleData.length > 0;
+  const visibleData = useMemo(
+    () => data.filter((item) => item.value > 0),
+    [data],
+  )
+  const hasRiskData = visibleData.length > 0
+
+  const getRiskFill = (name: string) =>
+    riskCategoryTheme[name]?.fill ?? defaultRiskFill
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 shadow-sm">
@@ -92,7 +106,7 @@ export default function ComplianceRiskChart({ data }: Props) {
                 {visibleData.map((item) => (
                   <Cell
                     key={item.name}
-                    fill={riskCategoryTheme[item.name as keyof typeof riskCategoryTheme].fill}
+                    fill={getRiskFill(item.name)}
                   />
                 ))}
               </Pie>
@@ -112,5 +126,5 @@ export default function ComplianceRiskChart({ data }: Props) {
         )}
       </div>
     </div>
-  );
+  )
 }

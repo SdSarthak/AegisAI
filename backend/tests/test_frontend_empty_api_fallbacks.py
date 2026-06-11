@@ -23,6 +23,9 @@ def test_ai_systems_page_shows_retry_fallback():
     assert "Unable to load AI systems" in source
     assert "refetch," in source
     assert "Retry" in source
+    assert "Download as CSV" in source
+    assert "Download as JSON" in source
+    assert "Last exported" in source
 
 
 def test_dashboard_shows_retry_fallback_for_invalid_api_payloads():

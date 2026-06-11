@@ -1,14 +1,24 @@
-"""
-GuardScanLog model — records every prompt scan decision made by the LLM Guard.
+"""Audit log for prompt scan decisions made by the LLM guard.
+
+Prompt text is stored only as a SHA-256 hash so the system can record scan
+activity and statistics without retaining raw user content.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-Prompts are stored as SHA-256 hashes only — never raw text — to protect user privacy.
 """
 
 from datetime import datetime
 
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, JSON, Boolean
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+)
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base

@@ -1,8 +1,12 @@
-"""Decision engine for determining prompt handling: ALLOW, SANITIZE, or BLOCK."""
+"""Combine guard signals into a final prompt-handling decision.
 
-from enum import Enum
+The decision engine takes the outputs of the regex filter and intent
+classifier and resolves them into a single action: allow the prompt,
+sanitize it, or block it outright.
+"""
+
 from dataclasses import dataclass
-from typing import Dict
+from enum import Enum
 
 
 class Decision(Enum):
@@ -24,7 +28,11 @@ class DecisionResult:
 
 
 class DecisionEngine:
-    """Simple, defensible logic for determining prompt handling."""
+    """Simple, defensible logic for determining prompt handling.
+
+    The engine blends regex and classifier signals into a final prompt
+    handling decision that downstream layers can enforce consistently.
+    """
 
     def __init__(
         self,
@@ -33,14 +41,13 @@ class DecisionEngine:
         suspicious_threshold: float = 0.5,
         malicious_threshold: float = 0.8,
     ):
-        """
-        Initialize decision engine with configurable thresholds.
+        """Initialize the decision engine with configurable thresholds.
 
         Args:
-            regex_weight: Weight of regex patterns in decision
-            intent_weight: Weight of intent classifier in decision
-            suspicious_threshold: Score above which prompt is suspicious
-            malicious_threshold: Score above which prompt is malicious
+            regex_weight: Weight of regex patterns in the combined score.
+            intent_weight: Weight of intent classifier output in the score.
+            suspicious_threshold: Score above which prompt is suspicious.
+            malicious_threshold: Score above which prompt is malicious.
         """
         self.regex_weight = regex_weight
         self.intent_weight = intent_weight
@@ -54,23 +61,17 @@ class DecisionEngine:
         intent: str,  # "benign", "suspicious", "malicious"
         intent_score: float,
     ) -> DecisionResult:
-        """
-        Make a decision based on regex filter and intent classifier outputs.
+        """Make a decision from regex and classifier outputs.
 
         Args:
-            regex_flag: Whether regex patterns were matched
-            regex_score: Severity score from regex (0.0-1.0)
-            intent: Classified intent ("benign", "suspicious", "malicious")
-            intent_score: Confidence score from classifier (0.0-1.0)
+            regex_flag: Whether regex patterns were matched.
+            regex_score: Severity score from regex, in the range 0.0-1.0.
+            intent: Classified intent (`benign`, `suspicious`, or `malicious`).
+            intent_score: Confidence score from the classifier, 0.0-1.0.
 
         Returns:
-            DecisionResult with decision, confidence, and reasoning
+            DecisionResult with the final decision, confidence, and reason.
         """
-        # Combine signals
-        combined_score = (self.regex_weight * regex_score) + (
-            self.intent_weight * intent_score
-        )
-
         # High-severity cases: Block if regex + malicious intent
         if regex_flag and regex_score >= 0.8 and intent == "malicious":
             return DecisionResult(
@@ -116,7 +117,11 @@ class DecisionEngine:
         )
 
     def get_safe_response(self) -> str:
-        """Get a safe fallback response for blocked prompts."""
+        """Get a safe fallback response for blocked prompts.
+
+        Returns:
+            A user-facing message explaining that the prompt was blocked.
+        """
         return (
             "I cannot process this request as it appears to contain instructions that conflict "
             "with my guidelines. Please rephrase your question clearly, and I'll be happy to help."

@@ -26,8 +26,6 @@ Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
-from __future__ import annotations
-
 import logging
 import threading
 import time
@@ -59,7 +57,12 @@ _explainer_instance: Optional["GuardExplainer"] = None
 
 
 def get_explainer() -> "GuardExplainer":
-    """Return the process-wide explainer. Thread-safe lazy init."""
+    """Return the shared explainer instance, creating it on first access.
+
+    The explainer is expensive to construct because it loads the model,
+    tokenizer, and pipeline stack. Keeping it process-wide avoids repeated
+    cold starts for subsequent explanation requests.
+    """
     global _explainer_instance
     if _explainer_instance is not None:
         return _explainer_instance
@@ -70,7 +73,7 @@ def get_explainer() -> "GuardExplainer":
 
 
 def reset_explainer() -> None:
-    """Clear the singleton — used by tests that want a fresh instance."""
+    """Drop the cached explainer so tests can force a clean reload."""
     global _explainer_instance
     _explainer_instance = None
 
@@ -81,11 +84,11 @@ def reset_explainer() -> None:
 
 
 class ExplainerUnavailable(RuntimeError):
-    """Raised when no fine-tuned model is on disk and we won't synth-explain."""
+    """Raised when explainability is requested without trained weights."""
 
 
 class ExplainerTimeout(RuntimeError):
-    """Raised when explanation exceeds the configured timeout budget."""
+    """Raised when explanation work runs past the configured timeout budget."""
 
 
 # ---------------------------------------------------------------------------
@@ -94,12 +97,16 @@ class ExplainerTimeout(RuntimeError):
 
 
 class GuardExplainer:
-    """SHAP/LIME wrapper around the Guard classifier."""
+    """Explain Guard classifier predictions with SHAP or LIME.
+
+    Instances load the classifier once and expose a small, synchronous API
+    that turns a prompt into token-level attribution rows for UI rendering.
+    """
 
     def __init__(self) -> None:
         # Lazy import — heavy ML stack only loads when an explainer is
         # actually instantiated (not on module import).
-        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
         from transformers import pipeline as hf_pipeline
 
         model_path = guard_config.CLASSIFIER_MODEL_PATH
@@ -268,7 +275,7 @@ class GuardExplainer:
     # ------------------------------------------------------------------
 
     def _predict(self, text: str) -> tuple[str, float, int]:
-        """Return (predicted_label, predicted_proba, predicted_idx)."""
+        """Return the top class along with its score and index."""
         outputs = self._pipeline([text])
         scores = {entry["label"]: entry["score"] for entry in outputs[0]}
         predicted_label = max(scores, key=scores.get)
@@ -282,7 +289,7 @@ class GuardExplainer:
         return predicted_label, predicted_proba, predicted_idx
 
     def _tokenize_with_offsets(self, text: str) -> list[tuple[str, tuple[int, int]]]:
-        """Tokenize with character offsets, stripping special tokens."""
+        """Tokenize ``text`` and keep character offsets for each token."""
         enc = self.tokenizer(
             text,
             return_offsets_mapping=True,
@@ -349,6 +356,7 @@ class GuardExplainer:
     # ------------------------------------------------------------------
     @staticmethod
     def _has_trained_weights(model_path: str) -> bool:
+        """Check whether a trained classifier artifact exists at ``model_path``."""
         import os
         has_weights = any(
             os.path.exists(os.path.join(model_path, name))

@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import {
   AlertCircle,
   Bot,
@@ -10,12 +10,30 @@ import {
   User,
 } from 'lucide-react'
 
+import CopyButton from '../components/CopyButton'
 import { useRagStream } from '../hooks/useRagStream'
+
+function buildExportText(
+  answer: string,
+  citations: Array<{ source: string; excerpt: string }>
+): string {
+  return [
+    'AI Response',
+    answer,
+    '',
+    'Source citations',
+    ...citations.map(
+      (citation, index) =>
+        `${index + 1}. ${citation.source}\n${citation.excerpt}`
+    ),
+  ].join('\n')
+}
 
 export default function RagChat() {
   const [question, setQuestion] = useState('')
   const [submittedQuestion, setSubmittedQuestion] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
+  const questionInputRef = useRef<HTMLTextAreaElement | null>(null)
 
   const {
     status,
@@ -32,6 +50,16 @@ export default function RagChat() {
   const isAwaitingFirstToken = isStreaming && tokens.length === 0
   const hasAnswer = tokens.length > 0
   const displayError = validationError ?? streamError
+  const exportText = buildExportText(tokens, citations)
+  const statusMessage = displayError
+    ? `Answer unavailable. ${displayError}`
+    : isAwaitingFirstToken
+      ? 'Searching knowledge base.'
+      : isStreaming
+        ? 'Streaming answer.'
+        : hasAnswer
+          ? 'Answer ready.'
+          : ''
 
   const handleAsk = (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,19 +75,13 @@ export default function RagChat() {
     ask(trimmed)
   }
 
+  const handleQuestionChange = (value: string) => {
+    setQuestion(value)
+    setValidationError(null)
+  }
+
   const handleExport = () => {
     if (!hasAnswer) return
-
-    const exportText = [
-      'AI Response',
-      tokens,
-      '',
-      'Source citations',
-      ...citations.map(
-        (citation, index) =>
-          `${index + 1}. ${citation.source}\n${citation.excerpt}`
-      ),
-    ].join('\n')
 
     const blob = new Blob([exportText], {
       type: 'text/plain;charset=utf-8',
@@ -114,7 +136,13 @@ export default function RagChat() {
                   <button
                     key={example}
                     type="button"
-                    onClick={() => setQuestion(example)}
+                    onClick={() => {
+                      setQuestion(example)
+                      setValidationError(null)
+                      requestAnimationFrame(() => {
+                        questionInputRef.current?.focus()
+                      })
+                    }}
                     className="text-left bg-white border border-gray-200 rounded-xl p-4 text-sm text-gray-700 hover:border-primary-200 hover:bg-primary-50 transition-colors"
                   >
                     {example}
@@ -209,14 +237,24 @@ export default function RagChat() {
                                 Sources
                               </h3>
                               {!isStreaming && (
-                                <button
-                                  type="button"
-                                  onClick={handleExport}
-                                  className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700"
-                                >
-                                  <FileText className="w-3.5 h-3.5" />
-                                  Export
-                                </button>
+                                <div className="flex items-center gap-2">
+                                  <CopyButton
+                                    text={exportText}
+                                    label="Copy"
+                                    successMessage="Answer copied!"
+                                    disabled={!hasAnswer}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={handleExport}
+                                    className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700"
+                                    aria-label="Export answer and citations"
+                                    title="Export answer and citations"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                    Export
+                                  </button>
+                                </div>
                               )}
                             </div>
                             <div className="space-y-3">
@@ -255,8 +293,9 @@ export default function RagChat() {
             </label>
             <textarea
               id="rag-question"
+              ref={questionInputRef}
               value={question}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setQuestion(e.target.value)}
+              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleQuestionChange(e.target.value)}
               placeholder="Ask a compliance question..."
               rows={1}
               disabled={isStreaming}
@@ -292,6 +331,9 @@ export default function RagChat() {
             <p className="text-xs text-gray-400">
               Use this assistant to explore risk, documentation, and governance obligations.
             </p>
+          </div>
+          <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {statusMessage}
           </div>
         </form>
       </div>

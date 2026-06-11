@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { classificationApi } from '../services/api'
@@ -156,6 +156,11 @@ const requirementContent: Record<string, RequirementContent> = {
 
 export default function Classification() {
   const { systemId } = useParams()
+  const parsedSystemId = systemId !== undefined ? Number(systemId) : null
+  const hasValidSystemId =
+    parsedSystemId !== null &&
+    Number.isInteger(parsedSystemId) &&
+    parsedSystemId > 0
   const [activeTab, setActiveTab] = useState<Tab>('questionnaire')
   const [result, setResult] = useState<ClassificationResult | null>(null)
   const [formData, setFormData] = useState({
@@ -177,12 +182,18 @@ export default function Classification() {
     emotion_recognition: false,
     biometric_categorization: false,
   })
+  const primaryUseCaseId = 'classification-primary-use-case'
 
   const classifyMutation = useMutation({
     mutationFn: () => {
-      if (systemId) {
-        return classificationApi.classifyAndSave(parseInt(systemId), formData)
+      if (systemId !== undefined) {
+        if (!hasValidSystemId) {
+          throw new Error('Invalid system ID in the URL.')
+        }
+
+        return classificationApi.classifyAndSave(parsedSystemId, formData)
       }
+
       return classificationApi.classify(formData)
     },
     onSuccess: (data) => {
@@ -194,6 +205,21 @@ export default function Classification() {
       setActiveTab('questionnaire')
     },
   })
+  const {
+    reset: resetClassificationMutation,
+    isError: hasClassificationError,
+  } = classifyMutation
+
+  useEffect(() => {
+    if (result) {
+      setResult(null)
+      setActiveTab('questionnaire')
+    }
+
+    if (hasClassificationError) {
+      resetClassificationMutation()
+    }
+  }, [formData, result, hasClassificationError, resetClassificationMutation])
 
   const getRiskIcon = (level: string) => {
     switch (level) {
@@ -270,6 +296,13 @@ export default function Classification() {
           }
         }}
         disabled={locked}
+        role="tab"
+        id={`classification-tab-${tab}`}
+        aria-controls={`classification-panel-${tab}`}
+        aria-selected={isActive}
+        aria-disabled={locked}
+        aria-label={`${label}${locked ? ' (locked until a result is available)' : ''}`}
+        tabIndex={isActive ? 0 : -1}
         className={`flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
           isActive
             ? 'border-primary-600 text-primary-700'
@@ -297,10 +330,14 @@ export default function Classification() {
       <form className="space-y-6">
         {/* Use Case Category */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label
+            htmlFor={primaryUseCaseId}
+            className="block text-sm font-medium text-gray-700 mb-2"
+          >
             Primary Use Case
           </label>
           <select
+            id={primaryUseCaseId}
             value={formData.use_case_category}
             onChange={(e) =>
               setFormData({ ...formData, use_case_category: e.target.value })
@@ -746,7 +783,7 @@ export default function Classification() {
           </ol>
         </div>
 
-        {riskLevel !== 'unacceptable' && (
+        {riskLevel !== 'unacceptable' && hasValidSystemId && (
           <div className="bg-white rounded-xl border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-gray-900">
@@ -758,10 +795,22 @@ export default function Classification() {
             </div>
 
             <ComplianceChecklist
-              systemId={Number(systemId || 0)}
+              systemId={parsedSystemId}
               riskLevel={riskLevel}
               items={CHECKLIST_ITEMS[riskLevel] || []}
             />
+          </div>
+        )}
+
+        {riskLevel !== 'unacceptable' && !hasValidSystemId && (
+          <div className="rounded-xl border border-gray-200 bg-white p-6">
+            <h3 className="text-lg font-bold text-gray-900 mb-2">
+              Interactive Compliance Checklist
+            </h3>
+            <p className="text-sm text-gray-600">
+              Save this classification against a numeric AI system ID to unlock
+              the interactive checklist for tracking obligations.
+            </p>
           </div>
         )}
       </div>
@@ -778,8 +827,16 @@ export default function Classification() {
           </p>
         </div>
 
+        {systemId !== undefined && !hasValidSystemId && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            The system ID in this URL is invalid. Use a numeric AI system ID to
+            classify and save the result, or open the page without an ID for a
+            one-off classification.
+          </div>
+        )}
+
         <div className="border-b border-gray-200">
-          <div className="flex gap-2 overflow-x-auto">
+          <div className="flex gap-2 overflow-x-auto" role="tablist" aria-label="Classification views">
             {renderTabButton('questionnaire', 'Questionnaire', ClipboardList, false)}
             {renderTabButton('results', 'Results', BarChart2, !result)}
             {renderTabButton('requirements', 'Requirements', ShieldCheck, !result)}
@@ -787,9 +844,30 @@ export default function Classification() {
         </div>
       </div>
 
-      {activeTab === 'questionnaire' && renderQuestionnaire()}
-      {activeTab === 'results' && renderResults()}
-      {activeTab === 'requirements' && renderRequirements()}
+      <div
+        id="classification-panel-questionnaire"
+        role="tabpanel"
+        aria-labelledby="classification-tab-questionnaire"
+        hidden={activeTab !== 'questionnaire'}
+      >
+        {renderQuestionnaire()}
+      </div>
+      <div
+        id="classification-panel-results"
+        role="tabpanel"
+        aria-labelledby="classification-tab-results"
+        hidden={activeTab !== 'results'}
+      >
+        {renderResults()}
+      </div>
+      <div
+        id="classification-panel-requirements"
+        role="tabpanel"
+        aria-labelledby="classification-tab-requirements"
+        hidden={activeTab !== 'requirements'}
+      >
+        {renderRequirements()}
+      </div>
     </div>
   )
 }

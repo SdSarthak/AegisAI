@@ -1,23 +1,16 @@
-"""
-Public Compliance Badge API — no authentication required.
+"""Public API for compliance badges that can be embedded externally.
+
+The badge endpoint is intentionally unauthenticated so a system's current
+status can be embedded in READMEs, dashboards, and public project pages.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (help wanted):
-  - Implement GET /badge/{system_id} — return an SVG badge showing the
-    AI system's current compliance status and risk level.
-    This endpoint is PUBLIC (no JWT required) so organisations can embed
-    the badge in their README or website.
-  - The badge should show: system name, risk level, compliance status,
-    and a color (green=compliant, yellow=in_progress, red=non_compliant).
-  - Optionally support ?format=json to return machine-readable JSON instead.
-  - Acceptance criteria: visiting /badge/{id} in a browser renders an
-    SVG badge without requiring a login.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limit import badge_rate_limiter
@@ -33,8 +26,20 @@ def get_compliance_badge(
     format: str = "svg",  # "svg" | "json"
     db: Session = Depends(get_db),
 ):
-    """
-    Return a public compliance badge for an AI system.
+    """Return a public compliance badge for an AI system.
+
+    Args:
+        system_id: ID of the AI system to render a badge for.
+        format: Response format to return. ``svg`` renders the badge as an
+            image, while ``json`` returns the badge metadata as a payload.
+        db: Active database session used to look up the AI system.
+
+    Returns:
+        Either a JSON payload with badge metadata or an SVG response.
+
+    Raises:
+        HTTPException: If rate limiting is exceeded or the AI system does not
+            exist.
     """
     # Rate limit: 5 requests per minute per system ID by default (sensitive, fail closed)
     limited, retry_after = badge_rate_limiter.check_and_consume(

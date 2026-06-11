@@ -1,9 +1,10 @@
-import React, { useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
+import { FileText, Download, Trash2, Plus, Edit } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
+import { notify } from '../utils/toast'
 
 interface Document {
   id: number
@@ -22,6 +23,12 @@ interface AISystem {
 
 export default function Documents() {
   const queryClient = useQueryClient()
+  const generateButtonRef = useRef<HTMLButtonElement | null>(null)
+  const editButtonRef = useRef<HTMLButtonElement | null>(null)
+  const deleteButtonRef = useRef<HTMLButtonElement | null>(null)
+  const previousShowModalRef = useRef(false)
+  const previousEditingDocRef = useRef<Document | null>(null)
+  const previousDocumentToDeleteRef = useRef<Document | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [selectedSystem, setSelectedSystem] = useState<number | null>(null)
   const [selectedType, setSelectedType] = useState('technical_documentation')
@@ -30,24 +37,96 @@ export default function Documents() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
-  const [copiedDocId, setCopiedDocId] = useState<number | null>(null)
-  const [saveError, setSaveError] = useState<string | null>(null)
+  const [deletingDocumentId, setDeletingDocumentId] = useState<number | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const limit = 10
+  const searchInputId = 'documents-search'
+  const filterTypeId = 'documents-filter-type'
+  const filterStatusId = 'documents-filter-status'
+  const generateSystemId = 'documents-generate-system'
+  const generateTypeId = 'documents-generate-type'
 
-  const handleCopy = async (docId: number, content: string) => {
-    try {
-      await navigator.clipboard.writeText(content)
+  const closeGenerateModal = useCallback(() => {
+    setShowModal(false)
+    setSelectedSystem(null)
+    setSelectedType('technical_documentation')
+  }, [])
 
-      setCopiedDocId(docId)
-
-      setTimeout(() => {
-        setCopiedDocId(null)
-      }, 2000)
-    } catch (error) {
-      console.error('Failed to copy content:', error)
+  const openGenerateModal = useCallback((trigger?: HTMLButtonElement | null) => {
+    if (trigger) {
+      generateButtonRef.current = trigger
     }
-  }
+    setShowModal(true)
+  }, [])
+
+  const openEditModal = useCallback(
+    (doc: Document, trigger?: HTMLButtonElement | null) => {
+      if (trigger) {
+        editButtonRef.current = trigger
+      }
+      setEditingDoc(doc)
+    },
+    [],
+  )
+
+  const openDeleteModal = useCallback(
+    (doc: Document, trigger?: HTMLButtonElement | null) => {
+      if (trigger) {
+        deleteButtonRef.current = trigger
+      }
+      setDocumentToDelete(doc)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (previousShowModalRef.current && !showModal) {
+      generateButtonRef.current?.focus()
+    }
+    previousShowModalRef.current = showModal
+  }, [showModal])
+
+  useEffect(() => {
+    if (previousEditingDocRef.current && !editingDoc) {
+      editButtonRef.current?.focus()
+    }
+    previousEditingDocRef.current = editingDoc
+  }, [editingDoc])
+
+  useEffect(() => {
+    if (previousDocumentToDeleteRef.current && !documentToDelete) {
+      deleteButtonRef.current?.focus()
+    }
+    previousDocumentToDeleteRef.current = documentToDelete
+  }, [documentToDelete])
+
+  useEffect(() => {
+    if (!showModal && !documentToDelete && !editingDoc) {
+      return
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+
+      if (editingDoc) {
+        setEditingDoc(null)
+        return
+      }
+
+      if (showModal) {
+        closeGenerateModal()
+        return
+      }
+
+      setDocumentToDelete(null)
+    }
+
+    document.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [closeGenerateModal, documentToDelete, editingDoc, showModal])
 
   const {
     data: documentsData,
@@ -93,15 +172,32 @@ export default function Documents() {
     mutationFn: documentsApi.generate,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
-      setShowModal(false)
+      closeGenerateModal()
+      notify.success('Document generated')
+    },
+    onError: () => {
+      notify.error('Unable to generate the document right now')
     },
   })
 
   const deleteMutation = useMutation({
     mutationFn: documentsApi.delete,
+    onMutate: (id) => {
+      setDeletingDocumentId(id)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] })
       setDocumentToDelete(null)
+      if (currentPage > 1 && documents.length === 1) {
+        setCurrentPage((page) => Math.max(page - 1, 1))
+      }
+      notify.success('Document deleted')
+    },
+    onError: () => {
+      notify.error('Unable to delete the document right now')
+    },
+    onSettled: () => {
+      setDeletingDocumentId(null)
     },
   })
 
@@ -122,16 +218,40 @@ export default function Documents() {
     })
   }
 
-  const handleSaveDocument = async (content: string) => {
+  const handleSystemSelect = (value: string) => {
+    if (!value) {
+      setSelectedSystem(null)
+      return
+    }
+
+    const parsed = Number(value)
+    setSelectedSystem(Number.isInteger(parsed) && parsed > 0 ? parsed : null)
+  }
+
+  const clearFilters = () => {
+    setSearchQuery('')
+    setFilterType('all')
+    setFilterStatus('all')
+    setCurrentPage(1)
+  }
+
+  const handleSaveDocument = async (
+    content: string,
+    source: 'manual' | 'autosave' = 'manual'
+  ) => {
     if (!editingDoc) return
 
     try {
-      setSaveError(null)
       await documentsApi.update(editingDoc.id, { content })
       queryClient.invalidateQueries({ queryKey: ['documents'] })
+      if (source === 'manual') {
+        notify.success('Document saved')
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to save document'
-      setSaveError(message)
+      if (source === 'manual') {
+        notify.error('Unable to save the document right now')
+      }
+      throw error
     }
   }
 
@@ -158,7 +278,7 @@ export default function Documents() {
           </p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={(event) => openGenerateModal(event.currentTarget)}
           disabled={systems.length === 0}
           className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
         >
@@ -169,7 +289,11 @@ export default function Documents() {
 
       <div className="bg-white rounded-xl border border-gray-200 p-4">
         <div className="flex flex-col md:flex-row gap-4">
+          <label htmlFor={searchInputId} className="sr-only">
+            Search documents
+          </label>
           <input
+            id={searchInputId}
             type="text"
             placeholder="Search documents..."
             value={searchQuery}
@@ -177,7 +301,11 @@ export default function Documents() {
             className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
 
+          <label htmlFor={filterTypeId} className="sr-only">
+            Filter documents by type
+          </label>
           <select
+            id={filterTypeId}
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg"
@@ -191,7 +319,11 @@ export default function Documents() {
             ))}
           </select>
 
+          <label htmlFor={filterStatusId} className="sr-only">
+            Filter documents by status
+          </label>
           <select
+            id={filterStatusId}
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value)}
             className="px-4 py-2 border border-gray-300 rounded-lg"
@@ -279,6 +411,15 @@ export default function Documents() {
           <p className="text-gray-500 mt-1">
             Try adjusting your search or filters
           </p>
+          {(searchQuery || filterType !== 'all' || filterStatus !== 'all') && (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="mt-4 inline-flex items-center rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid gap-4">
@@ -322,28 +463,17 @@ export default function Documents() {
                     />
                   )}
                   <button
-                    onClick={() => setEditingDoc(doc)}
+                    onClick={(event) => openEditModal(doc, event.currentTarget)}
                     className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
                     title="Edit"
+                    aria-label={`Edit document ${doc.title}`}
                   >
                     <Edit className="w-5 h-5" />
                   </button>
 
                   <button
-                    onClick={() => handleCopy(doc.id, doc.content || '')}
-                    className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
-                    title={copiedDocId === doc.id ? 'Copied!' : 'Copy Markdown'}
-                  >
-                    {copiedDocId === doc.id ? (
-                      <Check className="w-5 h-5" />
-                    ) : (
-                      <Copy className="w-5 h-5" />
-                    )}
-                  </button>
-
-                  <button
+                    type="button"
                     onClick={() => {
-                      // Download as text file
                       const blob = new Blob([doc.content || ''], {
                         type: 'text/markdown',
                       })
@@ -352,15 +482,19 @@ export default function Documents() {
                       a.href = url
                       a.download = `${doc.title}.md`
                       a.click()
+                      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
                     }}
-                    className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                    className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
+                    title="Download Markdown"
+                    aria-label={`Download document ${doc.title} as Markdown`}
                   >
                     <Download className="w-5 h-5" />
                   </button>
 
                   <button
-                    onClick={() => setDocumentToDelete(doc)}
+                    onClick={(event) => openDeleteModal(doc, event.currentTarget)}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
+                    aria-label={`Delete document ${doc.title}`}
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
@@ -406,9 +540,21 @@ export default function Documents() {
 
       {/* Delete Confirmation Modal */}
       {documentToDelete && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-document-title"
+          onClick={() => setDocumentToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-xl p-6 w-full max-w-md"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2
+              id="delete-document-title"
+              className="text-lg font-semibold text-gray-900 mb-2"
+            >
               Delete Document
             </h2>
             <p className="text-gray-600">
@@ -425,10 +571,12 @@ export default function Documents() {
               <button
                 type="button"
                 onClick={() => deleteMutation.mutate(documentToDelete.id)}
-                disabled={deleteMutation.isPending}
+                disabled={deleteMutation.isPending && deletingDocumentId === documentToDelete.id}
                 className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
               >
-                Delete
+                {deleteMutation.isPending && deletingDocumentId === documentToDelete.id
+                  ? 'Deleting...'
+                  : 'Delete'}
               </button>
             </div>
           </div>
@@ -437,19 +585,35 @@ export default function Documents() {
 
       {/* Generate Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="generate-document-title"
+          onClick={closeGenerateModal}
+        >
+          <div
+            className="bg-white rounded-xl p-6 w-full max-w-md"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2
+              id="generate-document-title"
+              className="text-lg font-semibold text-gray-900 mb-4"
+            >
               Generate Document
             </h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={generateSystemId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   AI System
                 </label>
                 <select
+                  id={generateSystemId}
                   value={selectedSystem || ''}
-                  onChange={(e) => setSelectedSystem(parseInt(e.target.value))}
+                  onChange={(e) => handleSystemSelect(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
                   <option value="">Select AI system...</option>
@@ -461,10 +625,14 @@ export default function Documents() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor={generateTypeId}
+                  className="block text-sm font-medium text-gray-700"
+                >
                   Document Type
                 </label>
                 <select
+                  id={generateTypeId}
                   value={selectedType}
                   onChange={(e) => setSelectedType(e.target.value)}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"
@@ -479,7 +647,7 @@ export default function Documents() {
               <div className="flex justify-end gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={closeGenerateModal}
                   className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
                 >
                   Cancel
@@ -497,24 +665,23 @@ export default function Documents() {
         </div>
       )}
 
-      {/* Editor Modal */}
-      {saveError && (
-        <div className="fixed top-4 right-4 z-50 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-lg">
-          {saveError}
-        </div>
-      )}
-
       {editingDoc && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
-          <div className="bg-white rounded-xl w-full max-w-6xl h-[90vh]">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="document-editor-title"
+          onClick={() => setEditingDoc(null)}
+        >
+          <div
+            className="bg-white rounded-xl w-full max-w-6xl h-[90vh]"
+            onClick={(event) => event.stopPropagation()}
+          >
             <DocumentEditor
               documentId={editingDoc.id}
               initialContent={editingDoc.content || ''}
               onSave={handleSaveDocument}
-              onClose={() => {
-                setEditingDoc(null)
-                setSaveError(null)
-              }}
+              onClose={() => setEditingDoc(null)}
             />
           </div>
         </div>

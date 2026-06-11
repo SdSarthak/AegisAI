@@ -1,24 +1,30 @@
-"""Transformer-based intent classifier for detecting prompt injection attempts."""
+"""Classify prompts with a transformer-backed guard intent model.
 
-import os
+The classifier is the slower but higher-signal layer in the guard stack.
+It uses a fine-tuned DeBERTa checkpoint when available and falls back to
+deterministic heuristics when the trained weights are absent.
+"""
+
 import json
+import logging
+import os
 import re
-from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass
-import numpy as np
+from typing import Dict, List, Optional
 
+import numpy as np
 import torch
+from sklearn.metrics import f1_score
 from torch.utils.data import DataLoader, Dataset
 from transformers import (
-    AutoTokenizer,
-    AutoModelForSequenceClassification,
     AdamW,
     get_linear_schedule_with_warmup,
 )
-from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
 from . import guard_config as config
 from .regex_rules import RegexFilter
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -64,7 +70,11 @@ class PromptDataset(Dataset):
 
 
 class IntentClassifier:
-    """Fine-tuned DeBERTa classifier for prompt injection intent detection."""
+    """Fine-tuned DeBERTa classifier for prompt injection intent detection.
+
+    The classifier falls back to deterministic heuristics when no fine-tuned
+    model is available on disk.
+    """
 
     EXTRA_MALICIOUS_PATTERNS = [
         r"\bdo\s+anything\s+now\b",
@@ -86,16 +96,12 @@ class IntentClassifier:
     ]
 
     def __init__(self, model_path: Optional[str] = None, device: Optional[str] = None):
-        """
-        Initialize classifier with a fine-tuned model or deterministic fallback.
-
-        Tries to load a fine-tuned model first. If none is available, uses
-        deterministic heuristics instead of a base DeBERTa model with random
-        classification head weights.
+        """Initialize the classifier with a fine-tuned model or fallback.
 
         Args:
-            model_path: Path to trained model directory. If None, auto-detects using config.
-            device: Device to use ('cpu' or 'cuda'). Auto-detects GPU if None.
+            model_path: Path to the trained model directory. If omitted, the
+                configured model path is auto-detected.
+            device: Device to use (`cpu` or `cuda`). Auto-detects when omitted.
         """
         # Auto-detect device
         if device is None:
@@ -119,11 +125,11 @@ class IntentClassifier:
         )
 
         if model_exists and has_weights and trained_marker:
-            print(f"✓ Loading fine-tuned model from {model_path}")
+            logger.info("Loading fine-tuned model from %s", model_path)
             try:
                 from transformers import (
-                    AutoTokenizer,
                     AutoModelForSequenceClassification,
+                    AutoTokenizer,
                 )
 
                 self.tokenizer = AutoTokenizer.from_pretrained(model_path)
@@ -131,19 +137,22 @@ class IntentClassifier:
                     model_path
                 )
                 self.uses_heuristic_fallback = False
-                print(f"✓ Model and tokenizer loaded successfully")
+                logger.info("Model and tokenizer loaded successfully")
             except Exception as e:
-                print(f"⚠ Failed to load model: {e}. Falling back to deterministic rules.")
+                logger.warning(
+                    "Failed to load model: %s. Falling back to deterministic rules.",
+                    e,
+                )
                 self._load_heuristic_fallback()
         else:
             if model_exists and has_weights and not trained_marker:
-                print(
-                    f"⚠ Model weights found at {model_path} but no .trained marker — "
-                    "the model has not been fine-tuned."
+                logger.warning(
+                    "Model weights found at %s but no .trained marker - the model has not been fine-tuned.",
+                    model_path,
                 )
-            print(f"⚠ Fine-tuned model not found at {model_path}")
-            print(
-                "  Using deterministic heuristic fallback. Run training pipeline to produce "
+            logger.warning("Fine-tuned model not found at %s", model_path)
+            logger.warning(
+                "Using deterministic heuristic fallback. Run the training pipeline to produce "
                 "a fine-tuned classifier for semantic coverage."
             )
             self._load_heuristic_fallback()
@@ -174,9 +183,9 @@ class IntentClassifier:
         self.uses_heuristic_fallback = True
 
     def _load_pretrained(self):
-        """Load pre-trained DeBERTa model for explicit fine-tuning only."""
-        print("Loading pre-trained DeBERTa v3 small...")
-        from transformers import AutoTokenizer, AutoModelForSequenceClassification
+        """Load a pre-trained DeBERTa model for explicit fine-tuning only."""
+        logger.info("Loading pre-trained DeBERTa v3 small...")
+        from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
         model_name = "microsoft/deberta-v3-small"
         self.tokenizer = AutoTokenizer.from_pretrained(model_name)
@@ -340,7 +349,7 @@ class IntentClassifier:
         metrics = {"train_loss": [], "val_accuracy": [], "val_f1": []}
 
         for epoch in range(epochs):
-            print(f"\nEpoch {epoch + 1}/{epochs}")
+            logger.info("Epoch %s/%s", epoch + 1, epochs)
 
             # Training
             total_loss = 0
@@ -362,7 +371,7 @@ class IntentClassifier:
 
             avg_loss = total_loss / len(train_loader)
             metrics["train_loss"].append(avg_loss)
-            print(f"Training loss: {avg_loss:.4f}")
+            logger.info("Training loss: %.4f", avg_loss)
 
             # Validation
             self.model.eval()
@@ -390,7 +399,7 @@ class IntentClassifier:
             metrics["val_accuracy"].append(accuracy)
             metrics["val_f1"].append(f1)
 
-            print(f"Validation accuracy: {accuracy:.4f}, F1: {f1:.4f}")
+            logger.info("Validation accuracy: %.4f, F1: %.4f", accuracy, f1)
 
             self.model.train()
 
@@ -408,6 +417,6 @@ class IntentClassifier:
             }
             with open(os.path.join(output_dir, ".trained"), "w") as f:
                 json.dump(trained_meta, f, indent=2)
-            print(f"\nModel saved to {output_dir}")
+            logger.info("Model saved to %s", output_dir)
 
         return metrics

@@ -1,4 +1,12 @@
-"""Unicode, zero-width, and homoglyph preprocessor normalization layer for LLM Guard."""
+"""Normalize text before guard classification.
+
+The guard pipeline needs a predictable prompt representation before the
+classifier or heuristic filters make a decision. This module strips
+formatting-only characters, applies Unicode compatibility normalization,
+and canonicalizes a handful of common Cyrillic and Greek homoglyphs back to
+their Latin equivalents so downstream matching sees the same text a human
+would expect.
+"""
 
 import unicodedata
 from typing import Dict
@@ -58,75 +66,28 @@ HOMOGLYPH_MAPPING: Dict[str, str] = {
 
 
 def remove_zero_width_chars(text: str) -> str:
-    """
-    Remove formatting and invisible characters from the Unicode Cf category.
-    
-    This includes zero-width space (U+200B), zero-width non-joiner (U+200C),
-    zero-width joiner (U+200D), word joiner (U+2060), and zero-width
-    no-break space (U+FEFF).
-
-    Args:
-        text: Prompt string to filter.
-
-    Returns:
-        Filtered string without Cf category characters.
-    """
+    """Strip invisible Unicode format characters from ``text``."""
     if not text:
         return ""
     return "".join(c for c in text if unicodedata.category(c) != "Cf")
 
 
 def normalize_unicode(text: str) -> str:
-    """
-    Convert stylized Unicode font variations to standard Unicode equivalents using NFKC.
-    
-    This handles mathematical bold/italic, fullwidth, circle-enclosed, and script
-    variations of alphanumeric characters.
-
-    Args:
-        text: Prompt string to normalize.
-
-    Returns:
-        Canonical NFKC normalized string.
-    """
+    """Apply NFKC normalization to collapse compatibility variants."""
     if not text:
         return ""
     return unicodedata.normalize("NFKC", text)
 
 
 def canonicalize_homoglyphs(text: str) -> str:
-    """
-    Replace lookalike Cyrillic and Greek characters with standard ASCII equivalents.
-
-    Args:
-        text: Normalized prompt string.
-
-    Returns:
-        Canonical string with Latin counterparts substituted.
-    """
+    """Map common Greek and Cyrillic lookalikes to Latin ASCII forms."""
     if not text:
         return ""
     return "".join(HOMOGLYPH_MAPPING.get(c, c) for c in text)
 
 
 def normalize_prompt(text: str) -> str:
-    """
-    Clean and canonicalize prompt using the full normalization pipeline.
-    
-    Executes in sequence:
-    1. Zero-width/format characters stripped
-    2. Unicode compatibility normalization (NFKC)
-    3. Cyrillic/Greek homoglyph substitutions canonicalized
-
-    Args:
-        text: Raw input prompt string.
-
-    Returns:
-        Cleaned and normalized prompt.
-    """
+    """Run the full normalization pipeline used by the guard stack."""
     if not text:
         return ""
-    text = remove_zero_width_chars(text)
-    text = normalize_unicode(text)
-    text = canonicalize_homoglyphs(text)
-    return text
+    return canonicalize_homoglyphs(normalize_unicode(remove_zero_width_chars(text)))

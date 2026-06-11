@@ -1,19 +1,9 @@
-"""
-Compliance badge generator — produces SVG badges for public embedding.
-Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
-SPDX-License-Identifier: AGPL-3.0-only
+"""Generate public compliance badges as SVG.
 
-TODO for contributors (good first issue):
-  - Implement `generate_badge_svg(system_name, risk_level, compliance_status)`
-    that returns a valid SVG string.
-  - Use the color map below to pick the right color per status.
-  - The SVG should look like a standard shields.io-style badge:
-    left label "AegisAI" | right value = compliance_status.
-  - Acceptance criteria: calling generate_badge_svg() returns a string
-    that starts with "<svg" and can be saved as a .svg file.
+The badge generator renders a small shields.io-style SVG that can be
+embedded in READMEs or dashboards to show system risk and compliance state
+at a glance.
 """
-
-from __future__ import annotations
 
 from xml.sax.saxutils import escape as _xml_escape
 
@@ -42,6 +32,7 @@ STATUS_LABELS = {
 
 
 def _escape_svg_text(text: str) -> str:
+    """Escape SVG text so badge labels remain safe to embed."""
     return _xml_escape(text, {'"': "&quot;", "'": "&apos;"})
 
 
@@ -50,9 +41,7 @@ def generate_badge_svg(
     risk_level: str | None,
     compliance_status: str,
 ) -> str:
-    """
-    Generate an SVG compliance badge.
-    """
+    """Generate an SVG compliance badge for the supplied system."""
     if compliance_status in STATUS_COLORS:
         status_key = compliance_status
         status_label = STATUS_LABELS.get(status_key, "Unknown")
@@ -80,13 +69,13 @@ def generate_badge_svg(
     # Build SVG
     svg = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{total_width}" height="20">',
-        f'<linearGradient id="b" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>',
+        '<linearGradient id="b" x2="0" y2="100%"><stop offset="0" stop-color="#bbb" stop-opacity=".1"/><stop offset="1" stop-opacity=".1"/></linearGradient>',
         f'<mask id="a"><rect width="{total_width}" height="20" rx="3" fill="#fff"/></mask>',
         '<g mask="url(#a)">',
     ]
 
     current_x = 0
-    for i, (text, bg_color) in enumerate(segments):
+    for i, (_, bg_color) in enumerate(segments):
         w = segment_widths[i]
         svg.append(f'<path fill="{bg_color}" d="M{current_x} 0h{w}v20H{current_x}z"/>')
         current_x += w

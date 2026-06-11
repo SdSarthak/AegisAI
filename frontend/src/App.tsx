@@ -14,6 +14,7 @@ import GuardConsole from './pages/GuardConsole'
 import NotFound from './pages/NotFound'
 import { Toaster } from 'react-hot-toast'
 import RagChat from './pages/RagChat'
+import { hasManualThemePreference, setDarkThemeEnabled } from './utils/theme'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuthStore()
@@ -26,8 +27,8 @@ function App() {
     const media = window.matchMedia("(prefers-color-scheme: dark)")
 
     const handler = (e: MediaQueryListEvent) => {
-      if (!localStorage.getItem("theme")) {
-        document.documentElement.classList.toggle("dark", e.matches)
+      if (!hasManualThemePreference()) {
+        setDarkThemeEnabled(e.matches)
       }
     }
 

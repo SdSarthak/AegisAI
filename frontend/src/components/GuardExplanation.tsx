@@ -10,7 +10,7 @@
  * shows the predicted label, confidence, and explanation latency.
  */
 
-import React, { useMemo } from 'react'
+import { useMemo } from 'react'
 import { Brain, Clock } from 'lucide-react'
 
 import type { GuardExplainResponse, GuardTokenAttribution } from '../services/api'
@@ -185,9 +185,7 @@ export default function GuardExplanation({ text, explanation }: Props) {
               <span
                 key={i}
                 className={`${tokenClass(seg.token!.attribution, maxAbs)} rounded px-0.5 transition-colors`}
-                tabIndex={0}
                 title={`${seg.token!.token}: ${seg.token!.attribution >= 0 ? '+' : ''}${seg.token!.attribution.toFixed(3)}`}
-                aria-label={`Token ${seg.token!.token}, attribution ${seg.token!.attribution.toFixed(3)}`}
               >
                 {seg.text}
               </span>

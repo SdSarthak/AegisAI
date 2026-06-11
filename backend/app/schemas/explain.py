@@ -1,12 +1,14 @@
-"""
-Pydantic schemas for the Risk Classification Explainer API.
+"""Pydantic schemas for the EU AI Act risk classification explainer API.
 
-These models define the request and response structure for
-POST /api/v1/classification/explain
+These models define the request and response structure for the endpoint
+that analyzes an AI system description and returns legal context,
+recommended actions, and a classified risk level.
 """
+
+from typing import List
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+
 from app.models.ai_system import RiskLevel
 
 

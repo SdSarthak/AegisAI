@@ -1,17 +1,24 @@
-from app.schemas.user import UserCreate, UserLogin, UserResponse, UserUpdateSchema, Token, ChangePasswordRequest
 from app.schemas.ai_system import (
     AISystemCreate,
-    AISystemUpdate,
     AISystemResponse,
+    AISystemUpdate,
     ComplianceStatusUpdateSchema,
+    QuestionnaireRiskFactor,
     RiskClassificationRequest,
     RiskClassificationResponse,
-    QuestionnaireRiskFactor
 )
-from app.schemas.document import DocumentCreate, DocumentResponse
 from app.schemas.audit_log import AISystemAuditLogResponse
-from app.schemas.pagination import PaginatedResponse, CursorPaginatedResponse
+from app.schemas.document import DocumentCreate, DocumentResponse
 from app.schemas.guard_stats import GuardStatsResponse
+from app.schemas.pagination import CursorPaginatedResponse, PaginatedResponse
+from app.schemas.user import (
+    ChangePasswordRequest,
+    Token,
+    UserCreate,
+    UserLogin,
+    UserResponse,
+    UserUpdateSchema,
+)
 
 __all__ = [
     "UserCreate", "UserLogin", "UserResponse", "UserUpdateSchema", "Token", "ChangePasswordRequest",

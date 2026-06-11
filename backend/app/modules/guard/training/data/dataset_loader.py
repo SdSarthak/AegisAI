@@ -1,6 +1,10 @@
-"""Load and persist training datasets for the guard classifier."""
+"""Load and cache training data for the guard classifier.
 
-from __future__ import annotations
+The training pipeline can source data either from a local CSV cache or from
+the Hugging Face dataset used by the project. These helpers normalize the
+result into a consistent dataframe shape and keep the local cache fresh
+when a download is requested.
+"""
 
 from pathlib import Path
 from typing import Iterable, Optional
@@ -8,14 +12,21 @@ from typing import Iterable, Optional
 import pandas as pd
 
 from app.modules.guard import guard_config as config
-from .preprocess import normalize_training_frame
 
+from .preprocess import normalize_training_frame
 
 DEFAULT_HF_DATASET = "xTRam1/safe-guard-prompt-injection"
 
 
 def resolve_backend_path(path: str | Path) -> Path:
-    """Resolve relative config paths from the backend directory."""
+    """Resolve relative config paths from the backend directory.
+
+    Args:
+        path: Absolute or backend-relative path.
+
+    Returns:
+        An absolute Path rooted at the backend directory when needed.
+    """
     path = Path(path)
     if path.is_absolute():
         return path
@@ -28,7 +39,17 @@ def load_local_dataset(
     label_column: str = "label",
     valid_labels: Iterable[str] = ("benign", "suspicious", "malicious"),
 ) -> pd.DataFrame:
-    """Load and normalize a local CSV dataset."""
+    """Load and normalize a local CSV dataset.
+
+    Args:
+        csv_path: Path to the local CSV file.
+        text_column: Column containing the prompt text.
+        label_column: Column containing the label values.
+        valid_labels: Allowed label values for the dataset.
+
+    Returns:
+        A normalized pandas DataFrame ready for training.
+    """
     return normalize_training_frame(
         pd.read_csv(resolve_backend_path(csv_path)),
         text_column=text_column,
@@ -44,7 +65,21 @@ def download_huggingface_dataset(
     label_column: str = "label",
     valid_labels: Iterable[str] = ("benign", "suspicious", "malicious"),
 ) -> pd.DataFrame:
-    """Download and normalize a Hugging Face dataset split."""
+    """Download and normalize a Hugging Face dataset split.
+
+    Args:
+        dataset_name: Hugging Face dataset name.
+        split: Dataset split to load.
+        text_column: Column containing the prompt text.
+        label_column: Column containing the label values.
+        valid_labels: Allowed label values for the dataset.
+
+    Returns:
+        A normalized pandas DataFrame ready for training.
+
+    Raises:
+        ValueError: If the requested split does not exist.
+    """
     from datasets import load_dataset
 
     dataset = load_dataset(dataset_name)
@@ -66,7 +101,19 @@ def load_or_download_dataset(
     label_column: str = "label",
     valid_labels: Optional[Iterable[str]] = None,
 ) -> pd.DataFrame:
-    """Load a local dataset unless a fresh Hugging Face download is requested."""
+    """Load a local dataset unless a fresh Hugging Face download is requested.
+
+    Args:
+        local_csv_path: Local cache path for the CSV dataset.
+        dataset_name: Hugging Face dataset name.
+        force_download: When True, bypass the local cache.
+        text_column: Column containing the prompt text.
+        label_column: Column containing the label values.
+        valid_labels: Optional label whitelist.
+
+    Returns:
+        A normalized pandas DataFrame, cached locally when downloaded.
+    """
     valid_labels = tuple(valid_labels or ("benign", "suspicious", "malicious"))
     local_path = resolve_backend_path(local_csv_path)
 

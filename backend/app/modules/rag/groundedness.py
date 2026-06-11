@@ -1,4 +1,10 @@
-"""Groundedness scoring for RAG answers against retrieved source chunks."""
+"""Score how well a RAG answer is supported by its retrieved sources.
+
+The groundedness checker combines semantic, retrieval, and lexical
+verifiers into a single score that the API can surface alongside each
+answer. That gives the frontend a quick way to explain whether a response
+looks well supported or needs caution.
+"""
 
 import logging
 import re
@@ -15,7 +21,15 @@ EmbeddingsFn = Callable[[list[str]], list[list[float]]]
 
 @dataclass
 class GroundednessResult:
-    """Composite groundedness result returned by the hybrid checker."""
+    """Composite groundedness result returned by the hybrid checker.
+
+    Attributes:
+        groundedness_score: Final aggregated groundedness score.
+        low_confidence: Whether the score fell below the configured threshold.
+        confidence_tier: Human-readable confidence band.
+        per_verifier_scores: Individual verifier scores used in aggregation.
+        flagged_reason: Optional explanation for why the result was flagged.
+    """
 
     groundedness_score: float
     low_confidence: bool
@@ -25,7 +39,11 @@ class GroundednessResult:
 
 
 class BaseVerifier(ABC):
-    """Abstract base class for groundedness verifier signals."""
+    """Abstract base class for groundedness verifier signals.
+
+    Concrete verifiers compare an answer, its sources, and the query to
+    produce a normalized confidence score.
+    """
 
     @abstractmethod
     def verify(
@@ -35,11 +53,22 @@ class BaseVerifier(ABC):
         query: str,
         embeddings_fn: EmbeddingsFn,
     ) -> float:
-        """Return a verifier score between 0.0 and 1.0."""
+        """Return a verifier score between 0.0 and 1.0.
+
+        Args:
+            answer: Generated answer text.
+            chunks: Retrieved source chunks.
+            query: Original user query.
+            embeddings_fn: Callable used to embed text for comparison.
+        """
 
 
 class SemanticSimilarityVerifier(BaseVerifier):
-    """Compare the generated answer to retrieved chunks with cosine similarity."""
+    """Compare the generated answer to retrieved chunks with cosine similarity.
+
+    This signal rewards answers that semantically resemble the retrieved
+    source chunks.
+    """
 
     def verify(
         self,
@@ -48,7 +77,17 @@ class SemanticSimilarityVerifier(BaseVerifier):
         query: str,
         embeddings_fn: EmbeddingsFn,
     ) -> float:
-        """Return the maximum answer-to-chunk cosine similarity."""
+        """Return the maximum answer-to-chunk cosine similarity.
+
+        Args:
+            answer: Generated answer text.
+            chunks: Retrieved source chunks.
+            query: Original user query.
+            embeddings_fn: Callable used to embed text for comparison.
+
+        Returns:
+            The strongest answer-to-chunk similarity score.
+        """
         del query
         if not answer.strip() or not chunks:
             return 0.0
@@ -75,7 +114,11 @@ class SemanticSimilarityVerifier(BaseVerifier):
 
 
 class RetrievalRelevanceVerifier(BaseVerifier):
-    """Compare the user query to retrieved chunks with cosine similarity."""
+    """Compare the user query to retrieved chunks with cosine similarity.
+
+    This signal rewards retrieval results that stay close to the original
+    user question.
+    """
 
     def verify(
         self,
@@ -84,7 +127,17 @@ class RetrievalRelevanceVerifier(BaseVerifier):
         query: str,
         embeddings_fn: EmbeddingsFn,
     ) -> float:
-        """Return the mean query-to-chunk cosine similarity."""
+        """Return the mean query-to-chunk cosine similarity.
+
+        Args:
+            answer: Generated answer text.
+            chunks: Retrieved source chunks.
+            query: Original user query.
+            embeddings_fn: Callable used to embed text for comparison.
+
+        Returns:
+            The average query-to-chunk similarity score.
+        """
         del answer
         if not query.strip() or not chunks:
             return 0.0
@@ -113,7 +166,11 @@ class RetrievalRelevanceVerifier(BaseVerifier):
 
 
 class LexicalOverlapVerifier(BaseVerifier):
-    """Compare answer and chunk terms with stop-word-filtered Jaccard overlap."""
+    """Compare answer and chunk terms with stop-word-filtered Jaccard overlap.
+
+    This signal provides a lightweight lexical sanity check on top of the
+    semantic verifiers.
+    """
 
     _TOKEN_PATTERN = re.compile(r"\b[a-zA-Z0-9]{2,}\b")
     _STOP_WORDS = {
@@ -154,7 +211,17 @@ class LexicalOverlapVerifier(BaseVerifier):
         query: str,
         embeddings_fn: EmbeddingsFn,
     ) -> float:
-        """Return Jaccard similarity between answer tokens and chunk tokens."""
+        """Return Jaccard similarity between answer tokens and chunk tokens.
+
+        Args:
+            answer: Generated answer text.
+            chunks: Retrieved source chunks.
+            query: Original user query.
+            embeddings_fn: Callable used to embed text for comparison.
+
+        Returns:
+            A token-overlap score between the answer and retrieved chunks.
+        """
         del query, embeddings_fn
         answer_tokens = self._tokenize(answer)
         chunk_tokens = self._tokenize(" ".join(chunks))
@@ -178,7 +245,10 @@ class LexicalOverlapVerifier(BaseVerifier):
 
 @dataclass
 class GroundednessConfig:
-    """Configuration for the hybrid groundedness checker."""
+    """Configuration for the hybrid groundedness checker.
+
+    The weights are normalized internally before aggregation.
+    """
 
     low_confidence_threshold: float = 0.65
     semantic_weight: float = 0.50
@@ -187,7 +257,11 @@ class GroundednessConfig:
 
 
 class HybridGroundednessChecker:
-    """Run multiple verifier signals and aggregate them into one confidence score."""
+    """Run multiple verifier signals and aggregate them into one confidence score.
+
+    The checker combines semantic, retrieval, and lexical signals into a
+    single groundedness result that the RAG layer can expose.
+    """
 
     def __init__(
         self,
@@ -195,7 +269,13 @@ class HybridGroundednessChecker:
         config: Optional[GroundednessConfig] = None,
         extra_verifiers: Optional[list[tuple[str, BaseVerifier, float]]] = None,
     ) -> None:
-        """Initialize the checker with embeddings, config, and optional verifiers."""
+        """Initialize the checker with embeddings, config, and optional verifiers.
+
+        Args:
+            embeddings_fn: Callable used to embed text during verification.
+            config: Optional weighting and threshold configuration.
+            extra_verifiers: Optional additional named verifier tuples.
+        """
         self.embeddings_fn = embeddings_fn
         self.config = config or GroundednessConfig()
         self.verifiers: list[tuple[str, BaseVerifier, float]] = [
@@ -206,7 +286,16 @@ class HybridGroundednessChecker:
         self.verifiers.extend(extra_verifiers or [])
 
     def check(self, answer: str, chunks: list[str], query: str) -> GroundednessResult:
-        """Return the hybrid groundedness result for an answer and its sources."""
+        """Return the hybrid groundedness result for an answer and its sources.
+
+        Args:
+            answer: Generated answer text.
+            chunks: Retrieved source chunks.
+            query: Original user query.
+
+        Returns:
+            GroundednessResult describing the aggregated groundedness score.
+        """
         per_verifier_scores: dict[str, float] = {}
         weighted_score = 0.0
         total_weight = 0.0
@@ -257,6 +346,7 @@ class HybridGroundednessChecker:
 
 
 def _cosine_similarity(left: np.ndarray, right: np.ndarray) -> float:
+    """Compute cosine similarity between two vectors."""
     left_norm = float(np.linalg.norm(left))
     right_norm = float(np.linalg.norm(right))
     if left_norm == 0.0 or right_norm == 0.0:
@@ -265,7 +355,15 @@ def _cosine_similarity(left: np.ndarray, right: np.ndarray) -> float:
 
 
 def cosine_similarity(left: list[float], right: list[float]) -> float:
-    """Backward-compatible public cosine similarity helper for legacy tests."""
+    """Backward-compatible public cosine similarity helper for legacy tests.
+
+    Args:
+        left: First vector.
+        right: Second vector.
+
+    Returns:
+        Cosine similarity between the vectors.
+    """
     return _cosine_similarity(
         np.asarray(left, dtype=float),
         np.asarray(right, dtype=float),
@@ -273,14 +371,26 @@ def cosine_similarity(left: list[float], right: list[float]) -> float:
 
 
 def get_embeddings():
-    """Lazy embeddings wrapper retained for older groundedness callers/tests."""
+    """Lazy embeddings wrapper retained for older groundedness callers/tests.
+
+    Returns:
+        The configured embeddings implementation.
+    """
     from .vector_store import get_embeddings as loader
 
     return loader()
 
 
 def compute_groundedness(answer: str, chunks: list[str]) -> float:
-    """Return the legacy answer-to-source groundedness score."""
+    """Return the legacy answer-to-source groundedness score.
+
+    Args:
+        answer: Generated answer text.
+        chunks: Retrieved source chunks.
+
+    Returns:
+        A legacy groundedness score between 0.0 and 1.0.
+    """
     if not answer.strip() or not chunks:
         return 0.0
 
@@ -296,12 +406,14 @@ def compute_groundedness(answer: str, chunks: list[str]) -> float:
 
 
 def _clamp_score(score: float) -> float:
+    """Clamp a similarity score to the 0.0-1.0 range."""
     if not np.isfinite(score):
         return 0.0
     return max(0.0, min(1.0, float(score)))
 
 
 def _confidence_tier(score: float, threshold: float) -> str:
+    """Map a groundedness score to a human-readable confidence tier."""
     if score >= 0.80:
         return "high"
     if score >= threshold:
