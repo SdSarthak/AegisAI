@@ -182,6 +182,7 @@ export default function Classification() {
     emotion_recognition: false,
     biometric_categorization: false,
   })
+  const primaryUseCaseId = 'classification-primary-use-case'
 
   const classifyMutation = useMutation({
     mutationFn: () => {
@@ -328,10 +329,14 @@ export default function Classification() {
       <form className="space-y-6">
         {/* Use Case Category */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label
+            htmlFor={primaryUseCaseId}
+            className="block text-sm font-medium text-gray-700 mb-2"
+          >
             Primary Use Case
           </label>
           <select
+            id={primaryUseCaseId}
             value={formData.use_case_category}
             onChange={(e) =>
               setFormData({ ...formData, use_case_category: e.target.value })
