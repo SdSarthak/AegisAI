@@ -79,6 +79,10 @@ export default function DocumentEditor({
 
   return (
     <div className="flex flex-col h-full border border-gray-200 rounded-xl overflow-hidden">
+      <h2 id="document-editor-title" className="sr-only">
+        Document editor
+      </h2>
+
       {/* Toolbar */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-gray-200 bg-gray-50">
         <div className="flex items-center gap-3">

@@ -590,9 +590,17 @@ export default function AISystems() {
 
       {/* Delete Confirmation Modal */}
       {systemToDelete && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-ai-system-title"
+        >
           <div className="bg-white rounded-xl p-6 w-full max-w-md">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+            <h2
+              id="delete-ai-system-title"
+              className="text-lg font-semibold text-gray-900 mb-2"
+            >
               Delete AI System
             </h2>
             <p className="text-gray-600">
@@ -627,13 +635,17 @@ export default function AISystems() {
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="add-ai-system-title"
           onClick={closeCreateModal}
         >
           <div
             className="bg-white rounded-xl p-6 w-full max-w-md"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            <h2
+              id="add-ai-system-title"
+              className="text-lg font-semibold text-gray-900 mb-4"
+            >
               Add AI System
             </h2>
             <form onSubmit={handleSubmit} className="space-y-4">

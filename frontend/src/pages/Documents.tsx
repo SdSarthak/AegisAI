@@ -454,13 +454,17 @@ export default function Documents() {
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="delete-document-title"
           onClick={() => setDocumentToDelete(null)}
         >
           <div
             className="bg-white rounded-xl p-6 w-full max-w-md"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+            <h2
+              id="delete-document-title"
+              className="text-lg font-semibold text-gray-900 mb-2"
+            >
               Delete Document
             </h2>
             <p className="text-gray-600">
@@ -495,13 +499,17 @@ export default function Documents() {
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="generate-document-title"
           onClick={closeGenerateModal}
         >
           <div
             className="bg-white rounded-xl p-6 w-full max-w-md"
             onClick={(event) => event.stopPropagation()}
           >
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
+            <h2
+              id="generate-document-title"
+              className="text-lg font-semibold text-gray-900 mb-4"
+            >
               Generate Document
             </h2>
             <div className="space-y-4">
@@ -564,6 +572,7 @@ export default function Documents() {
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4"
           role="dialog"
           aria-modal="true"
+          aria-labelledby="document-editor-title"
           onClick={() => setEditingDoc(null)}
         >
           <div
