@@ -57,6 +57,20 @@ export default function AISystems() {
     return window.localStorage.getItem('ai-systems-last-exported-at')
   })
 
+  const resetCreateForm = () => {
+    setFormData({ name: '', description: '', use_case: '', sector: '' })
+  }
+
+  const openCreateModal = () => {
+    resetCreateForm()
+    setShowModal(true)
+  }
+
+  const closeCreateModal = () => {
+    setShowModal(false)
+    resetCreateForm()
+  }
+
   const handleExport = async (format: 'csv' | 'json') => {
     setExporting(true)
     setExportMenuOpen(false)
@@ -120,8 +134,7 @@ export default function AISystems() {
     mutationFn: aiSystemsApi.create,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['ai-systems'] })
-      setShowModal(false)
-      setFormData({ name: '', description: '', use_case: '', sector: '' })
+      closeCreateModal()
       notify.success('AI system added')
     },
     onError: () => {
@@ -286,7 +299,7 @@ export default function AISystems() {
             </p>
           )}
           <button
-            onClick={() => setShowModal(true)}
+            onClick={openCreateModal}
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
           >
             <Plus className="w-5 h-5" />
@@ -651,7 +664,7 @@ export default function AISystems() {
               <div className="flex justify-end gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={closeCreateModal}
                   className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
                 >
                   Cancel
