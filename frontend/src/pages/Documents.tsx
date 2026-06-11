@@ -433,6 +433,7 @@ export default function Documents() {
                     onClick={(event) => openEditModal(doc, event.currentTarget)}
                     className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
                     title="Edit"
+                    aria-label={`Edit document ${doc.title}`}
                   >
                     <Edit className="w-5 h-5" />
                   </button>
@@ -452,6 +453,7 @@ export default function Documents() {
                     }}
                     className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
                     title="Download Markdown"
+                    aria-label={`Download document ${doc.title} as Markdown`}
                   >
                     <Download className="w-5 h-5" />
                   </button>
@@ -459,6 +461,7 @@ export default function Documents() {
                   <button
                     onClick={(event) => openDeleteModal(doc, event.currentTarget)}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
+                    aria-label={`Delete document ${doc.title}`}
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
