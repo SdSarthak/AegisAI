@@ -48,6 +48,11 @@ export default function BackendStatus() {
     : isHealthy
       ? 'Backend healthy'
       : 'Backend degraded'
+  const statusMessage = !dbOk
+    ? 'Backend status: database disconnected.'
+    : isHealthy
+      ? `Backend status: healthy. ${data?.service ?? 'Service'} v${data?.version ?? 'unknown'}.`
+      : `Backend status: degraded. ${data?.service ?? 'Service'} v${data?.version ?? 'unknown'}.`
 
   return (
     <div
@@ -72,6 +77,8 @@ export default function BackendStatus() {
           {data?.service} v{data?.version}
         </span>
       )}
+
+      <span className="sr-only">{statusMessage}</span>
     </div>
   )
 }
