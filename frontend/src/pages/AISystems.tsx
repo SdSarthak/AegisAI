@@ -595,8 +595,12 @@ export default function AISystems() {
           role="dialog"
           aria-modal="true"
           aria-labelledby="delete-ai-system-title"
+          onClick={() => setSystemToDelete(null)}
         >
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+          <div
+            className="bg-white rounded-xl p-6 w-full max-w-md"
+            onClick={(event) => event.stopPropagation()}
+          >
             <h2
               id="delete-ai-system-title"
               className="text-lg font-semibold text-gray-900 mb-2"
