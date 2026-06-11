@@ -84,6 +84,7 @@ export default function Layout() {
                 key={item.name}
                 to={item.href}
                 title={item.name}
+                aria-current={isActive ? 'page' : undefined}
                 className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
                   isActive
                     ? 'bg-primary-50 text-primary-700 dark:bg-primary-900 dark:text-white'
