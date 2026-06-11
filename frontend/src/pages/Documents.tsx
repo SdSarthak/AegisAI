@@ -422,8 +422,14 @@ export default function Documents() {
 
       {/* Delete Confirmation Modal */}
       {documentToDelete && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={() => setDocumentToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-xl p-6 w-full max-w-md"
+            onClick={(event) => event.stopPropagation()}
+          >
             <h2 className="text-lg font-semibold text-gray-900 mb-2">
               Delete Document
             </h2>
@@ -455,8 +461,14 @@ export default function Documents() {
 
       {/* Generate Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={closeGenerateModal}
+        >
+          <div
+            className="bg-white rounded-xl p-6 w-full max-w-md"
+            onClick={(event) => event.stopPropagation()}
+          >
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Generate Document
             </h2>
@@ -516,8 +528,14 @@ export default function Documents() {
       )}
 
       {editingDoc && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
-          <div className="bg-white rounded-xl w-full max-w-6xl h-[90vh]">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4"
+          onClick={() => setEditingDoc(null)}
+        >
+          <div
+            className="bg-white rounded-xl w-full max-w-6xl h-[90vh]"
+            onClick={(event) => event.stopPropagation()}
+          >
             <DocumentEditor
               documentId={editingDoc.id}
               initialContent={editingDoc.content || ''}
