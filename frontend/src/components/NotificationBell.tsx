@@ -44,6 +44,7 @@ export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false)
 
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
   const menuId = 'notification-menu'
 
   // Live data via useQuery
@@ -95,6 +96,12 @@ export default function NotificationBell() {
     }
     return () => {
       document.removeEventListener('keydown', handleEscape)
+    }
+  }, [isOpen])
+
+  useEffect(() => {
+    if (isOpen) {
+      closeButtonRef.current?.focus()
     }
   }, [isOpen])
 
@@ -151,6 +158,7 @@ export default function NotificationBell() {
             )}
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={() => setIsOpen(false)}
             tabIndex={isOpen ? 0 : -1}
