@@ -34,6 +34,10 @@ export default function AISystems() {
   const exportMenuRef = useRef<HTMLDivElement>(null)
   const exportButtonRef = useRef<HTMLButtonElement>(null)
   const previousExportMenuOpenRef = useRef(false)
+  const createModalTriggerRef = useRef<HTMLElement | null>(null)
+  const deleteModalTriggerRef = useRef<HTMLElement | null>(null)
+  const previousShowModalRef = useRef(false)
+  const previousSystemToDeleteRef = useRef<AISystem | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -63,7 +67,8 @@ export default function AISystems() {
     setFormData({ name: '', description: '', use_case: '', sector: '' })
   }, [])
 
-  const openCreateModal = useCallback(() => {
+  const openCreateModal = useCallback((trigger?: HTMLElement | null) => {
+    createModalTriggerRef.current = trigger ?? null
     resetCreateForm()
     setShowModal(true)
   }, [resetCreateForm])
@@ -72,6 +77,11 @@ export default function AISystems() {
     setShowModal(false)
     resetCreateForm()
   }, [resetCreateForm])
+
+  const openDeleteModal = useCallback((system: AISystem, trigger?: HTMLElement | null) => {
+    deleteModalTriggerRef.current = trigger ?? null
+    setSystemToDelete(system)
+  }, [])
 
   const handleExport = async (format: 'csv' | 'json') => {
     setExporting(true)
@@ -198,6 +208,22 @@ export default function AISystems() {
       document.removeEventListener('keydown', handleEscape)
     }
   }, [exportMenuOpen])
+
+  useEffect(() => {
+    if (previousShowModalRef.current && !showModal) {
+      createModalTriggerRef.current?.focus()
+      createModalTriggerRef.current = null
+    }
+    previousShowModalRef.current = showModal
+  }, [showModal])
+
+  useEffect(() => {
+    if (previousSystemToDeleteRef.current && !systemToDelete) {
+      deleteModalTriggerRef.current?.focus()
+      deleteModalTriggerRef.current = null
+    }
+    previousSystemToDeleteRef.current = systemToDelete
+  }, [systemToDelete])
 
   useEffect(() => {
     if (!showModal && !systemToDelete) {
@@ -330,7 +356,7 @@ export default function AISystems() {
             </p>
           )}
           <button
-            onClick={openCreateModal}
+            onClick={(event) => openCreateModal(event.currentTarget)}
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
           >
             <Plus className="w-5 h-5" />
@@ -480,10 +506,10 @@ export default function AISystems() {
               ? 'Try adjusting your filters or search term'
               : 'Add your first AI system to start tracking compliance'}
           </p>
-          {!searchTerm && !riskFilter && !complianceFilter && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowModal(true)}
+              {!searchTerm && !riskFilter && !complianceFilter && (
+                <div className="flex items-center gap-3">
+                  <button
+                onClick={(event) => openCreateModal(event.currentTarget)}
                 className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
               >
                 <Plus className="w-5 h-5" />
@@ -543,7 +569,7 @@ export default function AISystems() {
                     <Edit className="w-5 h-5" />
                   </button>
                   <button
-                    onClick={() => setSystemToDelete(system)}
+                    onClick={(event) => openDeleteModal(system, event.currentTarget)}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
                   >
                     <Trash2 className="w-5 h-5" />
