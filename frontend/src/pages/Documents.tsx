@@ -452,6 +452,8 @@ export default function Documents() {
       {documentToDelete && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
           onClick={() => setDocumentToDelete(null)}
         >
           <div
@@ -491,6 +493,8 @@ export default function Documents() {
       {showModal && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          role="dialog"
+          aria-modal="true"
           onClick={closeGenerateModal}
         >
           <div
@@ -558,6 +562,8 @@ export default function Documents() {
       {editingDoc && (
         <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4"
+          role="dialog"
+          aria-modal="true"
           onClick={() => setEditingDoc(null)}
         >
           <div
