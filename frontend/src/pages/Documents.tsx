@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { FileText, Download, Trash2, Plus, Edit } from 'lucide-react'
@@ -35,11 +35,39 @@ export default function Documents() {
   const [currentPage, setCurrentPage] = useState(1)
   const limit = 10
 
-  const closeGenerateModal = () => {
+  const closeGenerateModal = useCallback(() => {
     setShowModal(false)
     setSelectedSystem(null)
     setSelectedType('technical_documentation')
-  }
+  }, [])
+
+  useEffect(() => {
+    if (!showModal && !documentToDelete && !editingDoc) {
+      return
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+
+      if (editingDoc) {
+        setEditingDoc(null)
+        return
+      }
+
+      if (showModal) {
+        closeGenerateModal()
+        return
+      }
+
+      setDocumentToDelete(null)
+    }
+
+    document.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [closeGenerateModal, documentToDelete, editingDoc, showModal])
 
   const {
     data: documentsData,

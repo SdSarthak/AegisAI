@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import {
@@ -57,19 +57,19 @@ export default function AISystems() {
     return window.localStorage.getItem('ai-systems-last-exported-at')
   })
 
-  const resetCreateForm = () => {
+  const resetCreateForm = useCallback(() => {
     setFormData({ name: '', description: '', use_case: '', sector: '' })
-  }
+  }, [])
 
-  const openCreateModal = () => {
+  const openCreateModal = useCallback(() => {
     resetCreateForm()
     setShowModal(true)
-  }
+  }, [resetCreateForm])
 
-  const closeCreateModal = () => {
+  const closeCreateModal = useCallback(() => {
     setShowModal(false)
     resetCreateForm()
-  }
+  }, [resetCreateForm])
 
   const handleExport = async (format: 'csv' | 'json') => {
     setExporting(true)
@@ -191,6 +191,29 @@ export default function AISystems() {
       document.removeEventListener('keydown', handleEscape)
     }
   }, [exportMenuOpen])
+
+  useEffect(() => {
+    if (!showModal && !systemToDelete) {
+      return
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+
+      if (showModal) {
+        closeCreateModal()
+        return
+      }
+
+      setSystemToDelete(null)
+    }
+
+    document.addEventListener('keydown', handleEscape)
+
+    return () => {
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [closeCreateModal, showModal, systemToDelete])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
