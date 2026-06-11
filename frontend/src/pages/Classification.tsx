@@ -301,6 +301,7 @@ export default function Classification() {
         aria-controls={`classification-panel-${tab}`}
         aria-selected={isActive}
         aria-disabled={locked}
+        aria-label={`${label}${locked ? ' (locked until a result is available)' : ''}`}
         tabIndex={isActive ? 0 : -1}
         className={`flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium transition-colors ${
           isActive
