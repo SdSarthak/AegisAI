@@ -30,28 +30,33 @@ export default function ThemeToggle() {
   }
 
   return (
-    <button
-      type="button"
-      onClick={toggleTheme}
-      className="
-        p-2 
-        rounded-lg 
-        bg-white dark:bg-gray-800 
-        text-gray-800 dark:text-gray-200 
-        border border-gray-300 dark:border-gray-600 
-        hover:bg-gray-100 dark:hover:bg-gray-700 
-        transition-all duration-200 
-        shadow-sm
-      "
-      aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-      aria-pressed={isDark}
-      title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-    >
-      {isDark ? (
-        <Sun className="w-5 h-5 text-yellow-400" />
-      ) : (
-        <Moon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
-      )}
-    </button>
+    <div className="relative">
+      <button
+        type="button"
+        onClick={toggleTheme}
+        className="
+          p-2
+          rounded-lg
+          bg-white dark:bg-gray-800
+          text-gray-800 dark:text-gray-200
+          border border-gray-300 dark:border-gray-600
+          hover:bg-gray-100 dark:hover:bg-gray-700
+          transition-all duration-200
+          shadow-sm
+        "
+        aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        aria-pressed={isDark}
+        title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+      >
+        {isDark ? (
+          <Sun className="w-5 h-5 text-yellow-400" />
+        ) : (
+          <Moon className="w-5 h-5 text-gray-700 dark:text-gray-200" />
+        )}
+      </button>
+      <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {isDark ? 'Dark mode enabled' : 'Light mode enabled'}
+      </span>
+    </div>
   )
 }
