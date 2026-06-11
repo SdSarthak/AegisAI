@@ -44,7 +44,9 @@ export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false)
 
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
   const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const previousOpenRef = useRef(isOpen)
   const menuId = 'notification-menu'
 
   // Live data via useQuery
@@ -104,13 +106,18 @@ export default function NotificationBell() {
       closeButtonRef.current?.focus()
     }
   }, [isOpen])
-
-
+  useEffect(() => {
+    if (previousOpenRef.current && !isOpen) {
+      triggerRef.current?.focus()
+    }
+    previousOpenRef.current = isOpen
+  }, [isOpen])
 
   return (
     <div ref={wrapperRef} className="relative">
 
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className="relative p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
