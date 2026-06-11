@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import {
   AlertCircle,
   Bot,
@@ -33,6 +33,7 @@ export default function RagChat() {
   const [question, setQuestion] = useState('')
   const [submittedQuestion, setSubmittedQuestion] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
+  const questionInputRef = useRef<HTMLTextAreaElement | null>(null)
 
   const {
     status,
@@ -129,6 +130,9 @@ export default function RagChat() {
                     onClick={() => {
                       setQuestion(example)
                       setValidationError(null)
+                      requestAnimationFrame(() => {
+                        questionInputRef.current?.focus()
+                      })
                     }}
                     className="text-left bg-white border border-gray-200 rounded-xl p-4 text-sm text-gray-700 hover:border-primary-200 hover:bg-primary-50 transition-colors"
                   >
@@ -278,6 +282,7 @@ export default function RagChat() {
             </label>
             <textarea
               id="rag-question"
+              ref={questionInputRef}
               value={question}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => handleQuestionChange(e.target.value)}
               placeholder="Ask a compliance question..."
