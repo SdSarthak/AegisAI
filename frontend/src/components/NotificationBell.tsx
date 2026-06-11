@@ -191,6 +191,7 @@ export default function NotificationBell() {
                 type="button"
                 onClick={() => handleNotificationClick(notification.id)}
                 tabIndex={isOpen ? 0 : -1}
+                aria-label={`Open notification: ${notification.title}${notification.is_read ? '' : ' (unread)'}`}
                 className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 focus:outline-none focus:bg-gray-50 ${
                   !notification.is_read ? 'bg-primary-50/40' : ''
                 }`}
