@@ -32,6 +32,8 @@ interface AISystem {
 export default function AISystems() {
   const queryClient = useQueryClient()
   const exportMenuRef = useRef<HTMLDivElement>(null)
+  const exportButtonRef = useRef<HTMLButtonElement>(null)
+  const previousExportMenuOpenRef = useRef(false)
   const [showModal, setShowModal] = useState(false)
   const [formData, setFormData] = useState({
     name: '',
@@ -166,6 +168,11 @@ export default function AISystems() {
   const filteredSystems = systems
 
   useEffect(() => {
+    if (previousExportMenuOpenRef.current && !exportMenuOpen) {
+      exportButtonRef.current?.focus()
+    }
+    previousExportMenuOpenRef.current = exportMenuOpen
+
     function handleClickOutside(event: MouseEvent) {
       if (
         exportMenuRef.current &&
@@ -281,6 +288,7 @@ export default function AISystems() {
         <div className="flex flex-col items-end gap-2">
           <div ref={exportMenuRef} className="relative">
             <button
+              ref={exportButtonRef}
               type="button"
               onClick={() => setExportMenuOpen((value) => !value)}
               disabled={exporting}
