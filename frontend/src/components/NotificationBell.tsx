@@ -134,6 +134,7 @@ export default function NotificationBell() {
             className={`absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full ring-2 ring-white ${
               !isOpen ? 'animate-pulse' : ''
             }`}
+            aria-label={`${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}`}
           >
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
