@@ -51,6 +51,15 @@ export default function RagChat() {
   const hasAnswer = tokens.length > 0
   const displayError = validationError ?? streamError
   const exportText = buildExportText(tokens, citations)
+  const statusMessage = displayError
+    ? `Answer unavailable. ${displayError}`
+    : isAwaitingFirstToken
+      ? 'Searching knowledge base.'
+      : isStreaming
+        ? 'Streaming answer.'
+        : hasAnswer
+          ? 'Answer ready.'
+          : ''
 
   const handleAsk = (e: React.FormEvent) => {
     e.preventDefault()
@@ -320,6 +329,9 @@ export default function RagChat() {
             <p className="text-xs text-gray-400">
               Use this assistant to explore risk, documentation, and governance obligations.
             </p>
+          </div>
+          <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+            {statusMessage}
           </div>
         </form>
       </div>
