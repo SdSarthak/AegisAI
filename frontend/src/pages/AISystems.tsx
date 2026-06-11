@@ -6,7 +6,6 @@ import {
   Bot,
   ChevronDown,
   Download,
-  Edit,
   Filter,
   Loader2,
   Search,
@@ -565,9 +564,6 @@ export default function AISystems() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
-                    <Edit className="w-5 h-5" />
-                  </button>
                   <button
                     onClick={(event) => openDeleteModal(system, event.currentTarget)}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
