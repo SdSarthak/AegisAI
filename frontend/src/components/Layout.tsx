@@ -39,6 +39,7 @@ export default function Layout() {
       
       {/* Sidebar */}
       <div
+        id="app-sidebar"
         className={`fixed inset-y-0 left-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-[width] duration-200 z-40 ${
           isCollapsed ? 'w-20' : 'w-64'
         }`}
@@ -62,6 +63,8 @@ export default function Layout() {
             onClick={() => setIsCollapsed((prev) => !prev)}
             className="p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!isCollapsed}
+            aria-controls="app-sidebar"
           >
             {isCollapsed ? (
               <ChevronRight className="w-5 h-5" />
