@@ -600,8 +600,14 @@ export default function AISystems() {
 
       {/* Add Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={closeCreateModal}
+        >
+          <div
+            className="bg-white rounded-xl p-6 w-full max-w-md"
+            onClick={(event) => event.stopPropagation()}
+          >
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Add AI System
             </h2>
