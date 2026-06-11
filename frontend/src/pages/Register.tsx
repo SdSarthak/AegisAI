@@ -209,6 +209,7 @@ export default function Register() {
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="new-password"
                 required
+                aria-describedby="password-requirements"
                 value={formData.password}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
                   setFormData({ ...formData, password: e.target.value })
@@ -227,6 +228,7 @@ export default function Register() {
                 onMouseDown={(e: React.MouseEvent) => e.preventDefault()}
                 onClick={() => setShowPassword(!showPassword)}
                 aria-pressed={showPassword}
+                aria-controls="password"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
                 title={showPassword ? 'Hide password' : 'Show password'}
                 className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
@@ -237,7 +239,10 @@ export default function Register() {
 
             {/* Password strength requirements feedback */}
             {(showPasswordRequirements || formData.password) && (
-              <div className="mt-3 space-y-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+              <div
+                id="password-requirements"
+                className="mt-3 space-y-2 p-3 bg-gray-50 rounded-lg border border-gray-200"
+              >
                 <p className="text-xs font-semibold text-gray-700">
                   Password requirements:
                 </p>
