@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Clock, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { notificationsApi, type NotificationResponse } from '../services/api'
+import { notify } from '../utils/toast'
 
 /** Relative‑time formatter (e.g. "5m ago", "2h ago"). */
 function timeAgo(isoDate: string): string {
@@ -55,9 +56,13 @@ export default function NotificationBell() {
   const unreadCount = notifications.filter((n: NotificationResponse) => !n.is_read).length
 
   const handleNotificationClick = async (id: number) => {
-    await notificationsApi.markRead([id])
-    queryClient.invalidateQueries({ queryKey: ['notifications'] })
-    setIsOpen(false)
+    try {
+      await notificationsApi.markRead([id])
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      setIsOpen(false)
+    } catch {
+      notify.error('Unable to mark the notification as read right now')
+    }
   }
 
   // Close dropdown on click outside
