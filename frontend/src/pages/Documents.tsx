@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { FileText, Download, Trash2, Plus, Edit } from 'lucide-react'
@@ -23,6 +23,12 @@ interface AISystem {
 
 export default function Documents() {
   const queryClient = useQueryClient()
+  const generateButtonRef = useRef<HTMLButtonElement | null>(null)
+  const editButtonRef = useRef<HTMLButtonElement | null>(null)
+  const deleteButtonRef = useRef<HTMLButtonElement | null>(null)
+  const previousShowModalRef = useRef(false)
+  const previousEditingDocRef = useRef<Document | null>(null)
+  const previousDocumentToDeleteRef = useRef<Document | null>(null)
   const [showModal, setShowModal] = useState(false)
   const [selectedSystem, setSelectedSystem] = useState<number | null>(null)
   const [selectedType, setSelectedType] = useState('technical_documentation')
@@ -40,6 +46,54 @@ export default function Documents() {
     setSelectedSystem(null)
     setSelectedType('technical_documentation')
   }, [])
+
+  const openGenerateModal = useCallback((trigger?: HTMLButtonElement | null) => {
+    if (trigger) {
+      generateButtonRef.current = trigger
+    }
+    setShowModal(true)
+  }, [])
+
+  const openEditModal = useCallback(
+    (doc: Document, trigger?: HTMLButtonElement | null) => {
+      if (trigger) {
+        editButtonRef.current = trigger
+      }
+      setEditingDoc(doc)
+    },
+    [],
+  )
+
+  const openDeleteModal = useCallback(
+    (doc: Document, trigger?: HTMLButtonElement | null) => {
+      if (trigger) {
+        deleteButtonRef.current = trigger
+      }
+      setDocumentToDelete(doc)
+    },
+    [],
+  )
+
+  useEffect(() => {
+    if (previousShowModalRef.current && !showModal) {
+      generateButtonRef.current?.focus()
+    }
+    previousShowModalRef.current = showModal
+  }, [showModal])
+
+  useEffect(() => {
+    if (previousEditingDocRef.current && !editingDoc) {
+      editButtonRef.current?.focus()
+    }
+    previousEditingDocRef.current = editingDoc
+  }, [editingDoc])
+
+  useEffect(() => {
+    if (previousDocumentToDeleteRef.current && !documentToDelete) {
+      deleteButtonRef.current?.focus()
+    }
+    previousDocumentToDeleteRef.current = documentToDelete
+  }, [documentToDelete])
 
   useEffect(() => {
     if (!showModal && !documentToDelete && !editingDoc) {
@@ -212,7 +266,7 @@ export default function Documents() {
           </p>
         </div>
         <button
-          onClick={() => setShowModal(true)}
+          onClick={(event) => openGenerateModal(event.currentTarget)}
           disabled={systems.length === 0}
           className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
         >
@@ -376,7 +430,7 @@ export default function Documents() {
                     />
                   )}
                   <button
-                    onClick={() => setEditingDoc(doc)}
+                    onClick={(event) => openEditModal(doc, event.currentTarget)}
                     className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
                     title="Edit"
                   >
@@ -403,7 +457,7 @@ export default function Documents() {
                   </button>
 
                   <button
-                    onClick={() => setDocumentToDelete(doc)}
+                    onClick={(event) => openDeleteModal(doc, event.currentTarget)}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
                   >
                     <Trash2 className="w-5 h-5" />
