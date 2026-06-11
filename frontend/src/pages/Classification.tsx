@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { classificationApi } from '../services/api'
@@ -204,6 +204,21 @@ export default function Classification() {
       setActiveTab('questionnaire')
     },
   })
+  const {
+    reset: resetClassificationMutation,
+    isError: hasClassificationError,
+  } = classifyMutation
+
+  useEffect(() => {
+    if (result) {
+      setResult(null)
+      setActiveTab('questionnaire')
+    }
+
+    if (hasClassificationError) {
+      resetClassificationMutation()
+    }
+  }, [formData, result, hasClassificationError, resetClassificationMutation])
 
   const getRiskIcon = (level: string) => {
     switch (level) {
