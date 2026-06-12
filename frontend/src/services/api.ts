@@ -421,11 +421,7 @@ export const ragApi = {
     let buffer = ''
 
     try {
-<<<<<<< HEAD
       while (!signal?.aborted) {
-=======
-      for (;;) {
->>>>>>> a3656e9 (fix: clean up frontend lint issues)
         const { value, done } = await reader.read()
         if (done) break
         buffer += value
