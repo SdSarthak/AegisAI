@@ -248,13 +248,16 @@ def test_delete_read_notifications_only_deletes_current_user_read_notifications(
     db.refresh(mine_read)
     db.refresh(mine_unread)
     db.refresh(other_read)
+    mine_read_id = mine_read.id
+    mine_unread_id = mine_unread.id
+    other_read_id = other_read.id
 
     response = client.delete("/api/v1/notifications/read")
 
     assert response.status_code == 204
-    assert db.query(Notification).filter(Notification.id == mine_read.id).first() is None
-    assert db.query(Notification).filter(Notification.id == mine_unread.id).first() is not None
-    assert db.query(Notification).filter(Notification.id == other_read.id).first() is not None
+    assert db.query(Notification).filter(Notification.id == mine_read_id).first() is None
+    assert db.query(Notification).filter(Notification.id == mine_unread_id).first() is not None
+    assert db.query(Notification).filter(Notification.id == other_read_id).first() is not None
 
     app.dependency_overrides.clear()
     db.close()
