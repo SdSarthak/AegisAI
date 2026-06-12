@@ -27,3 +27,9 @@ class NotificationMarkRead(BaseModel):
     """Body for marking one or more notifications as read."""
 
     ids: list[int]
+
+
+class NotificationUnreadCount(BaseModel):
+    """Compact response used for unread badge counts."""
+
+    unread_count: int

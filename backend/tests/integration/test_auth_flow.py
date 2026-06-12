@@ -1,12 +1,14 @@
 from fastapi.testclient import TestClient
 
+VALID_TEST_PASSWORD = "TestPass123!"
+
 
 def test_complete_auth_flow(client: TestClient):
     
     # Step 1: Register user
     register_data = {
         "email": "flow@example.com",
-        "password": "testpassword123"
+        "password": VALID_TEST_PASSWORD
     }
 
     register_response = client.post(
