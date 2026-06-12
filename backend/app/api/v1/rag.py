@@ -14,6 +14,7 @@ Contributor note:
 import os
 import shutil
 import tempfile
+import time
 from typing import List, Literal, Optional
 import mimetypes
 
@@ -32,18 +33,9 @@ from app.modules.llm.llm_client import LLMClient
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.streaming import stream_rag_answer
 from app.modules.rag.vector_store import create_vector_store, load_vector_store
+from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
 
 router = APIRouter()
-
-
-class RAGQueryRequest(BaseModel):
-    question: str
-
-
-class RAGQueryResponse(BaseModel):
-    answer: str
-    sources: list[str] = []
-    answer_id: Optional[str] = None
 
 
 class RAGIngestResponse(BaseModel):
@@ -191,7 +183,16 @@ def query_knowledge_base(
         db.refresh(feedback)
         answer_id = feedback.id
 
-        return RAGQueryResponse(answer=result["result"], sources=sources, answer_id=answer_id)
+        return RAGQueryResponse(
+            answer=result["result"],
+            sources=sources,
+            answer_id=answer_id,
+            groundedness_score=float(result.get("groundedness_score", 0.0)),
+            low_confidence=bool(result.get("low_confidence", False)),
+            confidence_tier=str(result.get("confidence_tier", "unknown")),
+            per_verifier_scores=dict(result.get("per_verifier_scores", {})),
+            flagged_reason=result.get("flagged_reason"),
+        )
     except FileNotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
