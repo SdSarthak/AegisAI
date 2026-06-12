@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { CheckSquare, Square } from 'lucide-react'
 
 export interface ChecklistItem {
