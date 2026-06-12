@@ -116,7 +116,7 @@ def test_unread_count_returns_current_user_only(tmp_path):
                 user_id=user.id,
                 notification_type=NotificationType.GUARD_BLOCK.value,
                 title="Unread 1",
-                message="Unread notification one",
+                message="Unread notification",
                 is_read=False,
             ),
             Notification(
@@ -130,7 +130,7 @@ def test_unread_count_returns_current_user_only(tmp_path):
                 user_id=other_user.id,
                 notification_type=NotificationType.GUARD_BLOCK.value,
                 title="Other unread",
-                message="Other user unread notification",
+                message="Other user's unread notification",
                 is_read=False,
             ),
         ]
@@ -140,13 +140,45 @@ def test_unread_count_returns_current_user_only(tmp_path):
     response = client.get("/api/v1/notifications/unread-count")
 
     assert response.status_code == 200
-    assert response.json()["unread_count"] == 1
+    assert response.json() == {"unread_count": 1}
 
     app.dependency_overrides.clear()
     db.close()
 
 
-def test_mark_all_notifications_read_only_updates_current_user(tmp_path):
+def test_mark_notifications_read_only_updates_current_user(tmp_path):
+    client, db, user, other_user = _make_client(tmp_path)
+
+    mine = Notification(
+        user_id=user.id,
+        notification_type=NotificationType.GUARD_BLOCK.value,
+        title="Mine",
+        message="Mine",
+        is_read=False,
+    )
+    other = Notification(
+        user_id=other_user.id,
+        notification_type=NotificationType.GUARD_BLOCK.value,
+        title="Other",
+        message="Other",
+        is_read=False,
+    )
+    db.add_all([mine, other])
+    db.commit()
+    db.refresh(mine)
+    db.refresh(other)
+
+    response = client.post("/api/v1/notifications/read", json={"ids": [mine.id, other.id]})
+
+    assert response.status_code == 204
+    assert db.query(Notification).filter(Notification.id == mine.id).first().is_read is True
+    assert db.query(Notification).filter(Notification.id == other.id).first().is_read is False
+
+    app.dependency_overrides.clear()
+    db.close()
+
+
+def test_mark_all_notifications_read_only_updates_current_user_unread(tmp_path):
     client, db, user, other_user = _make_client(tmp_path)
 
     mine_unread = Notification(
@@ -187,7 +219,7 @@ def test_mark_all_notifications_read_only_updates_current_user(tmp_path):
     db.close()
 
 
-def test_delete_read_notifications_only_deletes_current_user_read_items(tmp_path):
+def test_delete_read_notifications_only_deletes_current_user_read_notifications(tmp_path):
     client, db, user, other_user = _make_client(tmp_path)
 
     mine_read = Notification(
@@ -217,48 +249,12 @@ def test_delete_read_notifications_only_deletes_current_user_read_items(tmp_path
     db.refresh(mine_unread)
     db.refresh(other_read)
 
-    mine_read_id = mine_read.id
-    mine_unread_id = mine_unread.id
-    other_read_id = other_read.id
-
     response = client.delete("/api/v1/notifications/read")
 
     assert response.status_code == 204
-    assert db.query(Notification).filter(Notification.id == mine_read_id).first() is None
-    assert db.query(Notification).filter(Notification.id == mine_unread_id).first() is not None
-    assert db.query(Notification).filter(Notification.id == other_read_id).first() is not None
-
-    app.dependency_overrides.clear()
-    db.close()
-
-
-def test_mark_notifications_read_only_updates_current_user(tmp_path):
-    client, db, user, other_user = _make_client(tmp_path)
-
-    mine = Notification(
-        user_id=user.id,
-        notification_type=NotificationType.GUARD_BLOCK.value,
-        title="Mine",
-        message="Mine",
-        is_read=False,
-    )
-    other = Notification(
-        user_id=other_user.id,
-        notification_type=NotificationType.GUARD_BLOCK.value,
-        title="Other",
-        message="Other",
-        is_read=False,
-    )
-    db.add_all([mine, other])
-    db.commit()
-    db.refresh(mine)
-    db.refresh(other)
-
-    response = client.post("/api/v1/notifications/read", json={"ids": [mine.id, other.id]})
-
-    assert response.status_code == 204
-    assert db.query(Notification).filter(Notification.id == mine.id).first().is_read is True
-    assert db.query(Notification).filter(Notification.id == other.id).first().is_read is False
+    assert db.query(Notification).filter(Notification.id == mine_read.id).first() is None
+    assert db.query(Notification).filter(Notification.id == mine_unread.id).first() is not None
+    assert db.query(Notification).filter(Notification.id == other_read.id).first() is not None
 
     app.dependency_overrides.clear()
     db.close()

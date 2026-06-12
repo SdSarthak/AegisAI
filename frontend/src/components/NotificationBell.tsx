@@ -1,20 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Clock, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { notificationsApi } from '../services/api'
-
-// TODO: Wire to GET /api/v1/notifications via useQuery (Issue #113)
-
-interface NotificationPreview {
-  id: number
-  title: string
-  message: string
-  is_read: boolean
-  created_at: string               // ISO‑8601 date string
-  type: 'alert' | 'update' | 'ai' | 'news'
-}
-
+import { notificationsApi, type NotificationResponse } from '../services/api'
+import { notify } from '../utils/toast'
 
 /** Relative‑time formatter (e.g. "5m ago", "2h ago"). */
 function timeAgo(isoDate: string): string {
@@ -31,12 +20,21 @@ function timeAgo(isoDate: string): string {
 }
 
 /** Accent colour for the notification type stripe. */
-function typeColor(type: NotificationPreview['type']): string {
+function typeColor(type: string): string {
   switch (type) {
-    case 'alert':  return 'bg-red-500'
-    case 'update': return 'bg-green-500'
-    case 'ai':     return 'bg-purple-500'
-    case 'news':   return 'bg-primary-500'
+    case 'system_classified':
+    case 'risk_updated':
+      return 'bg-red-500'
+    case 'document_generated':
+    case 'document_reviewed':
+      return 'bg-green-500'
+    case 'compliance_alert':
+      return 'bg-amber-500'
+    case 'ai_response':
+    case 'ai_system_update':
+      return 'bg-purple-500'
+    default:
+      return 'bg-primary-500'
   }
 }
 
@@ -46,20 +44,32 @@ export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false)
 
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
+  const previousOpenRef = useRef(isOpen)
+  const menuId = 'notification-menu'
 
   // Live data via useQuery
   const queryClient = useQueryClient()
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ['notifications', 'unread-count'],
+    queryFn: () => notificationsApi.unreadCount(),
+    refetchInterval: 60_000,
+  })
   const { data: notifications = [] } = useQuery({
     queryKey: ['notifications', 'unread'],
     queryFn: () => notificationsApi.list(true),
     refetchInterval: 60_000,
   })
 
-  const unreadCount = notifications.filter((n: NotificationPreview) => !n.is_read).length
-
   const handleNotificationClick = async (id: number) => {
-    await notificationsApi.markRead([id])
-    queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] })
+    try {
+      await notificationsApi.markRead([id])
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      setIsOpen(false)
+    } catch {
+      notify.error('Unable to mark the notification as read right now')
+    }
   }
 
   // Close dropdown on click outside
@@ -94,18 +104,30 @@ export default function NotificationBell() {
     }
   }, [isOpen])
 
-
+  useEffect(() => {
+    if (isOpen) {
+      closeButtonRef.current?.focus()
+    }
+  }, [isOpen])
+  useEffect(() => {
+    if (previousOpenRef.current && !isOpen) {
+      triggerRef.current?.focus()
+    }
+    previousOpenRef.current = isOpen
+  }, [isOpen])
 
   return (
     <div ref={wrapperRef} className="relative">
 
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className="relative p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
         aria-expanded={isOpen}
-        aria-haspopup="true"
+        aria-haspopup="menu"
+        aria-controls={menuId}
       >
         <Bell className="w-5 h-5" />
 
@@ -115,6 +137,7 @@ export default function NotificationBell() {
             className={`absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full ring-2 ring-white ${
               !isOpen ? 'animate-pulse' : ''
             }`}
+            aria-label={`${unreadCount} unread notification${unreadCount === 1 ? '' : 's'}`}
           >
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
@@ -123,6 +146,7 @@ export default function NotificationBell() {
 
       {/* Dropdown panel */}
       <div
+        id={menuId}
         className={`absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl border border-gray-200 shadow-xl z-50 transition-all duration-200 ease-out origin-top-right ${
           isOpen
             ? 'opacity-100 translate-y-0 pointer-events-auto'
@@ -130,6 +154,7 @@ export default function NotificationBell() {
         }`}
         role="menu"
         aria-label="Notifications panel"
+        aria-hidden={!isOpen}
       >
 
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -144,8 +169,10 @@ export default function NotificationBell() {
             )}
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={() => setIsOpen(false)}
+            tabIndex={isOpen ? 0 : -1}
             className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
             aria-label="Close notifications"
           >
@@ -161,11 +188,13 @@ export default function NotificationBell() {
               <p className="text-sm text-gray-400">No notifications yet</p>
             </div>
           ) : (
-            notifications.slice(0, 5).map((notification: NotificationPreview) => (
+            notifications.slice(0, 5).map((notification: NotificationResponse) => (
               <button
                 key={notification.id}
                 type="button"
                 onClick={() => handleNotificationClick(notification.id)}
+                tabIndex={isOpen ? 0 : -1}
+                aria-label={`Open notification: ${notification.title}${notification.is_read ? '' : ' (unread)'}`}
                 className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 focus:outline-none focus:bg-gray-50 ${
                   !notification.is_read ? 'bg-primary-50/40' : ''
                 }`}
@@ -174,7 +203,7 @@ export default function NotificationBell() {
 
                 <div
                   className={`w-1 self-stretch rounded-full flex-shrink-0 ${typeColor(
-                    notification.type,
+                    notification.notification_type,
                   )}`}
                 />
 
@@ -213,6 +242,7 @@ export default function NotificationBell() {
           <Link
             to="/notifications"
             onClick={() => setIsOpen(false)}
+            tabIndex={isOpen ? 0 : -1}
             className="block px-4 py-3 text-center text-sm font-medium text-primary-600 hover:text-primary-700 hover:bg-gray-50 transition-colors rounded-b-xl"
           >
             View all notifications
