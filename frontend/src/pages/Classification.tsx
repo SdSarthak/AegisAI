@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { classificationApi } from '../services/api'
@@ -188,6 +188,10 @@ export default function Classification() {
     onSuccess: (data) => {
       setResult(data)
       setActiveTab('results')
+    },
+    onError: () => {
+      setResult(null)
+      setActiveTab('questionnaire')
     },
   })
 
@@ -644,6 +648,14 @@ export default function Classification() {
         >
           {classifyMutation.isPending ? 'Classifying...' : 'Classify Risk Level'}
         </button>
+
+        {classifyMutation.isError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {classifyMutation.error instanceof Error
+              ? classifyMutation.error.message
+              : 'Unable to classify this system right now.'}
+          </div>
+        )}
       </form>
     </div>
   )
