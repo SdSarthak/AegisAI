@@ -47,7 +47,20 @@ users_router = APIRouter()
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
 def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user account."""
+    """Register a new user account.
+
+    Args:
+        user_data: Registration payload containing email, password, and
+            optional profile fields such as full_name and company_name.
+        db: Injected database session.
+
+    Returns:
+        The newly created user serialized as UserResponse.
+
+    Raises:
+        HTTPException 400: If the email is already registered.
+        HTTPException 500: If the database write fails.
+    """
     existing_user = db.query(User).filter(User.email == user_data.email).first()
     if existing_user:
         raise HTTPException(
@@ -85,7 +98,21 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 def login(
     form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
 ):
-    """Authenticate a user and return an access token."""
+    """Authenticate a user and return an access token.
+
+    Uses a constant-time bcrypt comparison regardless of whether the user
+    exists to prevent email enumeration via response timing.
+
+    Args:
+        form_data: OAuth2 password form containing username (email) and password.
+        db: Injected database session.
+
+    Returns:
+        Token dict with ``access_token`` (JWT string) and ``token_type``.
+
+    Raises:
+        HTTPException 401: If credentials are invalid or the user is inactive.
+    """
     user = db.query(User).filter(User.email == form_data.username).first()
 
     # Always run a constant-time bcrypt comparison regardless of whether the
@@ -115,7 +142,14 @@ def login(
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Return the authenticated user's profile."""
+    """Return the authenticated user's profile.
+
+    Args:
+        current_user: Authenticated user resolved from the Bearer token.
+
+    Returns:
+        The current user's profile serialized as UserResponse.
+    """
     return current_user
 
 
@@ -125,7 +159,19 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Change the authenticated user's password."""
+    """Change the authenticated user's password.
+
+    Args:
+        payload: Contains ``current_password`` and ``new_password``.
+        current_user: Authenticated user whose password is being changed.
+        db: Injected database session used to persist the new hash.
+
+    Returns:
+        Confirmation dict with a ``message`` key.
+
+    Raises:
+        HTTPException 400: If the current password is incorrect.
+    """
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -147,7 +193,19 @@ def update_current_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update the authenticated user's profile details."""
+    """Update the authenticated user's profile details.
+
+    Only the fields provided in the request body are updated; omitted fields
+    retain their current values.
+
+    Args:
+        user_data: Partial update payload (subset of user profile fields).
+        current_user: Authenticated user whose profile is being updated.
+        db: Injected database session used to merge and persist changes.
+
+    Returns:
+        The updated user serialized as UserResponse.
+    """
     if user_data.full_name is not None:
         current_user.full_name = user_data.full_name
 
@@ -168,7 +226,19 @@ def get_current_user_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return summary statistics for the authenticated user."""
+    """Return summary statistics for the authenticated user.
+
+    Aggregates counts for AI systems, documents, risk-level distribution,
+    and compliant systems owned by the user.
+
+    Args:
+        current_user: Authenticated user whose activity is being summarized.
+        db: Injected database session used to query systems and documents.
+
+    Returns:
+        UserStatsResponse containing total_systems, total_documents,
+        risk_breakdown, and compliant_systems.
+    """
     systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
 
     risk_breakdown: dict = {}
