@@ -36,19 +36,7 @@ export default function Documents() {
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
 
-  const handleCopy = async (docId: number, content: string) => {
-    try {
-      await navigator.clipboard.writeText(content)
 
-      setCopiedDocId(docId)
-
-      setTimeout(() => {
-        setCopiedDocId(null)
-      }, 2000)
-    } catch (error) {
-      console.error('Failed to copy content:', error)
-    }
-  }
 
   const { data: documentsData, isLoading } = useQuery({
     queryKey: ['documents', currentPage],
