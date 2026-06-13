@@ -8,11 +8,11 @@ from dataclasses import dataclass
 import numpy as np
 
 import torch
+from torch.optim import AdamW
 from torch.utils.data import DataLoader, Dataset
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
-    AdamW,
     get_linear_schedule_with_warmup,
 )
 from sklearn.metrics import classification_report, confusion_matrix, f1_score

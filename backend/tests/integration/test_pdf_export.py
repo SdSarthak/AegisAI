@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 from sqlalchemy import create_engine
 from io import BytesIO
+pytest.importorskip("pdfplumber")
 import pdfplumber
 
 from app.models.user import User
