@@ -6,6 +6,7 @@ import { aiSystemsApi, documentsApi } from '../services/api'
 import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import DocumentEditor from '../components/DocumentEditor'
+import CopyButton from '../components/CopyButton'
 
 
 interface Document {
@@ -28,20 +29,52 @@ export default function Documents() {
   const [showModal, setShowModal] = useState(false)
   const [selectedSystem, setSelectedSystem] = useState<number | null>(null)
   const [selectedType, setSelectedType] = useState('technical_documentation')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterType, setFilterType] = useState('all')
+  const [filterStatus, setFilterStatus] = useState('all')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
   const [copiedId, setCopiedId] = useState<number | null>(null)
 
-  const { data: documents = [], isLoading } = useQuery({
-    queryKey: ['documents'],
-    queryFn: documentsApi.list,
-  })
+  const handleCopy = async (docId: number, content: string) => {
+    try {
+      await navigator.clipboard.writeText(content)
 
-  const { data: systems = [] } = useQuery({
+      setCopiedDocId(docId)
+
+      setTimeout(() => {
+        setCopiedDocId(null)
+      }, 2000)
+    } catch (error) {
+      console.error('Failed to copy content:', error)
+    }
+  }
+
+  const { data: documentsData, isLoading } = useQuery({
+    queryKey: ['documents', currentPage],
+    queryFn: () => documentsApi.list({ skip: (currentPage - 1) * limit, limit }),
+  })
+  const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
+  const filteredDocuments = documents.filter((doc: Document) => {
+  const matchesSearch =
+    doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (doc.content || '').toLowerCase().includes(searchQuery.toLowerCase())
+
+  const matchesType =
+    filterType === 'all' || doc.document_type === filterType
+
+  const matchesStatus =
+    filterStatus === 'all' || doc.status === filterStatus
+
+  return matchesSearch && matchesType && matchesStatus
+})
+
+  const { data: systemsData } = useQuery({
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
-
+  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
+  
   const generateMutation = useMutation({
     mutationFn: documentsApi.generate,
     onSuccess: () => {
@@ -147,6 +180,44 @@ export default function Documents() {
         
       </div>
 
+      <div className="bg-white rounded-xl border border-gray-200 p-4">
+        <div className="flex flex-col md:flex-row gap-4">
+          <input
+            type="text"
+            placeholder="Search documents..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+
+          <select
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg"
+          >
+            <option value="all">All Types</option>
+
+            {documentTypes.map((type) => (
+              <option key={type.value} value={type.value}>
+                {type.label}
+              </option>
+            ))}
+          </select>
+
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-4 py-2 border border-gray-300 rounded-lg"
+          >
+            <option value="all">All Statuses</option>
+            <option value="generated">Generated</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="approved">Approved</option>
+          </select>
+        </div>
+      </div>
+
+
       {systems.length === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-800 text-sm">
           You need to add an AI system first before generating documents.
@@ -154,7 +225,42 @@ export default function Documents() {
       )}
 
       {isLoading ? (
-        <div className="text-center py-12 text-gray-500">Loading...</div>
+        <div className="grid gap-4">
+          {[...Array(3)].map((_, index) => (
+            <div
+              key={index}
+              className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse"
+            >
+              <div className="flex items-start justify-between">
+                <div className="flex items-start gap-4 flex-1">
+                  <div className="w-12 h-12 bg-gray-200 rounded-lg"></div>
+
+                  <div className="flex-1 space-y-3">
+                    <div className="h-5 bg-gray-200 rounded w-1/3"></div>
+
+                    <div className="flex gap-2">
+                      <div className="h-5 bg-gray-200 rounded w-20"></div>
+                      <div className="h-5 bg-gray-200 rounded w-16"></div>
+                      <div className="h-5 bg-gray-200 rounded w-24"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <div className="w-9 h-9 bg-gray-200 rounded-lg"></div>
+                  <div className="w-9 h-9 bg-gray-200 rounded-lg"></div>
+                  <div className="w-9 h-9 bg-gray-200 rounded-lg"></div>
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+                <div className="h-3 bg-gray-200 rounded w-full"></div>
+                <div className="h-3 bg-gray-200 rounded w-5/6"></div>
+                <div className="h-3 bg-gray-200 rounded w-4/6"></div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : documents.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
@@ -164,8 +270,18 @@ export default function Documents() {
           </p>
         </div>
       ) : (
+        filteredDocuments.length === 0 ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <h3 className="text-lg font-medium text-gray-900">
+            No matching documents
+          </h3>
+          <p className="text-gray-500 mt-1">
+            Try adjusting your search or filters
+          </p>
+        </div>
+      ) : (
         <div className="grid gap-4">
-          {documents.map((doc: Document) => (
+          {filteredDocuments.map((doc: Document) => (
             <div
               key={doc.id}
               className="bg-white rounded-xl border border-gray-200 p-6"
@@ -233,6 +349,7 @@ export default function Documents() {
                   >
                     <Download className="w-5 h-5" />
                   </button>
+
                   <button
                     onClick={() => setDocumentToDelete(doc)}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
@@ -253,7 +370,30 @@ export default function Documents() {
             </div>
           ))}
         </div>
-      )}
+      ))}
+
+      {/* Pagination Controls */}
+      <div className="flex items-center justify-between pt-4">
+        <button
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+        >
+          Previous
+        </button>
+
+        <span className="text-sm font-medium text-gray-700">
+          Page {currentPage}
+        </span>
+
+        <button
+          onClick={() => setCurrentPage((prev) => prev + 1)}
+          disabled={documents.length < limit}
+          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+        >
+          Next
+        </button>
+      </div>
 
 
       {/* Delete Confirmation Modal */}

@@ -107,6 +107,21 @@ cd backend
 pytest tests/ -v --cov=app
 ```
 
+### Pre-commit Hooks
+
+We use [pre-commit](https://pre-commit.com/) to catch common issues before they reach CI.
+
+```bash
+pip install pre-commit   # one-time install
+pre-commit install       # activate hooks for this repo
+```
+
+Hooks run automatically on `git commit`. To run them manually against all files:
+
+```bash
+pre-commit run --all-files
+```
+
 ---
 
 ## Pull Request Process
@@ -117,6 +132,17 @@ pytest tests/ -v --cov=app
 4. Link the issue your PR closes: `Closes #123`
 5. A maintainer will review within 48–72 hours.
 6. Address review comments and push to the same branch — the PR updates automatically.
+
+---
+
+## Updating the Changelog
+
+When submitting a PR, add a line to `CHANGELOG.md` under the `[Unreleased]` section using this format:
+
+- **Added** `<new features>`
+- **Fixed** `<bug fixes>`
+- **Changed** `<changes to existing functionality>`
+- **Removed** `<removed features>`
 
 ---
 

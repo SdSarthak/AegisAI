@@ -20,6 +20,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
+from app.models.ai_system import AISystem
+from sqlalchemy import func
 
 router = APIRouter()
 
@@ -31,11 +33,16 @@ def get_compliance_timeline(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Return daily compliance snapshots for a given AI system.
+    """Return daily compliance snapshots for a single AI system.
 
-    TODO (help wanted): query ComplianceSnapshot filtered by ai_system_id and
-    snapshotted_at >= now - days. Verify the system belongs to current_user.
+    Args:
+        system_id: ID of the AI system to inspect.
+        days: Number of days of history to return.
+        current_user: Authenticated user requesting the timeline.
+        db: Database session used to query compliance snapshots.
+
+    Returns:
+        ComplianceTimelineResponse containing the system's daily compliance data.
     """
     # TODO: implement — replace with real DB query
     raise HTTPException(
@@ -48,12 +55,39 @@ def get_analytics_summary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Return aggregate compliance stats for the current user's systems.
+    """Return aggregate compliance statistics for the current user.
 
-    TODO (help wanted): aggregate counts and averages from ai_systems table.
+    Args:
+        current_user: Authenticated user whose systems are being summarized.
+        db: Database session used to aggregate compliance metrics.
+
+    Returns:
+        Aggregate compliance statistics for the user's AI systems.
     """
-    # TODO: implement
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
-    )
+    # Aggregate risk level counts
+    risk_counts = db.query(
+        AISystem.risk_level, 
+        func.count(AISystem.id)
+    ).filter(
+        AISystem.owner_id == current_user.id
+    ).group_by(
+        AISystem.risk_level
+    ).all()
+    
+    counts = {
+        "minimal": 0,
+        "limited": 0,
+        "high": 0,
+        "unacceptable": 0
+    }
+    
+    total_systems = 0
+    for risk_level, count in risk_counts:
+        total_systems += count
+        if risk_level and risk_level.value in counts:
+            counts[risk_level.value] = count
+
+    return {
+        "total_systems": total_systems,
+        "counts": counts
+    }

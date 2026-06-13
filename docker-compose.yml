@@ -1,15 +1,11 @@
-version: '3.8'
-
 services:
   db:
     image: postgres:15
-    container_name: aegisai_db
+    restart: unless-stopped
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: aegisai_db
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -18,29 +14,48 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+
   backend:
     build: ./backend
-    container_name: aegisai_backend
-    ports:
-      - "8000:8000"
+    restart: unless-stopped
     env_file:
       - ./backend/.env
+    ports:
+      - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/aegisai_db
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/docs')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     volumes:
       - ./backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
     build: ./frontend
-    container_name: aegisai_frontend
+    restart: unless-stopped
     ports:
       - "5173:5173"
     environment:
       - BACKEND_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -48,3 +63,4 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:

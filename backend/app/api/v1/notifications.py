@@ -2,18 +2,6 @@
 Notifications API — in-app event feed for users.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (help wanted):
-  - Implement GET /notifications — return paginated list of notifications for
-    the current user, newest first. Support ?unread_only=true query param.
-  - Implement POST /notifications/read — accept {"ids": [1, 2, 3]} body and
-    mark those notifications as read (is_read=True).
-  - Implement DELETE /notifications/{id} — delete a single notification
-    (must belong to the current user).
-  - Add a helper function `create_notification(db, user_id, type, title, message)`
-    that other modules can import to emit notifications.
-  - Acceptance criteria: after a Guard scan is blocked, a new GUARD_BLOCK
-    notification appears in GET /notifications for that user.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -21,29 +9,76 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
+from app.models.notification import Notification
 from app.schemas.notification import NotificationResponse, NotificationMarkRead
 from app.schemas.pagination import PaginatedResponse
 
+
 router = APIRouter()
+
+
+def create_notification(
+    db: Session,
+    user_id: int,
+    notification_type: str,
+    title: str,
+    message: str,
+    resource_type: str | None = None,
+    resource_id: int | None = None,
+) -> Notification:
+    notification = Notification(
+        user_id=user_id,
+        notification_type=notification_type,
+        title=title,
+        message=message,
+        resource_type=resource_type,
+        resource_id=resource_id,
+    )
+    db.add(notification)
+    db.commit()
+    db.refresh(notification)
+    return notification
 
 
 @router.get("", response_model=PaginatedResponse[NotificationResponse])
 def list_notifications(
     unread_only: bool = False,
-    page: int = Query(1, ge=1, description="Page number (1-indexed)"),
+    skip: int = Query(0, ge=0, description="Items to skip"),
     limit: int = Query(50, ge=1, le=100, description="Items per page"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Return notifications for the current user.
+    """List the current user's notifications with optional unread filtering.
 
-    TODO (help wanted): query the notifications table filtered by user_id,
-    optionally filter is_read=False, order by created_at DESC.
+    Args:
+        unread_only: If true, return only unread notifications.
+        skip: Items to skip.
+        limit: Maximum number of notifications to return per page.
+        current_user: Authenticated user whose notifications are requested.
+        db: Database session used to query notifications.
+
+    Returns:
+        PaginatedResponse containing the user's notifications.
     """
-    # TODO: implement — replace with real DB query
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    query = db.query(Notification).filter(Notification.user_id == current_user.id)
+
+    if unread_only:
+        query = query.filter(Notification.is_read.is_(False))
+
+    total = query.count()
+
+    notifications = (
+        query.order_by(Notification.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+
+    return PaginatedResponse(
+        items=notifications,
+        total=total,
+        skip=skip,
+        limit=limit,
     )
 
 
@@ -53,16 +88,26 @@ def mark_notifications_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Mark a list of notification IDs as read.
+    """Mark the specified notifications as read.
 
-    TODO (help wanted): bulk-update is_read=True for the given IDs,
-    ensuring they belong to current_user (prevent IDOR).
+    Args:
+        body: Payload containing the notification IDs to mark read.
+        current_user: Authenticated user who owns the notifications.
+        db: Database session used to update the matching rows.
+
+    Returns:
+        None. The endpoint responds with HTTP 204 No Content.
     """
-    # TODO: implement
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    db.query(Notification).filter(
+        Notification.user_id == current_user.id,
+        Notification.id.in_(body.ids),
+    ).update(
+        {Notification.is_read: True},
+        synchronize_session=False,
     )
+
+    db.commit()
+    return None
 
 
 @router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -71,12 +116,34 @@ def delete_notification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Delete a single notification.
+    """Delete a notification owned by the current user.
 
-    TODO (help wanted): fetch by ID + user_id, return 404 if not found, then delete.
+    Args:
+        notification_id: ID of the notification to delete.
+        current_user: Authenticated user who must own the notification.
+        db: Database session used to locate and delete the notification.
+
+    Returns:
+        None. The endpoint responds with HTTP 204 No Content.
+
+    Raises:
+        HTTPException: If the notification does not exist or belongs to another user.
     """
-    # TODO: implement
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    notification = (
+        db.query(Notification)
+        .filter(
+            Notification.id == notification_id,
+            Notification.user_id == current_user.id,
+        )
+        .first()
     )
+
+    if notification is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Notification not found",
+        )
+
+    db.delete(notification)
+    db.commit()
+    return None
