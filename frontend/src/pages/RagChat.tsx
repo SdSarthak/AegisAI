@@ -41,11 +41,22 @@ export default function RagChat() {
       setSubmittedQuestion('')
       return
     }
+   
     setValidationError(null)
     setSubmittedQuestion(trimmed)
     setQuestion('')
     ask(trimmed)
   }
+   const handleCopy = async () => {
+  if (!hasAnswer) return
+
+  try {
+    await navigator.clipboard.writeText(tokens)
+    alert('Copied to clipboard!')
+  } catch (error) {
+    alert('Copy failed')
+  }
+}
 
   const handleExport = () => {
     if (!hasAnswer) return
@@ -208,16 +219,26 @@ export default function RagChat() {
                               <h3 className="text-sm font-semibold text-gray-900">
                                 Sources
                               </h3>
-                              {!isStreaming && (
-                                <button
-                                  type="button"
-                                  onClick={handleExport}
-                                  className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700"
-                                >
-                                  <FileText className="w-3.5 h-3.5" />
-                                  Export
-                                </button>
-                              )}
+                            {!isStreaming && (
+  <>
+    <button
+      type="button"
+      onClick={handleExport}
+      className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700"
+    >
+      <FileText className="w-3.5 h-3.5" />
+      Export
+    </button>
+
+    <button
+      type="button"
+      onClick={handleCopy}
+      className="inline-flex items-center gap-1.5 text-xs"
+    >
+      Copy
+    </button>
+  </>
+)}
                             </div>
                             <div className="space-y-3">
                               {citations.map((citation, index) => (
