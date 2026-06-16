@@ -38,6 +38,11 @@ def test_scan_prompts_blocks_malicious_prompt(tmp_path, monkeypatch):
 
     assert exit_code == 1
     assert (tmp_path / "report.json").exists()
+    
+    client.post.assert_called_once()
+    
+    kwargs = client.post.call_args.kwargs
+    assert "ignore all previous instructions" in str(kwargs)
 
 
 def test_scan_prompts_passes_clean_prompt(tmp_path, monkeypatch):
@@ -66,3 +71,9 @@ def test_scan_prompts_passes_clean_prompt(tmp_path, monkeypatch):
 
     assert exit_code == 0
     assert (tmp_path / "report.json").exists()
+    
+    client.post.assert_called_once()
+    
+    kwargs = client.post.call_args.kwargs
+    assert "Summarize the policy in three bullets." in str(kwargs)
+        

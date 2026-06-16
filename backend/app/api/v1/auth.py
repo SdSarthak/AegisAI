@@ -12,12 +12,14 @@ Dependencies:
   - pydantic      : request/response schema validation
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from collections import defaultdict, deque
+from datetime import datetime, timedelta, timezone
+from threading import Lock
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-import re
-from pydantic import BaseModel, field_validator
+
 from sqlalchemy.orm import Session
-from datetime import timedelta
 
 from app.core.database import get_db
 from app.core.security import (
@@ -30,57 +32,125 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.ai_system import AISystem, ComplianceStatus
 from app.models.document import Document
-from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse
+from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse, ChangePasswordRequest
 
+# Pre-computed bcrypt hash used when the looked-up user is None so that the
+# login endpoint always performs a constant-time hash comparison, closing
+# the timing side-channel that would otherwise let attackers enumerate valid
+# email addresses by measuring response latency.
+_DUMMY_HASH = get_password_hash("dummy-timing-safe-placeholder")
 
-class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
+_AUTH_LOGIN_RATE_LIMIT_REQUESTS = 5
+_AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS = 60
+_AUTH_REGISTER_RATE_LIMIT_REQUESTS = 3
+_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS = 3600
 
-    @field_validator("new_password")
-    @classmethod
-    def validate_new_password(cls, v: str) -> str:
-        errors = []
-        if len(v) < 8:
-            errors.append("at least 8 characters")
-        if not re.search(r'[A-Z]', v):
-            errors.append("at least one uppercase letter")
-        if not re.search(r'\d', v):
-            errors.append("at least one digit")
-        if not re.search(r'[!@#$%^&*]', v):
-            errors.append("at least one special character (!@#$%^&*)")
-        if errors:
-            raise ValueError("Password must contain: " + ", ".join(errors))
-        return v
+_auth_login_failures_by_key: dict[str, deque[datetime]] = defaultdict(deque)
+_auth_registration_attempts_by_ip: dict[str, deque[datetime]] = defaultdict(deque)
+_auth_rate_limit_lock = Lock()
 
 router = APIRouter()
 users_router = APIRouter()
 
 
+def _get_request_ip(request: Request) -> str:
+    client = request.client
+    return client.host if client and client.host else "unknown"
+
+
+def _prune_attempts(
+    attempts: deque[datetime],
+    window_seconds: int,
+    now: datetime,
+) -> None:
+    cutoff = now - timedelta(seconds=window_seconds)
+    while attempts and attempts[0] <= cutoff:
+        attempts.popleft()
+
+
+def _retry_after_seconds(
+    attempts: deque[datetime],
+    window_seconds: int,
+    now: datetime,
+) -> int:
+    if not attempts:
+        return window_seconds
+
+    oldest = attempts[0]
+    return max(1, int((window_seconds - (now - oldest).total_seconds()) + 0.999))
+
+
+def _is_rate_limited(
+    store: dict[str, deque[datetime]],
+    key: str,
+    limit: int,
+    window_seconds: int,
+) -> tuple[bool, int]:
+    now = datetime.now(timezone.utc)
+    with _auth_rate_limit_lock:
+        attempts = store[key]
+        _prune_attempts(attempts, window_seconds, now)
+        if len(attempts) >= limit:
+            return True, _retry_after_seconds(attempts, window_seconds, now)
+        return False, 0
+
+
+def _record_attempt(
+    store: dict[str, deque[datetime]],
+    key: str,
+    window_seconds: int,
+) -> None:
+    now = datetime.now(timezone.utc)
+    with _auth_rate_limit_lock:
+        attempts = store[key]
+        _prune_attempts(attempts, window_seconds, now)
+        attempts.append(now)
+
+
+def clear_auth_rate_limits() -> None:
+    """Reset in-memory auth rate limit state for tests."""
+    with _auth_rate_limit_lock:
+        _auth_login_failures_by_key.clear()
+        _auth_registration_attempts_by_ip.clear()
+
+
 @router.post(
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
-def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    """Register a new user account.
-
-    Args:
-        user_data: Registration payload containing email, password, and profile fields.
-        db: Database session used to check for duplicates and create the user.
-
-    Returns:
-        The created user serialized as UserResponse.
-
-    Raises:
-        HTTPException: If the email is already registered or registration fails.
-    """
-    existing_user = db.query(User).filter(User.email == user_data.email).first()
-    if existing_user:
+def register(
+    user_data: UserCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Register a new user account."""
+    client_ip = _get_request_ip(request)
+    limited, retry_after = _is_rate_limited(
+        _auth_registration_attempts_by_ip,
+        client_ip,
+        _AUTH_REGISTER_RATE_LIMIT_REQUESTS,
+        _AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    if limited:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This email is already registered. Please use a different email or try logging in."
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "field": "general",
+                "message": "Too many registration attempts from this IP. Please try again later.",
+            },
+            headers={"Retry-After": str(retry_after)},
         )
 
     try:
+        existing_user = db.query(User).filter(User.email == user_data.email).first()
+        if existing_user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "field": "general",
+                    "message": "This email is already registered. Please use a different email or try logging in."
+                }
+            )
+
         user = User(
             email=user_data.email,
             hashed_password=get_password_hash(user_data.password),
@@ -91,43 +161,73 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
         db.commit()
         db.refresh(user)
         return user
+    except HTTPException:
+        raise
     except Exception:
         db.rollback()
         # Generic database error handler
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An error occurred during registration. Please try again."
+            detail={
+                "field": "general",
+                "message": "An error occurred during registration. Please try again."
+            }
+        )
+    finally:
+        _record_attempt(
+            _auth_registration_attempts_by_ip,
+            client_ip,
+            _AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
         )
 
 
 @router.post("/login", response_model=Token)
 def login(
-    form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)
+    request: Request,
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db),
 ):
-    """Authenticate a user and return an access token.
-
-    Args:
-        form_data: OAuth2 password form containing the user's email and password.
-        db: Database session used to look up and validate the user.
-
-    Returns:
-        A bearer token payload with the access token and token type.
-
-    Raises:
-        HTTPException: If the credentials are invalid or the user is inactive.
-    """
-    user = db.query(User).filter(User.email == form_data.username).first()
-
-    if not user or not verify_password(form_data.password, user.hashed_password):
+    """Authenticate a user and return an access token."""
+    client_ip = _get_request_ip(request)
+    login_key = f"{form_data.username.lower()}:{client_ip}"
+    limited, retry_after = _is_rate_limited(
+        _auth_login_failures_by_key,
+        login_key,
+        _AUTH_LOGIN_RATE_LIMIT_REQUESTS,
+        _AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    if limited:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "field": "general",
+                "message": "Too many login attempts. Please try again later.",
+            },
+            headers={"Retry-After": str(retry_after)},
         )
 
-    if not user.is_active:
+    user = db.query(User).filter(User.email == form_data.username).first()
+
+    # Always run a constant-time bcrypt comparison regardless of whether the
+    # user exists.  Without this, an attacker can distinguish "user not found"
+    # (fast — no hash) from "wrong password" (slow — bcrypt verify) by
+    # measuring response latency.
+    hashed = user.hashed_password if user else _DUMMY_HASH
+    password_ok = verify_password(form_data.password, hashed)
+
+    if not user or not user.is_active or not password_ok:
+        _record_attempt(
+            _auth_login_failures_by_key,
+            login_key,
+            _AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+        )
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Inactive user"
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={
+                "field": "general",
+                "message": "Invalid email or password"
+            },
+            headers={"WWW-Authenticate": "Bearer"},
         )
 
     access_token = create_access_token(
@@ -140,14 +240,7 @@ def login(
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
-    """Return the authenticated user's profile.
-
-    Args:
-        current_user: Authenticated user resolved from the access token.
-
-    Returns:
-        The current user's profile serialized as UserResponse.
-    """
+    """Return the authenticated user's profile."""
     return current_user
 
 
@@ -157,23 +250,14 @@ def change_password(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Change the authenticated user's password.
-
-    Args:
-        payload: Current and new password values.
-        current_user: Authenticated user whose password is being changed.
-        db: Database session used to persist the updated password hash.
-
-    Returns:
-        A confirmation message indicating the password was updated.
-
-    Raises:
-        HTTPException: If the current password does not match.
-    """
+    """Change the authenticated user's password."""
     if not verify_password(payload.current_password, current_user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Current password is incorrect",
+            detail={
+                "field": "general",
+                "message": "Current password is incorrect"
+            },
         )
 
     current_user.hashed_password = get_password_hash(payload.new_password)
@@ -188,20 +272,15 @@ def update_current_user_info(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Update the authenticated user's profile details.
-
-    Args:
-        user_data: Partial profile update payload.
-        current_user: Authenticated user whose profile is being updated.
-        db: Database session used to persist the changes.
-
-    Returns:
-        The updated user serialized as UserResponse.
-    """
+    """Update the authenticated user's profile details."""
     if user_data.full_name is not None:
         current_user.full_name = user_data.full_name
+
     if user_data.company_name is not None:
         current_user.company_name = user_data.company_name
+
+    if user_data.onboarding_completed is not None:
+        current_user.onboarding_completed = user_data.onboarding_completed
 
     current_user = db.merge(current_user)
     db.commit()
@@ -214,15 +293,7 @@ def get_current_user_stats(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return summary statistics for the authenticated user.
-
-    Args:
-        current_user: Authenticated user whose activity is being summarized.
-        db: Database session used to count systems and documents.
-
-    Returns:
-        UserStatsResponse containing system, document, risk, and compliance counts.
-    """
+    """Return summary statistics for the authenticated user."""
     systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
 
     risk_breakdown: dict = {}

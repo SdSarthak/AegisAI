@@ -2,6 +2,8 @@
 
 import pytest
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+from sqlalchemy import create_engine
 from io import BytesIO
 import pdfplumber
 
@@ -173,6 +175,65 @@ class TestPDFExportEndpoint:
         )
         content_disposition = response.headers.get("content-disposition", "")
         assert "filename" in content_disposition or test_document.title in content_disposition
+
+    def test_pdf_export_escapes_user_controlled_markup(
+        self, client, auth_headers, test_user, test_ai_system, db_session
+    ):
+        document = Document(
+            owner_id=test_user.id,
+            ai_system_id=test_ai_system.id,
+            title='Markup <b>Title</b> "draft"',
+            document_type=DocumentType.TECHNICAL_DOCUMENTATION,
+            status=DocumentStatus.GENERATED,
+            content=(
+                "# <b>Injected heading</b>\n"
+                "Plain text with <font color=\"red\">unterminated markup\n"
+                "- <i>Injected bullet</i>\n"
+                "**Bold <script>alert(1)</script> text**"
+            ),
+        )
+        db_session.add(document)
+        db_session.commit()
+
+        response = client.get(
+            f"/api/v1/documents/{document.id}/pdf",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.content.startswith(b"%PDF-")
+
+        pdf_file = BytesIO(response.content)
+        with pdfplumber.open(pdf_file) as pdf:
+            first_page_text = pdf.pages[0].extract_text()
+            assert "Injected heading" in first_page_text
+            assert "unterminated markup" in first_page_text
+            assert "alert(1)" in first_page_text
+
+    def test_pdf_export_sanitizes_download_filename(
+        self, client, auth_headers, test_user, test_ai_system, db_session
+    ):
+        document = Document(
+            owner_id=test_user.id,
+            ai_system_id=test_ai_system.id,
+            title='Unsafe "Q4"/Report\nFinal',
+            document_type=DocumentType.TECHNICAL_DOCUMENTATION,
+            status=DocumentStatus.GENERATED,
+            content="# Safe content\n\nThis document should export.",
+        )
+        db_session.add(document)
+        db_session.commit()
+
+        response = client.get(
+            f"/api/v1/documents/{document.id}/pdf",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        content_disposition = response.headers["content-disposition"]
+        assert "\n" not in content_disposition
+        assert 'filename="Unsafe _Q4_ReportFinal.pdf"' in content_disposition
+        assert "filename*=UTF-8''Unsafe%20_Q4_ReportFinal.pdf" in content_disposition
 
     def test_pdf_export_multiple_documents(self, client, auth_headers, test_user, test_ai_system, db_session):
         doc1 = Document(

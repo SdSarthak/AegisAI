@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1 import auth, ai_systems, documents, classification, guard, rag, badge, analytics, notifications, webhooks
+from app.api.v1 import auth, ai_systems, documents, classification, guard, badge, analytics, notifications, rag, webhooks
 
 api_router = APIRouter()
 

@@ -1,13 +1,27 @@
-"""
-AISystemAuditLog model — records every field change on an AISystem row.
+"""Audit log models for governance-sensitive events.
+
+Changed: Added RAGAuditLog alongside the existing AISystemAuditLog.
+Why: RAG guard, chunk filtering, and grounding events need durable audit records.
+Addresses: Prompt-injection traceability without storing raw user questions or PII.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
 from datetime import datetime
 import enum
+import uuid
 
-from sqlalchemy import Column, Integer, DateTime, ForeignKey, JSON, event
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    JSON,
+    String,
+    event,
+)
 from sqlalchemy.orm import relationship
 from sqlalchemy.orm.attributes import get_history
 
@@ -52,8 +66,29 @@ class AISystemAuditLog(Base):
     changed_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
-    ai_system = relationship("AISystem")
+    ai_system = relationship("AISystem", back_populates="audit_logs")
     changed_by = relationship("User")
+
+
+class RAGAuditLog(Base):
+    """Audit record for RAG prompt guard, chunk scan, and grounding events."""
+
+    __tablename__ = "rag_audit_logs"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    event_type = Column(String(64), nullable=False, index=True)
+    question_hash = Column(String(64), nullable=False, index=True)
+    decision = Column(String(16), nullable=False)
+    reasoning = Column(String(1000), nullable=True)
+    changes_summary = Column(String(1000), nullable=True)
+    chunks_total = Column(Integer, nullable=True)
+    chunks_dropped = Column(Integer, nullable=True)
+    grounding_score = Column(Float, nullable=True)
+    ip_address = Column(String(64), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    user = relationship("User")
 
 
 @event.listens_for(AISystem, "after_update")
@@ -82,4 +117,3 @@ def after_ai_system_update(mapper, connection, target):
                 changed_at=datetime.utcnow(),
             )
         )
-        
