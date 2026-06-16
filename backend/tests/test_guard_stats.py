@@ -128,32 +128,36 @@ def test_unauthorized_user_access(client, auth_headers, other_user_auth_headers,
 def test_admin_access(client, db_session):
     from app.core.security import get_current_user
     from app.main import app
-    from unittest.mock import patch, PropertyMock
 
-    # Create regular user
     password = "TestPass123!"
-    client.post("/api/v1/auth/register", json={"email": "user@example.com", "password": password, "full_name": "Regular User"})
+
+    # Regular user
+    client.post("/api/v1/auth/register", json={
+        "email": "user@example.com",
+        "password": password,
+        "full_name": "Regular User",
+    })
     user = db_session.query(User).filter(User.email == "user@example.com").first()
 
-    # Create admin user
-    client.post("/api/v1/auth/register", json={"email": "admin@example.com", "password": password, "full_name": "Admin User"})
+    # Admin user — register, then promote
+    client.post("/api/v1/auth/register", json={
+        "email": "admin@example.com",
+        "password": password,
+        "full_name": "Admin User",
+    })
     admin_user = db_session.query(User).filter(User.email == "admin@example.com").first()
+    admin_user.role = "admin"
+    db_session.commit()
+    db_session.refresh(admin_user)
 
-    # 1. Properly mock the role property using PropertyMock so "admin" gets baked into the JWT token
-    with patch("app.models.user.User.role", new_callable=PropertyMock, return_value="admin", create=True):
-        
-        response = client.post("/api/v1/auth/login", data={"username": "admin@example.com", "password": password})
-        admin_token = response.json()["access_token"]
-
-        # 2. Override the dependency to bypass any internal DB checks fetching the raw user
-        app.dependency_overrides[get_current_user] = lambda: admin_user
-
+    # Skip JWT entirely - just inject the admin instance.
+    app.dependency_overrides[get_current_user] = lambda: admin_user
+    try:
         response = client.get(
             "/api/v1/guard/stats",
             params={"user_id": user.id},
-            headers={"Authorization": f"Bearer {admin_token}"}
         )
-
+    finally:
         app.dependency_overrides.clear()
 
     assert response.status_code == 200

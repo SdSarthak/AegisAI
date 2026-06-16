@@ -587,8 +587,6 @@ def get_guard_stats(
     Raises:
         HTTPException: If the caller is not allowed to query another user's stats.
     """
-    if user_id is not None and user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="Cannot access another user's stats")
     target_user_id = user_id if user_id is not None else current_user.id
     is_admin = getattr(current_user, "role", None) == "admin"
 
