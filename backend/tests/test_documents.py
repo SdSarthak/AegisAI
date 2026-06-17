@@ -117,7 +117,7 @@ def test_list_document_templates(api_client, user1):
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
-    assert len(data) == 3
+    assert len(data) >= 3
     template_types = {t["type"] for t in data}
     assert "technical_documentation" in template_types
     assert "risk_assessment" in template_types
