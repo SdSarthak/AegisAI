@@ -1,7 +1,7 @@
 """add_rag_documents_table
 
 Revision ID: 7f3b2e91a6d4
-Revises: add_onboarding_completed_to_users, c0e71c86214f, e7d9f2b3c4a5
+Revises: 9f2b7c6a1d3e
 Create Date: 2026-06-08 00:00:00.000000
 
 """
@@ -12,11 +12,7 @@ import sqlalchemy as sa
 
 
 revision: str = "7f3b2e91a6d4"
-down_revision: Union[str, tuple[str, ...], None] = (
-    "add_onboarding_completed_to_users",
-    "c0e71c86214f",
-    "e7d9f2b3c4a5",
-)
+down_revision: Union[str, None] = "9f2b7c6a1d3e"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
