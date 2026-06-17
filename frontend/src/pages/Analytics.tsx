@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 
 import ComplianceRiskChart from "../components/ComplianceRiskChart";
 
@@ -109,19 +109,7 @@ export default function Analytics() {
   const chartTheme = getChartTheme(isDark);
   const chartRemountKey = isDark ? "dark" : "light";
 
-  useEffect(() => {
-    fetchSummary();
-    fetchSystemRisk();
-    fetchRiskDistribution();
-  }, []);
-
-  useEffect(() => {
-    if (selectedSystemId !== null) {
-      fetchComplianceTimeline(selectedSystemId);
-    }
-  }, [selectedSystemId]);
-
-  const fetchSummary = async () => {
+  const fetchSummary = useCallback(async () => {
     setLoadingSummary(true);
     setErrorSummary(null);
     try {
@@ -161,9 +149,9 @@ export default function Analytics() {
     } finally {
       setLoadingSummary(false);
     }
-  };
+  }, []);
 
-  const fetchComplianceTimeline = async (systemId: number) => {
+  const fetchComplianceTimeline = useCallback(async (systemId: number) => {
     setLoadingTimeline(true);
     setErrorTimeline(null);
     try {
@@ -183,17 +171,17 @@ export default function Analytics() {
     } finally {
       setLoadingTimeline(false);
     }
-  };
+  }, []);
 
-  const fetchSystemRisk = async () => {
+  const fetchSystemRisk = useCallback(async () => {
     setLoadingSystems(true);
     setErrorSystems(null);
     try {
       const systems = await analyticsApi.systemRisk();
       const options = systems.map((s: { id: number; name: string }) => ({ id: s.id, name: s.name }));
       setSystemOptions(options);
-      if (options.length > 0 && selectedSystemId === null) {
-        setSelectedSystemId(options[0].id);
+      if (options.length > 0) {
+        setSelectedSystemId((prev) => (prev === null ? options[0].id : prev));
       }
       const mapped: BarChartPoint[] = systems.map((s: { name: string; risk_score: number }) => ({
         name: s.name,
@@ -205,9 +193,9 @@ export default function Analytics() {
     } finally {
       setLoadingSystems(false);
     }
-  };
+  }, []);
 
-  const fetchRiskDistribution = async () => {
+  const fetchRiskDistribution = useCallback(async () => {
     setLoadingPie(true);
     try {
       const res = await fetch("/api/v1/analytics/summary");
@@ -228,7 +216,19 @@ export default function Analytics() {
     } finally {
       setLoadingPie(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchSummary();
+    fetchSystemRisk();
+    fetchRiskDistribution();
+  }, [fetchSummary, fetchSystemRisk, fetchRiskDistribution]);
+
+  useEffect(() => {
+    if (selectedSystemId !== null) {
+      fetchComplianceTimeline(selectedSystemId);
+    }
+  }, [selectedSystemId, fetchComplianceTimeline]);
 
   const renderSummarySkeleton = () => (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">

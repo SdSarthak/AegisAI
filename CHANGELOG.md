@@ -15,6 +15,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Unit and integration tests for bypass payloads (`test_normalizer.py` and `test_guard.py`)
 
 ### Fixed
+- **Analytics Dashboard (#921)** — Replaced hardcoded mock data with live API calls (`/analytics/summary`, `/analytics/compliance-timeline`, `/analytics/system-risk`). Added loading skeletons, error states with retry buttons, system selector dropdown, and dynamic dark/light chart theming.
 - **Frontend Theme** — Fixed dark mode flash of unstyled content (FOUC), eliminated duplicate CSS, fixed React state overwrite bugs, and improved system preference synchronization.
 - **Documents API** — Validate `ai_system_id` ownership before creating documents so users cannot link documents to another user's AI system.
 - **PDF Export** — Escape user-controlled document text before ReportLab rendering and sanitize generated download filenames.
