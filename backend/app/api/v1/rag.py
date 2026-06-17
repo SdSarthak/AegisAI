@@ -82,11 +82,11 @@ def get_rag_guard() -> Any:
     return _RAG_GUARD
 
 
-def get_qa_chain() -> Any:
+def get_qa_chain(user_id: int | None = None) -> Any:
     """Return the configured RAG QA chain."""
     from app.modules.rag.retrieval_chain import get_qa_chain as chain_factory
 
-    return chain_factory()
+    return chain_factory(user_id=user_id)
 
 
 def _hash_question(question: str) -> str:
@@ -212,7 +212,7 @@ def ingest_documents(
     current_user: User = Depends(get_current_user),
 ) -> RAGIngestResponse:
     """Upload regulatory PDFs, chunk them, and rebuild the persisted FAISS index."""
-    del current_user
+    user_id = current_user.id
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -285,16 +285,18 @@ def ingest_documents(
             )
 
         try:
-            create_vector_store(chunks)
+            create_vector_store(chunks, user_id=user_id)
         except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Failed to build FAISS index: {exc}",
             )
 
+        from app.modules.rag.vector_store import _get_index_path
+        index_path = _get_index_path(user_id)
         index_size_bytes = 0
         for fname in ("index.faiss", "index.pkl"):
-            fpath = os.path.join(settings.FAISS_INDEX_PATH, fname)
+            fpath = os.path.join(index_path, fname)
             if os.path.exists(fpath):
                 index_size_bytes += os.path.getsize(fpath)
 
@@ -370,7 +372,7 @@ def query_knowledge_base(
 
         from app.core.database import Base
 
-        qa_chain = get_qa_chain()
+        qa_chain = get_qa_chain(user_id=current_user.id)
         t_start = time.monotonic()
         result = qa_chain({"query": guarded_question.question})
         latency_ms = (time.monotonic() - t_start) * 1000
@@ -496,9 +498,9 @@ async def query_knowledge_base_stream(
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
     """Stream a regulatory answer as Server-Sent Events."""
-    del request, current_user
+    del request
     try:
-        vector_store = load_vector_store()
+        vector_store = load_vector_store(user_id=current_user.id)
     except FileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

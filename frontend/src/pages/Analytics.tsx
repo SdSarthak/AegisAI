@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { formatLastUpdated } from "../utils/date";
 
 import ComplianceRiskChart from "../components/ComplianceRiskChart";
 
@@ -89,6 +90,7 @@ export default function Analytics() {
   const [isDark, setIsDark] = useState(false);
   const [selectedSystemId, setSelectedSystemId] = useState<number | null>(null);
   const [systemOptions, setSystemOptions] = useState<{ id: number; name: string }[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     const checkTheme = () => {
@@ -215,6 +217,7 @@ export default function Analytics() {
       setRiskPieData([]);
     } finally {
       setLoadingPie(false);
+      setLastUpdated(new Date());
     }
   }, []);
 
@@ -251,6 +254,11 @@ export default function Analytics() {
         <p className="text-gray-600 dark:text-gray-300">
           Compliance score trends and risk analysis
         </p>
+        {lastUpdated && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Last Updated: {formatLastUpdated(lastUpdated)}
+          </p>
+        )}
       </div>
 
       {loadingSummary ? renderSummarySkeleton() : errorSummary ? (
