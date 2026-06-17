@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import React, { useState } from 'react'
+import {
+ useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Download } from 'lucide-react'
@@ -64,18 +65,26 @@ export default function AISystems() {
 
   const limit = 10
 
-  // Fix: Track filters in the cache key array, but keep the API function strictly to known parameters
-  const { data: systemsData, isLoading } = useQuery({
-    queryKey: ['ai-systems', sortBy, order, currentPage, riskFilter, complianceFilter],
+  const {
+    data: systemsData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['ai-systems', sortBy, order, currentPage, riskFilter, complianceFilter, searchTerm],
     queryFn: () =>
       aiSystemsApi.list({
         sort_by: sortBy,
         order,
-        skip: (currentPage - 1) * limit,
+        page: currentPage,
         limit,
+        search: searchTerm || undefined,
+        risk_level: riskFilter || undefined,
+        compliance_status: complianceFilter || undefined,
       }),
   })
-  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
+  const systems = (systemsData ?? []) as AISystem[]
 
   const createMutation = useMutation({
     mutationFn: aiSystemsApi.create,
@@ -94,16 +103,7 @@ export default function AISystems() {
     },
   })
 
-  const filteredSystems = systems.filter((system: AISystem) => {
-    const matchesSearch =
-      system.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (system.description?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
-
-    const matchesRisk = !riskFilter || system.risk_level === riskFilter
-    const matchesCompliance = !complianceFilter || system.compliance_status === complianceFilter
-
-    return matchesSearch && matchesRisk && matchesCompliance
-  })
+  const filteredSystems = systems
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -300,6 +300,20 @@ export default function AISystems() {
               </div>
             </div>
           ))}
+        </div>
+      ) : isError ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <Bot className="w-16 h-16 mx-auto mb-4 text-red-300" />
+          <h3 className="text-lg font-medium text-gray-900">Unable to load AI systems</h3>
+          <p className="text-gray-500 mt-1">
+            {error instanceof Error ? error.message : 'Please try again.'}
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            Retry
+          </button>
         </div>
       ) : filteredSystems.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
@@ -555,4 +569,3 @@ export default function AISystems() {
     </div>
   )
 }
-

@@ -1,34 +1,79 @@
 from datetime import timedelta
-from app.core.security import create_access_token
-from app.core.security import get_current_user
+from app.core.security import create_access_token, get_current_user
 from app.main import app
 
+# Valid test password that meets all requirements:
+# - At least 8 characters
+# - At least one uppercase letter
+# - At least one digit
+# - At least one special character (!@#$%^&*)
+VALID_TEST_PASSWORD = "TestPass123!"
+ANOTHER_VALID_PASSWORD = "CorrectPass123!"
 
 def test_register_success(client):
+    """Test successful registration with valid password."""
     response = client.post(
         "/api/v1/auth/register",
         json={
             "email": "test@example.com",
-            "password": "testpassword123"
+            "password": VALID_TEST_PASSWORD
         }
     )
     assert response.status_code == 201
 
 
+def test_register_weak_password(client):
+    """Test registration fails with weak password (missing requirements)."""
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "weakpass@example.com",
+            "password": "weak"  # Too short, no uppercase, no digit, no special char
+        }
+    )
+
+    # Pydantic validation error
+    assert response.status_code == 422
+    data = response.json()
+    assert "detail" in data
+    # Verify it's a validation error
+    assert isinstance(data["detail"], list) or "Password must contain" in str(data["detail"])
+
+
+def test_register_password_over_72_bytes_returns_422(client):
+    """Test registration rejects passwords that exceed bcrypt's 72-byte limit."""
+    long_password = ("é" * 36) + "A1!"
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "longpass@example.com",
+            "password": long_password,
+        }
+    )
+
+    assert response.status_code == 422
+    assert "72 bytes" in str(response.json())
+
+
 def test_register_duplicate_email(client):
+    """Test registration fails when email already exists."""
     user_data = {
         "email": "duplicate@example.com",
-        "password": "testpassword123"
+        "password": VALID_TEST_PASSWORD
     }
     client.post("/api/v1/auth/register", json=user_data)
     response = client.post("/api/v1/auth/register", json=user_data)
     assert response.status_code == 400
+    detail = response.json()["detail"]
+    assert detail["field"] == "general"
+    assert "already registered" in detail["message"]
 
 
 def test_login_success(client):
+    """Test successful login after registration."""
     register_data = {
         "email": "login@example.com",
-        "password": "testpassword123"
+        "password": VALID_TEST_PASSWORD
     }
     client.post("/api/v1/auth/register", json=register_data)
     response = client.post(
@@ -45,9 +90,10 @@ def test_login_success(client):
 
 
 def test_login_wrong_password(client):
+    """Test login fails with incorrect password."""
     register_data = {
         "email": "wrongpass@example.com",
-        "password": "correctpassword123"
+        "password": ANOTHER_VALID_PASSWORD
     }
     client.post("/api/v1/auth/register", json=register_data)
     response = client.post(
@@ -58,6 +104,9 @@ def test_login_wrong_password(client):
         }
     )
     assert response.status_code == 401
+    detail = response.json()["detail"]
+    assert detail["field"] == "general"
+    assert "Invalid email or password" in detail["message"]
 
 
 def test_invalid_token_returns_401(client):
@@ -92,7 +141,7 @@ def test_register_full_name_exceeds_max_length(client):
         "/api/v1/auth/register",
         json={
             "email": "test@example.com",
-            "password": "testpassword123",
+            "password": VALID_TEST_PASSWORD,
             "full_name": "a" * 101
         }
     )
@@ -108,7 +157,7 @@ def test_register_company_name_exceeds_max_length(client):
         "/api/v1/auth/register",
         json={
             "email": "test@example.com",
-            "password": "testpassword123",
+            "password": VALID_TEST_PASSWORD,
             "company_name": "a" * 101
         }
     )
@@ -124,7 +173,7 @@ def test_register_with_valid_full_name_length(client):
         "/api/v1/auth/register",
         json={
             "email": "validname@example.com",
-            "password": "testpassword123",
+            "password": VALID_TEST_PASSWORD,
             "full_name": "a" * 100
         }
     )
@@ -138,7 +187,7 @@ def test_register_with_valid_company_name_length(client):
         "/api/v1/auth/register",
         json={
             "email": "validcompany@example.com",
-            "password": "testpassword123",
+            "password": VALID_TEST_PASSWORD,
             "company_name": "a" * 100
         }
     )
@@ -152,10 +201,104 @@ def test_register_with_both_fields_at_max_length(client):
         "/api/v1/auth/register",
         json={
             "email": "testboth@example.com",
-            "password": "testpassword123",
+            "password": VALID_TEST_PASSWORD,
             "full_name": "a" * 100,
             "company_name": "b" * 100
         }
     )
 
     assert response.status_code == 201
+
+
+def test_login_nonexistent_user(client):
+    """Test login with a completely nonexistent email returns 401 with generic message.
+
+    This is the primary defence against user enumeration: the response
+    must be indistinguishable from a wrong-password failure.
+    """
+    response = client.post(
+        "/api/v1/auth/login",
+        data={
+            "username": "nonexistent@example.com",
+            "password": "DoesNotMatter1!"
+        }
+    )
+    assert response.status_code == 401
+    detail = response.json()["detail"]
+    assert detail["field"] == "general"
+    assert "Invalid email or password" in detail["message"]
+
+
+def test_register_password_too_long(client):
+    """Test registration rejects passwords exceeding 128 characters."""
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "toolong@example.com",
+            "password": "A1!" + "a" * 126  # 129 chars, exceeds 128 limit
+        }
+    )
+    assert response.status_code == 422
+
+
+def test_login_rate_limit_triggers_after_five_failures(client):
+    """Test repeated login failures from the same email/IP return 429."""
+    email = "ratelimit-login@example.com"
+    client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": VALID_TEST_PASSWORD,
+        },
+    )
+
+    for _ in range(5):
+        response = client.post(
+            "/api/v1/auth/login",
+            data={
+                "username": email,
+                "password": "WrongPass123!",
+            },
+        )
+        assert response.status_code == 401
+
+    response = client.post(
+        "/api/v1/auth/login",
+        data={
+            "username": email,
+            "password": "WrongPass123!",
+        },
+    )
+    assert response.status_code == 429
+    detail = response.json()["detail"]
+    assert detail["field"] == "general"
+    assert "Too many login attempts" in detail["message"]
+    assert "Retry-After" in response.headers
+    assert int(response.headers["Retry-After"]) >= 1
+
+
+def test_register_rate_limit_triggers_after_three_attempts(client):
+    """Test repeated registrations from the same IP return 429 on the fourth attempt."""
+    for index in range(3):
+        response = client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": f"ratelimit-register-{index}@example.com",
+                "password": VALID_TEST_PASSWORD,
+            },
+        )
+        assert response.status_code == 201
+
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "ratelimit-register-3@example.com",
+            "password": VALID_TEST_PASSWORD,
+        },
+    )
+    assert response.status_code == 429
+    detail = response.json()["detail"]
+    assert detail["field"] == "general"
+    assert "Too many registration attempts" in detail["message"]
+    assert "Retry-After" in response.headers
+    assert int(response.headers["Retry-After"]) >= 1

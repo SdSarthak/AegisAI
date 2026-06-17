@@ -132,9 +132,10 @@ def test_scan_prompt_rate_limit(authenticated_client: TestClient):
         },
     }
 
-    # Clear rate limit lock before testing
-    from app.api.v1.guard import _scan_attempts_by_user, _RATE_LIMIT_REQUESTS
-    _scan_attempts_by_user.clear()
+    # Clear rate limit state before testing
+    from app.api.v1.guard import _RATE_LIMIT_REQUESTS
+    from app.core.rate_limit import guard_scan_rate_limiter
+    guard_scan_rate_limiter.clear_local_attempts()
 
     with patch("app.modules.guard.llm_guard.LLMGuard", return_value=mock_guard):
         # Fire 60 requests (allowed)
@@ -159,8 +160,8 @@ def test_bulk_scan_success(authenticated_client: TestClient):
         },
     }
 
-    from app.api.v1.guard import _scan_attempts_by_user
-    _scan_attempts_by_user.clear()
+    from app.core.rate_limit import guard_scan_rate_limiter
+    guard_scan_rate_limiter.clear_local_attempts()
 
     payload = {"prompts": ["prompt 1", "prompt 2", "prompt 3"]}
 
@@ -194,8 +195,8 @@ def test_bulk_scan_rate_limiting(authenticated_client: TestClient):
         },
     }
 
-    from app.api.v1.guard import _scan_attempts_by_user
-    _scan_attempts_by_user.clear()
+    from app.core.rate_limit import guard_scan_rate_limiter
+    guard_scan_rate_limiter.clear_local_attempts()
 
     # limit is 60. Let's send a batch of 40.
     payload_1 = {"prompts": ["p"] * 40}
@@ -225,5 +226,5 @@ def test_get_guard_history(authenticated_client: TestClient, db_session: Session
     response = authenticated_client.get("/api/v1/guard/history")
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] == 1
+    assert len(data["items"]) == 1
     assert data["items"][0]["decision"] == "allow"

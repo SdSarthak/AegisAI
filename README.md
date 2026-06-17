@@ -15,6 +15,29 @@
 </div>
 
 ---
+
+## 📚 Table of Contents
+
+- [Live Demo](#live-demo)
+- [What is AegisAI?](#what-is-aegisai)
+- [Tech Stack](#tech-stack)
+- [Quick Start](#quick-start)
+  - [Option 1 — Docker](#option-1--docker-recommended)
+  - [Option 2 — Manual](#option-2--manual)
+  - [Option 3 — Ollama](#option-3--ollama-free-no-api-key)
+- [Environment Variables](#environment-variables)
+- [Common Setup Profiles](#common-setup-profiles)
+- [Viewing RAG MLflow Runs Locally](#viewing-rag-mlflow-runs-locally)
+- [Colab Notebooks](#-colab-notebooks)
+- [Project Structure](#project-structure)
+- [What's New](#whats-new)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+- [Troubleshooting](#npm-install-fails)
+
+---
+
 ## Live Demo
 
 https://aegis-ai-sigma-seven.vercel.app
@@ -74,7 +97,13 @@ docker compose up -d
 ```bash
 # Backend
 cd backend
-python -m venv venv && source venv/bin/activate  # Windows: venv\Scripts\activate
+python -m venv venv
+# macOS / Linux
+source venv/bin/activate
+# Windows CMD
+# venv\Scripts\activate.bat
+# Windows PowerShell
+# venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 cp .env.example .env   # fill in values
 uvicorn app.main:app --reload
@@ -84,6 +113,8 @@ cd frontend
 npm install
 npm run dev
 ```
+
+For hosted frontend deployments, set `VITE_API_BASE_URL` to the backend API origin, for example `http://localhost:8000/api/v1` locally or your deployed backend URL in production.
 
 ### Option 3 — Ollama (free, no API key)
 
@@ -141,6 +172,17 @@ cp backend/.env.example backend/.env
 - Ollama local (no paid API): set `LLM_API_KEY=ollama`, `LLM_BASE_URL=http://localhost:11434/v1`, and `LLM_MODEL` to a local model such as `llama3.2`.
 - OpenAI: set `LLM_API_KEY=sk-...`, leave `LLM_BASE_URL` empty, and keep `LLM_MODEL=gpt-4o-mini` (or another OpenAI model).
 - PostgreSQL local: keep `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/aegisai_db` and make sure the database exists before startup.
+
+### Viewing RAG MLflow Runs Locally
+
+RAG query tracking uses `MLFLOW_TRACKING_URI`. Leave it empty to write runs to the local `./mlruns` directory, or set it to a running tracking server such as `http://localhost:5000`.
+
+```bash
+cd backend
+mlflow ui --port 5001
+```
+
+Open http://localhost:5001 and select the RAG query runs to inspect question text, answer length, source count, response latency, and answer artifacts.
 
 ---
 
@@ -274,10 +316,34 @@ AegisAI is licensed under **AGPL-3.0-only**.
 - If you run a modified version as a SaaS, you must release your source code.
 - For commercial licensing, contact the author.
 
-Copyright (C) 2024 **Sarthak Doshi** ([@SdSarthak](https://github.com/SdSarthak))
+Copyright (C) 2024–2026 **Sarthak Doshi** ([@SdSarthak](https://github.com/SdSarthak))
 
 ---
 
 <div align="center">
   <sub>Built with care. If AegisAI helps you, give it a star.</sub>
 </div>
+## Troubleshooting
+
+### npm install fails
+Try clearing the npm cache and reinstalling dependencies:
+
+```bash
+npm cache clean --force
+npm install 
+```
+### Module not found error
+Delete the node_modules folder and reinstall dependencies:
+
+```bash
+rm -rf node_modules
+npm install
+```
+### Port already in use
+Stop the process using the current port or change the port number.
+
+### Environment variables not loading
+Ensure the .env file exists and contains all required variables.
+
+### Application fails to start
+Make sure all dependencies are installed and the correct Node.js version is being used.
