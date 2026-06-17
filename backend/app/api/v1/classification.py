@@ -229,7 +229,7 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
                 "Review whether any Article 5 exceptions apply to your use case.",
             ],
         )
-    
+
     # Check for HIGH risk (Article 6 + Annex III)
     high_risk_indicators = []
 

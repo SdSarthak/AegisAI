@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Shield,
@@ -439,3 +439,4 @@ setRiskLevel(detectedRiskLevel)
     </div>
   )
 }
+

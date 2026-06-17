@@ -1,4 +1,3 @@
-import React from 'react'
 import { Bell, Check, Trash2 } from 'lucide-react'
 
 /**
@@ -114,3 +113,4 @@ export default function Notifications() {
     </div>
   )
 }
+

@@ -6,16 +6,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from app.api.v1 import guard as guard_api
+from app.core.rate_limit import guard_scan_rate_limiter
 from app.core.security import create_access_token
 from app.models.user import User
 
 
 @pytest.fixture(autouse=True)
 def reset_rate_limiter():
-    guard_mod = sys.modules.get("app.api.v1.guard")
-    if guard_mod is not None and hasattr(guard_mod, "_scan_attempts_by_user"):
-        guard_mod._scan_attempts_by_user.clear()
+    guard_scan_rate_limiter.clear_local_attempts()
     yield
 
 

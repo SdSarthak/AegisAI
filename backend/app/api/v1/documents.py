@@ -1,3 +1,21 @@
+"""
+Document Generation API — compliance document creation, management, and export.
+
+This module provides endpoints for:
+  - POST /documents/generate  : Generate AI compliance documents using LLM
+  - GET  /documents/           : List all documents for the authenticated user
+  - GET  /documents/{id}       : Retrieve a specific document
+  - PATCH /documents/{id}      : Update document content or metadata
+  - DELETE /documents/{id}     : Delete a document
+  - GET  /documents/{id}/pdf   : Export document as PDF
+  - POST /documents/{id}/share : Generate a shareable link for a document
+
+Dependencies:
+  - reportlab  : PDF generation
+  - SQLAlchemy : ORM session for Document persistence
+  - pydantic   : request/response schema validation
+  - python-jose: JWT token for document sharing
+"""
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query

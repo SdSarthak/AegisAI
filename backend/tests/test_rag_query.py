@@ -50,6 +50,11 @@ def mock_rag_modules():
         return {
             "result": "Regulatory answer based on retrieved context.",
             "source_documents": [_DummyDoc("doc.pdf#chunk1")],
+            "grounding_score": 0.92,
+            "grounding_confidence": "HIGH",
+            "chunks_total": 1,
+            "chunks_dropped": 0,
+            "warning": None,
             "groundedness_score": 0.92,
             "low_confidence": False,
             "confidence_tier": "high",
@@ -96,9 +101,11 @@ class TestRagQuery:
         assert response.status_code == 200
         data = response.json()
         assert data["answer"] == "Regulatory answer based on retrieved context."
-        assert data["sources"] == ["doc.pdf#chunk1"]
+        assert data["sources"] == [{"source": "doc.pdf#chunk1"}]
         assert isinstance(data["groundedness_score"], (int, float))
         assert data["low_confidence"] is False
+        assert data["guard_decision"] == "ALLOW"
+        assert data["chunks_dropped"] == 0
 
     def test_query_does_not_raise_nameerror(
         self, client, mock_rag_user, mock_rag_modules

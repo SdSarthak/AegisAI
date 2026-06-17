@@ -1,8 +1,16 @@
-import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
+import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
+const API_BASE_URL = configuredApiBaseUrl ? configuredApiBaseUrl.replace(/\/$/, '') : '/api/v1'
+
+function buildApiUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${API_BASE_URL}${normalizedPath}`
+}
+
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -22,7 +30,7 @@ const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 // Handle 401 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: any) => {
+  (error: AxiosError) => {
     const url = error.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
     if (error.response?.status === 401 && !isAuthEndpoint) {
@@ -32,7 +40,7 @@ api.interceptors.response.use(
         window.history.pushState({}, '', '/login')
         // Notify router listeners (e.g., react-router) to handle navigation.
         window.dispatchEvent(new PopStateEvent('popstate'))
-      } catch (e) {
+      } catch {
         // Fallback: if SPA navigation fails, perform a safe replace.
         window.location.replace('/login')
       }
@@ -51,6 +59,17 @@ function ensureObjectResponse<T extends Record<string, unknown>>(
 ): T {
   if (isRecord(data)) {
     return data as T
+  }
+
+  throw new Error(`${resourceName} response was empty or invalid.`)
+}
+
+function ensureListResponse<T>(
+  data: unknown,
+  resourceName: string
+): T[] {
+  if (Array.isArray(data)) {
+    return data as T[]
   }
 
   throw new Error(`${resourceName} response was empty or invalid.`)
@@ -154,7 +173,7 @@ export const aiSystemsApi = {
     compliance_status?: string
   }) => {
     const { data } = await api.get('/ai-systems/', { params })
-    return data
+    return ensureListResponse(data, 'AI systems')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/ai-systems/${id}`)
@@ -210,9 +229,9 @@ export const classificationApi = {
 
 // Documents API
 export const documentsApi = {
-  list: async () => {
-    const { data } = await api.get('/documents/')
-    return data
+  list: async (params?: { skip?: number; limit?: number }) => {
+    const { data } = await api.get('/documents/', { params })
+    return ensureListResponse(data, 'Documents')
   },
   get: async (id: number) => {
     const { data } = await api.get(`/documents/${id}`)
@@ -341,7 +360,7 @@ export const ragApi = {
     signal?: AbortSignal,
   ): Promise<void> => {
     const token = useAuthStore.getState().token
-    const resp = await fetch('/api/v1/rag/query/stream', {
+    const resp = await fetch(buildApiUrl('/rag/query/stream'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -365,8 +384,7 @@ export const ragApi = {
     let buffer = ''
 
     try {
-      while (true) {
-        // eslint-disable-next-line no-constant-condition
+      while (!signal?.aborted) {
         const { value, done } = await reader.read()
         if (done) break
         buffer += value
