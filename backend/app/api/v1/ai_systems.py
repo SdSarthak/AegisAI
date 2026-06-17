@@ -1,3 +1,25 @@
+"""
+AI Systems API — CRUD endpoints for managing AI systems under EU AI Act compliance.
+
+This module provides endpoints for:
+  - POST /ai-systems/            : Register a new AI system for compliance tracking
+  - GET  /ai-systems/            : List all AI systems with filtering and pagination
+  - POST /ai-systems/import      : Bulk import AI systems from a CSV file
+  - GET  /ai-systems/export      : Export AI systems registry as CSV
+  - GET  /ai-systems/{id}        : Retrieve a specific AI system
+  - PUT  /ai-systems/{id}        : Update an existing AI system
+  - DELETE /ai-systems/{id}      : Delete an AI system
+  - POST /ai-systems/{id}/clone  : Clone an existing AI system
+  - PATCH /ai-systems/{id}/status: Update compliance status of an AI system
+  - GET  /ai-systems/{id}/gaps   : Get unmet EU AI Act compliance requirements
+  - GET  /ai-systems/{id}/history: Get paginated audit history for an AI system
+
+Dependencies:
+  - SQLAlchemy : ORM session for AISystem persistence
+  - FastAPI    : API routing and dependency injection
+  - pydantic   : request/response schema validation
+  - csv        : CSV import/export processing
+"""
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy import asc, desc
