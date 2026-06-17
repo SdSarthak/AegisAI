@@ -42,6 +42,7 @@ def upgrade() -> None:
         op.f('ix_webhook_configs_id'),
         'webhook_configs',
 <<<<<<< HEAD
+<<<<<<< HEAD
         sa.Column('id', sa.Integer(), nullable=False),
         sa.Column('user_id', sa.Integer(), nullable=False),
         sa.Column('url', sa.String(length=1000), nullable=False),
@@ -62,9 +63,10 @@ def upgrade() -> None:
         unique=False,
 =======
 =======
+=======
+>>>>>>> 6928669 (fix: resolve conflict markers in migration files)
         ['id'],
         unique=False,
->>>>>>> 0e31294 (fix: make alembic table migrations idempotent)
         if_not_exists=True
 >>>>>>> 1bb39ad (fix: make alembic table migrations idempotent)
     )
