@@ -240,20 +240,18 @@ def scan_prompt(
 
         if result["decision"] == "block":
             try:
-                background_tasks.add_task(
-                    deliver_webhook,
-                    db,
-                    current_user.id,
-                   "guard_block",
-                    {
-                       "decision": "block",
-                       "confidence": response.confidence,
-                       "matched_patterns": response.matched_patterns,
-                       "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
-        },             
-                    background_tasks,
-
-)
+                deliver_webhook(
+                    db=db,
+                    user_id=current_user.id,
+                    event="guard_block",
+                    payload={
+                        "decision": "block",
+                        "confidence": response.confidence,
+                        "matched_patterns": response.matched_patterns,
+                        "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
+                    },
+                    background_tasks=background_tasks,
+                )
             except Exception:
                 logger.exception(
                     "Failed to trigger guard_block webhook delivery"

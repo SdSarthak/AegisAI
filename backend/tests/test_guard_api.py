@@ -228,3 +228,48 @@ def test_get_guard_history(authenticated_client: TestClient, db_session: Session
     data = response.json()
     assert len(data["items"]) == 1
     assert data["items"][0]["decision"] == "allow"
+
+
+def test_scan_prompt_blocks_triggers_webhook(authenticated_client: TestClient, db_session: Session, test_user: User):
+    from app.models.webhook import WebhookConfig
+    # Register an active webhook config for the test user subscribed to "guard_block"
+    webhook = WebhookConfig(
+        user_id=test_user.id,
+        url="https://example.com/webhook-delivery-test",
+        secret="testsecret",
+        is_active=True,
+        events=["guard_block"],
+    )
+    db_session.add(webhook)
+    db_session.commit()
+
+    mock_guard = MagicMock()
+    mock_guard.guard.return_value = {
+        "decision": "block",
+        "metadata": {
+            "decision_reasoning": {
+                "confidence": 0.95,
+                "reasoning": "Malicious prompt detected",
+            },
+            "regex_analysis": {
+                "matched_patterns": [],
+            },
+        },
+    }
+
+    from app.api.v1.guard import _scan_attempts_by_user
+    _scan_attempts_by_user.clear()
+
+    with patch("app.modules.guard.llm_guard.LLMGuard", return_value=mock_guard), \
+         patch("app.api.v1.webhooks._post_webhook") as mock_post_webhook:
+        response = authenticated_client.post("/api/v1/guard/scan", json={"prompt": "malicious prompt"})
+
+    assert response.status_code == 200
+    assert response.json()["decision"] == "block"
+
+    # Verify that mock_post_webhook was called
+    mock_post_webhook.assert_called_once()
+    args, kwargs = mock_post_webhook.call_args
+    assert kwargs["url"] == "https://example.com/webhook-delivery-test"
+    assert kwargs["event"] == "guard_block"
+    assert kwargs["payload"]["decision"] == "block"
