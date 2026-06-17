@@ -129,16 +129,19 @@ class GroundedRetrievalQA:
         return getattr(self.qa_chain, name)
 
 
-def load_vector_store() -> Any:
+def load_vector_store(user_id: int | None = None) -> Any:
     """Lazy wrapper around vector-store loading for lighter module imports."""
     from .vector_store import load_vector_store as loader
 
-    return loader()
+    return loader(user_id=user_id)
 
 
-def get_qa_chain():
+def get_qa_chain(user_id: int | None = None):
     """
     Build and return a RetrievalQA chain backed by the persisted FAISS index.
+
+    Args:
+        user_id: Optional user ID for tenant-isolated vector store.
 
     Raises:
         FileNotFoundError: if the vector store has not been ingested yet
@@ -152,7 +155,7 @@ def get_qa_chain():
 
         ChatOpenAI = LangChainChatOpenAI
 
-    vector_store = load_vector_store()
+    vector_store = load_vector_store(user_id=user_id)
     retriever = vector_store.as_retriever(search_kwargs={"k": 5})
     embeddings_fn = _get_embeddings_fn(vector_store)
 
