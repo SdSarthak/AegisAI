@@ -47,9 +47,7 @@ def get_embeddings() -> Any:
 def _get_index_path(user_id: int | None = None) -> str:
     """Return the FAISS index path, scoped to a user when provided."""
     if user_id is not None:
-        path = os.path.join(settings.FAISS_INDEX_BASE_PATH, f"user_{user_id}")
-        os.makedirs(path, exist_ok=True)
-        return path
+        return os.path.join(settings.FAISS_INDEX_BASE_PATH, f"user_{user_id}")
     return settings.FAISS_INDEX_PATH
 
 
@@ -65,6 +63,7 @@ def create_vector_store(documents: list[Any], user_id: int | None = None) -> Any
         The populated FAISS vector store.
     """
     index_path = _get_index_path(user_id)
+    os.makedirs(index_path, exist_ok=True)
     embeddings = get_embeddings()
     faiss_cls = _get_faiss_class()
     vector_store = faiss_cls.from_documents(documents, embeddings)
