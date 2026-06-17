@@ -1,4 +1,4 @@
-import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
+import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
@@ -30,21 +30,19 @@ const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 // Handle 401 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: unknown) => {
-    if (axios.isAxiosError(error)) {
-      const url = error.config?.url || ''
-      const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
-      if (error.response?.status === 401 && !isAuthEndpoint) {
-        // Logout and navigate to login without forcing a full page reload.
-        useAuthStore.getState().logout()
-        try {
-          window.history.pushState({}, '', '/login')
-          // Notify router listeners (e.g., react-router) to handle navigation.
-          window.dispatchEvent(new PopStateEvent('popstate'))
-        } catch {
-          // Fallback: if SPA navigation fails, perform a safe replace.
-          window.location.replace('/login')
-        }
+  (error: AxiosError) => {
+    const url = error.config?.url || ''
+    const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
+    if (error.response?.status === 401 && !isAuthEndpoint) {
+      // Logout and navigate to login without forcing a full page reload.
+      useAuthStore.getState().logout()
+      try {
+        window.history.pushState({}, '', '/login')
+        // Notify router listeners (e.g., react-router) to handle navigation.
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      } catch {
+        // Fallback: if SPA navigation fails, perform a safe replace.
+        window.location.replace('/login')
       }
     }
     return Promise.reject(error)
@@ -386,8 +384,7 @@ export const ragApi = {
     let buffer = ''
 
     try {
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
+      while (!signal?.aborted) {
         const { value, done } = await reader.read()
         if (done) break
         buffer += value

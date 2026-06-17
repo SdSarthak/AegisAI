@@ -244,16 +244,15 @@ def scan_prompt(
                     deliver_webhook,
                     db,
                     current_user.id,
-                   "guard_block",
+                    "guard_block",
                     {
-                       "decision": "block",
-                       "confidence": response.confidence,
-                       "matched_patterns": response.matched_patterns,
-                       "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
-        },             
+                        "decision": "block",
+                        "confidence": response.confidence,
+                        "matched_patterns": response.matched_patterns,
+                        "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
+                    },
                     background_tasks,
-
-)
+                )
             except Exception:
                 logger.exception(
                     "Failed to trigger guard_block webhook delivery"
@@ -839,6 +838,19 @@ def bulk_scan_prompts(
                     message="A prompt was blocked because it matched high-risk guard rules.",
                     resource_type="guard_scan",
                     resource_id=log.id,
+                )
+                background_tasks.add_task(
+                    deliver_webhook,
+                    db,
+                    current_user.id,
+                    "guard_block",
+                    {
+                        "decision": "block",
+                        "confidence": result["metadata"]["decision_reasoning"]["confidence"],
+                        "matched_patterns": result["metadata"]["regex_analysis"].get("matched_patterns", []),
+                        "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(),
+                    },
+                    background_tasks,
                 )
 
             results.append(
