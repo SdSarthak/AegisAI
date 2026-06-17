@@ -48,6 +48,7 @@ from app.schemas.document import (
     DocumentUpdateRequest,
 )
 from app.schemas.pagination import PaginatedResponse
+from app.modules.llm.document_generator import generate_compliance_narrative
 
 # PDF generation
 from reportlab.lib.pagesizes import letter, A4
