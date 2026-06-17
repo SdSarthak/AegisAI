@@ -94,7 +94,7 @@ def mock_rag_modules():
         "source_documents": [DummyDoc("doc1.pdf#chunk1"), DummyDoc("doc2.pdf#chunk2")]
     }
     
-    retrieval_chain_mod.get_qa_chain = lambda: lambda payload: fake_result
+    retrieval_chain_mod.get_qa_chain = lambda user_id=None: lambda payload: fake_result
     groundedness_mod.compute_groundedness = lambda answer, chunks: 0.85
     ml_flow_mod.log_query = lambda **kwargs: None
 

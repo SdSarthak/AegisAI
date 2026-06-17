@@ -62,7 +62,7 @@ def mock_rag_modules():
             "flagged_reason": None,
         }
 
-    retrieval_chain.get_qa_chain = lambda: _qa_chain
+    retrieval_chain.get_qa_chain = lambda user_id=None: _qa_chain
     ml_flow = types.ModuleType("app.modules.rag.ml_flow")
     ml_flow.log_query = lambda question, answer, sources, latency_ms: None
 

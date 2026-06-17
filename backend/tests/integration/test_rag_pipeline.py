@@ -184,14 +184,14 @@ def rag_env(monkeypatch):
         # ── Fake QA chain (avoids LLM call) ──────────────────────────────
         monkeypatch.setattr(
             "app.modules.rag.retrieval_chain.get_qa_chain",
-            lambda: _FakeQAChain(),
+            lambda user_id=None: _FakeQAChain(),
         )
         # Also patch the import inside rag.py's query handler
         monkeypatch.setattr(
             "app.api.v1.rag.get_qa_chain" if hasattr(
                 sys.modules.get("app.api.v1.rag", object()), "get_qa_chain"
             ) else "app.modules.rag.retrieval_chain.get_qa_chain",
-            lambda: _FakeQAChain(),
+            lambda user_id=None: _FakeQAChain(),
         )
 
         yield {
