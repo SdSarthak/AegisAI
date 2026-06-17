@@ -41,21 +41,8 @@ def upgrade() -> None:
     op.create_index(
         op.f('ix_webhook_configs_id'),
         'webhook_configs',
-<<<<<<< HEAD
-        sa.Column('id', sa.Integer(), nullable=False),
-        sa.Column('user_id', sa.Integer(), nullable=False),
-        sa.Column('url', sa.String(length=1000), nullable=False),
-        sa.Column('secret', sa.String(length=255), nullable=True),
-        sa.Column('is_active', sa.Boolean(), nullable=True),
-        sa.Column('events', sa.JSON(), nullable=True),
-        sa.Column('created_at', sa.DateTime(), nullable=True),
-        sa.Column('updated_at', sa.DateTime(), nullable=True),
-        sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
-        sa.PrimaryKeyConstraint('id'),
-=======
         ['id'],
         unique=False,
->>>>>>> 0e31294 (fix: make alembic table migrations idempotent)
         if_not_exists=True
     )
 
