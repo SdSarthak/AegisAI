@@ -35,9 +35,13 @@ return {current, ttl}
         self,
         failure_threshold: int = 5,
         recovery_timeout: int = 30,
+        cleanup_interval: int = 100,
     ) -> None:
         self._local_attempts_by_key: dict[str, deque[datetime]] = defaultdict(deque)
+        self._local_window_seconds_by_key: dict[str, int] = {}
         self._local_lock = Lock()
+        self._local_cleanup_interval = max(1, cleanup_interval)
+        self._local_cleanup_calls = 0
         self._redis_client: Optional[object] = None
         self._redis_script: Optional[object] = None
 
@@ -58,6 +62,38 @@ return {current, ttl}
             "failures_closed": 0,
             "failures_open": 0,
         }
+
+    def clear_local_attempts(self) -> None:
+        """Clear the in-memory fallback state used when Redis is unavailable."""
+        with self._local_lock:
+            self._local_attempts_by_key.clear()
+            self._local_window_seconds_by_key.clear()
+            self._local_cleanup_calls = 0
+
+    def cleanup_stale_local_attempts(self, now: Optional[datetime] = None) -> int:
+        """Prune expired in-memory keys and return how many were removed."""
+        with self._local_lock:
+            return self._cleanup_stale_local_attempts_locked(now=now)
+
+    def _cleanup_stale_local_attempts_locked(self, now: Optional[datetime] = None) -> int:
+        now = now or datetime.now(timezone.utc)
+        removed_keys = 0
+
+        for key, attempts in list(self._local_attempts_by_key.items()):
+            window_seconds = self._local_window_seconds_by_key.get(key)
+            if window_seconds is None:
+                window_seconds = 0
+
+            cutoff = now - timedelta(seconds=window_seconds)
+            while attempts and attempts[0] <= cutoff:
+                attempts.popleft()
+
+            if not attempts:
+                self._local_attempts_by_key.pop(key, None)
+                self._local_window_seconds_by_key.pop(key, None)
+                removed_keys += 1
+
+        return removed_keys
 
     def _get_redis_client(self) -> Optional[object]:
         if not settings.REDIS_URL or redis is None:
@@ -104,6 +140,10 @@ return {current, ttl}
         window_start = now - timedelta(seconds=window_seconds)
 
         with self._local_lock:
+            existing_window = self._local_window_seconds_by_key.get(key, 0)
+            if window_seconds > existing_window:
+                self._local_window_seconds_by_key[key] = window_seconds
+
             attempts = self._local_attempts_by_key[key]
 
             while attempts and attempts[0] <= window_start:
@@ -128,6 +168,11 @@ return {current, ttl}
 
             for _ in range(cost):
                 attempts.append(now)
+
+            self._local_cleanup_calls += 1
+            if self._local_cleanup_calls >= self._local_cleanup_interval:
+                self._local_cleanup_calls = 0
+                self._cleanup_stale_local_attempts_locked(now=now)
 
             return False, 0
 

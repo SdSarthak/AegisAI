@@ -1,4 +1,3 @@
-import React from 'react'
 import { Link } from 'react-router-dom'
 import { Shield, AlertTriangle } from 'lucide-react'
 
@@ -31,3 +30,4 @@ export default function NotFound() {
     </div>
   )
 }
+

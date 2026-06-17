@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
@@ -522,3 +522,4 @@ export default function Documents() {
     </div>
   )
 }
+

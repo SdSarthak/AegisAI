@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import ComplianceRiskChart from "../components/ComplianceRiskChart";
 
@@ -305,3 +305,4 @@ export default function Analytics() {
     </div>
   );
 }
+
