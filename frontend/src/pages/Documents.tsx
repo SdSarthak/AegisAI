@@ -31,6 +31,7 @@ export default function Documents() {
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
   const [copiedDocId, setCopiedDocId] = useState<number | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const limit = 10
 
@@ -48,30 +49,45 @@ export default function Documents() {
     }
   }
 
-  const { data: documentsData, isLoading } = useQuery({
+  const {
+    data: documentsData,
+    isLoading: documentsLoading,
+    isError: documentsError,
+    error: documentsErrorDetail,
+    refetch: refetchDocuments,
+  } = useQuery({
     queryKey: ['documents', currentPage],
     queryFn: () => documentsApi.list({ skip: (currentPage - 1) * limit, limit }),
   })
-  const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
+  const documents = (documentsData ?? []) as Document[]
   const filteredDocuments = documents.filter((doc: Document) => {
-  const matchesSearch =
-    doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (doc.content || '').toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesSearch =
+      doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (doc.content || '').toLowerCase().includes(searchQuery.toLowerCase())
 
-  const matchesType =
-    filterType === 'all' || doc.document_type === filterType
+    const matchesType = filterType === 'all' || doc.document_type === filterType
+    const matchesStatus = filterStatus === 'all' || doc.status === filterStatus
 
-  const matchesStatus =
-    filterStatus === 'all' || doc.status === filterStatus
+    return matchesSearch && matchesType && matchesStatus
+  })
 
-  return matchesSearch && matchesType && matchesStatus
-})
-
-  const { data: systemsData } = useQuery({
+  const {
+    data: systemsData,
+    isLoading: systemsLoading,
+    isError: systemsError,
+    error: systemsErrorDetail,
+    refetch: refetchSystems,
+  } = useQuery({
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
-  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
+  const systems = (systemsData ?? []) as AISystem[]
+  const isLoading = documentsLoading || systemsLoading
+  const hasError = documentsError || systemsError
+  const errorMessage =
+    (documentsErrorDetail instanceof Error && documentsErrorDetail.message) ||
+    (systemsErrorDetail instanceof Error && systemsErrorDetail.message) ||
+    'Unable to load documents.'
   
   const generateMutation = useMutation({
     mutationFn: documentsApi.generate,
@@ -110,19 +126,12 @@ export default function Documents() {
     if (!editingDoc) return
 
     try {
-      const response = await fetch(`/api/v1/documents/${editingDoc.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content })
-      })
-
-      if (response.ok) {
-        queryClient.invalidateQueries({ queryKey: ['documents'] })
-      }
+      setSaveError(null)
+      await documentsApi.update(editingDoc.id, { content })
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
     } catch (error) {
-      console.error('Save failed:', error)
+      const message = error instanceof Error ? error.message : 'Failed to save document'
+      setSaveError(message)
     }
   }
 
@@ -195,8 +204,7 @@ export default function Documents() {
         </div>
       </div>
 
-
-      {systems.length === 0 && (
+      {!hasError && systems.length === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-800 text-sm">
           You need to add an AI system first before generating documents.
         </div>
@@ -238,6 +246,21 @@ export default function Documents() {
               </div>
             </div>
           ))}
+        </div>
+      ) : hasError ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <FileText className="w-16 h-16 mx-auto mb-4 text-red-200" />
+          <h3 className="text-lg font-medium text-gray-900">Unable to load documents</h3>
+          <p className="text-gray-500 mt-1">{errorMessage}</p>
+          <button
+            onClick={() => {
+              refetchDocuments()
+              refetchSystems()
+            }}
+            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            Retry
+          </button>
         </div>
       ) : documents.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
@@ -475,14 +498,23 @@ export default function Documents() {
       )}
 
       {/* Editor Modal */}
+      {saveError && (
+        <div className="fixed top-4 right-4 z-50 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-lg">
+          {saveError}
+        </div>
+      )}
+
       {editingDoc && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
           <div className="bg-white rounded-xl w-full max-w-6xl h-[90vh]">
             <DocumentEditor
               documentId={editingDoc.id}
               initialContent={editingDoc.content || ''}
               onSave={handleSaveDocument}
-              onClose={() => setEditingDoc(null)}
+              onClose={() => {
+                setEditingDoc(null)
+                setSaveError(null)
+              }}
             />
           </div>
         </div>
@@ -490,3 +522,4 @@ export default function Documents() {
     </div>
   )
 }
+

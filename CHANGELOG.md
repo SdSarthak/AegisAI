@@ -14,6 +14,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - Retains both `normalized_prompt` and `user_prompt` in orchestrator response
 - Unit and integration tests for bypass payloads (`test_normalizer.py` and `test_guard.py`)
 
+### Fixed
+- **Frontend Theme** — Fixed dark mode flash of unstyled content (FOUC), eliminated duplicate CSS, fixed React state overwrite bugs, and improved system preference synchronization.
+- **Documents API** — Validate `ai_system_id` ownership before creating documents so users cannot link documents to another user's AI system.
+- **PDF Export** — Escape user-controlled document text before ReportLab rendering and sanitize generated download filenames.
+
 ---
 
 ## [Unreleased]
@@ -21,6 +26,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 - **Compliance Engine** — Added Education & Vocational Training (Annex III point 3) risk factor to EU AI Act classification.
 - LLM Guard console with copy-to-clipboard exports for scan response payloads and raw audit metrics.
+
+---
+
+## [Unreleased]
+
+- **Fixed** Guard API merge conflicts and resolved pagination inconsistencies in history endpoint
+- **Changed** Updated frontend Guard/RAG API types (removed duplicate interfaces, improved type safety)
+- **Fixed** ESLint issues in frontend services and components
+- **Changed** Improved cursor-based pagination handling for guard scan history
 
 ---
 
@@ -50,3 +64,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - No audit log for Guard decisions yet
 - Stripe billing wired up but not activated
 - Frontend pages for Guard and RAG not yet built
+
+## Unreleased
+
+### Added
+
+- **Notifications API**
+
+- Added `GET /api/v1/notifications/unread-count` endpoint to retrieve the current user's unread notification count.
+- Added `POST /api/v1/notifications/read-all` endpoint to mark all unread notifications as read.
+- Added `DELETE /api/v1/notifications/read` endpoint to delete all read notifications for the current user.
+- Added unit tests covering unread count retrieval, mark-all-read functionality, and bulk deletion of read notifications while preserving notification ownership boundaries.

@@ -13,6 +13,38 @@ logger = logging.getLogger(__name__)
 EmbeddingsFn = Callable[[list[str]], list[list[float]]]
 
 
+def get_embeddings():
+    """Return configured embeddings for legacy groundedness helpers."""
+    from app.modules.rag.vector_store import get_embeddings as load_embeddings
+
+    return load_embeddings()
+
+
+def cosine_similarity(left: list[float], right: list[float]) -> float:
+    """Return cosine similarity for two vectors, or 0.0 for invalid inputs."""
+    left_array = np.asarray(left, dtype=float)
+    right_array = np.asarray(right, dtype=float)
+    if left_array.shape != right_array.shape:
+        return 0.0
+    return _cosine_similarity(left_array, right_array)
+
+
+def compute_groundedness(answer: str, chunks: list[str]) -> float:
+    """Compute legacy groundedness score between an answer and joined chunks."""
+    if not answer.strip() or not chunks:
+        return 0.0
+
+    try:
+        embeddings = get_embeddings()
+        answer_embedding = embeddings.embed_query(answer)
+        context_embedding = embeddings.embed_query("\n\n".join(chunks))
+    except Exception:
+        logger.warning("Legacy groundedness computation failed", exc_info=True)
+        return 0.0
+
+    return round(cosine_similarity(answer_embedding, context_embedding), 4)
+
+
 @dataclass
 class GroundednessResult:
     """Composite groundedness result returned by the hybrid checker."""
@@ -262,6 +294,37 @@ def _cosine_similarity(left: np.ndarray, right: np.ndarray) -> float:
     if left_norm == 0.0 or right_norm == 0.0:
         return 0.0
     return float(np.dot(left, right) / (left_norm * right_norm))
+
+
+def cosine_similarity(left: list[float], right: list[float]) -> float:
+    """Backward-compatible public cosine similarity helper for legacy tests."""
+    return _cosine_similarity(
+        np.asarray(left, dtype=float),
+        np.asarray(right, dtype=float),
+    )
+
+
+def get_embeddings():
+    """Lazy embeddings wrapper retained for older groundedness callers/tests."""
+    from .vector_store import get_embeddings as loader
+
+    return loader()
+
+
+def compute_groundedness(answer: str, chunks: list[str]) -> float:
+    """Return the legacy answer-to-source groundedness score."""
+    if not answer.strip() or not chunks:
+        return 0.0
+
+    try:
+        embeddings = get_embeddings()
+        answer_embedding = embeddings.embed_query(answer)
+        source_embedding = embeddings.embed_query("\n\n".join(chunks))
+    except Exception:
+        logger.warning("Legacy groundedness computation failed", exc_info=True)
+        return 0.0
+
+    return _clamp_score(cosine_similarity(answer_embedding, source_embedding))
 
 
 def _clamp_score(score: float) -> float:

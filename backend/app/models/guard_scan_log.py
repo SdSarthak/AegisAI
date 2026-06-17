@@ -34,6 +34,7 @@ class GuardScanLog(Base):
     combined_score = Column(Float, default=0.0, nullable=False)
     prompt_length = Column(Integer, nullable=True)
     scanned_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    ip_address = Column(String(45), nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 

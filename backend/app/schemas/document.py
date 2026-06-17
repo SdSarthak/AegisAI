@@ -3,6 +3,9 @@ from typing import Optional
 from datetime import datetime
 from app.models.document import DocumentType, DocumentStatus
 
+class DocumentShareResponse(BaseModel):
+    share_url: str
+    expires_in_days: int
 
 class DocumentCreate(BaseModel):
     title: str

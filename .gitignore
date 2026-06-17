@@ -16,6 +16,7 @@ pip-delete-this-directory.txt
 # Virtual envs
 venv/
 .venv/
+.venv*/
 env/
 .env/
 ENV/
@@ -113,3 +114,6 @@ lifecycle.txt
 error.txt
 pdf_export.txt
 rag_ingest.txt
+
+# Models
+backend/app/modules/guard/models/*
