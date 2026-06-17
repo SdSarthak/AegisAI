@@ -2,51 +2,44 @@ import { useState, useEffect } from 'react'
 import { Sun, Moon } from 'lucide-react'
 
 export default function ThemeToggle() {
-  const [isDark, setIsDark] = useState(false)
-
-  // ✅ Initialize theme (localStorage OR system)
-  useEffect(() => {
-    const stored = localStorage.getItem('theme')
-
-    if (stored) {
-      setIsDark(stored === 'dark')
-    } else {
-      const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-      setIsDark(systemDark)
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof document !== 'undefined') {
+      return document.documentElement.classList.contains('dark')
     }
+    return false
+  })
+
+  // Keep state in sync with actual DOM (e.g. from system preference changes in App.tsx)
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDark(document.documentElement.classList.contains('dark'))
+    })
+    
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class']
+    })
+    
+    return () => observer.disconnect()
   }, [])
 
-  // ✅ Apply theme
-  useEffect(() => {
-    const root = document.documentElement
-
-    if (isDark) {
-      root.classList.add('dark')
+  const toggleTheme = () => {
+    const newTheme = !isDark
+    setIsDark(newTheme) // Optimistic update
+    
+    if (newTheme) {
+      document.documentElement.classList.add('dark')
       localStorage.setItem('theme', 'dark')
     } else {
-      root.classList.remove('dark')
+      document.documentElement.classList.remove('dark')
       localStorage.setItem('theme', 'light')
     }
-  }, [isDark])
-
-  // ✅ Sync with system if no manual preference
-  useEffect(() => {
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-
-    const handler = (e: MediaQueryListEvent) => {
-      if (!localStorage.getItem('theme')) {
-        setIsDark(e.matches)
-      }
-    }
-
-    media.addEventListener('change', handler)
-    return () => media.removeEventListener('change', handler)
-  }, [])
+  }
 
   return (
     <button
       type="button"
-      onClick={() => setIsDark(prev => !prev)}
+      onClick={toggleTheme}
       className="
         p-2 
         rounded-lg 
@@ -68,3 +61,4 @@ export default function ThemeToggle() {
     </button>
   )
 }
+

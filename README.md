@@ -15,6 +15,29 @@
 </div>
 
 ---
+
+## 📚 Table of Contents
+
+- [Live Demo](#live-demo)
+- [What is AegisAI?](#what-is-aegisai)
+- [Tech Stack](#tech-stack)
+- [Quick Start](#quick-start)
+  - [Option 1 — Docker](#option-1--docker-recommended)
+  - [Option 2 — Manual](#option-2--manual)
+  - [Option 3 — Ollama](#option-3--ollama-free-no-api-key)
+- [Environment Variables](#environment-variables)
+- [Common Setup Profiles](#common-setup-profiles)
+- [Viewing RAG MLflow Runs Locally](#viewing-rag-mlflow-runs-locally)
+- [Colab Notebooks](#-colab-notebooks)
+- [Project Structure](#project-structure)
+- [What's New](#whats-new)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+- [Troubleshooting](#npm-install-fails)
+
+---
+
 ## Live Demo
 
 https://aegis-ai-sigma-seven.vercel.app
@@ -91,6 +114,8 @@ npm install
 npm run dev
 ```
 
+For hosted frontend deployments, set `VITE_API_BASE_URL` to the backend API origin, for example `http://localhost:8000/api/v1` locally or your deployed backend URL in production.
+
 ### Option 3 — Ollama (free, no API key)
 
 ```bash
@@ -147,6 +172,17 @@ cp backend/.env.example backend/.env
 - Ollama local (no paid API): set `LLM_API_KEY=ollama`, `LLM_BASE_URL=http://localhost:11434/v1`, and `LLM_MODEL` to a local model such as `llama3.2`.
 - OpenAI: set `LLM_API_KEY=sk-...`, leave `LLM_BASE_URL` empty, and keep `LLM_MODEL=gpt-4o-mini` (or another OpenAI model).
 - PostgreSQL local: keep `DATABASE_URL=postgresql://postgres:postgres@localhost:5432/aegisai_db` and make sure the database exists before startup.
+
+### Viewing RAG MLflow Runs Locally
+
+RAG query tracking uses `MLFLOW_TRACKING_URI`. Leave it empty to write runs to the local `./mlruns` directory, or set it to a running tracking server such as `http://localhost:5000`.
+
+```bash
+cd backend
+mlflow ui --port 5001
+```
+
+Open http://localhost:5001 and select the RAG query runs to inspect question text, answer length, source count, response latency, and answer artifacts.
 
 ---
 

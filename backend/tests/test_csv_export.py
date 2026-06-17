@@ -11,6 +11,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
 from app.core.security import get_current_user
@@ -21,7 +22,11 @@ from app.models.user import User
 
 @pytest.fixture(scope="module")
 def engine():
-    eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    eng = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     Base.metadata.create_all(bind=eng)
     yield eng
     Base.metadata.drop_all(bind=eng)
@@ -113,6 +118,85 @@ class TestCSVExport:
         reader = csv.DictReader(io.StringIO(resp.text))
         rows = list(reader)
         assert all(r["risk_level"] == "minimal" for r in rows)
+
+    def test_export_sanitizes_formula_injection_name(self, client):
+        c, db, user = client
+        db.add(AISystem(
+            owner_id=user.id,
+            name="=HYPERLINK(\"http://evil.com\",\"Click me\")",
+            risk_level=RiskLevel.MINIMAL,
+        ))
+        db.flush()
+
+        resp = c.get("/api/v1/ai-systems/export")
+        reader = csv.DictReader(io.StringIO(resp.text))
+        rows = list(reader)
+        assert rows[0]["name"].startswith("'=HYPERLINK")
+
+    def test_export_sanitizes_plus_prefix(self, client):
+        c, db, user = client
+        db.add(AISystem(
+            owner_id=user.id,
+            name="Normal",
+            description="+SUM(A1:A10)",
+            risk_level=RiskLevel.MINIMAL,
+        ))
+        db.flush()
+
+        resp = c.get("/api/v1/ai-systems/export")
+        reader = csv.DictReader(io.StringIO(resp.text))
+        rows = list(reader)
+        assert rows[0]["description"].startswith("'+SUM")
+
+    def test_export_sanitizes_dash_prefix(self, client):
+        c, db, user = client
+        db.add(AISystem(
+            owner_id=user.id,
+            name="Normal",
+            use_case="-1+1",
+            risk_level=RiskLevel.MINIMAL,
+        ))
+        db.flush()
+
+        resp = c.get("/api/v1/ai-systems/export")
+        reader = csv.DictReader(io.StringIO(resp.text))
+        rows = list(reader)
+        assert rows[0]["use_case"].startswith("'-")
+
+    def test_export_sanitizes_at_prefix(self, client):
+        c, db, user = client
+        db.add(AISystem(
+            owner_id=user.id,
+            name="Normal",
+            sector="@SUM(A1)",
+            risk_level=RiskLevel.MINIMAL,
+        ))
+        db.flush()
+
+        resp = c.get("/api/v1/ai-systems/export")
+        reader = csv.DictReader(io.StringIO(resp.text))
+        rows = list(reader)
+        assert rows[0]["sector"].startswith("'@")
+
+    def test_export_does_not_escape_normal_values(self, client):
+        c, db, user = client
+        db.add(AISystem(
+            owner_id=user.id,
+            name="Safe Name",
+            description="Just text",
+            use_case="Analysis",
+            sector="Tech",
+            risk_level=RiskLevel.MINIMAL,
+        ))
+        db.flush()
+
+        resp = c.get("/api/v1/ai-systems/export")
+        reader = csv.DictReader(io.StringIO(resp.text))
+        rows = list(reader)
+        assert rows[0]["name"] == "Safe Name"
+        assert rows[0]["description"] == "Just text"
+        assert rows[0]["use_case"] == "Analysis"
+        assert rows[0]["sector"] == "Tech"
 
     def test_export_invalid_risk_level_returns_400(self, client):
         c, db, user = client
