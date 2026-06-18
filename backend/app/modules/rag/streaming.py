@@ -229,9 +229,26 @@ async def stream_rag_answer(
 
         # --- 5. Emit done -------------------------------------------------
         duration_ms = round((time.perf_counter() - started) * 1000, 2)
+        grounding_score = 0.0
+        if answer_buf and docs:
+            try:
+                from app.modules.rag.grounding import GroundingChecker
+                checker = GroundingChecker()
+                grounding_res = checker.check(
+                    answer="".join(answer_buf),
+                    chunks=[d.page_content for d in docs],
+                )
+                grounding_score = grounding_res.score
+            except Exception:
+                logger.exception("rag.stream.grounding_failed")
+
         yield sse(
             "done",
-            {"finish_reason": finish_reason, "duration_ms": duration_ms},
+            {
+                "finish_reason": finish_reason,
+                "duration_ms": duration_ms,
+                "grounding_score": grounding_score,
+            },
         )
 
     except GeneratorExit:

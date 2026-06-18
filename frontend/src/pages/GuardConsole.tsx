@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import {
   Activity,
   AlertCircle,
@@ -8,6 +8,8 @@ import {
   Loader2,
   Send,
   ShieldCheck,
+  Sliders,
+  Save,
 } from 'lucide-react'
 import CopyButton from '../components/CopyButton'
 import GuardExplanation from '../components/GuardExplanation'
@@ -16,6 +18,7 @@ import {
   type GuardExplainResponse,
   type GuardScanResponse,
 } from '../services/api'
+import toast from 'react-hot-toast'
 
 type GuardMetrics = {
   decision: string
@@ -70,6 +73,52 @@ export default function GuardConsole() {
   const [scannedAt, setScannedAt] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Safety Config States
+  const [sanitizationLevel, setSanitizationLevel] = useState('medium')
+  const [maliciousThreshold, setMaliciousThreshold] = useState(0.8)
+  const [suspiciousThreshold, setSuspiciousThreshold] = useState(0.5)
+  const [piiMaskingEnabled, setPiiMaskingEnabled] = useState(false)
+  const [hallucinationThreshold, setHallucinationThreshold] = useState(0.5)
+  const [isSavingConfig, setIsSavingConfig] = useState(false)
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const config = await guardApi.getConfig()
+        if (config) {
+          setSanitizationLevel(config.sanitization_level ?? 'medium')
+          setMaliciousThreshold(config.malicious_threshold ?? 0.8)
+          setSuspiciousThreshold(config.suspicious_threshold ?? 0.5)
+          setPiiMaskingEnabled(config.pii_masking_enabled ?? false)
+          setHallucinationThreshold(config.hallucination_threshold ?? 0.5)
+        }
+      } catch (err) {
+        console.error('Failed to load guard config', err)
+      }
+    }
+    fetchConfig()
+  }, [])
+
+  const handleSaveConfig = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setIsSavingConfig(true)
+    try {
+      await guardApi.updateConfig({
+        sanitization_level: sanitizationLevel,
+        malicious_threshold: maliciousThreshold,
+        suspicious_threshold: suspiciousThreshold,
+        pii_masking_enabled: piiMaskingEnabled,
+        hallucination_threshold: hallucinationThreshold,
+      })
+      toast.success('Guard configurations updated successfully!')
+    } catch (err) {
+      console.error('Failed to save config', err)
+      toast.error('Failed to save configuration settings.')
+    } finally {
+      setIsSavingConfig(false)
+    }
+  }
 
   const metrics = useMemo(
     () => buildMetrics(result, scannedAt),
@@ -170,10 +219,11 @@ export default function GuardConsole() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6">
-        <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Scan prompt</h2>
-          </div>
+        <div className="space-y-6">
+          <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Scan prompt</h2>
+            </div>
 
           <form onSubmit={handleScan} className="p-5 space-y-4">
             <label htmlFor="guard-prompt" className="sr-only">
@@ -216,7 +266,140 @@ export default function GuardConsole() {
           </form>
         </section>
 
-        <aside className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        {/* Guard settings panel */}
+        <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
+            <Sliders className="w-5 h-5 text-primary-600" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Guard settings</h2>
+          </div>
+
+          <form onSubmit={handleSaveConfig} className="p-5 space-y-6">
+            {/* Sanitization level selection */}
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Sanitization aggressiveness
+              </label>
+              <select
+                value={sanitizationLevel}
+                onChange={(e) => setSanitizationLevel(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-950 dark:text-white bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="low">Low (minimal filtering)</option>
+                <option value="medium">Medium (standard checks)</option>
+                <option value="high">High (strict scrub)</option>
+              </select>
+              <p className="text-xs text-gray-500">
+                Defines how aggressively prompt instructions and boundaries are neutralized.
+              </p>
+            </div>
+
+            {/* Threshold Sliders */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm font-semibold">
+                  <span className="text-gray-700 dark:text-gray-300">Malicious threshold</span>
+                  <span className="text-primary-600">{(maliciousThreshold * 100).toFixed(0)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={maliciousThreshold}
+                  onChange={(e) => setMaliciousThreshold(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary-600"
+                />
+                <p className="text-xs text-gray-500">Block queries scoring above this threat score.</p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm font-semibold">
+                  <span className="text-gray-700 dark:text-gray-300">Suspicious threshold</span>
+                  <span className="text-primary-600">{(suspiciousThreshold * 100).toFixed(0)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={suspiciousThreshold}
+                  onChange={(e) => setSuspiciousThreshold(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary-600"
+                />
+                <p className="text-xs text-gray-500">Sanitize queries scoring above this warning level.</p>
+              </div>
+            </div>
+
+            <hr className="border-gray-200 dark:border-gray-700" />
+
+            {/* PII Masking Filter */}
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-0.5">
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    PII masking filter
+                  </label>
+                  <p className="text-xs text-gray-500">
+                    Detect and redact emails, API keys, and phone numbers before output is sent to clients.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPiiMaskingEnabled(!piiMaskingEnabled)}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    piiMaskingEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-gray-700'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      piiMaskingEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Hallucination Threshold */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm font-semibold">
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-700 dark:text-gray-300">Hallucination blocker threshold</span>
+                  </div>
+                  <span className="text-primary-600">{(hallucinationThreshold * 100).toFixed(0)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={hallucinationThreshold}
+                  onChange={(e) => setHallucinationThreshold(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary-600"
+                />
+                <p className="text-xs text-gray-500">
+                  Verify response alignment with source documents. Block output if groundedness is below this.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                disabled={isSavingConfig}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingConfig ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Save settings
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <aside className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Audit exports</h2>
           </div>
