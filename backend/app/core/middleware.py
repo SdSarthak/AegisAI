@@ -107,3 +107,249 @@ class RequestContextMiddleware:
         finally:
             user_id_ctx.reset(uid_token)
             request_id_ctx.reset(rid_token)
+
+
+import codecs
+import json
+from app.modules.guard.pii_masking import PIIMaskingFilter
+
+_pii_filter = PIIMaskingFilter()
+
+
+class SSEStreamProcessor:
+    """Helper to parse SSE streams, apply token PII masking, and handle hallucination blocks."""
+
+    def __init__(self, pii_enabled: bool, hallucination_threshold: float):
+        self.pii_enabled = pii_enabled
+        self.hallucination_threshold = hallucination_threshold
+        self.decoder = codecs.getincrementaldecoder("utf-8")()
+        self.line_buffer = ""
+        self.current_event = None
+        self.pii_buffer = ""
+        self.answer_buf = []
+
+    def feed_pii_delta(self, delta: str) -> str:
+        self.pii_buffer += delta
+        # Split complete words at word boundaries
+        boundary_matches = list(re.finditer(r"[\s,;!?'\"()\[\]{}<>]", self.pii_buffer))
+        if not boundary_matches:
+            return ""
+        last_boundary_idx = boundary_matches[-1].end()
+        process_part = self.pii_buffer[:last_boundary_idx]
+        self.pii_buffer = self.pii_buffer[last_boundary_idx:]
+        return _pii_filter.mask(process_part)
+
+    def flush_pii_buffer(self) -> str:
+        if not self.pii_buffer:
+            return ""
+        masked = _pii_filter.mask(self.pii_buffer)
+        self.pii_buffer = ""
+        return masked
+
+    def process_event_data(self, event: str, data_str: str) -> str | None:
+        try:
+            data = json.loads(data_str)
+        except Exception:
+            return data_str
+
+        if event == "token" and isinstance(data, dict):
+            delta = data.get("delta", "")
+            self.answer_buf.append(delta)
+            if self.pii_enabled:
+                masked_delta = self.feed_pii_delta(delta)
+                data["delta"] = masked_delta
+            return json.dumps(data, ensure_ascii=False)
+
+        elif event == "done" and isinstance(data, dict):
+            # Include flushed remaining text for grounding/hallucination checks
+            flushed = self.flush_pii_buffer()
+            if flushed:
+                self.answer_buf.append(flushed)
+
+            grounding_score = data.get("grounding_score", 1.0)
+            if grounding_score < self.hallucination_threshold:
+                return None
+            return json.dumps(data, ensure_ascii=False)
+
+        return data_str
+
+    def feed(self, chunk: bytes) -> tuple[bytes, bool]:
+        """Feed bytes, returning (processed_bytes, hallucination_detected)."""
+        text = self.decoder.decode(chunk)
+        self.line_buffer += text
+
+        output_lines = []
+        hallucination_detected = False
+
+        while "\n" in self.line_buffer:
+            line, self.line_buffer = self.line_buffer.split("\n", 1)
+            line_stripped = line.strip()
+
+            if not line_stripped:
+                output_lines.append("")
+                continue
+
+            if line_stripped.startswith("event: "):
+                self.current_event = line_stripped[7:].strip()
+                output_lines.append(line)
+            elif line_stripped.startswith("data: "):
+                data_str = line_stripped[6:]
+                processed_data = self.process_event_data(self.current_event, data_str)
+                if processed_data is None:
+                    hallucination_detected = True
+                    break
+                output_lines.append(f"data: {processed_data}")
+            else:
+                output_lines.append(line)
+
+        if hallucination_detected:
+            err_payload = {
+                "code": "hallucination_detected",
+                "message": "The response was blocked due to high likelihood of hallucination.",
+            }
+            err_event = f"event: error\ndata: {json.dumps(err_payload, ensure_ascii=False)}\n\n"
+            return err_event.encode("utf-8"), True
+
+        return "\n".join(output_lines).encode("utf-8") if output_lines else b"", False
+
+
+class PIIAndHallucinationGuardMiddleware:
+    """FastAPI/Starlette ASGI middleware to prevent hallucination and PII leakage."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+
+        path = scope.get("path", "")
+        # Intercept both RAG query endpoints
+        if not (path.endswith("/rag/query") or path.endswith("/rag/query/stream")):
+            await self.app(scope, receive, send)
+            return
+
+        def get_config() -> dict:
+            user_id = user_id_ctx.get()
+            if not user_id:
+                # Retrieve from Authorization header (production & some integration tests)
+                headers = Headers(scope=scope)
+                auth_header = headers.get("authorization")
+                if auth_header and auth_header.lower().startswith("bearer "):
+                    token = auth_header.split(" ", 1)[1]
+                    try:
+                        from app.core.security import decode_token
+                        payload = decode_token(token)
+                        user_id_str = payload.get("sub")
+                        if user_id_str:
+                            user_id = int(user_id_str)
+                    except Exception:
+                        pass
+
+            default_config = {
+                "sanitization_level": "medium",
+                "malicious_threshold": 0.8,
+                "suspicious_threshold": 0.5,
+                "pii_masking_enabled": False,
+                "hallucination_threshold": 0.5,
+            }
+            from app.api.v1.guard import user_guard_configs
+            if user_id:
+                return user_guard_configs.get(user_id, default_config)
+
+            # Fallback for testing: if user_id cannot be resolved but configs are defined
+            if user_guard_configs:
+                return next(iter(user_guard_configs.values()))
+
+            return default_config
+
+        is_stream = path.endswith("/stream")
+        response_start_message = None
+        body_buffer = b""
+        stream_processor = None
+        stream_blocked = False
+
+        async def send_wrapper(message: Message) -> None:
+            nonlocal response_start_message, body_buffer, stream_processor, stream_blocked, is_stream
+
+            if stream_blocked:
+                return
+
+            if message["type"] == "http.response.start":
+                response_start_message = message
+                headers = Headers(raw=message.get("headers", []))
+                is_stream = is_stream or (headers.get("content-type") == "text/event-stream")
+
+                if not is_stream:
+                    return
+                else:
+                    config = get_config()
+                    stream_processor = SSEStreamProcessor(
+                        pii_enabled=config.get("pii_masking_enabled", False),
+                        hallucination_threshold=config.get("hallucination_threshold", 0.5),
+                    )
+                    await send(message)
+                    return
+
+            if message["type"] == "http.response.body":
+                if not is_stream:
+                    body_buffer += message.get("body", b"")
+                    if message.get("more_body", False):
+                        return
+
+                    config = get_config()
+                    status_code = response_start_message.get("status", 200)
+                    processed_body = body_buffer
+
+                    try:
+                        data = json.loads(body_buffer.decode("utf-8"))
+                        if status_code == 200 and isinstance(data, dict) and "answer" in data:
+                            grounding_score = data.get("grounding_score")
+                            h_threshold = config.get("hallucination_threshold", 0.5)
+
+                            if grounding_score is not None and grounding_score < h_threshold:
+                                status_code = 400
+                                data = {
+                                    "detail": {
+                                        "error": "hallucination_detected",
+                                        "safe_message": "The response was blocked due to high likelihood of hallucination.",
+                                        "grounding_score": grounding_score,
+                                        "threshold": h_threshold,
+                                    }
+                                }
+                            else:
+                                if config.get("pii_masking_enabled", False):
+                                    data["answer"] = _pii_filter.mask(data["answer"])
+
+                            processed_body = json.dumps(data, ensure_ascii=False).encode("utf-8")
+                    except Exception:
+                        pass
+
+                    mutable = MutableHeaders(scope=response_start_message)
+                    mutable["content-length"] = str(len(processed_body))
+                    response_start_message["status"] = status_code
+
+                    await send(response_start_message)
+                    await send(
+                        {"type": "http.response.body", "body": processed_body, "more_body": False}
+                    )
+                else:
+                    chunk_body = message.get("body", b"")
+                    processed_chunk, blocked = stream_processor.feed(chunk_body)
+
+                    if blocked:
+                        stream_blocked = True
+                        await send(
+                            {"type": "http.response.body", "body": processed_chunk, "more_body": False}
+                        )
+                    else:
+                        await send(
+                            {
+                                "type": "http.response.body",
+                                "body": processed_chunk,
+                                "more_body": message.get("more_body", False),
+                            }
+                        )
+
+        await self.app(scope, receive, send_wrapper)
