@@ -111,11 +111,11 @@ def get_rag_guard() -> Any:
     return _RAG_GUARD
 
 
-def get_qa_chain() -> Any:
+def get_qa_chain(user_id: int | None = None) -> Any:
     """Return the configured RAG QA chain."""
     from app.modules.rag.retrieval_chain import get_qa_chain as chain_factory
 
-    return chain_factory()
+    return chain_factory(user_id=user_id)
 
 
 def _hash_question(question: str) -> str:
@@ -290,6 +290,7 @@ def ingest_documents(
     db: Session = Depends(get_db),
 ) -> RAGIngestResponse:
     """Upload regulatory PDFs, persist metadata, and rebuild the FAISS index."""
+    user_id = current_user.id
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -517,7 +518,7 @@ def query_knowledge_base(
 
         from app.core.database import Base
 
-        qa_chain = get_qa_chain()
+        qa_chain = get_qa_chain(user_id=current_user.id)
         t_start = time.monotonic()
         result = qa_chain({"query": guarded_question.question})
         latency_ms = (time.monotonic() - t_start) * 1000
@@ -643,9 +644,9 @@ async def query_knowledge_base_stream(
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
     """Stream a regulatory answer as Server-Sent Events."""
-    del request, current_user
+    del request
     try:
-        vector_store = load_vector_store()
+        vector_store = load_vector_store(user_id=current_user.id)
     except FileNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

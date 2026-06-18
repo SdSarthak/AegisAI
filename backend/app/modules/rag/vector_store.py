@@ -44,16 +44,26 @@ def get_embeddings() -> Any:
     return OllamaEmbeddings(model=settings.EMBEDDINGS_MODEL, base_url=base)
 
 
-def create_vector_store(documents: list[Any]) -> Any:
+def _get_index_path(user_id: int | None = None) -> str:
+    """Return the FAISS index path, scoped to a user when provided."""
+    if user_id is not None:
+        return os.path.join(settings.FAISS_INDEX_BASE_PATH, f"user_{user_id}")
+    return settings.FAISS_INDEX_PATH
+
+
+def create_vector_store(documents: list[Any], user_id: int | None = None) -> Any:
     """
     Build a FAISS index from LangChain Document objects and persist it to disk.
 
     Args:
         documents: Loaded and chunked LangChain Document objects.
+        user_id: Optional user ID for tenant-isolated index storage.
 
     Returns:
         The populated FAISS vector store.
     """
+    index_path = _get_index_path(user_id)
+    os.makedirs(index_path, exist_ok=True)
     embeddings = get_embeddings()
     faiss_cls = _get_faiss_class()
     vector_store = faiss_cls.from_documents(documents, embeddings)
@@ -62,21 +72,24 @@ def create_vector_store(documents: list[Any]) -> Any:
         with tempfile.TemporaryDirectory(prefix="faiss_") as tmp_dir:
             vector_store.save_local(tmp_dir)
             faiss_cls.load_local(tmp_dir, embeddings, allow_dangerous_deserialization=True)
-            if os.path.exists(settings.FAISS_INDEX_PATH):
-                shutil.rmtree(settings.FAISS_INDEX_PATH, ignore_errors=True)
-            shutil.move(tmp_dir, settings.FAISS_INDEX_PATH)
+            if os.path.exists(index_path):
+                shutil.rmtree(index_path, ignore_errors=True)
+            shutil.move(tmp_dir, index_path)
 
     return vector_store
 
 
-def load_vector_store() -> Any:
+def load_vector_store(user_id: int | None = None) -> Any:
     """
     Load an existing FAISS index from disk.
+
+    Args:
+        user_id: Optional user ID for tenant-isolated index loading.
 
     Raises:
         FileNotFoundError: if the index has not been created yet.
     """
-    index_path = settings.FAISS_INDEX_PATH
+    index_path = _get_index_path(user_id)
     if not os.path.exists(index_path):
         raise FileNotFoundError(
             f"FAISS index not found at '{index_path}'. "
@@ -91,6 +104,6 @@ def load_vector_store() -> Any:
     )
 
 
-def check_index_exists() -> bool:
-    """Check if FAISS index exists on disk."""
-    return os.path.exists(settings.FAISS_INDEX_PATH)
+def check_index_exists(user_id: int | None = None) -> bool:
+    """Check if FAISS index exists on disk for the given user (or globally)."""
+    return os.path.exists(_get_index_path(user_id))
