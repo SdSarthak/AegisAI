@@ -105,7 +105,7 @@ def _safe_pdf_filename(title: str) -> str:
 # Document templates for generation
 DOCUMENT_TEMPLATES = {
     DocumentType.TECHNICAL_DOCUMENTATION: """
-# Technical Documentation - {system_name}
+# Technical Documentation - {system_name} 
 
 ## 1. General Description
 **System Name:** {system_name}
@@ -453,6 +453,7 @@ def share_document(
         "share_url": f"/api/v1/documents/share/{token}",
         "expires_in_days": settings.DOCUMENT_SHARE_EXPIRE_DAYS
     }
+
 @router.get("/templates", response_model=List[DocumentTemplateResponse])
 def list_document_templates(
     current_user: User = Depends(get_current_user),
@@ -495,6 +496,7 @@ def get_document(
         )
     return document
 
+
 @router.put("/{document_id}", response_model=DocumentResponse)
 def update_document(
     document_id: int,
@@ -503,24 +505,23 @@ def update_document(
     current_user: User = Depends(get_current_user)
 ):
     """Update the content of an existing document."""
-    # Fetch document
     document = db.query(Document).filter(
         Document.id == document_id,
         Document.owner_id == current_user.id
     ).first()
-    
+
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
-    
-    # Update content
+
     document.content = body.content
     db.commit()
     db.refresh(document)
-    
+
     return document
+
 
 @router.post(
     "/generate",
@@ -533,7 +534,6 @@ def generate_document(
     current_user: User = Depends(get_current_user),
 ):
     """Generate a compliance document for a user's AI system."""
-    # Get the AI system
     ai_system = (
         db.query(AISystem)
         .filter(
@@ -547,7 +547,6 @@ def generate_document(
             status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
         )
 
-    # Get template
     template = DOCUMENT_TEMPLATES.get(request.document_type)
     if not template:
         raise HTTPException(
@@ -555,13 +554,12 @@ def generate_document(
             detail=f"No template available for {request.document_type}",
         )
 
-    # Get latest risk assessment if available
     from app.models.ai_system import RiskAssessment
 
     assessment = db.query(RiskAssessment).filter(
         RiskAssessment.ai_system_id == ai_system.id
     ).order_by(RiskAssessment.assessed_at.desc()).first()
-    
+
     try:
         content = generate_compliance_narrative(
             document_type=request.document_type,
@@ -573,8 +571,7 @@ def generate_document(
         import logging
         logger = logging.getLogger(__name__)
         logger.warning(f"LLM generation failed, falling back to template: {str(e)}")
-        
-        from datetime import datetime
+
         content = template.format(
             system_name=ai_system.name,
             version=ai_system.version or "1.0",
@@ -590,7 +587,6 @@ def generate_document(
             next_steps="Complete all checklist items"
         )
 
-    # Create document
     document = Document(
         owner_id=current_user.id,
         ai_system_id=ai_system.id,
@@ -628,6 +624,96 @@ def delete_document(
     db.commit()
 
 
+@router.post("/{document_id}/regenerate", response_model=DocumentResponse)
+def regenerate_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Re-generate a document using the current state of its linked AI system."""
+    document = (
+        db.query(Document)
+        .filter(Document.id == document_id, Document.owner_id == current_user.id)
+        .first()
+    )
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
+        )
+
+    if not document.ai_system_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Document is not linked to an AI system and cannot be regenerated",
+        )
+
+    ai_system = (
+        db.query(AISystem)
+        .filter(
+            AISystem.id == document.ai_system_id,
+            AISystem.owner_id == current_user.id,
+        )
+        .first()
+    )
+
+    if not ai_system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Linked AI system not found",
+        )
+
+    template = DOCUMENT_TEMPLATES.get(document.document_type)
+    if not template:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"No template available for {document.document_type}",
+        )
+
+    from app.models.ai_system import RiskAssessment
+
+    assessment = (
+        db.query(RiskAssessment)
+        .filter(RiskAssessment.ai_system_id == ai_system.id)
+        .order_by(RiskAssessment.assessed_at.desc())
+        .first()
+    )
+
+    try:
+        content = generate_compliance_narrative(
+            document_type=document.document_type,
+            ai_system=ai_system,
+            risk_assessment=assessment,
+            company_name=current_user.company_name,
+        )
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"LLM generation failed, falling back to template: {str(e)}")
+
+        content = template.format(
+            system_name=ai_system.name,
+            version=ai_system.version or "1.0",
+            use_case=ai_system.use_case or "Not specified",
+            sector=ai_system.sector or "Not specified",
+            description=ai_system.description or "No description provided",
+            risk_level=ai_system.risk_level.value if ai_system.risk_level else "Not assessed",
+            date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            company_name=current_user.company_name or "Not specified",
+            classification_reasons="See risk assessment details",
+            recommendations="Based on risk assessment",
+            requirements="See applicable requirements above",
+            next_steps="Complete all checklist items",
+        )
+
+    document.content = content
+    document.status = DocumentStatus.GENERATED
+    db.commit()
+    db.refresh(document)
+
+    return document
+
+
 @router.get("/{document_id}/pdf")
 def export_document_pdf(
     document_id: int,
@@ -635,28 +721,25 @@ def export_document_pdf(
     current_user: User = Depends(get_current_user)
 ):
     """Export a document as a PDF attachment."""
-    # Retrieve the document
     document = db.query(Document).filter(
         Document.id == document_id,
         Document.owner_id == current_user.id
     ).first()
-    
+
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
-    
+
     if not document.content:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Document has no content to export"
         )
-    
-    # Generate PDF
+
     pdf_buffer = BytesIO()
-    
-    # Create PDF document
+
     doc = SimpleDocTemplate(
         pdf_buffer,
         pagesize=A4,
@@ -665,11 +748,9 @@ def export_document_pdf(
         topMargin=0.75*inch,
         bottomMargin=0.75*inch,
     )
-    
-    # Container for PDF elements
+
     story = []
-    
-    # Get styles
+
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
         'CustomTitle',
@@ -679,7 +760,7 @@ def export_document_pdf(
         spaceAfter=12,
         alignment=TA_CENTER,
     )
-    
+
     body_style = ParagraphStyle(
         'CustomBody',
         parent=styles['BodyText'],
@@ -687,12 +768,10 @@ def export_document_pdf(
         alignment=TA_LEFT,
         spaceAfter=12,
     )
-    
-    # Add title
+
     story.append(Paragraph(_escape_pdf_text(document.title), title_style))
     story.append(Spacer(1, 0.2*inch))
-    
-    # Add metadata
+
     metadata_style = ParagraphStyle(
         'Metadata',
         parent=styles['Normal'],
@@ -704,14 +783,12 @@ def export_document_pdf(
     story.append(Paragraph(f"<b>Status:</b> {document.status.value}", metadata_style))
     story.append(Paragraph(f"<b>Created:</b> {document.created_at.strftime('%Y-%m-%d %H:%M:%S')}", metadata_style))
     story.append(Spacer(1, 0.3*inch))
-    
-    # Process content - split by lines and handle markdown-like formatting
+
     content_lines = document.content.split('\n')
     for line in content_lines:
         if not line.strip():
             story.append(Spacer(1, 0.1*inch))
         elif line.startswith('# '):
-            # Heading 1
             heading_style = ParagraphStyle(
                 'CustomHeading1',
                 parent=styles['Heading1'],
@@ -722,7 +799,6 @@ def export_document_pdf(
             )
             story.append(Paragraph(_escape_pdf_text(line[2:]), heading_style))
         elif line.startswith('## '):
-            # Heading 2
             heading_style = ParagraphStyle(
                 'CustomHeading2',
                 parent=styles['Heading2'],
@@ -733,7 +809,6 @@ def export_document_pdf(
             )
             story.append(Paragraph(_escape_pdf_text(line[3:]), heading_style))
         elif line.startswith('### '):
-            # Heading 3
             heading_style = ParagraphStyle(
                 'CustomHeading3',
                 parent=styles['Heading3'],
@@ -744,32 +819,26 @@ def export_document_pdf(
             )
             story.append(Paragraph(_escape_pdf_text(line[4:]), heading_style))
         elif line.startswith('- '):
-            # Bullet point
             story.append(Paragraph('• ' + _escape_pdf_text(line[2:]), body_style))
         else:
             story.append(Paragraph(_render_inline_markdown(line), body_style))
-    
-    # Build PDF
+
     doc.build(story)
-    
-    # Get PDF bytes
+
     pdf_bytes = pdf_buffer.getvalue()
-    
-    # Verify PDF is valid (starts with %PDF- magic bytes)
+
     if not pdf_bytes.startswith(b'%PDF-'):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="PDF generation failed - invalid PDF format"
         )
-    
-    # Verify PDF is larger than 1KB
+
     if len(pdf_bytes) < 1024:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="PDF generation failed - PDF too small"
         )
-    
-    # Return PDF response
+
     filename = _safe_pdf_filename(document.title)
     return StreamingResponse(
         BytesIO(pdf_bytes),
