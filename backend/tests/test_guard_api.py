@@ -228,3 +228,64 @@ def test_get_guard_history(authenticated_client: TestClient, db_session: Session
     data = response.json()
     assert len(data["items"]) == 1
     assert data["items"][0]["decision"] == "allow"
+
+
+def test_export_guard_logs_success_csv(authenticated_client: TestClient, db_session: Session, test_user: User):
+    log = GuardScanLog(
+        user_id=test_user.id,
+        prompt_hash="dummy_hash",
+        decision="allow",
+        confidence=0.95,
+        matched_patterns=[],
+        detection_type="none",
+        regex_flag=False,
+        regex_score=0.0,
+        intent="benign",
+        ml_confidence=0.0,
+        combined_score=0.0,
+        prompt_length=10,
+        ip_address="127.0.0.1",
+    )
+    db_session.add(log)
+    db_session.commit()
+
+    response = authenticated_client.get("/api/v1/guard/logs/export?format=csv")
+    assert response.status_code == 200
+    assert "text/csv" in response.headers["content-type"]
+    assert "guard_scan_logs.csv" in response.headers["content-disposition"]
+    
+    lines = response.text.strip().split("\n")
+    assert len(lines) == 2
+    assert "decision" in lines[0]
+    assert "allow" in lines[1]
+
+
+def test_export_guard_logs_success_json(authenticated_client: TestClient, db_session: Session, test_user: User):
+    log = GuardScanLog(
+        user_id=test_user.id,
+        prompt_hash="dummy_hash",
+        decision="block",
+        confidence=0.88,
+        matched_patterns=["pattern1"],
+        detection_type="ml",
+        regex_flag=True,
+        regex_score=0.5,
+        intent="malicious",
+        ml_confidence=0.88,
+        combined_score=0.88,
+        prompt_length=15,
+        ip_address="192.168.1.1",
+    )
+    db_session.add(log)
+    db_session.commit()
+
+    response = authenticated_client.get("/api/v1/guard/logs/export?format=json")
+    assert response.status_code == 200
+    assert "application/json" in response.headers["content-type"]
+    assert "guard_scan_logs.json" in response.headers["content-disposition"]
+    
+    data = response.json()
+    assert "logs" in data
+    assert len(data["logs"]) == 1
+    assert data["logs"][0]["decision"] == "block"
+

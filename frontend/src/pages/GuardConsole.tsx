@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Sliders,
   Save,
+  Download,
 } from 'lucide-react'
 import CopyButton from '../components/CopyButton'
 import GuardExplanation from '../components/GuardExplanation'
@@ -18,7 +19,9 @@ import {
   type GuardExplainResponse,
   type GuardScanResponse,
 } from '../services/api'
+import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
+
 
 type GuardMetrics = {
   decision: string
@@ -81,6 +84,53 @@ export default function GuardConsole() {
   const [piiMaskingEnabled, setPiiMaskingEnabled] = useState(false)
   const [hallucinationThreshold, setHallucinationThreshold] = useState(0.5)
   const [isSavingConfig, setIsSavingConfig] = useState(false)
+
+  // Telemetry Log Export States & Handlers
+  const [exportFormat, setExportFormat] = useState('csv')
+  const [exportDays, setExportDays] = useState('')
+  const [isExporting, setIsExporting] = useState(false)
+
+  const handleExportLogs = async () => {
+    setIsExporting(true)
+    try {
+      const minDelay = new Promise((r) => setTimeout(r, 1000))
+      const fetchLogs = async () => {
+        const token = useAuthStore.getState().token
+        const params = new URLSearchParams()
+        params.append('format', exportFormat)
+        if (exportDays) {
+          params.append('days', exportDays)
+        }
+
+        const response = await fetch(`/api/v1/guard/logs/export?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (!response.ok) {
+          if (response.status === 403) {
+            throw new Error('Forbidden: Only administrators can export scan logs.')
+          }
+          throw new Error('Failed to export guard scan logs.')
+        }
+        return response.blob()
+      }
+
+      const [blob] = await Promise.all([fetchLogs(), minDelay])
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `guard_scan_logs.${exportFormat}`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Guard scan logs exported successfully!')
+    } catch (err: any) {
+      console.error('Export logs failed:', err)
+      toast.error(err.message || 'Failed to export guard scan logs.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
 
   useEffect(() => {
     const fetchConfig = async () => {
@@ -430,8 +480,62 @@ export default function GuardConsole() {
                 disabled={!metrics}
               />
             </div>
+
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Telemetry scan logs</h3>
+              
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Format</label>
+                    <select
+                      value={exportFormat}
+                      onChange={(e) => setExportFormat(e.target.value)}
+                      className="w-full text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 focus:ring-1 focus:ring-primary-500 focus:border-transparent outline-none transition-all cursor-pointer text-gray-700 dark:text-gray-300"
+                    >
+                      <option value="csv">CSV Format</option>
+                      <option value="json">JSON Format</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Time Range</label>
+                    <select
+                      value={exportDays}
+                      onChange={(e) => setExportDays(e.target.value)}
+                      className="w-full text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 focus:ring-1 focus:ring-primary-500 focus:border-transparent outline-none transition-all cursor-pointer text-gray-700 dark:text-gray-300"
+                    >
+                      <option value="">All time</option>
+                      <option value="1">Last 24 hours</option>
+                      <option value="7">Last 7 days</option>
+                      <option value="30">Last 30 days</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleExportLogs}
+                  disabled={isExporting}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-white text-xs font-semibold py-2.5 px-4 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5" />
+                      Export Scan Logs
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </aside>
+
       </div>
 
       {isLoading && (
