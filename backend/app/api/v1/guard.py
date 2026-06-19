@@ -927,7 +927,18 @@ def update_guard_config(
     current_user.guard_suspicious_threshold = config.suspicious_threshold
 
     db.commit()
-    db.refresh(current_user)
+    db.commit()
+
+    updated_user = db.get(User, current_user.id)
+
+    return {
+    "message": "Guard configuration updated successfully",
+    "config": {
+        "sanitization_level": updated_user.guard_sanitization_level,
+        "malicious_threshold": updated_user.guard_malicious_threshold,
+        "suspicious_threshold": updated_user.guard_suspicious_threshold,
+    },
+}
 
     return {
         "message": "Guard configuration updated successfully",
