@@ -313,3 +313,149 @@ def get_current_user_stats(
         risk_breakdown=risk_breakdown,
         compliant_systems=compliant_systems,
     )
+# ── OAuth 2.0 (Google + GitHub) ──────────────────────────────────────────────
+
+from authlib.integrations.starlette_client import OAuth
+from starlette.config import Config as StarletteConfig
+from fastapi.responses import RedirectResponse
+
+starlette_config = StarletteConfig(environ={
+    "GOOGLE_CLIENT_ID": settings.GOOGLE_CLIENT_ID,
+    "GOOGLE_CLIENT_SECRET": settings.GOOGLE_CLIENT_SECRET,
+    "GITHUB_CLIENT_ID": settings.GITHUB_CLIENT_ID,
+    "GITHUB_CLIENT_SECRET": settings.GITHUB_CLIENT_SECRET,
+})
+
+oauth = OAuth(starlette_config)
+
+oauth.register(
+    name="google",
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_kwargs={"scope": "openid email profile"},
+)
+
+oauth.register(
+    name="github",
+    access_token_url="https://github.com/login/oauth/access_token",
+    authorize_url="https://github.com/login/oauth/authorize",
+    api_base_url="https://api.github.com/",
+    client_kwargs={"scope": "user:email"},
+)
+
+
+def _get_or_create_oauth_user(db: Session, email: str, full_name: str, provider: str, oauth_id: str, avatar_url: str) -> User:
+    """Find existing user by email or create a new OAuth user."""
+    user = db.query(User).filter(User.email == email).first()
+    if user:
+        # Update OAuth fields if logging in via OAuth for first time
+        user.oauth_provider = provider
+        user.oauth_id = oauth_id
+        user.avatar_url = avatar_url
+        db.commit()
+        db.refresh(user)
+        return user
+
+    # Create new user
+    user = User(
+        email=email,
+        full_name=full_name,
+        hashed_password=None,
+        oauth_provider=provider,
+        oauth_id=oauth_id,
+        avatar_url=avatar_url,
+        is_active=True,
+        is_verified=True,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+# ── Google ────────────────────────────────────────────────────────────────────
+
+@router.get("/google")
+async def google_login(request: Request):
+    """Redirect user to Google OAuth consent screen."""
+    redirect_uri = str(request.url_for("google_callback"))
+    return await oauth.google.authorize_redirect(request, redirect_uri)
+
+
+@router.get("/google/callback", name="google_callback")
+async def google_callback(request: Request, db: Session = Depends(get_db)):
+    """Handle Google OAuth callback and return JWT."""
+    try:
+        token = await oauth.google.authorize_access_token(request)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Google authentication failed.")
+
+    user_info = token.get("userinfo")
+    if not user_info:
+        raise HTTPException(status_code=400, detail="Could not fetch user info from Google.")
+
+    user = _get_or_create_oauth_user(
+        db=db,
+        email=user_info["email"],
+        full_name=user_info.get("name", ""),
+        provider="google",
+        oauth_id=user_info["sub"],
+        avatar_url=user_info.get("picture", ""),
+    )
+
+    access_token = create_access_token(
+        data={"sub": str(user.id)},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+
+    return RedirectResponse(
+        url=f"{settings.FRONTEND_URL}/oauth/callback?token={access_token}"
+    )
+
+
+# ── GitHub ────────────────────────────────────────────────────────────────────
+
+@router.get("/github")
+async def github_login(request: Request):
+    """Redirect user to GitHub OAuth consent screen."""
+    redirect_uri = str(request.url_for("github_callback"))
+    return await oauth.github.authorize_redirect(request, redirect_uri)
+
+
+@router.get("/github/callback", name="github_callback")
+async def github_callback(request: Request, db: Session = Depends(get_db)):
+    """Handle GitHub OAuth callback and return JWT."""
+    try:
+        token = await oauth.github.authorize_access_token(request)
+    except Exception:
+        raise HTTPException(status_code=400, detail="GitHub authentication failed.")
+
+    resp = await oauth.github.get("user", token=token)
+    profile = resp.json()
+
+    email = profile.get("email")
+    if not email:
+        # GitHub may hide email — fetch it separately
+        emails_resp = await oauth.github.get("user/emails", token=token)
+        emails = emails_resp.json()
+        primary = next((e["email"] for e in emails if e.get("primary") and e.get("verified")), None)
+        if not primary:
+            raise HTTPException(status_code=400, detail="Could not retrieve verified email from GitHub.")
+        email = primary
+
+    user = _get_or_create_oauth_user(
+        db=db,
+        email=email,
+        full_name=profile.get("name") or profile.get("login", ""),
+        provider="github",
+        oauth_id=str(profile["id"]),
+        avatar_url=profile.get("avatar_url", ""),
+    )
+
+    access_token = create_access_token(
+        data={"sub": str(user.id)},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+
+    return RedirectResponse(
+        url=f"{settings.FRONTEND_URL}/oauth/callback?token={access_token}"
+    )
