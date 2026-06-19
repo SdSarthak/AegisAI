@@ -16,9 +16,11 @@ import CopyButton from '../components/CopyButton'
 import GuardExplanation from '../components/GuardExplanation'
 import {
   guardApi,
+  guardHistoryApi,
   type GuardExplainResponse,
   type GuardScanResponse,
 } from '../services/api'
+
 import { useAuthStore } from '../stores/authStore'
 import toast from 'react-hot-toast'
 
@@ -99,7 +101,11 @@ export default function GuardConsole() {
         const params = new URLSearchParams()
         params.append('format', exportFormat)
         if (exportDays) {
-          params.append('days', exportDays)
+          const daysNum = parseInt(exportDays, 10)
+          if (!isNaN(daysNum)) {
+            const startDate = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000)
+            params.append('start_date', startDate.toISOString())
+          }
         }
 
         const response = await fetch(`/api/v1/guard/logs/export?${params.toString()}`, {
@@ -130,6 +136,71 @@ export default function GuardConsole() {
       setIsExporting(false)
     }
   }
+
+  // Tab State
+  const [activeTab, setActiveTab] = useState<'console' | 'history'>('console')
+
+  // History / Audit Log States & Handlers
+  const [historyLogs, setHistoryLogs] = useState<any[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
+  const [cursorHistory, setCursorHistory] = useState<(string | null)[]>([null])
+  const [cursorIndex, setCursorIndex] = useState(0)
+
+
+  const [filterDecision, setFilterDecision] = useState('')
+  const [filterIntent, setFilterIntent] = useState('')
+
+  const fetchHistoryLogs = async (cursor: string | null = null) => {
+    setHistoryLoading(true)
+    try {
+      const response = await guardHistoryApi.list({
+        cursor,
+        limit: 10,
+        decision: filterDecision || undefined,
+        intent: filterIntent || undefined,
+      })
+      setHistoryLogs(response.items || [])
+      setHistoryNextCursor(response.next_cursor)
+    } catch (err) {
+      console.error('Failed to fetch history logs', err)
+      toast.error('Failed to load scan history logs.')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      setCursorHistory([null])
+      setCursorIndex(0)
+      fetchHistoryLogs(null)
+    }
+  }, [activeTab, filterDecision, filterIntent])
+
+
+  const handleNextPage = () => {
+    if (historyNextCursor) {
+      const nextIndex = cursorIndex + 1
+      const newHistory = [...cursorHistory]
+      newHistory[nextIndex] = historyNextCursor
+      setCursorHistory(newHistory)
+      setCursorIndex(nextIndex)
+      fetchHistoryLogs(historyNextCursor)
+    }
+  }
+
+
+  const handlePrevPage = () => {
+    if (cursorIndex > 0) {
+      const prevIndex = cursorIndex - 1
+      setCursorIndex(prevIndex)
+      const prevCursor = cursorHistory[prevIndex]
+      fetchHistoryLogs(prevCursor)
+    }
+  }
+
+
 
 
   useEffect(() => {
@@ -268,7 +339,36 @@ export default function GuardConsole() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6">
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
+        <button
+          type="button"
+          onClick={() => setActiveTab('console')}
+          className={`py-2.5 px-4 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === 'console'
+              ? 'border-primary-600 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+          }`}
+        >
+          Scanner Console
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('history')}
+          className={`py-2.5 px-4 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === 'history'
+              ? 'border-primary-600 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+          }`}
+        >
+          Scan History & Audit Logs
+        </button>
+      </div>
+
+      {activeTab === 'console' ? (
+        <>
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6">
+
         <div className="space-y-6">
           <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
             <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
@@ -699,6 +799,126 @@ export default function GuardConsole() {
               </div>
             </div>
           </aside>
+        </div>
+      )}
+      </>
+      ) : (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden p-6 space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-700 pb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Scan History & Audit Logs</h2>
+              <p className="text-xs text-gray-500">Telemetry logs of prompt scan decisions.</p>
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-wrap gap-2">
+              <div>
+                <select
+                  value={filterDecision}
+                  onChange={(e) => setFilterDecision(e.target.value)}
+                  className="text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 focus:ring-1 focus:ring-primary-500 outline-none transition-all cursor-pointer text-gray-700 dark:text-gray-300"
+                >
+                  <option value="">All Decisions</option>
+                  <option value="allow">Allow</option>
+                  <option value="block">Block</option>
+                  <option value="sanitize">Sanitize</option>
+                </select>
+              </div>
+
+              <div>
+                <select
+                  value={filterIntent}
+                  onChange={(e) => setFilterIntent(e.target.value)}
+                  className="text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 focus:ring-1 focus:ring-primary-500 outline-none transition-all cursor-pointer text-gray-700 dark:text-gray-300"
+                >
+                  <option value="">All Intents</option>
+                  <option value="benign">Benign</option>
+                  <option value="suspicious">Suspicious</option>
+                  <option value="malicious">Malicious</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          {historyLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+            </div>
+          ) : historyLogs.length === 0 ? (
+            <div className="text-center py-12">
+              <ShieldCheck className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">No scan history logs found.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">Timestamp</th>
+                    <th className="py-3 px-4">Prompt Hash</th>
+                    <th className="py-3 px-4">Decision</th>
+                    <th className="py-3 px-4">Confidence</th>
+                    <th className="py-3 px-4">Matched Patterns</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50 text-sm text-gray-700 dark:text-gray-300">
+                  {historyLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-all">
+                      <td className="py-3.5 px-4 font-mono text-xs whitespace-nowrap">
+                        {log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-xs max-w-[150px] truncate" title={log.prompt_hash}>
+                        {log.prompt_hash}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${decisionBadgeClass(log.decision)}`}>
+                          {log.decision}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 font-medium text-gray-900 dark:text-white">
+                        {(log.confidence * 100).toFixed(0)}%
+                      </td>
+                      <td className="py-3.5 px-4 max-w-[200px] truncate">
+                        {log.matched_patterns && log.matched_patterns.length > 0 ? (
+                          <span className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 px-2 py-0.5 rounded text-xs">
+                            {log.matched_patterns.join(', ')}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {!historyLoading && historyLogs.length > 0 && (
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
+              <button
+                type="button"
+                onClick={handlePrevPage}
+                disabled={cursorIndex === 0}
+                className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                Previous
+              </button>
+              <span className="text-xs text-gray-500">
+                Page {cursorIndex + 1}
+              </span>
+              <button
+                type="button"
+                onClick={handleNextPage}
+                disabled={!historyNextCursor}
+                className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
