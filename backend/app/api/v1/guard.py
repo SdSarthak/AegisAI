@@ -922,30 +922,20 @@ def update_guard_config(
             detail="suspicious_threshold must be between 0 and 1",
         )
 
-    current_user.guard_sanitization_level = config.sanitization_level
-    current_user.guard_malicious_threshold = config.malicious_threshold
-    current_user.guard_suspicious_threshold = config.suspicious_threshold
+    db_user = db.get(User, current_user.id)
+
+    db_user.guard_sanitization_level = config.sanitization_level
+    db_user.guard_malicious_threshold = config.malicious_threshold
+    db_user.guard_suspicious_threshold = config.suspicious_threshold
 
     db.commit()
-    db.commit()
-
-    updated_user = db.get(User, current_user.id)
-
-    return {
-    "message": "Guard configuration updated successfully",
-    "config": {
-        "sanitization_level": updated_user.guard_sanitization_level,
-        "malicious_threshold": updated_user.guard_malicious_threshold,
-        "suspicious_threshold": updated_user.guard_suspicious_threshold,
-    },
-}
 
     return {
         "message": "Guard configuration updated successfully",
         "config": {
-            "sanitization_level": current_user.guard_sanitization_level,
-            "malicious_threshold": current_user.guard_malicious_threshold,
-            "suspicious_threshold": current_user.guard_suspicious_threshold,
+            "sanitization_level": db_user.guard_sanitization_level,
+            "malicious_threshold": db_user.guard_malicious_threshold,
+            "suspicious_threshold": db_user.guard_suspicious_threshold,
         },
     }
 
@@ -1065,3 +1055,4 @@ def bulk_scan_prompts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."
         )
+
