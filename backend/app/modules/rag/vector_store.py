@@ -84,6 +84,15 @@ def create_vector_store(documents: list[Any], user_id: int | None = None) -> Any
                 shutil.rmtree(index_path, ignore_errors=True)
 
             shutil.copytree(tmp_dir, index_path)
+            if not os.path.exists(os.path.join(index_path, "index.faiss")):
+                shutil.rmtree(index_path, ignore_errors=True)
+                os.makedirs(index_path, exist_ok=True)
+                vector_store.save_local(index_path)
+                faiss_cls.load_local(
+                    index_path,
+                    embeddings,
+                    allow_dangerous_deserialization=True,
+                )
 
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
