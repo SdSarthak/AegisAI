@@ -208,6 +208,9 @@ export default function Classification() {
     }
   }
 
+<<<<<<< HEAD
+  
+=======
   const getRiskColor = (level: string) => {
     switch (level) {
       case 'unacceptable':
@@ -220,6 +223,7 @@ export default function Classification() {
         return 'bg-green-50 border-green-200 text-green-800'
     }
   }
+>>>>>>> 2d30a37840a3bf1b7baafd25ce4acca9567632bc
 
   const getRiskBadgeColor = (level: string) => {
     switch (level) {
