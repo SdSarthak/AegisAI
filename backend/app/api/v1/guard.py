@@ -887,13 +887,15 @@ def get_guard_stats(
 
 @router.get("/config", tags=["LLM Guard"])
 def get_guard_config(
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the current user's Guard configuration."""
+    db_user = db.get(User, current_user.id)
+
     return {
-        "sanitization_level": current_user.guard_sanitization_level,
-        "malicious_threshold": current_user.guard_malicious_threshold,
-        "suspicious_threshold": current_user.guard_suspicious_threshold,
+        "sanitization_level": db_user.guard_sanitization_level,
+        "malicious_threshold": db_user.guard_malicious_threshold,
+        "suspicious_threshold": db_user.guard_suspicious_threshold,
     }
 
 
