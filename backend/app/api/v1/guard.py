@@ -318,8 +318,7 @@ def scan_prompt(
 
         if result["decision"] == "block":
             try:
-                background_tasks.add_task(
-                    deliver_webhook,
+                deliver_webhook(
                     db,
                     current_user.id,
                     "guard_block",
@@ -329,7 +328,6 @@ def scan_prompt(
                         "matched_patterns": response.matched_patterns,
                         "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
                     },
-                    background_tasks,
                 )
             except Exception:
                 logger.exception(
@@ -1007,8 +1005,7 @@ def bulk_scan_prompts(
                     resource_type="guard_scan",
                     resource_id=log.id,
                 )
-                background_tasks.add_task(
-                    deliver_webhook,
+                deliver_webhook(
                     db,
                     current_user.id,
                     "guard_block",
@@ -1018,7 +1015,6 @@ def bulk_scan_prompts(
                         "matched_patterns": result["metadata"]["regex_analysis"].get("matched_patterns", []),
                         "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(),
                     },
-                    background_tasks,
                 )
 
             results.append(

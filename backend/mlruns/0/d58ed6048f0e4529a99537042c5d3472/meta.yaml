@@ -1,0 +1,15 @@
+artifact_uri: file:///D:/Imp%20Docs/AdvanceDev/OpenSourceContributions/AegisAI/backend/mlruns/0/d58ed6048f0e4529a99537042c5d3472/artifacts
+end_time: 1781686709179
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: d58ed6048f0e4529a99537042c5d3472
+run_name: rag_query
+run_uuid: d58ed6048f0e4529a99537042c5d3472
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1781686709131
+status: 3
+tags: []
+user_id: Srijan Jaiswal
