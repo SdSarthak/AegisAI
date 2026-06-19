@@ -69,13 +69,24 @@ def create_vector_store(documents: list[Any], user_id: int | None = None) -> Any
     vector_store = faiss_cls.from_documents(documents, embeddings)
 
     with _rag_index_lock:
-        with tempfile.TemporaryDirectory(prefix="faiss_") as tmp_dir:
+        tmp_dir = tempfile.mkdtemp(prefix="faiss_")
+
+        try:
             vector_store.save_local(tmp_dir)
-            faiss_cls.load_local(tmp_dir, embeddings, allow_dangerous_deserialization=True)
+
+            faiss_cls.load_local(
+                tmp_dir,
+                embeddings,
+                allow_dangerous_deserialization=True,
+            )
+
             if os.path.exists(index_path):
                 shutil.rmtree(index_path, ignore_errors=True)
-            shutil.move(tmp_dir, index_path)
 
+            shutil.copytree(tmp_dir, index_path)
+
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
     return vector_store
 
 
