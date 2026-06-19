@@ -565,16 +565,18 @@ def query_knowledge_base(
             pass
 
         feedback = RAGFeedback(
-            question=guarded_question.question,
-            answer=answer,
+            question_hash=hashlib.sha256(guarded_question.question.encode("utf-8")).hexdigest(),
+            answer_hash=hashlib.sha256(answer.encode("utf-8")).hexdigest(),
             source_chunks=source_labels,
         )
         db.add(feedback)
         db.add(
             RagQuery(
                 user_id=current_user.id,
-                question=guarded_question.question,
-                answer_summary=answer[:200],
+                question_hash=hashlib.sha256(guarded_question.question.encode("utf-8")).hexdigest(),
+                question_length=len(guarded_question.question),
+                answer_hash=hashlib.sha256(answer.encode("utf-8")).hexdigest(),
+                answer_length=len(answer),
                 source_count=len(sources),
             )
         )
@@ -784,8 +786,10 @@ def get_rag_history(
         "results": [
             {
                 "id": query.id,
-                "question": query.question,
-                "answer_summary": query.answer_summary,
+                "question_hash": query.question_hash,
+                "question_length": query.question_length,
+                "answer_hash": query.answer_hash,
+                "answer_length": query.answer_length,
                 "source_count": query.source_count,
                 "created_at": query.created_at,
             }
