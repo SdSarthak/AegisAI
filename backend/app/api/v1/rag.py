@@ -211,7 +211,22 @@ def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
 ) -> RAGIngestResponse:
-    """Upload regulatory PDFs, chunk them, and rebuild the persisted FAISS index."""
+    """Accept PDF uploads, extract text chunks, and rebuild the FAISS index for the user.
+
+    Args:
+        files: PDF files to upload. Must have .pdf extension. Each file must be
+            within the size limit and total upload must not exceed the budget.
+            Number of files cannot exceed the configured max per request.
+        current_user: Authenticated user making the request.
+
+    Returns:
+        RAGIngestResponse with files_processed, chunks_created, and index_size_bytes.
+
+    Raises:
+        HTTPException 400: No valid PDFs provided, or PDFs have no extractable text.
+        HTTPException 413: File too large, total size over budget, or too many files.
+        HTTPException 503: FAISS index could not be built.
+    """
     user_id = current_user.id
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
@@ -317,7 +332,27 @@ def query_knowledge_base(
     guarded_question: GuardedRAGQuestion = Depends(guard_rag_question),
     db: Session = Depends(get_db),
 ) -> RAGQueryResponse:
-    """Ask a regulatory question and get an answer grounded in source documents."""
+    """Run a regulatory question through the guard pipeline and return a grounded answer.
+
+    Blocked queries are rejected and logged. Sanitized queries are forwarded
+    with changes recorded. The answer, sources, and grounding scores are saved
+    to the database.
+
+    Args:
+        http_request: Raw request object used to capture client IP for audit logs.
+        current_user: Authenticated user making the request.
+        guarded_question: Guard-processed question with decision metadata.
+        db: Database session.
+
+    Returns:
+        RAGQueryResponse with answer, sources, answer_id, grounding_score,
+        grounding_confidence, guard_triggered, guard_decision, chunks_total,
+        chunks_dropped, and warning.
+
+    Raises:
+        HTTPException 400: Query was blocked by the guard.
+        HTTPException 503: Guard unavailable, FAISS index missing, or internal error.
+    """
     try:
         if guarded_question.guard_decision == "ERROR":
             _log_rag_audit(
@@ -497,7 +532,25 @@ async def query_knowledge_base_stream(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
-    """Stream a regulatory answer as Server-Sent Events."""
+    """Stream the answer to a regulatory question as Server-Sent Events.
+
+    Loads the user's FAISS index, retrieves top-k chunks, and streams the
+    LLM response token by token. Emits a meta event first (sources, answer_id),
+    then token events, and finally a done event.
+
+    Args:
+        request: Raw FastAPI request (reserved for future use).
+        payload: Request body containing the question string.
+        current_user: Authenticated user making the request.
+        db: Database session passed to the streaming generator.
+
+    Returns:
+        StreamingResponse with Content-Type text/event-stream.
+        Events: meta (sources + answer_id), token (text fragments), done.
+
+    Raises:
+        HTTPException 503: User has not ingested any documents yet.
+    """
     del request
     try:
         vector_store = load_vector_store(user_id=current_user.id)
@@ -531,7 +584,15 @@ async def query_knowledge_base_stream(
 
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health() -> dict[str, Any]:
-    """Check if the RAG module is available."""
+    """Check whether the RAG module is ready to handle queries.
+
+    Does not require authentication. Returns module status and whether
+    the FAISS index exists on disk.
+
+    Returns:
+        dict with keys: module (str), status (str), index_loaded (bool),
+        and message (str) if index is missing.
+    """
     from app.modules.rag.vector_store import check_index_exists
 
     index_loaded = check_index_exists()
@@ -559,7 +620,20 @@ def rag_feedback(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
-    """Record a thumbs-up or thumbs-down for a previously returned answer."""
+    """Submit a thumbs-up or thumbs-down vote for a previously returned answer.
+
+    Args:
+        payload: Contains answer_id (UUID of the feedback row) and
+            vote ("up" or "down").
+        current_user: Authenticated user submitting the vote.
+        db: Database session.
+
+    Returns:
+        dict with status ("ok") and answer_id of the updated row.
+
+    Raises:
+        HTTPException 404: No feedback record found for the given answer_id.
+    """
     del current_user
     fb = db.query(RAGFeedback).filter(RAGFeedback.id == payload.answer_id).first()
     if not fb:
@@ -580,7 +654,23 @@ def get_low_quality_chunks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Aggregate feedback by source chunk and return low-quality candidates."""
+    """Return source chunks with a high negative feedback ratio. Admin only.
+
+    Scans all feedback records, aggregates votes per chunk, and filters
+    chunks where thumbs_down / total exceeds the threshold.
+
+    Args:
+        threshold: Min negative vote ratio to flag a chunk (0 to 1, default 0.3).
+        current_user: Must have SCALE subscription tier to access this endpoint.
+        db: Database session.
+
+    Returns:
+        dict with threshold (float) and low_quality_chunks (list of dicts with
+        chunk, thumbs_down, total, and ratio).
+
+    Raises:
+        HTTPException 403: User does not have SCALE tier access.
+    """
     try:
         if current_user.subscription_tier != SubscriptionTier.SCALE:
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -622,7 +712,21 @@ def get_rag_history(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Return the current user's paginated RAG query history."""
+    """Fetch the current user's past RAG queries with pagination.
+
+    Results are ordered newest first. Only queries belonging to the
+    authenticated user are returned.
+
+    Args:
+        page: Page number to fetch, 1-indexed (default 1).
+        page_size: Number of results per page (default 10).
+        current_user: Authenticated user whose history is being fetched.
+        db: Database session.
+
+    Returns:
+        dict with page (int), page_size (int), and results (list of dicts
+        with id, question, answer_summary, source_count, created_at).
+    """
     offset = (page - 1) * page_size
     queries = (
         db.query(RagQuery)
