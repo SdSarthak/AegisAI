@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, Float, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -32,6 +32,11 @@ class User(Base):
     onboarding_completed = Column(Boolean, default=False)
     dashboard_layout = Column(JSON, nullable=True)
 
+    # Guard configuration
+    guard_sanitization_level = Column(String(20), nullable=False, default="medium")
+    guard_malicious_threshold = Column(Float, nullable=False, default=0.8)
+    guard_suspicious_threshold = Column(Float, nullable=False, default=0.5)
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -40,4 +45,4 @@ class User(Base):
     ai_systems = relationship("AISystem", back_populates="owner")
     documents = relationship("Document", back_populates="owner")
     webhook_configs = relationship("WebhookConfig", back_populates="user")
-    notifications    = relationship("Notification",    back_populates="user")
+    notifications = relationship("Notification", back_populates="user")
