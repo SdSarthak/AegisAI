@@ -1,9 +1,4 @@
-"""Main application: LLM Guard orchestrator combining all defense layers.
-
-Changed: Added regex-only chunk scanning for retrieved RAG context.
-Why: RAG chunks can contain injected instructions even when the user query is safe.
-Addresses: Indirect prompt injection and poisoned document chunks before LLM context assembly.
-"""
+"""Main application: LLM Guard orchestrator combining all defense layers."""
 
 import json
 import logging
@@ -16,7 +11,6 @@ from .sanitizer import SanitizationLevel
 from .normalizer import normalize_prompt
 from ..llm.llm_client import LLMClient
 from . import guard_config as config
-from app.core.telemetry import instrument_guard
 
 # Logging is configured centrally in app.core.logging (configure_logging).
 # Importing this module must not call logging.basicConfig — doing so would
@@ -76,7 +70,6 @@ class LLMGuard:
             logger.error(f"Failed to initialize Gemini client: {e}")
             self.llm_client = None
 
-    @instrument_guard
     def guard(self, user_prompt: str) -> Dict:
         """
         Run the complete guard pipeline on a user prompt.
@@ -198,32 +191,77 @@ class LLMGuard:
 
         return result
 
-    def scan_chunk(self, chunk_text: str) -> Dict:
-        """Scan retrieved RAG chunk text using only the fast regex layer.
+    def scan_input(self, text: str) -> Dict:
+        """
+        Scan text through the guard pipeline without calling the downstream LLM.
+
+        Runs normalize -> regex -> ML classifier -> decision engine -> sanitizer.
+        Never calls the LLM client, so it is safe to call from other endpoints
+        (e.g. the RAG query endpoint) that use their own LLM pipeline.
 
         Args:
-            chunk_text: Text content retrieved from the vector store.
+            text: Raw user input to scan.
 
         Returns:
-            Dictionary with safety status, severity, and matched regex patterns.
+            dict with:
+                - ``decision`` (str): ``"allow"``, ``"sanitize"``, or ``"block"``
+                - ``sanitized_prompt`` (Optional[str]): cleaned text when
+                  decision is ``"sanitize"``; ``None`` otherwise.
         """
-        normalized_text = normalize_prompt(chunk_text)
-        regex_result = self.regex_filter.check(normalized_text)
+        normalized = normalize_prompt(text)
 
-        if regex_result.score >= 0.8:
-            severity = "high"
-        elif regex_result.score >= 0.5:
-            severity = "medium"
-        elif regex_result.score > 0.0:
-            severity = "low"
-        else:
-            severity = "low"
+        regex_result = self.regex_filter.check(normalized)
+        intent_result = self.classifier.classify(normalized)
+        decision_result = self.decision_engine.decide(
+            regex_flag=regex_result.flag,
+            regex_score=regex_result.score,
+            intent=intent_result.intent,
+            intent_score=intent_result.confidence,
+        )
 
+        sanitized_prompt: Optional[str] = None
+        if decision_result.decision == Decision.SANITIZE:
+            sanitized_prompt, _ = self.sanitizer.sanitize(normalized)
+
+        logger.info(
+            "scan_input decision=%s text_len=%d",
+            decision_result.decision.value,
+            len(text),
+        )
         return {
-            "safe": severity != "high",
-            "severity": severity,
-            "matched_patterns": regex_result.matched_patterns,
+            "decision": decision_result.decision.value,
+            "sanitized_prompt": sanitized_prompt,
         }
+
+    def scan_chunk(self, chunk_text: str) -> str:
+        """
+        Lightweight scan for a retrieved document chunk.
+
+        Only the regex layer runs -- no ML classifier, no LLM call -- so
+        this is fast enough to execute on every FAISS chunk per query.
+        The prompt is normalized first to defeat Unicode-bypass attempts.
+
+        A chunk is blocked when the regex filter raises a flag AND the
+        risk score is >= 0.7 (HIGH severity). Lower-scoring matches are
+        passed through to avoid over-filtering legitimate regulatory text.
+
+        Args:
+            chunk_text: The ``page_content`` of a retrieved LangChain Document.
+
+        Returns:
+            ``"block"`` if a high-severity injection pattern is detected,
+            ``"allow"`` otherwise.
+        """
+        normalized = normalize_prompt(chunk_text)
+        regex_result = self.regex_filter.check(normalized)
+        if regex_result.flag and regex_result.score >= 0.7:
+            logger.warning(
+                "scan_chunk BLOCKED score=%.2f patterns=%s",
+                regex_result.score,
+                regex_result.matched_patterns,
+            )
+            return "block"
+        return "allow"
 
     def evaluate_on_test_set(self, test_prompts: list, true_labels: list) -> Dict:
         """
