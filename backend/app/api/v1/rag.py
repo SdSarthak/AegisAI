@@ -39,6 +39,7 @@ from app.models.user import SubscriptionTier, User
 from app.modules.llm.llm_client import LLMClient
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.streaming import stream_rag_answer
+from app.modules.rag.cache import get_cached_answer, set_cached_answer
 from app.modules.rag.vector_store import create_vector_store, load_vector_store
 from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
 
@@ -518,6 +519,10 @@ def query_knowledge_base(
 
         from app.core.database import Base
 
+        cached_response = get_cached_answer(guarded_question.question)
+        if cached_response:
+            return RAGQueryResponse(**cached_response)
+
         qa_chain = get_qa_chain(user_id=current_user.id)
         t_start = time.monotonic()
         result = qa_chain({"query": guarded_question.question})
@@ -595,7 +600,7 @@ def query_knowledge_base(
         except Exception:
             pass
 
-        return RAGQueryResponse(
+        response = RAGQueryResponse(
             answer=answer,
             sources=sources,
             answer_id=feedback.id,
@@ -611,6 +616,9 @@ def query_knowledge_base(
             confidence_tier=grounding_confidence.lower(),
             flagged_reason=warning,
         )
+
+        set_cached_answer(guarded_question.question, response.model_dump())
+        return response
     except HTTPException:
         raise
     except FileNotFoundError as exc:
