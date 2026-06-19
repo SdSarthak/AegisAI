@@ -82,6 +82,29 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     )
     return encoded_jwt
 
+def create_refresh_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """Create a JWT refresh token with an expiration payload."""
+    to_encode = data.copy()
+
+    now = datetime.now(timezone.utc)
+    if expires_delta:
+        expire = now + expires_delta
+    else:
+        expire = now + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+
+    to_encode.update({
+        "exp": expire,
+        "iat": int(now.timestamp()),
+        "nbf": int(now.timestamp()),
+        "type": "refresh",
+    })
+
+    return jwt.encode(
+        to_encode,
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM,
+    )
+
 
 def decode_token(token: str) -> Dict[str, Any]:
     """Decode and strictly validate a JWT token payload."""
@@ -154,3 +177,16 @@ async def get_current_user(
     user_id_ctx.set(user.id)
 
     return user
+
+def validate_refresh_token(token: str) -> Dict[str, Any]:
+    """Validate a refresh token and return its payload."""
+    payload = decode_token(token)
+
+    if payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"field": "general", "message": "Invalid refresh token"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return payload
