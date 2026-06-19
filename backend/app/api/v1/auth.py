@@ -32,7 +32,16 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.ai_system import AISystem, ComplianceStatus
 from app.models.document import Document
-from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse, ChangePasswordRequest
+from app.schemas.user import (
+    UserCreate,
+    UserResponse,
+    UserUpdateSchema,
+    Token,
+    UserStatsResponse,
+    ChangePasswordRequest,
+    DashboardLayoutUpdate,
+    DashboardLayoutResponse,
+)
 
 # Pre-computed bcrypt hash used when the looked-up user is None so that the
 # login endpoint always performs a constant-time hash comparison, closing
@@ -51,6 +60,16 @@ _auth_rate_limit_lock = Lock()
 
 router = APIRouter()
 users_router = APIRouter()
+
+DEFAULT_DASHBOARD_LAYOUT = {
+    "layout": [
+        {"i": "compliance_summary", "x": 0, "y": 0, "w": 2, "h": 2},
+        {"i": "risk_distribution", "x": 2, "y": 0, "w": 1, "h": 2},
+        {"i": "recent_systems", "x": 0, "y": 2, "w": 3, "h": 2},
+        {"i": "deadlines", "x": 3, "y": 0, "w": 1, "h": 2},
+    ],
+    "hidden": [],
+}
 
 
 def _get_request_ip(request: Request) -> str:
@@ -313,3 +332,33 @@ def get_current_user_stats(
         risk_breakdown=risk_breakdown,
         compliant_systems=compliant_systems,
     )
+
+@users_router.get(
+    "/me/dashboard-layout",
+    response_model=DashboardLayoutResponse,
+)
+def get_dashboard_layout(
+    current_user: User = Depends(get_current_user),
+):
+    return current_user.dashboard_layout or DEFAULT_DASHBOARD_LAYOUT
+
+
+@users_router.put(
+    "/me/dashboard-layout",
+    response_model=DashboardLayoutResponse,
+)
+def update_dashboard_layout(
+    payload: DashboardLayoutUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    current_user.dashboard_layout = {
+        "layout": payload.layout,
+        "hidden": payload.hidden,
+    }
+
+    current_user = db.merge(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user.dashboard_layout
