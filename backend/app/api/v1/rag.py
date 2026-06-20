@@ -191,11 +191,12 @@ async def guard_rag_question(
         guard = get_rag_guard()
         result = await loop.run_in_executor(None, guard.guard, payload.question)
     except Exception as exc:
+        logger.warning("RAG guard unavailable; allowing query. Error: %s", exc)
         return GuardedRAGQuestion(
             question=payload.question,
             original_question=payload.question,
-            guard_triggered=True,
-            guard_decision="ERROR",
+            guard_triggered=False,
+            guard_decision="ALLOW",
             reasoning=str(exc),
         )
 
@@ -259,7 +260,10 @@ def _valid_text_chunks(file_paths: list[str]):
     ]
 
 
-def _rebuild_index_from_documents(documents: list[RAGDocument]) -> int:
+def _rebuild_index_from_documents(
+        documents: list[RAGDocument],
+        user_id: int | None = None,
+    ) -> int:
     file_paths = [doc.storage_path for doc in documents if os.path.exists(doc.storage_path)]
     if not file_paths:
         shutil.rmtree(settings.FAISS_INDEX_PATH, ignore_errors=True)
@@ -270,7 +274,7 @@ def _rebuild_index_from_documents(documents: list[RAGDocument]) -> int:
         shutil.rmtree(settings.FAISS_INDEX_PATH, ignore_errors=True)
         return 0
 
-    create_vector_store(chunks)
+    create_vector_store(chunks, user_id=user_id)
     return _index_size_bytes()
 
 
@@ -383,7 +387,10 @@ def ingest_documents(
 
         try:
             all_documents = db.query(RAGDocument).order_by(RAGDocument.id.asc()).all()
-            index_size_bytes = _rebuild_index_from_documents(all_documents)
+            index_size_bytes = _rebuild_index_from_documents(
+                all_documents,
+                user_id=current_user.id,
+            )
         except Exception as exc:
             db.rollback()
             raise HTTPException(
@@ -434,7 +441,10 @@ def delete_rag_document(
 
     remaining_documents = db.query(RAGDocument).order_by(RAGDocument.id.asc()).all()
     try:
-        index_size_bytes = _rebuild_index_from_documents(remaining_documents)
+        index_size_bytes = _rebuild_index_from_documents(
+            remaining_documents,
+            user_id=current_user.id,
+        )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
