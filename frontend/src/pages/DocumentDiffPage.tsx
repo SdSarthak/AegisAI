@@ -1,9 +1,6 @@
-'use client';
-
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, GitCompare, AlertCircle } from 'lucide-react'
-import ReactDiffViewer from 'react-diff-viewer-continued'
 import { documentsApi } from '../services/api'
 
 interface Version {
@@ -18,16 +15,148 @@ interface VersionWithContent extends Version {
   content: string
 }
 
+interface DiffHunkLine {
+  type: 'context' | 'added' | 'removed'
+  content: string
+}
+
+interface DiffHunk {
+  old_start: number
+  old_count: number
+  new_start: number
+  new_count: number
+  lines: DiffHunkLine[]
+}
+
 interface DiffData {
   v1: VersionWithContent
   v2: VersionWithContent
-  hunks: Array<{
-    old_start: number
-    old_count: number
-    new_start: number
-    new_count: number
-    lines: Array<{ type: string; content: string }>
-  }>
+  hunks: DiffHunk[]
+}
+
+function HunkViewer({ hunks, viewType }: { hunks: DiffHunk[]; viewType: 'split' | 'unified' }) {
+  if (viewType === 'unified') {
+    return (
+      <div className="font-mono text-sm leading-6 overflow-x-auto">
+        {hunks.map((hunk, hi) => (
+          <div key={hi}>
+            <div className="bg-gray-100 px-4 py-1 text-xs text-gray-500 font-semibold border-y">
+              @@ -{hunk.old_start},{hunk.old_count} +{hunk.new_start},{hunk.new_count} @@
+            </div>
+            {hunk.lines.map((line, li) => (
+              <div
+                key={li}
+                className={`flex px-4 ${
+                  line.type === 'added'
+                    ? 'bg-green-50 text-green-800'
+                    : line.type === 'removed'
+                    ? 'bg-red-50 text-red-800'
+                    : ''
+                }`}
+              >
+                <span className="w-8 text-gray-400 select-none shrink-0 text-right mr-2">
+                  {line.type === 'added' ? '+' : line.type === 'removed' ? '-' : ' '}
+                </span>
+                <span className="whitespace-pre-wrap break-all min-w-0">{line.content}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+        {hunks.length === 0 && (
+          <div className="px-4 py-8 text-center text-gray-400 text-sm">
+            No differences — the two versions are identical
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  const oldLines: { lineNum: number | null; content: string; type: string }[] = []
+  const newLines: { lineNum: number | null; content: string; type: string }[] = []
+  let oldLineNum = 0
+  let newLineNum = 0
+
+  for (const hunk of hunks) {
+    if (oldLines.length > 0 || newLines.length > 0) {
+      oldLines.push({ lineNum: null, content: '⋯', type: 'context' })
+      newLines.push({ lineNum: null, content: '⋯', type: 'context' })
+    }
+    oldLineNum = hunk.old_start
+    newLineNum = hunk.new_start
+    for (const line of hunk.lines) {
+      if (line.type === 'added') {
+        oldLines.push({ lineNum: null, content: '', type: 'empty' })
+        newLines.push({ lineNum: newLineNum++, content: line.content, type: 'added' })
+      } else if (line.type === 'removed') {
+        oldLines.push({ lineNum: oldLineNum++, content: line.content, type: 'removed' })
+        newLines.push({ lineNum: null, content: '', type: 'empty' })
+      } else {
+        oldLines.push({ lineNum: oldLineNum++, content: line.content, type: 'context' })
+        newLines.push({ lineNum: newLineNum++, content: line.content, type: 'context' })
+      }
+    }
+  }
+
+  if (hunks.length === 0) {
+    return (
+      <div className="px-4 py-8 text-center text-gray-400 text-sm">
+        No differences — the two versions are identical
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid grid-cols-2 font-mono text-sm leading-6">
+      <div className="border-r border-gray-200">
+        <div className="bg-gray-100 px-3 py-1 text-xs text-gray-500 font-semibold border-b text-center">
+          v1 (older)
+        </div>
+        {oldLines.map((line, i) => (
+          <div
+            key={i}
+            className={`flex ${
+              line.type === 'removed'
+                ? 'bg-red-50 text-red-800'
+                : line.type === 'empty'
+                ? 'bg-gray-50'
+                : ''
+            }`}
+          >
+            <span className="w-10 text-gray-400 select-none shrink-0 text-right px-1 border-r border-gray-100">
+              {line.lineNum ?? ''}
+            </span>
+            <span className="whitespace-pre-wrap break-all min-w-0 px-2">
+              {line.content}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div>
+        <div className="bg-gray-100 px-3 py-1 text-xs text-gray-500 font-semibold border-b text-center">
+          v2 (newer)
+        </div>
+        {newLines.map((line, i) => (
+          <div
+            key={i}
+            className={`flex ${
+              line.type === 'added'
+                ? 'bg-green-50 text-green-800'
+                : line.type === 'empty'
+                ? 'bg-gray-50'
+                : ''
+            }`}
+          >
+            <span className="w-10 text-gray-400 select-none shrink-0 text-right px-1 border-r border-gray-100">
+              {line.lineNum ?? ''}
+            </span>
+            <span className="whitespace-pre-wrap break-all min-w-0 px-2">
+              {line.content}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export default function DocumentDiffPage() {
@@ -213,15 +342,7 @@ export default function DocumentDiffPage() {
             </div>
           ) : diffData ? (
             <div className="border border-gray-200 rounded-xl overflow-hidden bg-white">
-              <ReactDiffViewer
-                oldValue={diffData.v1.content}
-                newValue={diffData.v2.content}
-                splitView={viewType === 'split'}
-                leftTitle={`v${diffData.v1.version_number}`}
-                rightTitle={`v${diffData.v2.version_number}`}
-                showDiffOnly={false}
-                extraLinesSurroundingDiff={3}
-              />
+              <HunkViewer hunks={diffData.hunks} viewType={viewType} />
             </div>
           ) : null}
         </>
