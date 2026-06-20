@@ -497,6 +497,10 @@ export const analyticsApi = {
     const { data } = await api.get('/analytics/summary')
     return data
   },
+  usage: async () => {
+    const { data } = await api.get('/analytics/usage')
+    return data
+  },
 }
 
 export const guardHistoryApi = {

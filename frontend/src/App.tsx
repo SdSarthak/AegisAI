@@ -10,6 +10,7 @@ import Classification from './pages/Classification'
 import Documents from './pages/Documents'
 import Notifications from './pages/Notifications'
 import Analytics from './pages/Analytics'
+import ApiUsagePage from './pages/ApiUsagePage'
 import GuardConsole from './pages/GuardConsole'
 import NotFound from './pages/NotFound'
 import { Toaster } from 'react-hot-toast'
@@ -72,6 +73,7 @@ function App() {
         >
           <Route index element={<Dashboard />} />
           <Route path="analytics" element={<Analytics />} />
+          <Route path="api-usage" element={<ApiUsagePage />} />
           <Route path="ai-systems" element={<AISystems />} />
           <Route path="classification/:systemId?" element={<Classification />} />
           <Route path="documents" element={<Documents />} />

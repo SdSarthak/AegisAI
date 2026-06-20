@@ -1,3 +1,4 @@
+import logging
 import time
 
 from sqlalchemy import create_engine, event
@@ -5,6 +6,13 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from sqlalchemy.pool import StaticPool
 from app.core.config import settings
 from app.core.telemetry import DB_QUERY_LATENCY
+
+logger = logging.getLogger(__name__)
+
+try:
+    import redis as redis_module
+except ImportError:
+    redis_module = None
 
 # SQLite needs check_same_thread=False; PostgreSQL ignores connect_args
 connect_args = {"check_same_thread": False} if settings.DATABASE_URL.startswith("sqlite") else {}
@@ -44,3 +52,22 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+_redis_client = None
+
+
+def get_redis():
+    """Return a shared Redis client, or None if Redis is not configured."""
+    global _redis_client
+    if not settings.REDIS_URL or redis_module is None:
+        return None
+    if _redis_client is None:
+        try:
+            _redis_client = redis_module.Redis.from_url(
+                settings.REDIS_URL, decode_responses=True
+            )
+        except Exception:
+            logger.exception("Failed to connect to Redis")
+            return None
+    return _redis_client

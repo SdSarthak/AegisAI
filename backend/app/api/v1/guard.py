@@ -25,6 +25,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
 
+from app.api.v1.analytics import track_api_usage, log_rate_limit_event
 from app.api.v1.notifications import create_notification
 from app.core.config import settings
 from app.core.database import SessionLocal, get_db
@@ -191,6 +192,7 @@ def scan_prompt(
     )
 
     if limited:
+        background_tasks.add_task(log_rate_limit_event, current_user.id, "Guard Scan")
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={
@@ -218,6 +220,8 @@ def scan_prompt(
 
         guard = LLMGuard(sanitization_level=san_level)
         result = guard.guard(request.prompt)
+
+        background_tasks.add_task(track_api_usage, current_user.id, "guard_scan")
 
         client_ip = http_request.client.host if http_request.client else None
         background_tasks.add_task(
@@ -302,6 +306,7 @@ class _ExplainRateLimitConfig:
 )
 async def explain_prompt(
     request: ExplainRequestModel,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -321,6 +326,7 @@ async def explain_prompt(
         window_seconds=_ExplainRateLimitConfig.WINDOW_SECONDS,
     )
     if limited:
+        background_tasks.add_task(log_rate_limit_event, current_user.id, "Guard Explain")
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={
@@ -372,6 +378,7 @@ async def explain_prompt(
             detail="An internal error occurred while generating the explanation.",
         )
 
+    background_tasks.add_task(track_api_usage, current_user.id, "guard_scan")
     return result
 
 @router.get("/health", tags=["LLM Guard"])
@@ -781,6 +788,7 @@ def bulk_scan_prompts(
     )
 
     if limited:
+        background_tasks.add_task(log_rate_limit_event, current_user.id, "Guard Scan")
         return JSONResponse(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             content={
@@ -854,6 +862,8 @@ def bulk_scan_prompts(
             )
 
         db.commit()
+
+        background_tasks.add_task(track_api_usage, current_user.id, "guard_scan")
 
         return BulkScanResponse(
             results=results,

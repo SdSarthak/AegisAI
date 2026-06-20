@@ -31,6 +31,7 @@ from html import escape as html_escape
 from urllib.parse import quote
 import re
 
+from app.api.v1.analytics import track_api_usage
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -349,6 +350,7 @@ def create_document(
     db.add(document)
     db.commit()
     db.refresh(document)
+    track_api_usage(current_user.id, "documents")
     return document
 
 
@@ -519,7 +521,7 @@ def update_document(
     document.content = body.content
     db.commit()
     db.refresh(document)
-    
+    track_api_usage(current_user.id, "documents")
     return document
 
 @router.post(
@@ -602,7 +604,7 @@ def generate_document(
     db.add(document)
     db.commit()
     db.refresh(document)
-
+    track_api_usage(current_user.id, "documents")
     return document
 
 
