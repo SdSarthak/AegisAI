@@ -162,6 +162,17 @@ export const authApi = {
   const { data } = await api.patch('/users/me', payload)
   return data
 },
+  getDashboardLayout: async () => {
+    const { data } = await api.get('/users/me/dashboard-layout')
+    return data
+  },
+  updateDashboardLayout: async (payload: {
+    layout: Array<{ i: string; x: number; y: number; w: number; h: number }>
+    hidden: string[]
+  }) => {
+    const { data } = await api.put('/users/me/dashboard-layout', payload)
+    return data
+  },
 }
 
 // AI Systems API
