@@ -156,16 +156,22 @@ def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = N
         db.refresh(log)
 
         if log.decision == "block":
-            create_notification(
-                db=db,
-                user_id=user_id,
-                notification_type=NotificationType.GUARD_BLOCK.value,
-                title="Prompt blocked by LLM Guard",
-                message="A prompt was blocked because it matched high-risk guard rules.",
-                resource_type="guard_scan",
-                resource_id=log.id,
-            )
-            db.commit()
+            try:
+                create_notification(
+                    db=db,
+                    user_id=user_id,
+                    notification_type=NotificationType.GUARD_BLOCK.value,
+                    title="Prompt blocked by LLM Guard",
+                    message="A prompt was blocked because it matched high-risk guard rules.",
+                    resource_type="guard_scan",
+                    resource_id=log.id,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                logger.warning("Failed to create block notification for scan %d", log.id)
+                db.add(log)
+                db.commit()
 
     except Exception:
         db.rollback()

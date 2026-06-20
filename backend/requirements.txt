@@ -57,6 +57,9 @@ opentelemetry-sdk==1.22.0
 
 prometheus-fastapi-instrumentator==6.1.0
 
+# ── Task Scheduling ──────────────────────────────────────────────────────────
+apscheduler>=3.10.4
+
 # ── PDF Utilities ────────────────────────────────────────────────────────────────
 pdfplumber==0.10.3
 pypdf>=3.0.0            # required by LangChain's PyPDFLoader
