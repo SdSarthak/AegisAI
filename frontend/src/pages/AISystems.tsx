@@ -1,5 +1,6 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import React, { useState } from 'react'
+import {
+ useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Download } from 'lucide-react'
@@ -134,8 +135,8 @@ export default function AISystems() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">AI Systems</h1>
-          <p className="text-gray-600">Manage your AI systems for compliance tracking</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Systems</h1>
+          <p className="text-gray-600 dark:text-gray-400">Manage your AI systems for compliance tracking</p>
         </div>
         <div className="flex items-center gap-3">
           <button
@@ -159,7 +160,7 @@ export default function AISystems() {
       </div>
 
       {/* Search and Filters */}
-      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+      <div className="flex flex-col md:flex-row gap-4 bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" aria-hidden="true" />
           <input

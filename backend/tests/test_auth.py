@@ -40,6 +40,21 @@ def test_register_weak_password(client):
     assert isinstance(data["detail"], list) or "Password must contain" in str(data["detail"])
 
 
+def test_register_password_over_72_bytes_returns_422(client):
+    """Test registration rejects passwords that exceed bcrypt's 72-byte limit."""
+    long_password = ("é" * 36) + "A1!"
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "longpass@example.com",
+            "password": long_password,
+        }
+    )
+
+    assert response.status_code == 422
+    assert "72 bytes" in str(response.json())
+
+
 def test_register_duplicate_email(client):
     """Test registration fails when email already exists."""
     user_data = {
@@ -224,3 +239,66 @@ def test_register_password_too_long(client):
         }
     )
     assert response.status_code == 422
+
+
+def test_login_rate_limit_triggers_after_five_failures(client):
+    """Test repeated login failures from the same email/IP return 429."""
+    email = "ratelimit-login@example.com"
+    client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": VALID_TEST_PASSWORD,
+        },
+    )
+
+    for _ in range(5):
+        response = client.post(
+            "/api/v1/auth/login",
+            data={
+                "username": email,
+                "password": "WrongPass123!",
+            },
+        )
+        assert response.status_code == 401
+
+    response = client.post(
+        "/api/v1/auth/login",
+        data={
+            "username": email,
+            "password": "WrongPass123!",
+        },
+    )
+    assert response.status_code == 429
+    detail = response.json()["detail"]
+    assert detail["field"] == "general"
+    assert "Too many login attempts" in detail["message"]
+    assert "Retry-After" in response.headers
+    assert int(response.headers["Retry-After"]) >= 1
+
+
+def test_register_rate_limit_triggers_after_three_attempts(client):
+    """Test repeated registrations from the same IP return 429 on the fourth attempt."""
+    for index in range(3):
+        response = client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": f"ratelimit-register-{index}@example.com",
+                "password": VALID_TEST_PASSWORD,
+            },
+        )
+        assert response.status_code == 201
+
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "ratelimit-register-3@example.com",
+            "password": VALID_TEST_PASSWORD,
+        },
+    )
+    assert response.status_code == 429
+    detail = response.json()["detail"]
+    assert detail["field"] == "general"
+    assert "Too many registration attempts" in detail["message"]
+    assert "Retry-After" in response.headers
+    assert int(response.headers["Retry-After"]) >= 1

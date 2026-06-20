@@ -48,18 +48,7 @@ def list_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List the current user's notifications with optional unread filtering.
-
-    Args:
-        unread_only: If true, return only unread notifications.
-        skip: Items to skip.
-        limit: Maximum number of notifications to return per page.
-        current_user: Authenticated user whose notifications are requested.
-        db: Database session used to query notifications.
-
-    Returns:
-        PaginatedResponse containing the user's notifications.
-    """
+    """List the current user's notifications with optional unread filtering."""
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
 
     if unread_only:
@@ -81,6 +70,25 @@ def list_notifications(
         limit=limit,
     )
 
+@router.get("/unread-count")
+def get_unread_count(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the number of unread notifications for the current user."""
+
+    unread_count = (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == current_user.id,
+            Notification.is_read.is_(False),
+        )
+        .count()
+    )
+
+    return {
+        "unread_count": unread_count
+    }
 
 @router.post("/read", status_code=status.HTTP_204_NO_CONTENT)
 def mark_notifications_read(
@@ -88,16 +96,7 @@ def mark_notifications_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Mark the specified notifications as read.
-
-    Args:
-        body: Payload containing the notification IDs to mark read.
-        current_user: Authenticated user who owns the notifications.
-        db: Database session used to update the matching rows.
-
-    Returns:
-        None. The endpoint responds with HTTP 204 No Content.
-    """
+    """Mark the specified notifications as read."""
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.id.in_(body.ids),
@@ -109,6 +108,49 @@ def mark_notifications_read(
     db.commit()
     return None
 
+@router.post("/read-all", status_code=status.HTTP_204_NO_CONTENT)
+def mark_all_notifications_read(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mark all notifications for the current user as read."""
+
+    (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == current_user.id,
+            Notification.is_read.is_(False),
+        )
+        .update(
+            {Notification.is_read: True},
+            synchronize_session=False,
+        )
+    )
+
+    db.commit()
+
+    return None
+
+@router.delete("/read", status_code=status.HTTP_204_NO_CONTENT)
+def delete_read_notifications(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete all read notifications belonging to the current user."""
+
+    (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == current_user.id,
+            Notification.is_read.is_(True),
+        )
+        .delete(synchronize_session=False)
+    )
+
+    db.commit()
+
+    return None
+
 
 @router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_notification(
@@ -116,19 +158,7 @@ def delete_notification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a notification owned by the current user.
-
-    Args:
-        notification_id: ID of the notification to delete.
-        current_user: Authenticated user who must own the notification.
-        db: Database session used to locate and delete the notification.
-
-    Returns:
-        None. The endpoint responds with HTTP 204 No Content.
-
-    Raises:
-        HTTPException: If the notification does not exist or belongs to another user.
-    """
+    """Delete a notification owned by the current user."""
     notification = (
         db.query(Notification)
         .filter(

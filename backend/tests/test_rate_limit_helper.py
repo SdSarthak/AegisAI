@@ -1,7 +1,7 @@
 """Unit tests for the shared rate limiter helper."""
 
 from types import SimpleNamespace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.core import rate_limit
 from app.core.config import settings
@@ -200,3 +200,34 @@ def test_distributed_rate_limiter_circuit_breaker_recovery(monkeypatch):
     assert limited is False
     assert limiter.cb_state == "CLOSED"
     assert limiter.consecutive_failures == 0
+
+
+def test_distributed_rate_limiter_cleans_up_stale_local_keys(monkeypatch):
+    """Expired in-memory keys are removed during the periodic cleanup sweep."""
+    fake_now = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    class FrozenDateTime(datetime):
+        current = fake_now
+
+        @classmethod
+        def now(cls, tz=None):
+            return cls.current
+
+    monkeypatch.setattr(rate_limit, "datetime", FrozenDateTime)
+
+    limiter = rate_limit.DistributedRateLimiter(cleanup_interval=1)
+    limited, retry_after = limiter.check_and_consume(
+        key="stale:key",
+        limit=1,
+        window_seconds=60,
+        fail_closed=False,
+    )
+    assert limited is False
+    assert retry_after == 0
+
+    FrozenDateTime.current = fake_now + timedelta(seconds=61)
+
+    removed = limiter.cleanup_stale_local_attempts()
+
+    assert removed == 1
+    assert limiter.cleanup_stale_local_attempts() == 0

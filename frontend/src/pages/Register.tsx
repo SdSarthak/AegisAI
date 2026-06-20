@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
 import { authApi } from '../services/api'
@@ -140,30 +140,30 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white rounded-xl shadow-lg">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
         <div className="text-center">
           <div className="flex justify-center">
             <Shield className="w-12 h-12 text-primary-600" />
           </div>
-          <h2 className="mt-4 text-3xl font-bold text-gray-900">
+          <h2 className="mt-4 text-3xl font-bold text-gray-900 dark:text-white">
             Create Account
           </h2>
-          <p className="mt-2 text-gray-600">Start your compliance journey</p>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">Start your compliance journey</p>
         </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
-          {errors.some((e) => e.field === 'general') && (
+          {errors.some((e: ValidationError) => e.field === 'general') && (
             <div className="p-3 flex items-start gap-3 text-sm bg-red-50 rounded-lg border border-red-200">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="text-red-700">
-                {errors.find((e) => e.field === 'general')?.message}
+                {errors.find((e: ValidationError) => e.field === 'general')?.message}
               </div>
             </div>
           )}
 
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Email
             </label>
             <input
@@ -171,16 +171,16 @@ export default function Register() {
               type="email"
               required
               value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, email: e.target.value })}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e) => e.field === 'email')
+                errors.some((e: ValidationError) => e.field === 'email')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e) => e.field === 'email') && (
+            {errors.some((e: ValidationError) => e.field === 'email') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e) => e.field === 'email')?.message}
+                {errors.find((e: ValidationError) => e.field === 'email')?.message}
               </p>
             )}
           </div>
@@ -195,18 +195,18 @@ export default function Register() {
                 type={showPassword ? 'text' : 'password'}
                 required
                 value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, password: e.target.value })}
                 onFocus={() => setShowPasswordRequirements(true)}
                 onBlur={() => setShowPasswordRequirements(false)}
                 className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                  errors.some((e) => e.field === 'password')
+                  errors.some((e: ValidationError) => e.field === 'password')
                     ? 'border-red-300 bg-red-50'
                     : 'border-gray-300'
                 }`}
               />
               <button
                 type="button"
-                onMouseDown={(e) => e.preventDefault()}
+                onMouseDown={(e: React.MouseEvent) => e.preventDefault()}
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
               >
@@ -216,8 +216,8 @@ export default function Register() {
 
             {/* Password strength requirements feedback */}
             {(showPasswordRequirements || formData.password) && (
-              <div className="mt-3 space-y-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <p className="text-xs font-semibold text-gray-700">
+              <div className="mt-3 space-y-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                   Password requirements:
                 </p>
                 <div className="space-y-1">
@@ -241,9 +241,9 @@ export default function Register() {
               </div>
             )}
 
-            {errors.some((e) => e.field === 'password') && (
+            {errors.some((e: ValidationError) => e.field === 'password') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e) => e.field === 'password')?.message}
+                {errors.find((e: ValidationError) => e.field === 'password')?.message}
               </p>
             )}
           </div>
@@ -257,16 +257,16 @@ export default function Register() {
               type="text"
               required
               value={formData.full_name}
-              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, full_name: e.target.value })}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e) => e.field === 'full_name')
+                errors.some((e: ValidationError) => e.field === 'full_name')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e) => e.field === 'full_name') && (
+            {errors.some((e: ValidationError) => e.field === 'full_name') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e) => e.field === 'full_name')?.message}
+                {errors.find((e: ValidationError) => e.field === 'full_name')?.message}
               </p>
             )}
           </div>
@@ -280,16 +280,16 @@ export default function Register() {
               type="text"
               required
               value={formData.company_name}
-              onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, company_name: e.target.value })}
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e) => e.field === 'company_name')
+                errors.some((e: ValidationError) => e.field === 'company_name')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e) => e.field === 'company_name') && (
+            {errors.some((e: ValidationError) => e.field === 'company_name') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e) => e.field === 'company_name')?.message}
+                {errors.find((e: ValidationError) => e.field === 'company_name')?.message}
               </p>
             )}
           </div>
@@ -303,7 +303,7 @@ export default function Register() {
           </button>
         </form>
 
-        <p className="text-center text-sm text-gray-600">
+        <p className="text-center text-sm text-gray-600 dark:text-gray-400">
           Already have an account?{' '}
           <Link to="/login" className="text-primary-600 hover:text-primary-500">
             Sign in

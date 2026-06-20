@@ -1,8 +1,10 @@
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 import BackendStatus from '../components/BackendStatus'
+import { formatLastUpdated } from '../utils/date'
 
 export default function Dashboard() {
   const {
@@ -40,6 +42,14 @@ export default function Dashboard() {
     (documentsErrorDetail instanceof Error && documentsErrorDetail.message) ||
     'Unable to load dashboard data.'
 
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+
+  useEffect(() => {
+    if (!isLoading && !hasError && (systemsData !== undefined || documentsData !== undefined)) {
+      setLastUpdated(new Date())
+    }
+  }, [isLoading, hasError, systemsData, documentsData])
+
   const stats = [
     {
       name: 'AI Systems',
@@ -73,6 +83,11 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
           <p className="text-gray-600 dark:text-gray-400">Overview of your EU AI Act compliance status</p>
+          {lastUpdated && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Last Updated: {formatLastUpdated(lastUpdated)}
+            </p>
+          )}
         </div>
         <BackendStatus />
       </div>
@@ -217,3 +232,4 @@ export default function Dashboard() {
     </div>
   )
 }
+

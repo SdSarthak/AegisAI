@@ -1,25 +1,60 @@
+"""
+Document Generation API — compliance document creation, management, and export.
+
+This module provides endpoints for:
+  - POST /documents/generate  : Generate AI compliance documents using LLM
+  - GET  /documents/           : List all documents for the authenticated user
+  - GET  /documents/{id}       : Retrieve a specific document
+  - PATCH /documents/{id}      : Update document content or metadata
+  - DELETE /documents/{id}     : Delete a document
+  - GET  /documents/{id}/pdf   : Export document as PDF
+  - POST /documents/{id}/share : Generate a shareable link for a document
+
+Dependencies:
+  - reportlab  : PDF generation
+  - SQLAlchemy : ORM session for Document persistence
+  - pydantic   : request/response schema validation
+  - python-jose: JWT token for document sharing
+"""
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from jose import jwt, JWTError
+from jose.exceptions import ExpiredSignatureError
+
+
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from typing import List
 from io import BytesIO
+from html import escape as html_escape
+from urllib.parse import quote
+import difflib
 import re
-import html
-import urllib.parse
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem
-from app.models.document import Document, DocumentType, DocumentStatus
+from app.models.document import Document, DocumentVersion, DocumentType, DocumentStatus
+from app.modules.llm.document_generator import generate_compliance_narrative
 from app.schemas.document import (
     DocumentCreate,
     DocumentResponse,
     DocumentGenerateRequest,
+    DocumentShareResponse,
+    DocumentUpdateRequest,
     DocumentTemplateResponse,
     DocumentUpdateRequest,
+    DocumentVersionResponse,
+    DocumentVersionWithContent,
+    DocumentDiffResponse,
+    DiffHunk,
+    DiffHunkLine,
 )
 from app.schemas.pagination import PaginatedResponse
+from app.modules.llm.document_generator import generate_compliance_narrative
 
 # PDF generation
 from reportlab.lib.pagesizes import letter, A4
@@ -28,7 +63,49 @@ from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak
 from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
+
 router = APIRouter()
+
+def create_share_token(document_id: int):
+    expire = datetime.now(timezone.utc) + timedelta(
+        days=settings.DOCUMENT_SHARE_EXPIRE_DAYS
+    )
+
+    payload = {
+        "document_id": document_id,
+        "type": "document_share",
+        "exp": expire
+    }
+
+    token = jwt.encode(
+        payload,
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM
+    )
+
+    return token
+
+def _escape_pdf_text(value: str) -> str:
+    """Escape user-controlled text before ReportLab Paragraph parses it."""
+    return html_escape(value, quote=False)
+
+
+def _render_inline_markdown(value: str) -> str:
+    """Render the small markdown subset supported by PDF export safely."""
+    escaped = _escape_pdf_text(value.strip())
+    return re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', escaped)
+
+
+def _safe_pdf_filename(title: str) -> str:
+    """Return a header-safe PDF filename derived from a document title."""
+    filename = re.sub(r"[\x00-\x1f\x7f]", "", title or "").strip()
+    filename = re.sub(r'[/\\:*?"<>|]+', "_", filename)
+    filename = re.sub(r"\s+", " ", filename).strip(" ._")
+
+    if not filename:
+        filename = "document"
+
+    return f"{filename[:120]}.pdf"
 
 
 # Document templates for generation
@@ -252,16 +329,7 @@ def create_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new document for the authenticated user.
-
-    Args:
-        doc_data: Document creation payload.
-        db: Database session used to persist the new document.
-        current_user: Authenticated user who will own the document.
-
-    Returns:
-        The created document serialized as DocumentResponse.
-    """
+    """Create a new document for the authenticated user."""
     if doc_data.ai_system_id is not None:
         ai_system = (
             db.query(AISystem)
@@ -297,17 +365,7 @@ def list_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List the current user's documents with pagination.
-
-    Args:
-        skip: Number of documents to skip.
-        limit: Maximum number of documents to return per page.
-        db: Database session used to query documents.
-        current_user: Authenticated user whose documents are being listed.
-
-    Returns:
-        PaginatedResponse containing the user's documents.
-    """
+    """List the current user's documents with pagination."""
     base_query = db.query(Document).filter(Document.owner_id == current_user.id)
     total = base_query.count()
 
@@ -315,6 +373,92 @@ def list_documents(
     return PaginatedResponse(items=documents, total=total, skip=skip, limit=limit)
 
 
+@router.get("/share/{token}", response_model=DocumentResponse)
+def get_shared_document(
+    token: str,
+    db: Session = Depends(get_db)
+):
+    """Access shared document without authentication."""
+
+    try:
+        payload = jwt.decode(
+            token,
+            settings.SECRET_KEY,
+            algorithms=[settings.ALGORITHM]
+        )
+
+    except ExpiredSignatureError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Share link expired"
+        )
+
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid share token"
+        )
+
+    if payload.get("type") != "document_share":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token type"
+        )
+
+    document_id = payload.get("document_id")
+
+    if not document_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid token payload"
+        )
+
+    document = db.query(Document).filter(
+        Document.id == document_id
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    if hasattr(document, "is_deleted") and document.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Share link revoked"
+        )
+
+    return document
+
+@router.post(
+    "/{document_id}/share",
+    response_model=DocumentShareResponse
+)
+def share_document(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Generate share link for a document."""
+
+    document = db.query(Document).filter(
+        Document.id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+
+    if not document:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    token = create_share_token(document.id)
+
+    return {
+        "share_url": f"/api/v1/documents/share/{token}",
+        "expires_in_days": settings.DOCUMENT_SHARE_EXPIRE_DAYS
+    }
 @router.get("/templates", response_model=List[DocumentTemplateResponse])
 def list_document_templates(
     current_user: User = Depends(get_current_user),
@@ -344,19 +488,7 @@ def get_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return a single document owned by the current user.
-
-    Args:
-        document_id: ID of the document to retrieve.
-        db: Database session used to query the document.
-        current_user: Authenticated user who must own the document.
-
-    Returns:
-        The requested document serialized as DocumentResponse.
-
-    Raises:
-        HTTPException: If the document does not exist or belongs to another user.
-    """
+    """Return a single document owned by the current user."""
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -369,6 +501,120 @@ def get_document(
         )
     return document
 
+@router.get("/{document_id}/versions", response_model=list[DocumentVersionResponse])
+def list_document_versions(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all versions of a document."""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return db.query(DocumentVersion).filter(
+        DocumentVersion.document_id == document_id
+    ).order_by(DocumentVersion.created_at.asc()).all()
+
+
+@router.get("/{document_id}/diff", response_model=DocumentDiffResponse)
+def get_document_diff(
+    document_id: int,
+    v1: int = Query(..., description="First version ID"),
+    v2: int = Query(..., description="Second version ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Compare two versions of a document and return a structured diff."""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    ver1 = db.query(DocumentVersion).filter(
+        DocumentVersion.id == v1,
+        DocumentVersion.document_id == document_id,
+    ).first()
+    ver2 = db.query(DocumentVersion).filter(
+        DocumentVersion.id == v2,
+        DocumentVersion.document_id == document_id,
+    ).first()
+
+    if not ver1 or not ver2:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+
+    lines1 = ver1.content.splitlines(keepends=True)
+    lines2 = ver2.content.splitlines(keepends=True)
+
+    diff = difflib.unified_diff(
+        lines1, lines2,
+        fromfile=f'v{ver1.version_number}',
+        tofile=f'v{ver2.version_number}',
+        n=3,
+    )
+
+    hunks = _parse_unified_diff(list(diff))
+
+    return DocumentDiffResponse(
+        v1=DocumentVersionWithContent(
+            id=ver1.id,
+            document_id=ver1.document_id,
+            version_number=ver1.version_number,
+            content=ver1.content,
+            created_at=ver1.created_at,
+            regeneration_reason=ver1.regeneration_reason,
+        ),
+        v2=DocumentVersionWithContent(
+            id=ver2.id,
+            document_id=ver2.document_id,
+            version_number=ver2.version_number,
+            content=ver2.content,
+            created_at=ver2.created_at,
+            regeneration_reason=ver2.regeneration_reason,
+        ),
+        hunks=hunks,
+    )
+
+
+def _parse_unified_diff(diff_lines: list[str]) -> list[DiffHunk]:
+    """Parse unified diff output into a structured list of hunks."""
+    hunks: list[DiffHunk] = []
+    current_hunk = None
+
+    for line in diff_lines:
+        if line.startswith('---') or line.startswith('+++'):
+            continue
+        if line.startswith('@@'):
+            if current_hunk is not None:
+                hunks.append(current_hunk)
+            match = re.match(r'@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@', line)
+            if match:
+                current_hunk = DiffHunk(
+                    old_start=int(match.group(1)),
+                    old_count=int(match.group(2)) if match.group(2) else 1,
+                    new_start=int(match.group(3)),
+                    new_count=int(match.group(4)) if match.group(4) else 1,
+                    lines=[],
+                )
+            continue
+        if current_hunk is not None:
+            if line.startswith(' '):
+                current_hunk.lines.append(DiffHunkLine(type="context", content=line[1:]))
+            elif line.startswith('+'):
+                current_hunk.lines.append(DiffHunkLine(type="added", content=line[1:]))
+            elif line.startswith('-'):
+                current_hunk.lines.append(DiffHunkLine(type="removed", content=line[1:]))
+
+    if current_hunk is not None:
+        hunks.append(current_hunk)
+
+    return hunks
+
+
 @router.put("/{document_id}", response_model=DocumentResponse)
 def update_document(
     document_id: int,
@@ -376,20 +622,7 @@ def update_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update the content of an existing document.
-
-    Args:
-        document_id: ID of the document to update.
-        body: Payload containing the replacement document content.
-        db: Database session used to load and persist the document.
-        current_user: Authenticated user who must own the document.
-
-    Returns:
-        The updated document serialized as DocumentResponse.
-
-    Raises:
-        HTTPException: If the document does not exist or belongs to another user.
-    """
+    """Update the content of an existing document."""
     # Fetch document
     document = db.query(Document).filter(
         Document.id == document_id,
@@ -419,19 +652,7 @@ def generate_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate a compliance document for a user's AI system.
-
-    Args:
-        request: Payload specifying the AI system and document type.
-        db: Database session used to look up the AI system and save the result.
-        current_user: Authenticated user who must own the AI system.
-
-    Returns:
-        The generated document serialized as DocumentResponse.
-
-    Raises:
-        HTTPException: If the AI system or template is missing.
-    """
+    """Generate a compliance document for a user's AI system."""
     # Get the AI system
     ai_system = (
         db.query(AISystem)
@@ -481,7 +702,7 @@ def generate_document(
             sector=ai_system.sector or "Not specified",
             description=ai_system.description or "No description provided",
             risk_level=ai_system.risk_level.value if ai_system.risk_level else "Not assessed",
-            date=datetime.utcnow().strftime("%Y-%m-%d"),
+            date=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
             company_name=current_user.company_name or "Not specified",
             classification_reasons="See risk assessment details",
             recommendations="Based on risk assessment",
@@ -511,19 +732,7 @@ def delete_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a document owned by the current user.
-
-    Args:
-        document_id: ID of the document to delete.
-        db: Database session used to locate and delete the document.
-        current_user: Authenticated user who must own the document.
-
-    Returns:
-        None. The endpoint responds with HTTP 204 No Content.
-
-    Raises:
-        HTTPException: If the document does not exist or belongs to another user.
-    """
+    """Delete a document owned by the current user."""
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -545,19 +754,7 @@ def export_document_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Export a document as a PDF attachment.
-
-    Args:
-        document_id: ID of the document to export.
-        db: Database session used to load the document.
-        current_user: Authenticated user who must own the document.
-
-    Returns:
-        StreamingResponse containing the generated PDF bytes.
-
-    Raises:
-        HTTPException: If the document is missing, has no content, or PDF generation fails.
-    """
+    """Export a document as a PDF attachment."""
     # Retrieve the document
     document = db.query(Document).filter(
         Document.id == document_id,
@@ -612,7 +809,7 @@ def export_document_pdf(
     )
     
     # Add title
-    story.append(Paragraph(html.escape(document.title), title_style))
+    story.append(Paragraph(_escape_pdf_text(document.title), title_style))
     story.append(Spacer(1, 0.2*inch))
     
     # Add metadata
@@ -643,7 +840,7 @@ def export_document_pdf(
                 spaceAfter=12,
                 spaceBefore=12,
             )
-            story.append(Paragraph(html.escape(line.replace('# ', '')), heading_style))
+            story.append(Paragraph(_escape_pdf_text(line[2:]), heading_style))
         elif line.startswith('## '):
             # Heading 2
             heading_style = ParagraphStyle(
@@ -654,7 +851,7 @@ def export_document_pdf(
                 spaceAfter=10,
                 spaceBefore=10,
             )
-            story.append(Paragraph(html.escape(line.replace('## ', '')), heading_style))
+            story.append(Paragraph(_escape_pdf_text(line[3:]), heading_style))
         elif line.startswith('### '):
             # Heading 3
             heading_style = ParagraphStyle(
@@ -665,15 +862,12 @@ def export_document_pdf(
                 spaceAfter=8,
                 spaceBefore=8,
             )
-            story.append(Paragraph(html.escape(line.replace('### ', '')), heading_style))
+            story.append(Paragraph(_escape_pdf_text(line[4:]), heading_style))
         elif line.startswith('- '):
             # Bullet point
-            story.append(Paragraph('• ' + html.escape(line.replace('- ', '')), body_style))
+            story.append(Paragraph('• ' + _escape_pdf_text(line[2:]), body_style))
         else:
-            # Handle inline bold with regex after escaping user input
-            escaped_line = html.escape(line.strip())
-            processed_line = re.sub(r'\*\*(.+?)\*\*', r'<b>\1</b>', escaped_line)
-            story.append(Paragraph(processed_line, body_style))
+            story.append(Paragraph(_render_inline_markdown(line), body_style))
     
     # Build PDF
     doc.build(story)
@@ -695,17 +889,15 @@ def export_document_pdf(
             detail="PDF generation failed - PDF too small"
         )
     
-    # Generate RFC 5987/6266 safe filename formatting
-    encoded_filename = urllib.parse.quote(f"{document.title}.pdf")
-    safe_title = "".join(c for c in document.title if c.isalnum() or c in "._- ")
-    if not safe_title.strip():
-        safe_title = "document"
-    safe_filename = f"{safe_title}.pdf"
-    content_disposition = f'attachment; filename="{safe_filename}"; filename*=UTF-8\'\'{encoded_filename}'
-    
     # Return PDF response
+    filename = _safe_pdf_filename(document.title)
     return StreamingResponse(
         BytesIO(pdf_bytes),
         media_type="application/pdf",
-        headers={"Content-Disposition": content_disposition}
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{filename}"; '
+                f"filename*=UTF-8''{quote(filename)}"
+            )
+        }
     )
