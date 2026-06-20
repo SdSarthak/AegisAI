@@ -191,12 +191,11 @@ async def guard_rag_question(
         guard = get_rag_guard()
         result = await loop.run_in_executor(None, guard.guard, payload.question)
     except Exception as exc:
-        logger.warning("RAG guard unavailable; allowing query. Error: %s", exc)
         return GuardedRAGQuestion(
             question=payload.question,
             original_question=payload.question,
-            guard_triggered=False,
-            guard_decision="ALLOW",
+            guard_triggered=True,
+            guard_decision="ERROR",
             reasoning=str(exc),
         )
 
