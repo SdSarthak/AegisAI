@@ -4,6 +4,9 @@ import { useAuthStore } from '../stores/authStore'
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
 const API_BASE_URL = configuredApiBaseUrl ? configuredApiBaseUrl.replace(/\/$/, '') : '/api/v1'
 
+// Tracks whether the global 401-response handler is currently executing.
+let isUnauthorizedHandlerRunning = false
+
 function buildApiUrl(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   return `${API_BASE_URL}${normalizedPath}`
@@ -36,7 +39,13 @@ api.interceptors.response.use(
 }
     const url = error.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
-    if (error.response?.status === 401 && !isAuthEndpoint) {
+    const isUnAuthorized = error.response?.status === 401 && !isAuthEndpoint
+
+    if (isUnAuthorized && !isUnauthorizedHandlerRunning) {
+
+      // Block concurrent 401 responses from entering the unauthorized handler.
+      isUnauthorizedHandlerRunning = true
+
       // Logout and navigate to login without forcing a full page reload.
       useAuthStore.getState().logout()
       try {
@@ -46,6 +55,10 @@ api.interceptors.response.use(
       } catch (e) {
         // Fallback: if SPA navigation fails, perform a safe replace.
         window.location.replace('/login')
+      }
+      finally {
+        // Allow future unauthorized responses after current logout/navigation flow has finished.
+        isUnauthorizedHandlerRunning = false
       }
     }
     return Promise.reject(error)
