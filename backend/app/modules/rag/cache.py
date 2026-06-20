@@ -12,13 +12,13 @@ def normalize_question(question: str) -> str:
     return " ".join(question.lower().strip().split())
 
 
-def question_hash(question: str) -> str:
+def question_hash(question: str, user_id: int) -> str:
     normalized = normalize_question(question)
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return hashlib.sha256(f"{user_id}:{normalized}".encode("utf-8")).hexdigest()
 
 
-def get_cached_answer(question: str) -> dict[str, Any] | None:
-    key = question_hash(question)
+def get_cached_answer(question: str, user_id: int) -> dict[str, Any] | None:
+    key = question_hash(question, user_id)
     cached = _CACHE.get(key)
 
     if not cached:
@@ -31,8 +31,8 @@ def get_cached_answer(question: str) -> dict[str, Any] | None:
     return cached["response"]
 
 
-def set_cached_answer(question: str, response: dict[str, Any]) -> None:
-    key = question_hash(question)
+def set_cached_answer(question: str, user_id: int, response: dict[str, Any]) -> None:
+    key = question_hash(question, user_id)
     _CACHE[key] = {
         "response": response,
         "expires_at": time.time() + TTL_SECONDS,

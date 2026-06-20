@@ -519,7 +519,10 @@ def query_knowledge_base(
 
         from app.core.database import Base
 
-        cached_response = get_cached_answer(guarded_question.question)
+        cached_response = get_cached_answer(
+            guarded_question.question,
+            current_user.id,
+        )
         if cached_response:
             return RAGQueryResponse(**cached_response)
 
@@ -617,7 +620,11 @@ def query_knowledge_base(
             flagged_reason=warning,
         )
 
-        set_cached_answer(guarded_question.question, response.model_dump())
+        set_cached_answer(
+            guarded_question.question,
+            current_user.id,
+            response.model_dump(),
+        )
         return response
     except HTTPException:
         raise
