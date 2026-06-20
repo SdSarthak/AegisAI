@@ -29,6 +29,7 @@ from typing import List
 from io import BytesIO
 from html import escape as html_escape
 from urllib.parse import quote
+import difflib
 import re
 
 from app.api.v1.analytics import track_api_usage
@@ -37,7 +38,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem
-from app.models.document import Document, DocumentType, DocumentStatus
+from app.models.document import Document, DocumentVersion, DocumentType, DocumentStatus
 from app.modules.llm.document_generator import generate_compliance_narrative
 from app.schemas.document import (
     DocumentCreate,
@@ -47,6 +48,11 @@ from app.schemas.document import (
     DocumentUpdateRequest,
     DocumentTemplateResponse,
     DocumentUpdateRequest,
+    DocumentVersionResponse,
+    DocumentVersionWithContent,
+    DocumentDiffResponse,
+    DiffHunk,
+    DiffHunkLine,
 )
 from app.schemas.pagination import PaginatedResponse
 from app.modules.llm.document_generator import generate_compliance_narrative
@@ -496,6 +502,120 @@ def get_document(
             status_code=status.HTTP_404_NOT_FOUND, detail="Document not found"
         )
     return document
+
+@router.get("/{document_id}/versions", response_model=list[DocumentVersionResponse])
+def list_document_versions(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all versions of a document."""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return db.query(DocumentVersion).filter(
+        DocumentVersion.document_id == document_id
+    ).order_by(DocumentVersion.created_at.asc()).all()
+
+
+@router.get("/{document_id}/diff", response_model=DocumentDiffResponse)
+def get_document_diff(
+    document_id: int,
+    v1: int = Query(..., description="First version ID"),
+    v2: int = Query(..., description="Second version ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Compare two versions of a document and return a structured diff."""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    ver1 = db.query(DocumentVersion).filter(
+        DocumentVersion.id == v1,
+        DocumentVersion.document_id == document_id,
+    ).first()
+    ver2 = db.query(DocumentVersion).filter(
+        DocumentVersion.id == v2,
+        DocumentVersion.document_id == document_id,
+    ).first()
+
+    if not ver1 or not ver2:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+
+    lines1 = ver1.content.splitlines(keepends=True)
+    lines2 = ver2.content.splitlines(keepends=True)
+
+    diff = difflib.unified_diff(
+        lines1, lines2,
+        fromfile=f'v{ver1.version_number}',
+        tofile=f'v{ver2.version_number}',
+        n=3,
+    )
+
+    hunks = _parse_unified_diff(list(diff))
+
+    return DocumentDiffResponse(
+        v1=DocumentVersionWithContent(
+            id=ver1.id,
+            document_id=ver1.document_id,
+            version_number=ver1.version_number,
+            content=ver1.content,
+            created_at=ver1.created_at,
+            regeneration_reason=ver1.regeneration_reason,
+        ),
+        v2=DocumentVersionWithContent(
+            id=ver2.id,
+            document_id=ver2.document_id,
+            version_number=ver2.version_number,
+            content=ver2.content,
+            created_at=ver2.created_at,
+            regeneration_reason=ver2.regeneration_reason,
+        ),
+        hunks=hunks,
+    )
+
+
+def _parse_unified_diff(diff_lines: list[str]) -> list[DiffHunk]:
+    """Parse unified diff output into a structured list of hunks."""
+    hunks: list[DiffHunk] = []
+    current_hunk = None
+
+    for line in diff_lines:
+        if line.startswith('---') or line.startswith('+++'):
+            continue
+        if line.startswith('@@'):
+            if current_hunk is not None:
+                hunks.append(current_hunk)
+            match = re.match(r'@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@', line)
+            if match:
+                current_hunk = DiffHunk(
+                    old_start=int(match.group(1)),
+                    old_count=int(match.group(2)) if match.group(2) else 1,
+                    new_start=int(match.group(3)),
+                    new_count=int(match.group(4)) if match.group(4) else 1,
+                    lines=[],
+                )
+            continue
+        if current_hunk is not None:
+            if line.startswith(' '):
+                current_hunk.lines.append(DiffHunkLine(type="context", content=line[1:]))
+            elif line.startswith('+'):
+                current_hunk.lines.append(DiffHunkLine(type="added", content=line[1:]))
+            elif line.startswith('-'):
+                current_hunk.lines.append(DiffHunkLine(type="removed", content=line[1:]))
+
+    if current_hunk is not None:
+        hunks.append(current_hunk)
+
+    return hunks
+
 
 @router.put("/{document_id}", response_model=DocumentResponse)
 def update_document(

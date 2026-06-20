@@ -254,6 +254,16 @@ export const documentsApi = {
   delete: async (id: number) => {
     await api.delete(`/documents/${id}`)
   },
+  getVersions: async (documentId: number) => {
+    const { data } = await api.get(`/documents/${documentId}/versions`)
+    return data
+  },
+  getDiff: async (documentId: number, v1: number, v2: number) => {
+    const { data } = await api.get(`/documents/${documentId}/diff`, {
+      params: { v1, v2 },
+    })
+    return data
+  },
 }
 
 // Notifications API
