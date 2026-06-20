@@ -28,6 +28,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app.api.v1.analytics import track_api_usage
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -592,6 +593,8 @@ def query_knowledge_base(
             )
         except Exception:
             pass
+
+        track_api_usage(current_user.id, "rag_query")
 
         return RAGQueryResponse(
             answer=answer,

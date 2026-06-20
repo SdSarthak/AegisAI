@@ -7,6 +7,7 @@ from typing import List, Optional
 import csv
 import io
 
+from app.api.v1.analytics import track_api_usage
 from app.core.csv_utils import sanitize_csv_field
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -163,6 +164,7 @@ def create_ai_system(
             detail=f"AI system with name '{system_data.name}' already exists",
         )
     db.refresh(ai_system)
+    track_api_usage(current_user.id, "ai_systems")
     return ai_system
 
 
@@ -294,6 +296,7 @@ def bulk_import_systems(
             detail=f"Error processing CSV: {str(e)}"
         )
 
+    track_api_usage(current_user.id, "ai_systems")
     return BulkImportResponse(created=created_count, errors=errors)
 
 
@@ -462,6 +465,7 @@ def clone_ai_system(
     db.add(cloned)
     db.commit()
     db.refresh(cloned)
+    track_api_usage(current_user.id, "ai_systems")
     return cloned
 
 

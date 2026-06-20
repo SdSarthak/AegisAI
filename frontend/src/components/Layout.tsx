@@ -14,12 +14,14 @@ import {
   ChevronLeft,
   ChevronRight,
   BarChart,
+  Activity,
 } from 'lucide-react'
 import NotificationBell from './NotificationBell'
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
   { name: 'Analytics', href: '/analytics', icon: BarChart },
+  { name: 'API Usage', href: '/api-usage', icon: Activity },
   { name: 'AI Systems', href: '/ai-systems', icon: Bot },
   { name: 'Risk Classification', href: '/classification', icon: FileCheck },
   { name: 'Documents', href: '/documents', icon: FileText },

@@ -1,5 +1,5 @@
 """
-Analytics API — compliance score timelines and aggregate stats.
+Analytics API — compliance score timelines, aggregate stats, and API usage dashboard.
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 
@@ -11,19 +11,22 @@ TODO for contributors (help wanted):
     least one data point per system.
 """
 
+import json
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.database import get_db, get_redis
 from app.core.security import get_current_user
 from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
 from app.models.compliance_snapshot import ComplianceSnapshot
-from sqlalchemy import func
 from datetime import datetime, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from fastapi import Query
 
@@ -32,6 +35,43 @@ from app.schemas.audit_log import GuardAuditLogResponse
 from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+ENDPOINT_DEFINITIONS = [
+    {"name": "Guard Scan", "key": "guard_scan", "limit": 1000},
+    {"name": "RAG Query", "key": "rag_query", "limit": 500},
+    {"name": "AI System CRUD", "key": "ai_systems", "limit": 2000},
+    {"name": "Document Operations", "key": "documents", "limit": 1000},
+    {"name": "Classification", "key": "classification", "limit": 500},
+]
+
+
+def track_api_usage(user_id: int, endpoint_key: str) -> None:
+    """Increment the daily usage counter for a user and endpoint in Redis."""
+    try:
+        r = get_redis()
+        if r is None:
+            return
+        today = datetime.utcnow().date().isoformat()
+        usage_key = f"usage:{user_id}:{today}"
+        r.hincrby(usage_key, endpoint_key, 1)
+        r.expire(usage_key, 172800)
+    except Exception:
+        logger.exception("Failed to track API usage for %s", endpoint_key)
+
+
+def log_rate_limit_event(user_id: int, endpoint: str) -> None:
+    """Push a rate-limit event to the user's recent-429 list in Redis."""
+    try:
+        r = get_redis()
+        if r is None:
+            return
+        event = json.dumps({"endpoint": endpoint, "timestamp": datetime.utcnow().isoformat()})
+        r.lpush(f"rate_limit_events:{user_id}", event)
+        r.ltrim(f"rate_limit_events:{user_id}", 0, 49)
+        r.expire(f"rate_limit_events:{user_id}", 604800)
+    except Exception:
+        logger.exception("Failed to log rate limit event")
 
 
 @router.get("/compliance-timeline", response_model=ComplianceTimelineResponse)
@@ -164,3 +204,103 @@ def get_audit_logs(
     logs = base_query.order_by(GuardScanLog.scanned_at.desc()).offset(skip).limit(limit).all()
 
     return PaginatedResponse(items=logs, total=total, skip=skip, limit=limit)
+
+
+@router.get("/usage")
+def get_api_usage(
+    current_user: User = Depends(get_current_user),
+):
+    """Return aggregated API usage stats for the current user.
+
+    Reads daily counters and rate-limit events from Redis. Returns empty/zero
+    data when Redis is unavailable so the frontend always has a valid response.
+    """
+    user_id = current_user.id
+    today = datetime.utcnow().date().isoformat()
+    usage_key = f"usage:{user_id}:{today}"
+    r = get_redis()
+
+    daily_data: dict[str, int] = {}
+    if r is not None:
+        try:
+            raw = r.hgetall(usage_key)
+            daily_data = {k: int(v) for k, v in raw.items()} if raw else {}
+        except Exception:
+            logger.exception("Failed to read daily usage from Redis")
+
+    endpoint_stats = []
+    total_requests = 0
+    total_limit = 0
+
+    for ep in ENDPOINT_DEFINITIONS:
+        count = daily_data.get(ep["key"], 0)
+        total_requests += count
+        total_limit += ep["limit"]
+        reset_at = (
+            datetime.utcnow()
+            + timedelta(days=1)
+        ).replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+        endpoint_stats.append({
+            "endpoint": ep["name"],
+            "requests": count,
+            "limit": ep["limit"],
+            "remaining": max(0, ep["limit"] - count),
+            "reset_at": reset_at,
+        })
+
+    history: list[dict] = []
+    if r is not None:
+        try:
+            for i in range(7):
+                day = (datetime.utcnow() - timedelta(days=i)).date().isoformat()
+                day_key = f"usage:{user_id}:{day}"
+                raw = r.hgetall(day_key)
+                if raw:
+                    day_total = sum(int(v) for v in raw.values())
+                else:
+                    day_total = 0
+                history.append({"date": day, "requests": day_total})
+            history.reverse()
+        except Exception:
+            logger.exception("Failed to read usage history from Redis")
+
+    recent_429s: list[dict] = []
+    if r is not None:
+        try:
+            events = r.lrange(f"rate_limit_events:{user_id}", 0, 9)
+            if events:
+                for event in events:
+                    try:
+                        recent_429s.append(json.loads(event))
+                    except json.JSONDecodeError:
+                        continue
+        except Exception:
+            logger.exception("Failed to read rate limit events from Redis")
+
+    guard_scan_count = daily_data.get("guard_scan", 0)
+    rag_query_count = daily_data.get("rag_query", 0)
+
+    return {
+        "daily": {
+            "total_requests": total_requests,
+            "total_limit": total_limit,
+            "remaining": max(0, total_limit - total_requests),
+            "reset_at": (
+                datetime.utcnow()
+                + timedelta(days=1)
+            ).replace(hour=0, minute=0, second=0, microsecond=0).isoformat(),
+        },
+        "endpoints": endpoint_stats,
+        "history": history,
+        "recent_429s": recent_429s,
+        "guard_scan": {
+            "requests": guard_scan_count,
+            "limit": 1000,
+            "ai_credits_used": round(guard_scan_count * 0.5, 1),
+        },
+        "rag_query": {
+            "requests": rag_query_count,
+            "limit": 500,
+            "estimated_tokens": rag_query_count * 1500,
+        },
+    }
