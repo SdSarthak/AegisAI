@@ -244,6 +244,22 @@ def get_current_user_info(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+@router.get("/csrf-token", tags=["auth"])
+def get_csrf_token():
+    """
+    Return a fresh CSRF token and set it as an HttpOnly cookie.
+
+    The cookie value is HttpOnly (not readable by JavaScript) so this
+    endpoint is safe to call from the browser.  Clients must echo the
+    cookie value back in the X-CSRF-Token header on every state-changing
+    request (POST / PUT / PATCH / DELETE).
+    """
+    from fastapi.responses import JSONResponse
+    from app.middleware.csrf import make_csrf_response, _generate_token
+    token = _generate_token()
+    return make_csrf_response(token)
+
+
 @router.post("/change-password", status_code=status.HTTP_200_OK)
 def change_password(
     payload: ChangePasswordRequest,
