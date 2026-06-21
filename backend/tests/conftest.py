@@ -14,12 +14,20 @@ os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SECRET_KEY"] = "testsecret"
 os.environ["REDIS_URL"] = ""
 
-from app.core.database import Base, SessionLocal
+from app.core.database import Base
 from app.core.security import decode_token, get_current_user
 from app.models.user import SubscriptionTier
 from app.models.user import User
 from app.main import app
 from uuid import uuid4
+
+
+@pytest.fixture(autouse=True)
+def bypass_csrf_for_tests(monkeypatch, request):
+    """Keep endpoint tests focused on application behavior, not CSRF transport."""
+    if request.node.path.name == "test_csrf.py":
+        return
+    monkeypatch.setattr("app.middleware.csrf._is_csrf_exempt", lambda _path: True)
 
 def _mock_current_user():
     user = MagicMock()
