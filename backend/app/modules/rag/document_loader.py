@@ -6,6 +6,11 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.core.config import settings
 
 
+class PDFParseError(Exception):
+    """Raised when a PDF file cannot be parsed (malformed, encrypted, etc.)."""
+    pass
+
+
 def load_documents_from_s3():
     """Load documents from the configured S3 bucket."""
     bucket = settings.S3_BUCKET_NAME
@@ -21,11 +26,20 @@ def load_documents_from_s3():
 
 
 def load_documents_from_paths(file_paths: list[str]):
-    """Load documents from a list of local PDF file paths."""
+    """Load documents from a list of local PDF file paths.
+
+    Raises:
+        PDFParseError: If any file cannot be parsed (malformed, encrypted, etc.).
+    """
     documents = []
     for path in file_paths:
         loader = PyPDFLoader(path)
-        documents.extend(loader.load())
+        try:
+            documents.extend(loader.load())
+        except Exception as exc:
+            raise PDFParseError(
+                f"Failed to parse PDF '{os.path.basename(path)}': {exc}"
+            ) from exc
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=settings.RAG_CHUNK_SIZE,
         chunk_overlap=settings.RAG_CHUNK_OVERLAP,

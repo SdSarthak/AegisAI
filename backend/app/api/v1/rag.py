@@ -37,7 +37,7 @@ from app.models.rag_feedback import RAGFeedback
 from app.models.rag_query import RagQuery
 from app.models.user import SubscriptionTier, User
 from app.modules.llm.llm_client import LLMClient
-from app.modules.rag.document_loader import load_documents_from_paths
+from app.modules.rag.document_loader import load_documents_from_paths, PDFParseError
 from app.modules.rag.streaming import stream_rag_answer
 from app.modules.rag.vector_store import create_vector_store, load_vector_store
 from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
@@ -251,7 +251,14 @@ def _index_size_bytes() -> int:
 
 
 def _valid_text_chunks(file_paths: list[str]):
-    raw_chunks = load_documents_from_paths(file_paths)
+    try:
+        raw_chunks = load_documents_from_paths(file_paths)
+    except PDFParseError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="One or more PDF files could not be parsed. "
+            "Ensure the files are not malformed or password-protected.",
+        )
     return [
         chunk for chunk in raw_chunks
         if getattr(chunk, "page_content", None) and chunk.page_content.strip()

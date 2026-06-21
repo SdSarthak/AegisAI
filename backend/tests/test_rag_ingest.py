@@ -13,6 +13,7 @@ from unittest.mock import MagicMock, patch
 from app.core.config import settings
 from app.core.security import get_current_user
 from app.main import app
+from app.modules.rag.document_loader import PDFParseError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -176,6 +177,32 @@ class TestRagIngest:
 
         assert response.status_code == 400
         assert "text" in response.json()["detail"].lower()
+        mock_create.assert_not_called()
+
+    @patch(PATCH_CREATE_VS)
+    @patch(PATCH_LOAD_DOCS)
+    def test_malformed_pdf_returns_400(self, mock_load, mock_create, client, mock_rag_user):
+        """
+        6. A PDF that triggers a parser exception (malformed, encrypted) should
+        return 400 with a user-safe message, not a raw 500. create_vector_store
+        must NOT be called.
+        """
+        mock_load.side_effect = PDFParseError(
+            "PdfReadError: file has not been decrypted"
+        )
+
+        with patch(PATCH_AUTH, return_value=_mock_current_user()):
+            response = client.post(
+                "/api/v1/rag/ingest",
+                files={"files": _make_pdf_upload("encrypted.pdf")},
+            )
+
+        assert response.status_code == 400
+        assert "pdf" in response.json()["detail"].lower()
+        # Parser details must not leak to client
+        assert "PdfReadError" not in response.json()["detail"]
+        assert "decrypted" not in response.json()["detail"]
+        # create_vector_store must not run for a bad file
         mock_create.assert_not_called()
 
     # ------------------------------------------------------------------
