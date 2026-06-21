@@ -32,7 +32,7 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.ai_system import AISystem, ComplianceStatus
 from app.models.document import Document
-from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse, ChangePasswordRequest
+from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse, ChangePasswordRequest, DashboardLayoutUpdate
 
 # Pre-computed bcrypt hash used when the looked-up user is None so that the
 # login endpoint always performs a constant-time hash comparison, closing
@@ -313,3 +313,30 @@ def get_current_user_stats(
         risk_breakdown=risk_breakdown,
         compliant_systems=compliant_systems,
     )
+
+
+@users_router.get("/me/dashboard-layout")
+def get_dashboard_layout(
+    current_user: User = Depends(get_current_user),
+):
+    """Return the user's saved dashboard layout."""
+    return {
+        "layout": current_user.dashboard_layout.get("layout", []) if current_user.dashboard_layout else [],
+        "hidden": current_user.dashboard_layout.get("hidden", []) if current_user.dashboard_layout else [],
+    }
+
+
+@users_router.put("/me/dashboard-layout")
+def update_dashboard_layout(
+    body: DashboardLayoutUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Save the user's dashboard layout configuration."""
+    current_user.dashboard_layout = {
+        "layout": body.layout,
+        "hidden": body.hidden,
+    }
+    current_user = db.merge(current_user)
+    db.commit()
+    return {"status": "ok"}

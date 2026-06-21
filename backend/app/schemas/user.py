@@ -61,6 +61,11 @@ class UserStatsResponse(BaseModel):
     compliant_systems: int
 
 
+class DashboardLayoutUpdate(BaseModel):
+    layout: list[dict] = []
+    hidden: list[str] = []
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(..., max_length=128)
