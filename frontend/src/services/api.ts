@@ -16,12 +16,17 @@ const api = axios.create({
   },
 })
 
-// Add auth token to requests
+// Add auth token and request ID to every request
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = useAuthStore.getState().token
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  // Generate a UUID for end-to-end request tracing.  Honours any
+  // server-supplied X-Request-ID from previous responses so correlated
+  // requests retain the same ID.
+  const existingId = config.headers['X-Request-ID']
+  config.headers['X-Request-ID'] = existingId || crypto.randomUUID()
   return config
 })
 
