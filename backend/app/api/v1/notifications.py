@@ -48,7 +48,26 @@ def list_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List the current user's notifications with optional unread filtering."""
+    """
+    Retrieve notifications for the authenticated user.
+
+    Supports pagination and optional filtering to return only unread
+    notifications.
+
+    Args:
+        unread_only: If True, returns only unread notifications.
+        skip: Number of notifications to skip for pagination.
+        limit: Maximum number of notifications to return.
+        current_user: Authenticated user making the request.
+        db: Database session.
+
+    Returns:
+        PaginatedResponse[NotificationResponse]: Paginated collection of
+        notifications ordered by creation time in descending order.
+
+    Raises:
+        HTTPException: 401 if the user is not authenticated.
+    """
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
 
     if unread_only:
@@ -75,7 +94,20 @@ def get_unread_count(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return the number of unread notifications for the current user."""
+    """
+    Retrieve the number of unread notifications for the authenticated user.
+
+    Args:
+        current_user: Authenticated user making the request.
+        db: Database session.
+
+    Returns:
+        dict: A dictionary containing the unread notification count with
+        the key ``unread_count``.
+
+    Raises:
+        HTTPException: 401 if the user is not authenticated.
+    """
 
     unread_count = (
         db.query(Notification)
@@ -96,7 +128,20 @@ def mark_notifications_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Mark the specified notifications as read."""
+    """
+    Mark specific notifications as read for the authenticated user.
+
+    Args:
+        body: Request payload containing notification IDs to mark as read.
+        current_user: Authenticated user making the request.
+        db: Database session.
+
+    Returns:
+        None: Returns HTTP 204 No Content on success.
+
+    Raises:
+        HTTPException: 401 if the user is not authenticated.
+    """
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.id.in_(body.ids),
@@ -113,7 +158,19 @@ def mark_all_notifications_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Mark all notifications for the current user as read."""
+    """
+    Mark all unread notifications as read for the authenticated user.
+
+    Args:
+        current_user: Authenticated user making the request.
+        db: Database session.
+
+    Returns:
+        None: Returns HTTP 204 No Content on success.
+
+    Raises:
+        HTTPException: 401 if the user is not authenticated.
+    """
 
     (
         db.query(Notification)
@@ -136,7 +193,19 @@ def delete_read_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete all read notifications belonging to the current user."""
+    """
+    Delete all read notifications belonging to the authenticated user.
+
+    Args:
+        current_user: Authenticated user making the request.
+        db: Database session.
+
+    Returns:
+        None: Returns HTTP 204 No Content on success.
+
+    Raises:
+        HTTPException: 401 if the user is not authenticated.
+    """
 
     (
         db.query(Notification)
@@ -158,7 +227,22 @@ def delete_notification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Delete a notification owned by the current user."""
+    """
+    Delete a notification owned by the authenticated user.
+
+    Args:
+        notification_id: Unique identifier of the notification to delete.
+        current_user: Authenticated user making the request.
+        db: Database session.
+
+    Returns:
+        None: Returns HTTP 204 No Content on success.
+
+    Raises:
+        HTTPException: 401 if the user is not authenticated.
+        HTTPException: 404 if the notification does not exist or does not
+        belong to the authenticated user.
+    """
     notification = (
         db.query(Notification)
         .filter(
