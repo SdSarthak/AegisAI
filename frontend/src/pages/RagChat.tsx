@@ -12,6 +12,12 @@ import {
 
 import { useRagStream } from '../hooks/useRagStream'
 
+function getResponseTimeColor(time: number): string {
+  if (time < 1) return 'text-green-600 bg-green-50'
+  if (time < 3) return 'text-yellow-600 bg-yellow-50'
+  return 'text-red-600 bg-red-50'
+}
+
 export default function RagChat() {
   const [question, setQuestion] = useState('')
   const [submittedQuestion, setSubmittedQuestion] = useState('')
@@ -22,6 +28,7 @@ export default function RagChat() {
     tokens,
     citations,
     error: streamError,
+    responseTime,
     ask,
     stop,
   } = useRagStream()
@@ -185,6 +192,18 @@ export default function RagChat() {
                         <Bot className="w-5 h-5 text-primary-600" />
                       </div>
                       <div className="space-y-5 min-w-0 flex-1">
+                        {!isStreaming && responseTime !== null && (
+                          <div className="flex justify-end">
+                            <span
+                              className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${getResponseTimeColor(
+                                responseTime,
+                              )}`}
+                            >
+                              ⚡ {responseTime.toFixed(2)}s
+                            </span>
+                          </div>
+                        )}
+
                         <p className="text-gray-700 leading-7 whitespace-pre-wrap">
                           {tokens}
                           {isStreaming && (
