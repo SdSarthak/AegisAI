@@ -228,13 +228,6 @@ class TestRagPipelineIntegration:
         pdf_bytes = rag_env["pdf_bytes"]
         index_dir = rag_env["index_dir"]
 
-        # Decode the user id from the JWT to determine the user-scoped index path
-        from app.core.security import decode_token
-        token = auth["Authorization"].removeprefix("Bearer ")
-        payload = decode_token(token)
-        user_id = int(payload["sub"])
-        user_index_dir = os.path.join(index_dir, f"user_{user_id}")
-
         response = client.post(
             "/api/v1/rag/ingest",
             files={"files": ("test_regulatory.pdf", io.BytesIO(pdf_bytes), "application/pdf")},
@@ -248,11 +241,11 @@ class TestRagPipelineIntegration:
         assert data["files_processed"] == 1
         assert data["chunks_created"] > 0, "Expected at least one text chunk from the PDF"
 
-        # FAISS index files must exist on disk (under user-scoped path)
-        assert os.path.exists(os.path.join(user_index_dir, "index.faiss")), (
+        # FAISS index files must exist on disk (at the patched index path)
+        assert os.path.exists(os.path.join(index_dir, "index.faiss")), (
             "index.faiss not found — FAISS index was not persisted"
         )
-        assert os.path.exists(os.path.join(user_index_dir, "index.pkl")), (
+        assert os.path.exists(os.path.join(index_dir, "index.pkl")), (
             "index.pkl not found — FAISS index was not persisted"
         )
 

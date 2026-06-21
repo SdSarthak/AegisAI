@@ -8,7 +8,7 @@ Addresses: Indirect prompt injection and poisoned document chunks before LLM con
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, Generator, Optional
 
 from . import RegexFilter, IntentClassifier, DecisionEngine, PromptSanitizer
 from .decision_engine import Decision
@@ -78,14 +78,28 @@ class LLMGuard:
 
     @instrument_guard
     def guard(self, user_prompt: str) -> Dict:
+        """Run the complete guard pipeline and return the final scan result."""
+        final_result = None
+
+        for event in self.stream_guard(user_prompt):
+            if event["layer"] == "complete":
+                final_result = event["result"]
+
+        if final_result is None:
+            raise RuntimeError("Guard pipeline completed without a final result.")
+
+        return final_result
+
+    def stream_guard(self, user_prompt: str) -> Generator[Dict, None, None]:
         """
-        Run the complete guard pipeline on a user prompt.
+        Run the guard pipeline and yield each layer result as soon as it completes.
 
         Args:
             user_prompt: Raw user input
 
-        Returns:
-            Dictionary with decision, response, and metadata
+        Yields:
+            Layer progress dictionaries followed by a complete event containing the
+            final guard result.
         """
         timestamp = datetime.now().isoformat()
         logger.info(f"Processing prompt at {timestamp}")
@@ -116,6 +130,12 @@ class LLMGuard:
             "risk_score": regex_result.score,
         }
         logger.info(f"Regex flag: {regex_result.flag}, Score: {regex_result.score}")
+        yield {
+            "layer": "regex",
+            "flag": regex_result.flag,
+            "score": regex_result.score,
+            "matched_patterns": regex_result.matched_patterns,
+        }
 
         # Step 2: Intent Classification (ML Layer)
         logger.debug("Step 2: Classifying intent...")
@@ -128,6 +148,12 @@ class LLMGuard:
         logger.info(
             f"Intent: {intent_result.intent}, Confidence: {intent_result.confidence}"
         )
+        yield {
+            "layer": "classifier",
+            "intent": intent_result.intent,
+            "confidence": intent_result.confidence,
+            "class_scores": intent_result.class_scores,
+        }
 
         # Step 3: Decision Engine
         logger.debug("Step 3: Making decision...")
@@ -146,6 +172,13 @@ class LLMGuard:
         logger.info(
             f"Decision: {decision_result.decision.value} (confidence: {decision_result.confidence})"
         )
+        yield {
+            "layer": "decision",
+            "decision": decision_result.decision.value,
+            "confidence": decision_result.confidence,
+            "reasoning": decision_result.reasoning,
+            "rule_matched": decision_result.rule_matched,
+        }
 
         # Step 4: Handle Decision
         if decision_result.decision == Decision.BLOCK:
@@ -196,7 +229,10 @@ class LLMGuard:
             else:
                 result["response"] = "LLM client not available"
 
-        return result
+        yield {
+            "layer": "complete",
+            "result": result,
+        }
 
     def scan_chunk(self, chunk_text: str) -> Dict:
         """Scan retrieved RAG chunk text using only the fast regex layer.

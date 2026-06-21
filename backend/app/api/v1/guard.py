@@ -19,16 +19,17 @@ from threading import Lock
 from typing import Optional, TypedDict
 
 from app.api.v1.webhooks import deliver_webhook
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Query, WebSocket, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
+from starlette.websockets import WebSocketState
 
 from app.api.v1.notifications import create_notification
 from app.core.config import settings
 from app.core.database import SessionLocal, get_db
-from app.core.security import get_current_user
+from app.core.security import get_current_user, decode_token
 from app.core.rate_limit import guard_scan_rate_limiter
 from app.models.guard_scan_log import GuardScanLog
 from app.models.notification import NotificationType
@@ -174,6 +175,34 @@ def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = N
         db.close()
 
 
+def _build_scan_response(result: dict) -> ScanResponse:
+    """Convert the full guard pipeline result into the public API response."""
+    return ScanResponse(
+        decision=result["decision"],
+        confidence=result["metadata"]["decision_reasoning"]["confidence"],
+        reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
+        sanitized_prompt=result.get("sanitized_prompt"),
+        matched_patterns=result["metadata"]["regex_analysis"].get(
+            "matched_patterns",
+            [],
+        ),
+    )
+
+
+def _get_user_from_websocket_token(token: str | None, db: Session) -> User | None:
+    """Authenticate a WebSocket using the same JWT token as the REST API."""
+    if not token:
+        return None
+
+    try:
+        payload = decode_token(token)
+        user_id = int(payload.get("sub", ""))
+    except (HTTPException, TypeError, ValueError):
+        return None
+
+    return db.query(User).filter(User.id == user_id).first()
+
+
 @router.post("/scan", response_model=ScanResponse)
 def scan_prompt(
     request: ScanRequest,
@@ -227,16 +256,8 @@ def scan_prompt(
             result,
             client_ip,
         )
-        response = ScanResponse(
-            decision=result["decision"],
-            confidence=result["metadata"]["decision_reasoning"]["confidence"],
-            reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
-            sanitized_prompt=result.get("sanitized_prompt"),
-            matched_patterns=result["metadata"]["regex_analysis"].get(
-                "matched_patterns",
-                [],
-            ),
-        )
+
+        response = _build_scan_response(result)
 
         if result["decision"] == "block":
             try:
@@ -267,7 +288,99 @@ def scan_prompt(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the Guard scan.",
         )
-    
+
+
+@router.websocket("/stream")
+async def stream_guard_scan(websocket: WebSocket, token: str | None = Query(default=None)):
+    """Stream Guard scan progress over WebSocket as each pipeline layer completes."""
+    db = SessionLocal()
+
+    try:
+        current_user = _get_user_from_websocket_token(token, db)
+        if current_user is None:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+        await websocket.accept()
+
+        try:
+            payload = await websocket.receive_json()
+            request = ScanRequest.model_validate(payload)
+            if not request.prompt.strip():
+                raise ValueError("Prompt is required.")
+        except (ValueError, ValidationError):
+            await websocket.send_json(
+                {"layer": "error", "message": "A non-empty prompt is required."}
+            )
+            await websocket.close(code=status.WS_1003_UNSUPPORTED_DATA)
+            return
+
+        limited, retry_after = guard_scan_rate_limiter.check_and_consume(
+            key=f"guard:scan:{current_user.id}",
+            limit=settings.GUARD_RATE_LIMIT_REQUESTS,
+            window_seconds=settings.GUARD_RATE_LIMIT_WINDOW_SECONDS,
+        )
+
+        if limited:
+            await websocket.send_json(
+                {
+                    "layer": "error",
+                    "message": (
+                        f"Rate limit exceeded: {settings.GUARD_RATE_LIMIT_REQUESTS} "
+                        f"requests per {settings.GUARD_RATE_LIMIT_WINDOW_SECONDS} seconds per user. "
+                        "Please try again later."
+                    ),
+                    "retry_after": retry_after,
+                }
+            )
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return
+
+        from app.modules.guard.llm_guard import LLMGuard
+        from app.modules.guard.sanitizer import SanitizationLevel
+
+        level_map = {
+            "low": SanitizationLevel.LOW,
+            "medium": SanitizationLevel.MEDIUM,
+            "high": SanitizationLevel.HIGH,
+        }
+        san_level = level_map.get(
+            settings.GUARD_SANITIZATION_LEVEL,
+            SanitizationLevel.MEDIUM,
+        )
+
+        guard = LLMGuard(sanitization_level=san_level)
+        final_result = None
+
+        for event in guard.stream_guard(request.prompt):
+            if event["layer"] == "complete":
+                final_result = event["result"]
+                await websocket.send_json(
+                    {
+                        "layer": "complete",
+                        "result": _build_scan_response(final_result).model_dump(),
+                    }
+                )
+            else:
+                await websocket.send_json(event)
+
+        if final_result is not None:
+            log_scan(current_user.id, request.prompt, final_result)
+
+        await websocket.close(code=status.WS_1000_NORMAL_CLOSURE)
+    except Exception:
+        logger.exception("Guard stream failed")
+        if websocket.application_state == WebSocketState.CONNECTED:
+            await websocket.send_json(
+                {
+                    "layer": "error",
+                    "message": "An internal error occurred while processing the Guard scan.",
+                }
+            )
+            await websocket.close(code=status.WS_1011_INTERNAL_ERROR)
+    finally:
+        db.close()
+
 
 # ---------------------------------------------------------------------------
 # POST /guard/explain - SHAP/LIME explainability (issue #77)
@@ -313,8 +426,6 @@ async def explain_prompt(
         get_explainer,
     )
 
-    # Rate limit: reuse the shared limiter under a distinct key so explain
-    # quota is independent of scan quota.
     limited, retry_after = guard_scan_rate_limiter.check_and_consume(
         key=f"guard:explain:{current_user.id}",
         limit=_ExplainRateLimitConfig.LIMIT,
@@ -342,8 +453,6 @@ async def explain_prompt(
         )
 
     try:
-        # SHAP is CPU-bound and synchronous — run in a worker thread so
-        # the event loop stays responsive and the timeout actually fires.
         result = await asyncio.wait_for(
             asyncio.to_thread(
                 explainer.explain,
@@ -425,7 +534,7 @@ class CursorPagination:
             ts, id_str = decoded.split("|")
 
             dt = datetime.fromisoformat(ts)
-            
+
             if dt.tzinfo is None:
                dt = dt.replace(tzinfo=timezone.utc)
             else:
@@ -435,7 +544,7 @@ class CursorPagination:
 
         except Exception:
             raise HTTPException(status_code=400, detail="Invalid cursor format")
-    
+
 
     @staticmethod
     def apply_filters(query, cursor: Optional[str]):
@@ -482,9 +591,6 @@ def build_history_filters(
 ):
     filters = [GuardScanLog.user_id == current_user_id]
 
-    # -----------------------
-    # decision filter
-    # -----------------------
     if decision:
         decision = decision.strip().lower()
 
@@ -496,9 +602,6 @@ def build_history_filters(
 
         filters.append(GuardScanLog.decision == decision)
 
-    # -----------------------
-    # intent filter
-    # -----------------------
     if intent:
         intent = intent.strip().lower()
 
@@ -510,9 +613,6 @@ def build_history_filters(
 
         filters.append(GuardScanLog.intent == intent)
 
-    # -----------------------
-    # date filters
-    # -----------------------
     if start_date:
         filters.append(GuardScanLog.scanned_at >= start_date)
 
@@ -552,7 +652,6 @@ def get_guard_history(
 
     query = db.query(GuardScanLog).filter(*filters)
 
-    # cursor + ordering handled by helper
     query = CursorPagination.apply_filters(query, cursor)
     query = CursorPagination.apply_ordering(query)
 
@@ -686,14 +785,14 @@ def get_guard_stats(
             daily_buckets[date_key]["count"] += count
 
     scans_per_day = list(daily_buckets.values())
-    
+
     for b in scans_per_day:
         b["count"] = (
         int(b.get("allow", 0) or 0)
         + int(b.get("sanitize", 0) or 0)
         + int(b.get("block", 0) or 0)
     )
-        
+
     return {
         "window": window,
         "total_scans": total_scans,
