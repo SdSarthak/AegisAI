@@ -48,6 +48,33 @@ export default function RagChat() {
   const handleExport = () => {
     if (!hasAnswer) return
 
+      setAnswer({
+        answer: data.answer,
+        sources: data.sources || [],
+      })
+    } catch (err) {
+      const errorResponse = err as {
+        response?: {
+          status?: number
+          data?: {
+            detail?: string
+          }
+        }
+        message?: string
+      }
+
+      // ✅ ERROR HANDLING
+      if (errorResponse.response?.status === 503) {
+        setError('Index not ready. Please try again later.')
+      } else if (errorResponse.response?.status === 401) {
+        setError('Unauthorized. Please login again.')
+      } else {
+        setError(
+          errorResponse?.response?.data?.detail ||
+            errorResponse.message ||
+    } catch (err: unknown) {
+      // ✅ ERROR HANDLING
+      const apiError = isApiError(err) ? err : {}
     const exportText = [
       'AI Response',
       tokens,
