@@ -449,16 +449,25 @@ def clone_ai_system(
             detail="AI system not found"
         )
 
+    base_name = f"{original.name} (copy)"
+    candidate = base_name
+    counter = 2
+    while db.query(AISystem).filter(
+        AISystem.owner_id == current_user.id,
+        AISystem.name == candidate,
+    ).first():
+        candidate = f"{original.name} (copy {counter})"
+        counter += 1
+
     cloned = AISystem(
         owner_id=current_user.id,
-        name=f"{original.name} (copy)",
+        name=candidate,
         description=original.description,
         version=original.version,
         use_case=original.use_case,
         sector=original.sector,
         compliance_status=ComplianceStatus.NOT_STARTED,
     )
-
     db.add(cloned)
     db.commit()
     db.refresh(cloned)
