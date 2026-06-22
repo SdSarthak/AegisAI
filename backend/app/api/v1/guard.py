@@ -16,7 +16,7 @@ import base64
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
-from typing import Optional, TypedDict
+from typing import Optional, TypedDict, Literal
 
 from app.api.v1.webhooks import deliver_webhook
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Query, status
@@ -54,12 +54,31 @@ class ScanRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=settings.GUARD_MAX_PROMPT_LENGTH)
 
 
+class GuardTestRequest(BaseModel):
+    prompt: str = Field(
+        ...,
+        min_length=1,
+        max_length=settings.GUARD_MAX_PROMPT_LENGTH,
+    )
+
+    mode: Literal[
+        "regex_only",
+        "classifier_only",
+        "full",
+    ]
+
+
 class ScanResponse(BaseModel):
     decision: str
     confidence: float
     reasoning: str
     sanitized_prompt: str | None = None
     matched_patterns: list[str] = []
+
+
+class GuardTestResponse(BaseModel):
+    mode: str
+    result: dict
 
 
 class GuardConfigRequest(BaseModel):
@@ -178,6 +197,59 @@ def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = N
         raise
     finally:
         db.close()
+
+
+@router.post("/test", response_model=GuardTestResponse)
+def test_guard_layer(
+    request: GuardTestRequest,
+    current_user: User = Depends(get_current_user),
+):
+    from app.modules.guard.llm_guard import LLMGuard
+    from app.modules.guard.sanitizer import SanitizationLevel
+
+    level_map = {
+        "low": SanitizationLevel.LOW,
+        "medium": SanitizationLevel.MEDIUM,
+        "high": SanitizationLevel.HIGH,
+    }
+
+    san_level = level_map.get(
+        settings.GUARD_SANITIZATION_LEVEL,
+        SanitizationLevel.MEDIUM,
+    )
+
+    guard = LLMGuard(sanitization_level=san_level)
+
+    if request.mode == "regex_only":
+        regex_result = guard.regex_filter.check(request.prompt)
+
+        return GuardTestResponse(
+            mode=request.mode,
+            result={
+                "flag": regex_result.flag,
+                "matched_patterns": regex_result.matched_patterns,
+                "risk_score": regex_result.score,
+            },
+        )
+
+    if request.mode == "classifier_only":
+        intent_result = guard.classifier.classify(request.prompt)
+
+        return GuardTestResponse(
+            mode=request.mode,
+            result={
+                "intent": intent_result.intent,
+                "confidence": intent_result.confidence,
+                "class_scores": intent_result.class_scores,
+            },
+        )
+
+    result = guard.guard(request.prompt)
+
+    return GuardTestResponse(
+        mode=request.mode,
+        result=result,
+    )
 
 
 @router.post("/scan", response_model=ScanResponse)
