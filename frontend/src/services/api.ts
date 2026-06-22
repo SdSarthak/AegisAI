@@ -1,8 +1,11 @@
-import axios, { InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
+import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
 const API_BASE_URL = configuredApiBaseUrl ? configuredApiBaseUrl.replace(/\/$/, '') : '/api/v1'
+
+// Tracks whether the global 401-response handler is currently executing.
+let isUnauthorizedHandlerRunning = false
 
 function buildApiUrl(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
@@ -16,12 +19,17 @@ const api = axios.create({
   },
 })
 
-// Add auth token to requests
+// Add auth token and request ID to every request
 api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = useAuthStore.getState().token
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  // Generate a UUID for end-to-end request tracing.  Honours any
+  // server-supplied X-Request-ID from previous responses so correlated
+  // requests retain the same ID.
+  const existingId = config.headers['X-Request-ID']
+  config.headers['X-Request-ID'] = existingId || crypto.randomUUID()
   return config
 })
 
@@ -30,19 +38,32 @@ const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 // Handle 401 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: AxiosError) => {
+  (error: unknown) => {
+    if (!axios.isAxiosError(error)) {
+  return Promise.reject(error)
+}
     const url = error.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
-    if (error.response?.status === 401 && !isAuthEndpoint) {
+    const isUnAuthorized = error.response?.status === 401 && !isAuthEndpoint
+
+    if (isUnAuthorized && !isUnauthorizedHandlerRunning) {
+
+      // Block concurrent 401 responses from entering the unauthorized handler.
+      isUnauthorizedHandlerRunning = true
+
       // Logout and navigate to login without forcing a full page reload.
       useAuthStore.getState().logout()
       try {
         window.history.pushState({}, '', '/login')
         // Notify router listeners (e.g., react-router) to handle navigation.
         window.dispatchEvent(new PopStateEvent('popstate'))
-      } catch {
+      } catch (e) {
         // Fallback: if SPA navigation fails, perform a safe replace.
         window.location.replace('/login')
+      }
+      finally {
+        // Allow future unauthorized responses after current logout/navigation flow has finished.
+        isUnauthorizedHandlerRunning = false
       }
     }
     return Promise.reject(error)
@@ -251,12 +272,22 @@ export const documentsApi = {
   delete: async (id: number) => {
     await api.delete(`/documents/${id}`)
   },
+  getVersions: async (documentId: number) => {
+    const { data } = await api.get(`/documents/${documentId}/versions`)
+    return data
+  },
+  getDiff: async (documentId: number, v1: number, v2: number) => {
+    const { data } = await api.get(`/documents/${documentId}/diff`, {
+      params: { v1, v2 },
+    })
+    return data
+  },
 }
 
 // Notifications API
 export const notificationsApi = {
   list: (unreadOnly = false) =>
-    api.get(`/notifications?unread_only=${unreadOnly}`).then((r: AxiosResponse) => r.data),
+    api.get(`/notifications?unread_only=${unreadOnly}`).then((r: AxiosResponse) => r.data.items),
   markRead: (ids: number[]) =>
     api.post('/notifications/read', { ids }),
 }
@@ -384,7 +415,8 @@ export const ragApi = {
     let buffer = ''
 
     try {
-      while (!signal?.aborted) {
+      for (;;) {
+        
         const { value, done } = await reader.read()
         if (done) break
         buffer += value

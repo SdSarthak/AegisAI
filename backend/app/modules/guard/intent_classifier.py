@@ -9,19 +9,13 @@ import numpy as np
 
 import torch
 from torch.utils.data import DataLoader, Dataset
-
-try:
-    from transformers import AdamW, get_linear_schedule_with_warmup
-except ImportError:
-    AdamW = None
-    get_linear_schedule_with_warmup = None
-
-try:
-    from sklearn.metrics import f1_score
-except ImportError:
-    def f1_score(*args, **kwargs):
-        """Fallback F1 scorer used when sklearn is not installed."""
-        return 0.0
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    get_linear_schedule_with_warmup,
+)
+from torch.optim import AdamW
+from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
 from . import guard_config as config
 from .regex_rules import RegexFilter

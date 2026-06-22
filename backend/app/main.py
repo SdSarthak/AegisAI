@@ -18,9 +18,11 @@ from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.middleware.csrf import CSRFMiddleware
 from app.core.telemetry import setup_telemetry
 from app.api.v1 import api_router, badge
 from app.plugins.regulation_loader import init_registry
+from app.tasks.scheduler import scheduler, snapshot_compliance_scores, send_reassessment_reminders
 import app.models  # ensure all ORM models are imported so tables are created
 
 # -------------------------------------------------------------------
@@ -55,10 +57,31 @@ async def lifespan(app: FastAPI):
     app.state.registry = init_registry(builtin_dir, custom_dir)
     logger.info("Regulation registry initialized.")
 
+    # Initialize background scheduler for periodic jobs
+    scheduler.add_job(
+        snapshot_compliance_scores,
+        "cron",
+        hour=2,
+        minute=0,
+        id="compliance_snapshot",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        send_reassessment_reminders,
+        "cron",
+        hour=8,
+        minute=0,
+        id="reassessment_reminder",
+        replace_existing=True,
+    )
+    scheduler.start()
+    logger.info("Compliance scheduler started")
+
     yield  # Control is passed to FastAPI and the application runs
 
     logger.info("Shutting down AegisAI backend...")
-    # Place any teardown logic here (e.g., closing thread pools, background tasks)
+    scheduler.shutdown()
+    logger.info("Compliance scheduler shut down")
 
 # -------------------------------------------------------------------
 # FastAPI Application Initialization
@@ -94,6 +117,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Added last => outermost: every request (incl. CORS preflight and error
+# responses) is assigned a request id and access-logged in JSON.
+app.add_middleware(CSRFMiddleware)
 
 # Added last => outermost: every request (incl. CORS preflight and error
 # responses) is assigned a request id and access-logged in JSON.

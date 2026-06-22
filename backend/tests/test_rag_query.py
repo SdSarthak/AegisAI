@@ -8,6 +8,7 @@ Verifies that the endpoint does not crash with a NameError when using
 import sys
 import types
 from unittest.mock import MagicMock, patch
+from app.modules.rag.cache import clear_cache
 
 import pytest
 
@@ -42,8 +43,7 @@ def mock_rag_user():
 
 @pytest.fixture
 def mock_rag_modules():
-    """Patch the lazily-imported RAG modules so the endpoint runs without
-    external dependencies (OpenAI, FAISS, etc.)."""
+    """Patch RAG and guard modules so tests avoid external dependencies."""
     retrieval_chain = types.ModuleType("app.modules.rag.retrieval_chain")
 
     def _qa_chain(payload):
@@ -63,18 +63,40 @@ def mock_rag_modules():
         }
 
     retrieval_chain.get_qa_chain = lambda user_id=None: _qa_chain
+
     ml_flow = types.ModuleType("app.modules.rag.ml_flow")
     ml_flow.log_query = lambda question, answer, sources, latency_ms: None
+
+    guard_module = types.ModuleType("app.modules.guard.llm_guard")
+
+    class MockGuard:
+        def guard(self, text):
+            return {
+                "decision": "ALLOW",
+                "sanitized_prompt": text,
+                "metadata": {
+                    "decision_reasoning": {"reasoning": "test allow"},
+                    "sanitization": {"changes": None},
+                },
+            }
+
+    guard_module.LLMGuard = MockGuard
 
     with patch.dict(
         sys.modules,
         {
             "app.modules.rag.retrieval_chain": retrieval_chain,
             "app.modules.rag.ml_flow": ml_flow,
+            "app.modules.guard.llm_guard": guard_module,
         },
     ):
         yield
 
+@pytest.fixture(autouse=True)
+def clear_rag_cache_between_tests():
+    clear_cache()
+    yield
+    clear_cache()
 
 class TestRagQuery:
     """Integration-style tests for the /rag/query endpoint."""

@@ -49,11 +49,16 @@ export default function NotificationBell() {
 
   // Live data via useQuery
   const queryClient = useQueryClient()
-  const { data: notifications = [] } = useQuery({
+  const { data: notificationsResponse } = useQuery({
     queryKey: ['notifications', 'unread'],
     queryFn: () => notificationsApi.list(true),
     refetchInterval: 60_000,
   })
+
+  // Normalize response — API may return a plain array or { items, total }
+  const notifications: NotificationPreview[] = Array.isArray(notificationsResponse)
+    ? notificationsResponse
+    : notificationsResponse?.items ?? []
 
   const unreadCount = notifications.filter((n: NotificationPreview) => !n.is_read).length
 
@@ -123,7 +128,7 @@ export default function NotificationBell() {
 
       {/* Dropdown panel */}
       <div
-        className={`absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl border border-gray-200 shadow-xl z-50 transition-all duration-200 ease-out origin-top-right ${
+        className={`absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xl z-50 transition-all duration-200 ease-out origin-top-right ${
           isOpen
             ? 'opacity-100 translate-y-0 pointer-events-auto'
             : 'opacity-0 -translate-y-2 pointer-events-none'
@@ -132,9 +137,9 @@ export default function NotificationBell() {
         aria-label="Notifications panel"
       >
 
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-gray-900">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
               Notifications
             </h3>
             {unreadCount > 0 && (
@@ -209,7 +214,7 @@ export default function NotificationBell() {
         </div>
 
 
-        <div className="border-t border-gray-100">
+        <div className="border-t border-gray-100 dark:border-gray-700">
           <Link
             to="/notifications"
             onClick={() => setIsOpen(false)}
