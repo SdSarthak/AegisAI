@@ -11,6 +11,8 @@ import {
 } from 'lucide-react'
 
 import { useRagStream } from '../hooks/useRagStream'
+import CopyButton from '../components/CopyButton'
+
 
 export default function RagChat() {
   const [question, setQuestion] = useState('')
@@ -174,7 +176,23 @@ export default function RagChat() {
                       <div className="p-2 bg-primary-50 rounded-lg flex-shrink-0">
                         <Bot className="w-5 h-5 text-primary-600" />
                       </div>
+
                       <div className="space-y-5 min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <h3 className="text-sm font-semibold text-gray-900">
+                            Response
+                          </h3>
+
+                          <CopyButton
+                            text={tokens}
+                            label="Copy"
+                            copiedLabel="Copied!"
+                            successMessage="Response copied!"
+                            iconOnly
+                            disabled={isStreaming || !tokens.trim()}
+                          />
+                        </div>
+
                         <p className="text-gray-700 leading-7 whitespace-pre-wrap">
                           {tokens}
                           {isStreaming && (
@@ -184,6 +202,7 @@ export default function RagChat() {
                             />
                           )}
                         </p>
+
 
                         {streamError && (
                           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
