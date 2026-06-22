@@ -321,6 +321,15 @@ def ingest_documents(
         file_size = upload.file.tell()
         upload.file.seek(0)
 
+        if file_size == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"File {upload.filename} is empty (0 bytes). "
+                    "Please upload a valid PDF file."
+                ),
+            )
+
         if file_size > settings.RAG_MAX_FILE_SIZE_BYTES:
             raise HTTPException(
                 status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
