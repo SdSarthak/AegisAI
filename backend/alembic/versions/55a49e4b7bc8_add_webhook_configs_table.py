@@ -31,9 +31,14 @@ def upgrade() -> None:
         sa.Column('updated_at', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ),
         sa.PrimaryKeyConstraint('id'),
-        if_not_exists=True
+        if_not_exists=True,
     )
-    op.create_index(op.f('ix_webhook_configs_id'), 'webhook_configs', ['id'], unique=False)
+    op.create_index(
+        op.f('ix_webhook_configs_id'),
+        'webhook_configs',
+        ['id'],
+        unique=False,
+    )
 
 
 def downgrade() -> None:

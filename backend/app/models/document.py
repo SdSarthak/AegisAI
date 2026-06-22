@@ -49,6 +49,7 @@ class Document(Base):
     # Relationships
     owner = relationship("User", back_populates="documents")
     ai_system = relationship("AISystem", back_populates="documents")
+    versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan")
 
 class DocumentVersion(Base):
     __tablename__ = "document_versions"
@@ -70,5 +71,7 @@ class DocumentVersion(Base):
         default=datetime.utcnow
     )
 
+    regeneration_reason = Column(String(500), nullable=True)
+
     # Relationship
-    document = relationship("Document")
+    document = relationship("Document", back_populates="versions")
