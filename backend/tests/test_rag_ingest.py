@@ -393,7 +393,10 @@ class TestRagDocuments:
         assert data["documents_remaining"] == 1
         assert data["index_rebuilt"] is True
         assert not os.path.exists(deleted_path)
-        mock_create.assert_called_once_with([remaining_chunk])
+        mock_create.assert_called_once_with(
+            [remaining_chunk],
+            user_id="test-user-id",
+        )
 
     def test_delete_missing_document_returns_404(self, client, mock_rag_user):
         response = client.delete("/api/v1/rag/documents/999999")

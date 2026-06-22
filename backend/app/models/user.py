@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -31,6 +31,7 @@ class User(Base):
     is_verified = Column(Boolean, default=False)
     role = Column(String(50), nullable=False, server_default="user")
     onboarding_completed = Column(Boolean, default=False)
+    dashboard_layout = Column(JSON, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
