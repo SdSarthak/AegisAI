@@ -17,6 +17,7 @@ import logging
 import mimetypes
 import os
 import shutil
+import tempfile
 import time
 import uuid
 from dataclasses import dataclass
