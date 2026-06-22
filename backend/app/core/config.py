@@ -62,6 +62,7 @@ class Settings(BaseSettings):
     MLFLOW_TRACKING_URI: str = ""
     EMBEDDINGS_MODEL: str = "nomic-embed-text"
     RAG_MAX_FILES_PER_REQUEST: int = 10
+    RAG_MIN_FILE_SIZE_BYTES: int = 100  # Minimum valid PDF size in bytes
     RAG_MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024
     RAG_TOTAL_BUDGET_BYTES: int = 50 * 1024 * 1024
 
