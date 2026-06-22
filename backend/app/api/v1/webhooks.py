@@ -59,33 +59,40 @@ async def _post_webhook(
 
 
 def deliver_webhook(
-    db: Session,
     user_id: int,
     event: str,
     payload: dict[str, Any],
     background_tasks: BackgroundTasks,
 ) -> None:
-    """Schedule delivery to active user webhooks subscribed to the event."""
-    webhooks = (
-        db.query(WebhookConfig)
-        .filter(
-            WebhookConfig.user_id == user_id,
-            WebhookConfig.is_active.is_(True),
-        )
-        .all()
-    )
+    """Schedule delivery to active user webhooks subscribed to the event.
 
-    for webhook in webhooks:
-        if event not in (webhook.events or []):
-            continue
+    Opens its own database session so this function is safe to call from
+    a background task, where the request-scoped session is already closed.
+    """
+    from app.core.database import SessionLocal
 
-        background_tasks.add_task(
-            _post_webhook,
-            url=webhook.url,
-            event=event,
-            payload=payload,
-            secret=webhook.secret,
+    db = SessionLocal()
+    try:
+        webhooks = (
+            db.query(WebhookConfig)
+            .filter(
+                WebhookConfig.user_id == user_id,
+                WebhookConfig.is_active.is_(True),
+            )
+            .all()
         )
+        for webhook in webhooks:
+            if event not in (webhook.events or []):
+                continue
+            background_tasks.add_task(
+                _post_webhook,
+                url=webhook.url,
+                event=event,
+                payload=payload,
+                secret=webhook.secret,
+            )
+    finally:
+        db.close()
 
 
 @router.post("", response_model=WebhookResponse, status_code=status.HTTP_201_CREATED)

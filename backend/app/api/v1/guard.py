@@ -242,7 +242,6 @@ def scan_prompt(
             try:
                 background_tasks.add_task(
                     deliver_webhook,
-                    db,
                     current_user.id,
                     "guard_block",
                     {
@@ -828,7 +827,6 @@ def bulk_scan_prompts(
                 )
                 background_tasks.add_task(
                     deliver_webhook,
-                    db,
                     current_user.id,
                     "guard_block",
                     {
