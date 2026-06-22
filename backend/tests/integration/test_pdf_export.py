@@ -2,6 +2,8 @@
 
 import pytest
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+from sqlalchemy import create_engine
 from io import BytesIO
 import pdfplumber
 

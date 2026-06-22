@@ -208,7 +208,7 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
                 "Review whether any Article 5 exceptions apply to your use case.",
             ],
         )
-    
+
     # Check for HIGH risk (Article 6 + Annex III)
     high_risk_indicators = []
 
@@ -352,15 +352,7 @@ def classify_risk(data: RiskClassificationRequest) -> RiskClassificationResponse
 def classify_ai_system(
     data: RiskClassificationRequest, current_user: User = Depends(get_current_user)
 ):
-    """Classify an AI system's risk level from the questionnaire payload.
-
-    Args:
-        data: Risk classification questionnaire answers for the AI system.
-        current_user: Authenticated user requesting the classification.
-
-    Returns:
-        RiskClassificationResponse containing the inferred risk level and guidance.
-    """
+    """Classify an AI system's risk level from the questionnaire payload."""
     return classify_risk(data)    
 
 
@@ -371,20 +363,7 @@ def classify_and_save(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Classify an AI system and persist the result.
-
-    Args:
-        system_id: ID of the AI system to classify.
-        data: Risk classification questionnaire answers.
-        db: Database session used to load the system and save the assessment.
-        current_user: Authenticated user who must own the system.
-
-    Returns:
-        RiskClassificationResponse for the submitted questionnaire.
-
-    Raises:
-        HTTPException: If the system does not exist or does not belong to the user.
-    """
+    """Classify an AI system and persist the result."""
     system = (
         db.query(AISystem)
         .filter(AISystem.id == system_id, AISystem.owner_id == current_user.id)
@@ -423,15 +402,47 @@ def classify_and_save(
 def get_questionnaire_risk_factors(
     current_user: User = Depends(get_current_user),
 ):
-    """Return the static questionnaire metadata used by the classifier.
-
-    Args:
-        current_user: Authenticated user requesting the questionnaire metadata.
-
-    Returns:
-        The list of questionnaire risk factors used by the classification flow.
-    """
+    """Return the static questionnaire metadata used by the classifier."""
     return QUESTIONNAIRE_RISK_FACTORS
+@router.get("/history")
+def get_classification_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    page: int = 1,
+    limit: int = 10,
+):
+    """Return paginated classification history for the current user."""
+
+    query = (
+        db.query(RiskAssessment, AISystem)
+        .join(AISystem, RiskAssessment.ai_system_id == AISystem.id)
+        .filter(AISystem.owner_id == current_user.id)
+        .order_by(RiskAssessment.assessed_at.desc())
+    )
+
+    total = query.count()
+
+    results = (
+        query.offset((page - 1) * limit)
+        .limit(limit)
+        .all()
+    )
+
+    history = [
+        {
+            "system_name": system.name,
+            "risk_level": assessment.risk_level,
+            "timestamp": assessment.assessed_at,
+        }
+        for assessment, system in results
+    ]
+
+    return {
+        "page": page,
+        "limit": limit,
+        "total": total,
+        "items": history,
+    }
 
 
 @router.post("/bulk", response_model=BulkClassificationResponse)
@@ -440,16 +451,7 @@ def bulk_classify_systems(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Classify multiple AI systems in a single request.
-
-    Args:
-        request: Payload containing the AI system IDs to classify.
-        db: Database session used to load systems and store assessments.
-        current_user: Authenticated user who must own every system.
-
-    Returns:
-        BulkClassificationResponse containing per-system results and errors.
-    """
+    """Classify multiple AI systems in a single request."""
     results: List[BulkClassificationItem] = []
 
     for system_id in request.system_ids:
@@ -518,10 +520,5 @@ def explain_ai_system_risk(
     data: ExplainRequest,
     current_user: User = Depends(get_current_user),
 ):
-    """
-    Explain the risk classification of an AI system from a plain-text description.
-    Unlike /classify which requires a full questionnaire, this endpoint accepts
-    a natural language description and returns risk level, triggered EU AI Act
-    factors, relevant legal articles, and concrete compliance recommendations.
-    """
+    """Explain the risk classification of an AI system from a plain-text description."""
     return explain_risk(data)

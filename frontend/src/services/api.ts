@@ -1,19 +1,35 @@
-import axios from 'axios'
+import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import { useAuthStore } from '../stores/authStore'
 
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
+const API_BASE_URL = configuredApiBaseUrl ? configuredApiBaseUrl.replace(/\/$/, '') : '/api/v1'
+
+// Tracks whether the global 401-response handler is currently executing.
+let isUnauthorizedHandlerRunning = false
+
+function buildApiUrl(path: string): string {
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`
+  return `${API_BASE_URL}${normalizedPath}`
+}
+
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Add auth token to requests
-api.interceptors.request.use((config) => {
+// Add auth token and request ID to every request
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = useAuthStore.getState().token
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+  // Generate a UUID for end-to-end request tracing.  Honours any
+  // server-supplied X-Request-ID from previous responses so correlated
+  // requests retain the same ID.
+  const existingId = config.headers['X-Request-ID']
+  config.headers['X-Request-ID'] = existingId || crypto.randomUUID()
   return config
 })
 
@@ -21,11 +37,20 @@ const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 
 // Handle 401 errors
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response: AxiosResponse) => response,
+  (error: unknown) => {
+    if (!axios.isAxiosError(error)) {
+  return Promise.reject(error)
+}
     const url = error.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
-    if (error.response?.status === 401 && !isAuthEndpoint) {
+    const isUnAuthorized = error.response?.status === 401 && !isAuthEndpoint
+
+    if (isUnAuthorized && !isUnauthorizedHandlerRunning) {
+
+      // Block concurrent 401 responses from entering the unauthorized handler.
+      isUnauthorizedHandlerRunning = true
+
       // Logout and navigate to login without forcing a full page reload.
       useAuthStore.getState().logout()
       try {
@@ -35,6 +60,10 @@ api.interceptors.response.use(
       } catch (e) {
         // Fallback: if SPA navigation fails, perform a safe replace.
         window.location.replace('/login')
+      }
+      finally {
+        // Allow future unauthorized responses after current logout/navigation flow has finished.
+        isUnauthorizedHandlerRunning = false
       }
     }
     return Promise.reject(error)
@@ -59,9 +88,10 @@ function ensureObjectResponse<T extends Record<string, unknown>>(
 function ensureListResponse<T>(
   data: unknown,
   resourceName: string
-): T {
-  if (data != null && typeof data === 'object') {
-    return data as T
+): T[] {
+  if (Array.isArray(data)) {
+    return data as T[]
+  }
   }
 
   throw new Error(`${resourceName} response was empty or invalid.`)
@@ -221,8 +251,8 @@ export const classificationApi = {
 
 // Documents API
 export const documentsApi = {
-  list: async () => {
-    const { data } = await api.get('/documents/')
+  list: async (params?: { skip?: number; limit?: number }) => {
+    const { data } = await api.get('/documents/', { params })
     return ensureListResponse(data, 'Documents')
   },
   get: async (id: number) => {
@@ -243,12 +273,22 @@ export const documentsApi = {
   delete: async (id: number) => {
     await api.delete(`/documents/${id}`)
   },
+  getVersions: async (documentId: number) => {
+    const { data } = await api.get(`/documents/${documentId}/versions`)
+    return data
+  },
+  getDiff: async (documentId: number, v1: number, v2: number) => {
+    const { data } = await api.get(`/documents/${documentId}/diff`, {
+      params: { v1, v2 },
+    })
+    return data
+  },
 }
 
 // Notifications API
 export const notificationsApi = {
   list: (unreadOnly = false) =>
-    api.get(`/notifications?unread_only=${unreadOnly}`).then((r) => r.data),
+    api.get(`/notifications?unread_only=${unreadOnly}`).then((r: AxiosResponse) => r.data.items),
   markRead: (ids: number[]) =>
     api.post('/notifications/read', { ids }),
 }
@@ -352,7 +392,7 @@ export const ragApi = {
     signal?: AbortSignal,
   ): Promise<void> => {
     const token = useAuthStore.getState().token
-    const resp = await fetch('/api/v1/rag/query/stream', {
+    const resp = await fetch(buildApiUrl('/rag/query/stream'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -376,8 +416,7 @@ export const ragApi = {
     let buffer = ''
 
     try {
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
+      for (;;) {
         const { value, done } = await reader.read()
         if (done) break
         buffer += value

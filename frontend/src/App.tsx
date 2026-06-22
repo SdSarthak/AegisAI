@@ -1,5 +1,5 @@
+import React, { useEffect } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
-import { useEffect } from 'react'
 import { useAuthStore } from './stores/authStore'
 import Layout from './components/Layout'
 import Login from './pages/Login'
@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard'
 import AISystems from './pages/AISystems'
 import Classification from './pages/Classification'
 import Documents from './pages/Documents'
+import DocumentDiffPage from './pages/DocumentDiffPage'
 import Notifications from './pages/Notifications'
 import Analytics from './pages/Analytics'
 import GuardConsole from './pages/GuardConsole'
@@ -75,6 +76,7 @@ function App() {
           <Route path="ai-systems" element={<AISystems />} />
           <Route path="classification/:systemId?" element={<Classification />} />
           <Route path="documents" element={<Documents />} />
+          <Route path="documents/:id/diff" element={<DocumentDiffPage />} />
           <Route path="guard" element={<GuardConsole />} />
           <Route path="rag-chat" element={<RagChat />} />
           <Route path="notifications" element={<Notifications />} />

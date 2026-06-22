@@ -1,3 +1,21 @@
+"""
+Document Generation API — compliance document creation, management, and export.
+
+This module provides endpoints for:
+  - POST /documents/generate  : Generate AI compliance documents using LLM
+  - GET  /documents/           : List all documents for the authenticated user
+  - GET  /documents/{id}       : Retrieve a specific document
+  - PATCH /documents/{id}      : Update document content or metadata
+  - DELETE /documents/{id}     : Delete a document
+  - GET  /documents/{id}/pdf   : Export document as PDF
+  - POST /documents/{id}/share : Generate a shareable link for a document
+
+Dependencies:
+  - reportlab  : PDF generation
+  - SQLAlchemy : ORM session for Document persistence
+  - pydantic   : request/response schema validation
+  - python-jose: JWT token for document sharing
+"""
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -11,6 +29,7 @@ from typing import List
 from io import BytesIO
 from html import escape as html_escape
 from urllib.parse import quote
+import difflib
 import re
 
 from app.core.config import settings
@@ -18,7 +37,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
 from app.models.ai_system import AISystem
-from app.models.document import Document, DocumentType, DocumentStatus
+from app.models.document import Document, DocumentVersion, DocumentType, DocumentStatus
+from app.modules.llm.document_generator import generate_compliance_narrative
 from app.schemas.document import (
     DocumentCreate,
     DocumentResponse,
@@ -27,8 +47,14 @@ from app.schemas.document import (
     DocumentUpdateRequest,
     DocumentTemplateResponse,
     DocumentUpdateRequest,
+    DocumentVersionResponse,
+    DocumentVersionWithContent,
+    DocumentDiffResponse,
+    DiffHunk,
+    DiffHunkLine,
 )
 from app.schemas.pagination import PaginatedResponse
+from app.modules.llm.document_generator import generate_compliance_narrative
 
 # PDF generation
 from reportlab.lib.pagesizes import letter, A4
@@ -303,16 +329,7 @@ def create_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Create a new document for the authenticated user.
-
-    Args:
-        doc_data: Document creation payload.
-        db: Database session used to persist the new document.
-        current_user: Authenticated user who will own the document.
-
-    Returns:
-        The created document serialized as DocumentResponse.
-    """
+    """Create a new document for the authenticated user."""
     if doc_data.ai_system_id is not None:
         ai_system = (
             db.query(AISystem)
@@ -348,17 +365,7 @@ def list_documents(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """List the current user's documents with pagination.
-
-    Args:
-        skip: Number of documents to skip.
-        limit: Maximum number of documents to return per page.
-        db: Database session used to query documents.
-        current_user: Authenticated user whose documents are being listed.
-
-    Returns:
-        PaginatedResponse containing the user's documents.
-    """
+    """List the current user's documents with pagination."""
     base_query = db.query(Document).filter(Document.owner_id == current_user.id)
     total = base_query.count()
 
@@ -481,19 +488,7 @@ def get_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return a single document owned by the current user.
-
-    Args:
-        document_id: ID of the document to retrieve.
-        db: Database session used to query the document.
-        current_user: Authenticated user who must own the document.
-
-    Returns:
-        The requested document serialized as DocumentResponse.
-
-    Raises:
-        HTTPException: If the document does not exist or belongs to another user.
-    """
+    """Return a single document owned by the current user."""
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -506,6 +501,120 @@ def get_document(
         )
     return document
 
+@router.get("/{document_id}/versions", response_model=list[DocumentVersionResponse])
+def list_document_versions(
+    document_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """List all versions of a document."""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+    return db.query(DocumentVersion).filter(
+        DocumentVersion.document_id == document_id
+    ).order_by(DocumentVersion.created_at.asc()).all()
+
+
+@router.get("/{document_id}/diff", response_model=DocumentDiffResponse)
+def get_document_diff(
+    document_id: int,
+    v1: int = Query(..., description="First version ID"),
+    v2: int = Query(..., description="Second version ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Compare two versions of a document and return a structured diff."""
+    doc = db.query(Document).filter(
+        Document.id == document_id,
+        Document.owner_id == current_user.id
+    ).first()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    ver1 = db.query(DocumentVersion).filter(
+        DocumentVersion.id == v1,
+        DocumentVersion.document_id == document_id,
+    ).first()
+    ver2 = db.query(DocumentVersion).filter(
+        DocumentVersion.id == v2,
+        DocumentVersion.document_id == document_id,
+    ).first()
+
+    if not ver1 or not ver2:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+
+    lines1 = ver1.content.splitlines(keepends=True)
+    lines2 = ver2.content.splitlines(keepends=True)
+
+    diff = difflib.unified_diff(
+        lines1, lines2,
+        fromfile=f'v{ver1.version_number}',
+        tofile=f'v{ver2.version_number}',
+        n=3,
+    )
+
+    hunks = _parse_unified_diff(list(diff))
+
+    return DocumentDiffResponse(
+        v1=DocumentVersionWithContent(
+            id=ver1.id,
+            document_id=ver1.document_id,
+            version_number=ver1.version_number,
+            content=ver1.content,
+            created_at=ver1.created_at,
+            regeneration_reason=ver1.regeneration_reason,
+        ),
+        v2=DocumentVersionWithContent(
+            id=ver2.id,
+            document_id=ver2.document_id,
+            version_number=ver2.version_number,
+            content=ver2.content,
+            created_at=ver2.created_at,
+            regeneration_reason=ver2.regeneration_reason,
+        ),
+        hunks=hunks,
+    )
+
+
+def _parse_unified_diff(diff_lines: list[str]) -> list[DiffHunk]:
+    """Parse unified diff output into a structured list of hunks."""
+    hunks: list[DiffHunk] = []
+    current_hunk = None
+
+    for line in diff_lines:
+        if line.startswith('---') or line.startswith('+++'):
+            continue
+        if line.startswith('@@'):
+            if current_hunk is not None:
+                hunks.append(current_hunk)
+            match = re.match(r'@@ -(\d+),?(\d*) \+(\d+),?(\d*) @@', line)
+            if match:
+                current_hunk = DiffHunk(
+                    old_start=int(match.group(1)),
+                    old_count=int(match.group(2)) if match.group(2) else 1,
+                    new_start=int(match.group(3)),
+                    new_count=int(match.group(4)) if match.group(4) else 1,
+                    lines=[],
+                )
+            continue
+        if current_hunk is not None:
+            if line.startswith(' '):
+                current_hunk.lines.append(DiffHunkLine(type="context", content=line[1:]))
+            elif line.startswith('+'):
+                current_hunk.lines.append(DiffHunkLine(type="added", content=line[1:]))
+            elif line.startswith('-'):
+                current_hunk.lines.append(DiffHunkLine(type="removed", content=line[1:]))
+
+    if current_hunk is not None:
+        hunks.append(current_hunk)
+
+    return hunks
+
+
 @router.put("/{document_id}", response_model=DocumentResponse)
 def update_document(
     document_id: int,
@@ -513,20 +622,7 @@ def update_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Update the content of an existing document.
-
-    Args:
-        document_id: ID of the document to update.
-        body: Payload containing the replacement document content.
-        db: Database session used to load and persist the document.
-        current_user: Authenticated user who must own the document.
-
-    Returns:
-        The updated document serialized as DocumentResponse.
-
-    Raises:
-        HTTPException: If the document does not exist or belongs to another user.
-    """
+    """Update the content of an existing document."""
     # Fetch document
     document = db.query(Document).filter(
         Document.id == document_id,
@@ -556,19 +652,7 @@ def generate_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Generate a compliance document for a user's AI system.
-
-    Args:
-        request: Payload specifying the AI system and document type.
-        db: Database session used to look up the AI system and save the result.
-        current_user: Authenticated user who must own the AI system.
-
-    Returns:
-        The generated document serialized as DocumentResponse.
-
-    Raises:
-        HTTPException: If the AI system or template is missing.
-    """
+    """Generate a compliance document for a user's AI system."""
     # Get the AI system
     ai_system = (
         db.query(AISystem)
@@ -648,19 +732,7 @@ def delete_document(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Delete a document owned by the current user.
-
-    Args:
-        document_id: ID of the document to delete.
-        db: Database session used to locate and delete the document.
-        current_user: Authenticated user who must own the document.
-
-    Returns:
-        None. The endpoint responds with HTTP 204 No Content.
-
-    Raises:
-        HTTPException: If the document does not exist or belongs to another user.
-    """
+    """Delete a document owned by the current user."""
     document = (
         db.query(Document)
         .filter(Document.id == document_id, Document.owner_id == current_user.id)
@@ -682,19 +754,7 @@ def export_document_pdf(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Export a document as a PDF attachment.
-
-    Args:
-        document_id: ID of the document to export.
-        db: Database session used to load the document.
-        current_user: Authenticated user who must own the document.
-
-    Returns:
-        StreamingResponse containing the generated PDF bytes.
-
-    Raises:
-        HTTPException: If the document is missing, has no content, or PDF generation fails.
-    """
+    """Export a document as a PDF attachment."""
     # Retrieve the document
     document = db.query(Document).filter(
         Document.id == document_id,

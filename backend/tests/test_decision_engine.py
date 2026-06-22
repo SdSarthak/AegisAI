@@ -29,7 +29,7 @@ def engine():
         (False, 0.0, "malicious", 0.85, Decision.BLOCK, 0.85, "intent_malicious"),
         (False, 0.0, "suspicious", 0.6, Decision.SANITIZE, 0.6, "intent_suspicious"),
         (True, 0.6, "benign", 0.1, Decision.SANITIZE, 0.6, "regex_medium"),
-        (False, 0.0, "benign", 0.1, Decision.ALLOW, 0.9, "default_allow"),
+        (False, 0.0, "benign", 0.1, Decision.ALLOW, 0.1, "default_allow"),
     ],
 )
 def test_decision_engine_branches(

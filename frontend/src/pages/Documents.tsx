@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { FileText, Download, Trash2, Plus, Edit, Copy, Check, GitCompare } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
 
@@ -321,6 +322,13 @@ export default function Documents() {
                       iconOnly
                     />
                   )}
+                  <Link
+                    to={`/documents/${doc.id}/diff`}
+                    className="p-2 text-gray-400 hover:text-purple-600 rounded-lg hover:bg-purple-50"
+                    title="Compare Versions"
+                  >
+                    <GitCompare className="w-5 h-5" />
+                  </Link>
                   <button
                     onClick={() => setEditingDoc(doc)}
                     className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
@@ -522,3 +530,4 @@ export default function Documents() {
     </div>
   )
 }
+

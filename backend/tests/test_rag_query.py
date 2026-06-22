@@ -8,15 +8,18 @@ Verifies that the endpoint does not crash with a NameError when using
 import sys
 import types
 from unittest.mock import MagicMock, patch
+from app.modules.rag.cache import clear_cache
 
 import pytest
 
 from app.core.security import get_current_user
+from app.models.user import SubscriptionTier
 from app.main import app
 
 
 class _DummyDoc:
     def __init__(self, source: str):
+        self.page_content = source
         self.metadata = {"source": source}
 
 
@@ -24,6 +27,9 @@ def _mock_current_user():
     user = MagicMock()
     user.id = 1
     user.email = "test@example.com"
+    user.full_name = "Test User"
+    user.subscription_tier = SubscriptionTier.FREE
+    user.is_active = True
     return user
 
 
@@ -37,14 +43,18 @@ def mock_rag_user():
 
 @pytest.fixture
 def mock_rag_modules():
-    """Patch the lazily-imported RAG modules so the endpoint runs without
-    external dependencies (OpenAI, FAISS, etc.)."""
+    """Patch RAG and guard modules so tests avoid external dependencies."""
     retrieval_chain = types.ModuleType("app.modules.rag.retrieval_chain")
 
     def _qa_chain(payload):
         return {
             "result": "Regulatory answer based on retrieved context.",
             "source_documents": [_DummyDoc("doc.pdf#chunk1")],
+            "grounding_score": 0.92,
+            "grounding_confidence": "HIGH",
+            "chunks_total": 1,
+            "chunks_dropped": 0,
+            "warning": None,
             "groundedness_score": 0.92,
             "low_confidence": False,
             "confidence_tier": "high",
@@ -52,19 +62,41 @@ def mock_rag_modules():
             "flagged_reason": None,
         }
 
-    retrieval_chain.get_qa_chain = lambda: _qa_chain
+    retrieval_chain.get_qa_chain = lambda user_id=None: _qa_chain
+
     ml_flow = types.ModuleType("app.modules.rag.ml_flow")
     ml_flow.log_query = lambda question, answer, sources, latency_ms: None
+
+    guard_module = types.ModuleType("app.modules.guard.llm_guard")
+
+    class MockGuard:
+        def guard(self, text):
+            return {
+                "decision": "ALLOW",
+                "sanitized_prompt": text,
+                "metadata": {
+                    "decision_reasoning": {"reasoning": "test allow"},
+                    "sanitization": {"changes": None},
+                },
+            }
+
+    guard_module.LLMGuard = MockGuard
 
     with patch.dict(
         sys.modules,
         {
             "app.modules.rag.retrieval_chain": retrieval_chain,
             "app.modules.rag.ml_flow": ml_flow,
+            "app.modules.guard.llm_guard": guard_module,
         },
     ):
         yield
 
+@pytest.fixture(autouse=True)
+def clear_rag_cache_between_tests():
+    clear_cache()
+    yield
+    clear_cache()
 
 class TestRagQuery:
     """Integration-style tests for the /rag/query endpoint."""
@@ -91,9 +123,11 @@ class TestRagQuery:
         assert response.status_code == 200
         data = response.json()
         assert data["answer"] == "Regulatory answer based on retrieved context."
-        assert data["sources"] == ["doc.pdf#chunk1"]
+        assert data["sources"] == [{"source": "doc.pdf#chunk1"}]
         assert isinstance(data["groundedness_score"], (int, float))
         assert data["low_confidence"] is False
+        assert data["guard_decision"] == "ALLOW"
+        assert data["chunks_dropped"] == 0
 
     def test_query_does_not_raise_nameerror(
         self, client, mock_rag_user, mock_rag_modules

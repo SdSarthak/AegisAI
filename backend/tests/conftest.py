@@ -5,12 +5,14 @@ import pytest
 from unittest.mock import MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.pool import StaticPool
 from fastapi import Request, HTTPException, status
 from fastapi.testclient import TestClient
 
 # Set test database before importing app
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SECRET_KEY"] = "testsecret"
+os.environ["REDIS_URL"] = ""
 
 from app.core.database import Base, SessionLocal, StaticPool
 from app.core.security import decode_token, get_current_user
@@ -45,7 +47,11 @@ def _mock_other_user():
 def db_engine():
     """Create a test database engine."""
     test_db_url = "sqlite:///:memory:"
-    engine = create_engine(test_db_url, connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    engine = create_engine(
+        test_db_url,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     Base.metadata.create_all(bind=engine)
     yield engine
     Base.metadata.drop_all(bind=engine)
@@ -67,10 +73,12 @@ def db_session(db_engine) -> Session:
 def client(db_engine):
     """Create test client with test database."""
     from app.core.database import get_db
+    from app.core.rate_limit import guard_scan_rate_limiter
 
     connection = db_engine.connect()
     transaction = connection.begin()
     session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+    guard_scan_rate_limiter._local_attempts_by_key.clear()
 
     def override_get_db():
         yield session
@@ -154,7 +162,7 @@ def clear_guard_rate_limits():
     from app.core.rate_limit import guard_scan_rate_limiter
     
     # 1. Clear local memory
-    guard_scan_rate_limiter._local_attempts_by_key.clear()
+    guard_scan_rate_limiter.clear_local_attempts()
     
     # 2. Clear Redis
     redis_client = guard_scan_rate_limiter._get_redis_client()
@@ -164,6 +172,16 @@ def clear_guard_rate_limits():
     yield
     
     # Clean up after the test completes
-    guard_scan_rate_limiter._local_attempts_by_key.clear()
+    guard_scan_rate_limiter.clear_local_attempts()
     if redis_client is not None:
         redis_client.flushdb()
+
+
+@pytest.fixture(autouse=True)
+def clear_auth_rate_limits():
+    """Keep in-memory auth rate limits isolated between tests."""
+    from app.api.v1.auth import clear_auth_rate_limits as reset_auth_rate_limits
+
+    reset_auth_rate_limits()
+    yield
+    reset_auth_rate_limits()

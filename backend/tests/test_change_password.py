@@ -7,6 +7,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
 
 from app.core.database import Base, get_db
@@ -17,7 +18,7 @@ from app.models.user import User
 
 @pytest.fixture(scope="module")
 def engine():
-    eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+    eng = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(bind=eng)
     yield eng
     Base.metadata.drop_all(bind=eng)
@@ -89,6 +90,16 @@ class TestChangePassword:
         )
         assert resp.status_code == 422
         assert "at least 8 characters" in str(resp.json())
+
+    def test_long_new_password_returns_422(self, client):
+        c, user = client
+        long_password = ("é" * 36) + "A1!"
+        resp = c.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "OldPass1!", "new_password": long_password},
+        )
+        assert resp.status_code == 422
+        assert "72 bytes" in str(resp.json())
 
     def test_missing_uppercase_returns_422(self, client):
         c, user = client

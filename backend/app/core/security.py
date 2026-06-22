@@ -30,8 +30,8 @@ def _get_credentials_exception() -> HTTPException:
 
 def validate_password_strength(password: str) -> str:
     errors = []
-    if len(password) > 128:
-        raise ValueError("Password must not exceed 128 characters")
+    if len(password.encode("utf-8")) > 72:
+        raise ValueError("Password must be 72 bytes or fewer due to bcrypt limitations")
     if len(password) < 8:
         errors.append("at least 8 characters")
     if not re.search(r'[A-Z]', password):
@@ -72,7 +72,11 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     else:
         expire = now + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         
-    to_encode.update({"exp": expire, "iat": now})
+    to_encode.update({
+        "exp": expire,
+        "iat": int(now.timestamp()),
+        "nbf": int(now.timestamp()),
+    })
     encoded_jwt = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
     )
