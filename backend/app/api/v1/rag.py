@@ -629,7 +629,6 @@ def query_knowledge_base(
             confidence_tier=grounding_confidence.lower(),
             flagged_reason=warning,
         )
-        )
 
         set_cached_answer(
             guarded_question.question,

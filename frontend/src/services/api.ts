@@ -92,7 +92,6 @@ function ensureListResponse<T>(
   if (Array.isArray(data)) {
     return data as T[]
   }
-  }
 
   throw new Error(`${resourceName} response was empty or invalid.`)
 }
