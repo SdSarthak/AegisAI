@@ -70,31 +70,53 @@ def ingest_nist_ai_rmf() -> None:
         if "framework" not in chunk.metadata:
             chunk.metadata["framework"] = "NIST AI RMF 1.0"
 
-    # Load embeddings
-    embeddings = OpenAIEmbeddings(
-        openai_api_key=os.environ["OPENAI_API_KEY"]
-    )
+    # Load embeddings — validate key presence first
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError(
+            "OPENAI_API_KEY environment variable is not set. "
+            "Set it to a valid OpenAI API key before running NIST ingestion."
+        )
+
+    try:
+        embeddings = OpenAIEmbeddings(openai_api_key=api_key)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            f"Failed to initialise OpenAI embeddings (check OPENAI_API_KEY): {exc}"
+        ) from exc
 
     # Load existing FAISS index and merge, or create new if none exists
-    if FAISS_INDEX_PATH.exists():
-        logger.info("Loading existing FAISS index from %s", FAISS_INDEX_PATH)
-        vector_store = FAISS.load_local(
-            str(FAISS_INDEX_PATH),
-            embeddings,
-            allow_dangerous_deserialization=True,
-        )
-        vector_store.add_documents(chunks)
-        logger.info("Added NIST chunks to existing index")
-    else:
-        logger.info("No existing index found — creating new FAISS index")
-        vector_store = FAISS.from_documents(chunks, embeddings)
+    try:
+        if FAISS_INDEX_PATH.exists():
+            logger.info("Loading existing FAISS index from %s", FAISS_INDEX_PATH)
+            vector_store = FAISS.load_local(
+                str(FAISS_INDEX_PATH),
+                embeddings,
+                allow_dangerous_deserialization=True,
+            )
+            vector_store.add_documents(chunks)
+            logger.info("Added NIST chunks to existing index")
+        else:
+            logger.info("No existing index found — creating new FAISS index")
+            vector_store = FAISS.from_documents(chunks, embeddings)
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            f"Failed to build or merge FAISS index: {exc}. "
+            "Ensure the FAISS index path is accessible and not corrupted."
+        ) from exc
 
     # Save updated index
-    FAISS_INDEX_PATH.mkdir(parents=True, exist_ok=True)
-    vector_store.save_local(str(FAISS_INDEX_PATH))
-    logger.info(
-        "FAISS index saved to %s with NIST AI RMF chunks", FAISS_INDEX_PATH
-    )
+    try:
+        FAISS_INDEX_PATH.mkdir(parents=True, exist_ok=True)
+        vector_store.save_local(str(FAISS_INDEX_PATH))
+        logger.info(
+            "FAISS index saved to %s with NIST AI RMF chunks", FAISS_INDEX_PATH
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise RuntimeError(
+            f"Failed to save FAISS index to {FAISS_INDEX_PATH}: {exc}. "
+            "Check write permissions and disk space."
+        ) from exc
 
 
 if __name__ == "__main__":

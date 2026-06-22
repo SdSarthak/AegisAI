@@ -32,7 +32,16 @@ from app.core.config import settings
 from app.models.user import User
 from app.models.ai_system import AISystem, ComplianceStatus
 from app.models.document import Document
-from app.schemas.user import UserCreate, UserResponse, UserUpdateSchema, Token, UserStatsResponse, ChangePasswordRequest
+from app.schemas.user import (
+    UserCreate,
+    UserResponse,
+    UserUpdateSchema,
+    Token,
+    UserStatsResponse,
+    ChangePasswordRequest,
+    DashboardLayoutUpdate,
+    DashboardLayoutResponse,
+)
 
 # Pre-computed bcrypt hash used when the looked-up user is None so that the
 # login endpoint always performs a constant-time hash comparison, closing
@@ -51,6 +60,16 @@ _auth_rate_limit_lock = Lock()
 
 router = APIRouter()
 users_router = APIRouter()
+
+DEFAULT_DASHBOARD_LAYOUT = {
+    "layout": [
+        {"i": "compliance_summary", "x": 0, "y": 0, "w": 2, "h": 2},
+        {"i": "risk_distribution", "x": 2, "y": 0, "w": 1, "h": 2},
+        {"i": "recent_systems", "x": 0, "y": 2, "w": 3, "h": 2},
+        {"i": "deadlines", "x": 3, "y": 0, "w": 1, "h": 2},
+    ],
+    "hidden": [],
+}
 
 
 def _get_request_ip(request: Request) -> str:
@@ -244,6 +263,22 @@ def get_current_user_info(current_user: User = Depends(get_current_user)):
     return current_user
 
 
+@router.get("/csrf-token", tags=["auth"])
+def get_csrf_token():
+    """
+    Return a fresh CSRF token and set it as an HttpOnly cookie.
+
+    The cookie value is HttpOnly (not readable by JavaScript) so this
+    endpoint is safe to call from the browser.  Clients must echo the
+    cookie value back in the X-CSRF-Token header on every state-changing
+    request (POST / PUT / PATCH / DELETE).
+    """
+    from fastapi.responses import JSONResponse
+    from app.middleware.csrf import make_csrf_response, _generate_token
+    token = _generate_token()
+    return make_csrf_response(token)
+
+
 @router.post("/change-password", status_code=status.HTTP_200_OK)
 def change_password(
     payload: ChangePasswordRequest,
@@ -313,6 +348,7 @@ def get_current_user_stats(
         risk_breakdown=risk_breakdown,
         compliant_systems=compliant_systems,
     )
+<<<<<<< HEAD
 # ── OAuth 2.0 (Google + GitHub) ──────────────────────────────────────────────
 
 from authlib.integrations.starlette_client import OAuth
@@ -347,7 +383,6 @@ def _get_or_create_oauth_user(db: Session, email: str, full_name: str, provider:
     """Find existing user by email or create a new OAuth user."""
     user = db.query(User).filter(User.email == email).first()
     if user:
-        # Update OAuth fields if logging in via OAuth for first time
         user.oauth_provider = provider
         user.oauth_id = oauth_id
         user.avatar_url = avatar_url
@@ -355,7 +390,6 @@ def _get_or_create_oauth_user(db: Session, email: str, full_name: str, provider:
         db.refresh(user)
         return user
 
-    # Create new user
     user = User(
         email=email,
         full_name=full_name,
@@ -434,7 +468,6 @@ async def github_callback(request: Request, db: Session = Depends(get_db)):
 
     email = profile.get("email")
     if not email:
-        # GitHub may hide email — fetch it separately
         emails_resp = await oauth.github.get("user/emails", token=token)
         emails = emails_resp.json()
         primary = next((e["email"] for e in emails if e.get("primary") and e.get("verified")), None)
@@ -459,3 +492,68 @@ async def github_callback(request: Request, db: Session = Depends(get_db)):
     return RedirectResponse(
         url=f"{settings.FRONTEND_URL}/oauth/callback?token={access_token}"
     )
+
+
+# ── Dashboard Layout ──────────────────────────────────────────────────────────
+
+@users_router.get(
+    "/me/dashboard-layout",
+    response_model=DashboardLayoutResponse,
+)
+def get_dashboard_layout(
+    current_user: User = Depends(get_current_user),
+):
+    return current_user.dashboard_layout or DEFAULT_DASHBOARD_LAYOUT
+
+
+@users_router.put(
+    "/me/dashboard-layout",
+    response_model=DashboardLayoutResponse,
+)
+def update_dashboard_layout(
+    payload: DashboardLayoutUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    current_user.dashboard_layout = {
+        "layout": payload.layout,
+        "hidden": payload.hidden,
+    }
+
+    current_user = db.merge(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user.dashboard_layout
+=======
+
+@users_router.get(
+    "/me/dashboard-layout",
+    response_model=DashboardLayoutResponse,
+)
+def get_dashboard_layout(
+    current_user: User = Depends(get_current_user),
+):
+    return current_user.dashboard_layout or DEFAULT_DASHBOARD_LAYOUT
+
+
+@users_router.put(
+    "/me/dashboard-layout",
+    response_model=DashboardLayoutResponse,
+)
+def update_dashboard_layout(
+    payload: DashboardLayoutUpdate,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    current_user.dashboard_layout = {
+        "layout": payload.layout,
+        "hidden": payload.hidden,
+    }
+
+    current_user = db.merge(current_user)
+    db.commit()
+    db.refresh(current_user)
+
+    return current_user.dashboard_layout
+>>>>>>> upstream/main

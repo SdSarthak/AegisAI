@@ -110,7 +110,7 @@ class DecisionEngine:
         # Default: Allow benign prompts
         return DecisionResult(
             decision=Decision.ALLOW,
-            confidence=1.0 - intent_score if intent == "benign" else 0.5,
+            confidence=intent_score,
             reasoning="Prompt classified as benign - no risk detected",
             rule_matched="default_allow",
         )

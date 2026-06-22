@@ -67,8 +67,9 @@ def evaluate_compliance(
 
     for article, description, action in rules:
         # Check individual requirement status from questionnaire responses
-        req_key = article.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_")
-        req_status = questionnaire_responses.get(req_key, "missing")
+        req_key = article.lower().replace(" ", "_").replace("(", "_").replace(")", "").replace("/", "_")
+        raw_status = questionnaire_responses.get(req_key, "missing")
+        req_status = _COMPLIANCE_STATUS_MAP.get(raw_status, raw_status)
 
         if req_status not in ("missing", "partial", "done"):
             req_status = "missing"

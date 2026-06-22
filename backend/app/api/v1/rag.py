@@ -39,6 +39,7 @@ from app.models.user import SubscriptionTier, User
 from app.modules.llm.llm_client import LLMClient
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.streaming import stream_rag_answer
+from app.modules.rag.cache import get_cached_answer, set_cached_answer
 from app.modules.rag.vector_store import create_vector_store, load_vector_store
 from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
 
@@ -258,7 +259,10 @@ def _valid_text_chunks(file_paths: list[str]):
     ]
 
 
-def _rebuild_index_from_documents(documents: list[RAGDocument]) -> int:
+def _rebuild_index_from_documents(
+        documents: list[RAGDocument],
+        user_id: int | None = None,
+    ) -> int:
     file_paths = [doc.storage_path for doc in documents if os.path.exists(doc.storage_path)]
     if not file_paths:
         shutil.rmtree(settings.FAISS_INDEX_PATH, ignore_errors=True)
@@ -269,7 +273,7 @@ def _rebuild_index_from_documents(documents: list[RAGDocument]) -> int:
         shutil.rmtree(settings.FAISS_INDEX_PATH, ignore_errors=True)
         return 0
 
-    create_vector_store(chunks)
+    create_vector_store(chunks, user_id=user_id)
     return _index_size_bytes()
 
 
@@ -382,7 +386,10 @@ def ingest_documents(
 
         try:
             all_documents = db.query(RAGDocument).order_by(RAGDocument.id.asc()).all()
-            index_size_bytes = _rebuild_index_from_documents(all_documents)
+            index_size_bytes = _rebuild_index_from_documents(
+                all_documents,
+                user_id=current_user.id,
+            )
         except Exception as exc:
             db.rollback()
             raise HTTPException(
@@ -433,7 +440,10 @@ def delete_rag_document(
 
     remaining_documents = db.query(RAGDocument).order_by(RAGDocument.id.asc()).all()
     try:
-        index_size_bytes = _rebuild_index_from_documents(remaining_documents)
+        index_size_bytes = _rebuild_index_from_documents(
+            remaining_documents,
+            user_id=current_user.id,
+        )
     except Exception as exc:
         db.rollback()
         raise HTTPException(
@@ -518,6 +528,13 @@ def query_knowledge_base(
 
         from app.core.database import Base
 
+        cached_response = get_cached_answer(
+            guarded_question.question,
+            current_user.id,
+        )
+        if cached_response:
+            return RAGQueryResponse(**cached_response)
+
         qa_chain = get_qa_chain(user_id=current_user.id)
         t_start = time.monotonic()
         result = qa_chain({"query": guarded_question.question})
@@ -595,7 +612,7 @@ def query_knowledge_base(
         except Exception:
             pass
 
-        return RAGQueryResponse(
+        response = RAGQueryResponse(
             answer=answer,
             sources=sources,
             answer_id=feedback.id,
@@ -611,6 +628,13 @@ def query_knowledge_base(
             confidence_tier=grounding_confidence.lower(),
             flagged_reason=warning,
         )
+
+        set_cached_answer(
+            guarded_question.question,
+            current_user.id,
+            response.model_dump(),
+        )
+        return response
     except HTTPException:
         raise
     except FileNotFoundError as exc:
