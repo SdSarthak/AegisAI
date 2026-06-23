@@ -13,6 +13,7 @@ from app.schemas.ai_system import (
     RiskClassificationRequest,
     RiskClassificationResponse,
     QuestionnaireRiskFactor,
+    RiskFactorSchema,
 )
 from app.schemas.explain import ExplainRequest, ExplainResponse
 from app.modules.explainer.engine import explain_risk
@@ -21,131 +22,151 @@ router = APIRouter()
 
 QUESTIONNAIRE_RISK_FACTORS: List[QuestionnaireRiskFactor] = [
     # Article 5 — Prohibited practices (checked first)
+    # NOTE: QuestionnaireRiskFactor schema requires:
+    #   - id: string
+    #   - weight: float
+    # The earlier implementation used string ids and omitted weight, which crashed startup.
+    #
+    # weight values below are indicative (used by UI/analytics); adjust as needed.
     QuestionnaireRiskFactor(
         id="social_scoring",
         question="Is the system used by a public authority to evaluate or classify individuals based on their social behaviour or personal characteristics?",
         article="Article 5(1)(c)",
         triggers_level=RiskLevel.UNACCEPTABLE,
+        weight=1.0,
     ),
     QuestionnaireRiskFactor(
         id="realtime_biometric_public",
         question="Does the system perform real-time remote biometric identification of individuals in publicly accessible spaces?",
         article="Article 5(1)(h)",
         triggers_level=RiskLevel.UNACCEPTABLE,
-    ),
-    QuestionnaireRiskFactor(
-        id="biometric_categorisation",
-        question="Does the system categorise individuals based on biometric data to infer sensitive attributes such as race, political opinions, religion, or sexual orientation?",
-        article="Article 5(1)(g)",
-        triggers_level=RiskLevel.UNACCEPTABLE,
+        weight=1.0,
     ),
     QuestionnaireRiskFactor(
         id="subliminal_manipulation",
         question="Does the system use subliminal techniques or manipulative methods that impair a person's ability to make free decisions, causing them harm?",
         article="Article 5(1)(a)",
         triggers_level=RiskLevel.UNACCEPTABLE,
+        weight=1.0,
     ),
     QuestionnaireRiskFactor(
         id="exploits_vulnerable_groups",
         question="Does the system exploit vulnerabilities of specific groups such as children, elderly, or persons with disabilities to distort their behaviour in a harmful way?",
         article="Article 5(1)(b)",
         triggers_level=RiskLevel.UNACCEPTABLE,
+        weight=1.0,
     ),
     QuestionnaireRiskFactor(
         id="is_safety_component",
         question="Is the AI system used as a safety component of a product or system?",
         article="Article 6(1)",
         triggers_level=RiskLevel.HIGH,
+        weight=0.8,
     ),
     QuestionnaireRiskFactor(
         id="affects_fundamental_rights",
         question="Can the AI system affect fundamental rights such as employment, education, essential services, or access to opportunities?",
         article="Article 6(2)",
         triggers_level=RiskLevel.HIGH,
+        weight=0.8,
     ),
     QuestionnaireRiskFactor(
         id="uses_biometric_data",
         question="Does the system use biometric data for identification, verification, or categorization?",
         article="Annex III",
         triggers_level=RiskLevel.HIGH,
+        weight=0.8,
     ),
     QuestionnaireRiskFactor(
         id="makes_automated_decisions",
         question="Does the system make automated decisions without meaningful human review?",
         article="Article 6 / Annex III context",
         triggers_level=RiskLevel.HIGH,
+        weight=0.8,
     ),
     QuestionnaireRiskFactor(
         id="hr_recruitment_screening",
         question="Is the system used for recruitment, CV screening, candidate filtering, or candidate ranking?",
         article="Annex III point 4(a)",
         triggers_level=RiskLevel.HIGH,
+        weight=0.8,
     ),
     QuestionnaireRiskFactor(
         id="hr_promotion_termination",
         question="Is the system used for promotion, termination, task allocation, performance evaluation, or employment-related decisions?",
         article="Annex III point 4(b)",
         triggers_level=RiskLevel.HIGH,
+        weight=0.8,
     ),
     QuestionnaireRiskFactor(
         id="credit_worthiness",
         question="Is the system used to evaluate creditworthiness or determine access to financial resources?",
         article="Annex III point 5(b)",
         triggers_level=RiskLevel.HIGH,
+        weight=0.8,
     ),
     QuestionnaireRiskFactor(
         id="insurance_risk_assessment",
         question="Is the system used for insurance risk assessment, pricing, or eligibility decisions?",
         article="Annex III point 5(c)",
         triggers_level=RiskLevel.HIGH,
+        weight=0.8,
     ),
     QuestionnaireRiskFactor(
         id="law_enforcement",
         question="Is the system used by or for law enforcement purposes?",
         article="Annex III point 6",
         triggers_level=RiskLevel.HIGH,
+        weight=0.8,
     ),
     QuestionnaireRiskFactor(
         id="border_control",
         question="Is the system used for migration, asylum, or border control management?",
         article="Annex III point 7",
         triggers_level=RiskLevel.HIGH,
+        weight=0.8,
     ),
     QuestionnaireRiskFactor(
         id="justice_system",
         question="Is the system used to assist judicial authorities or influence legal outcomes?",
         article="Annex III point 8",
         triggers_level=RiskLevel.HIGH,
+        weight=0.8,
     ),
     QuestionnaireRiskFactor(
         id="education_vocational_training",
         question="Is the system used to determine access to or assign natural persons to educational and vocational training institutions?",
         article="Annex III point 3",
         triggers_level=RiskLevel.HIGH,
+        weight=0.8,
     ),
     QuestionnaireRiskFactor(
         id="interacts_with_humans",
         question="Does the system directly interact with humans, such as a chatbot or virtual assistant?",
         article="Article 52(1)",
         triggers_level=RiskLevel.LIMITED,
+        weight=0.4,
     ),
     QuestionnaireRiskFactor(
         id="generates_synthetic_content",
         question="Does the system generate synthetic or manipulated audio, image, video, or text content?",
         article="Article 52(3)",
         triggers_level=RiskLevel.LIMITED,
+        weight=0.4,
     ),
     QuestionnaireRiskFactor(
         id="emotion_recognition",
         question="Does the system perform emotion recognition?",
         article="Article 52(3)",
         triggers_level=RiskLevel.LIMITED,
+        weight=0.4,
     ),
     QuestionnaireRiskFactor(
         id="biometric_categorization",
         question="Does the system perform biometric categorization?",
         article="Article 52 / Annex III context",
         triggers_level=RiskLevel.LIMITED,
+        weight=0.4,
     ),
 ]
 
@@ -402,47 +423,25 @@ def classify_and_save(
 def get_questionnaire_risk_factors(
     current_user: User = Depends(get_current_user),
 ):
-    """Return the static questionnaire metadata used by the classifier."""
-    return QUESTIONNAIRE_RISK_FACTORS
-@router.get("/history")
-def get_classification_history(
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    page: int = 1,
-    limit: int = 10,
-):
-    """Return paginated classification history for the current user."""
+    """Return the static questionnaire metadata used by the classifier.
 
-    query = (
-        db.query(RiskAssessment, AISystem)
-        .join(AISystem, RiskAssessment.ai_system_id == AISystem.id)
-        .filter(AISystem.owner_id == current_user.id)
-        .order_by(RiskAssessment.assessed_at.desc())
-    )
+    Args:
+        current_user: Authenticated user requesting the questionnaire metadata.
 
-    total = query.count()
-
-    results = (
-        query.offset((page - 1) * limit)
-        .limit(limit)
-        .all()
-    )
-
-    history = [
-        {
-            "system_name": system.name,
-            "risk_level": assessment.risk_level,
-            "timestamp": assessment.assessed_at,
-        }
-        for assessment, system in results
+    Returns:
+        The list of questionnaire risk factors used by the classification flow.
+    """
+    
+    return [
+        RiskFactorSchema(
+            id=rf.id,
+            question=rf.question,
+            article_reference=rf.article,           
+            risk_level_triggered=rf.triggers_level,  
+            weight=rf.weight,
+        )
+        for rf in QUESTIONNAIRE_RISK_FACTORS
     ]
-
-    return {
-        "page": page,
-        "limit": limit,
-        "total": total,
-        "items": history,
-    }
 
 
 @router.post("/bulk", response_model=BulkClassificationResponse)

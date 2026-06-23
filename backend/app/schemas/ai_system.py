@@ -146,3 +146,15 @@ class QuestionnaireRiskFactor(BaseModel):
     question: str
     article: str
     triggers_level: RiskLevel
+    weight: Optional[float] = None
+    
+# RiskFactor Schema  - for /risk-factors endpoint 
+class RiskFactorSchema(BaseModel):
+    id: str
+    question: str
+    article_reference: str
+    risk_level_triggered: RiskLevel
+    weight: Optional[float] = None
+    
+    class Config:
+        use_enum_values = True
