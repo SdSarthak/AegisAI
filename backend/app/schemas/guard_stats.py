@@ -23,6 +23,7 @@ class DailyBucket(BaseModel):
     allow: int
     sanitize: int
     block: int
+    count: int = 0
 
 
 class GuardStatsResponse(BaseModel):
