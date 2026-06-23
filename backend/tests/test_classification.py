@@ -70,11 +70,12 @@ LIMITED_PAYLOAD = {
 # ---------------------------------------------------------------------------
 def _make_client():
     """
-    Return a FastAPI TestClient with authentication bypassed.
+    Return a FastAPI TestClient with authentication bypassed and CSRF handling.
     Uses dependency_overrides to skip JWT validation entirely.
     """
     from app.main import app
     from app.core.security import get_current_user
+    from tests.conftest import _CSRFClientWrapper
 
     mock_user = MagicMock()
     mock_user.id = 1
@@ -83,8 +84,8 @@ def _make_client():
     # Override BEFORE creating the client — overrides persist on the app object
     app.dependency_overrides[get_current_user] = lambda: mock_user
 
-    client = TestClient(app)
-    return client
+    raw_client = TestClient(app)
+    return _CSRFClientWrapper(raw_client)
  
  
 # ---------------------------------------------------------------------------
