@@ -92,7 +92,7 @@ def client(db):
 
 class TestAuditLogs:
     def test_ai_system_update_creates_audit_log(self, client):
-        response = client.put(
+        response = client.patch(
             "/api/v1/ai-systems/1",
             json={
                 "name": "AI Fraud Detector"
