@@ -48,26 +48,7 @@ def list_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Retrieve notifications for the authenticated user.
-
-    Supports pagination and optional filtering to return only unread
-    notifications.
-
-    Args:
-        unread_only: If True, returns only unread notifications.
-        skip: Number of notifications to skip for pagination.
-        limit: Maximum number of notifications to return.
-        current_user: Authenticated user making the request.
-        db: Database session.
-
-    Returns:
-        PaginatedResponse[NotificationResponse]: Paginated collection of
-        notifications ordered by creation time in descending order.
-
-    Raises:
-        HTTPException: 401 if the user is not authenticated.
-    """
+    """Return paginated notifications for the current user, optionally filtered to unread only."""
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
 
     if unread_only:
@@ -89,25 +70,13 @@ def list_notifications(
         limit=limit,
     )
 
+
 @router.get("/unread-count")
 def get_unread_count(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Retrieve the number of unread notifications for the authenticated user.
-
-    Args:
-        current_user: Authenticated user making the request.
-        db: Database session.
-
-    Returns:
-        dict: A dictionary containing the unread notification count with
-        the key ``unread_count``.
-
-    Raises:
-        HTTPException: 401 if the user is not authenticated.
-    """
+    """Return the number of unread notifications for the current user."""
 
     unread_count = (
         db.query(Notification)
@@ -122,26 +91,14 @@ def get_unread_count(
         "unread_count": unread_count
     }
 
+
 @router.post("/read", status_code=status.HTTP_204_NO_CONTENT)
 def mark_notifications_read(
     body: NotificationMarkRead,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Mark specific notifications as read for the authenticated user.
-
-    Args:
-        body: Request payload containing notification IDs to mark as read.
-        current_user: Authenticated user making the request.
-        db: Database session.
-
-    Returns:
-        None: Returns HTTP 204 No Content on success.
-
-    Raises:
-        HTTPException: 401 if the user is not authenticated.
-    """
+    """Mark the specified notifications as read for the current user."""
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.id.in_(body.ids),
@@ -153,24 +110,13 @@ def mark_notifications_read(
     db.commit()
     return None
 
+
 @router.post("/read-all", status_code=status.HTTP_204_NO_CONTENT)
 def mark_all_notifications_read(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Mark all unread notifications as read for the authenticated user.
-
-    Args:
-        current_user: Authenticated user making the request.
-        db: Database session.
-
-    Returns:
-        None: Returns HTTP 204 No Content on success.
-
-    Raises:
-        HTTPException: 401 if the user is not authenticated.
-    """
+    """Mark all unread notifications as read for the current user."""
 
     (
         db.query(Notification)
@@ -188,24 +134,13 @@ def mark_all_notifications_read(
 
     return None
 
+
 @router.delete("/read", status_code=status.HTTP_204_NO_CONTENT)
 def delete_read_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Delete all read notifications belonging to the authenticated user.
-
-    Args:
-        current_user: Authenticated user making the request.
-        db: Database session.
-
-    Returns:
-        None: Returns HTTP 204 No Content on success.
-
-    Raises:
-        HTTPException: 401 if the user is not authenticated.
-    """
+    """Delete all read notifications belonging to the current user."""
 
     (
         db.query(Notification)
@@ -227,22 +162,7 @@ def delete_notification(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """
-    Delete a notification owned by the authenticated user.
-
-    Args:
-        notification_id: Unique identifier of the notification to delete.
-        current_user: Authenticated user making the request.
-        db: Database session.
-
-    Returns:
-        None: Returns HTTP 204 No Content on success.
-
-    Raises:
-        HTTPException: 401 if the user is not authenticated.
-        HTTPException: 404 if the notification does not exist or does not
-        belong to the authenticated user.
-    """
+    """Delete a notification owned by the current user."""
     notification = (
         db.query(Notification)
         .filter(
