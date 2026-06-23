@@ -46,7 +46,8 @@ export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false)
 
   const wrapperRef = useRef<HTMLDivElement>(null)
-
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const closeButtonRef = useRef<HTMLButtonElement>(null)
   // Live data via useQuery
   const queryClient = useQueryClient()
   const { data: notificationsResponse } = useQuery({
@@ -92,7 +93,10 @@ export default function NotificationBell() {
   // Close dropdown on Escape key
   useEffect(() => {
     function handleEscape(e: KeyboardEvent) {
-      if (e.key === 'Escape') setIsOpen(false)
+      if (e.key === 'Escape') {
+        setIsOpen(false)
+        triggerRef.current?.focus()
+      }
     }
     if (isOpen) {
       document.addEventListener('keydown', handleEscape)
@@ -102,24 +106,35 @@ export default function NotificationBell() {
     }
   }, [isOpen])
 
-
+  // Focus close button when opened, return focus to trigger when closed
+  const hasOpenedRef = useRef(false)
+  useEffect(() => {
+    if (isOpen) {
+      hasOpenedRef.current = true
+      closeButtonRef.current?.focus()
+    } else if (hasOpenedRef.current) {
+      triggerRef.current?.focus()
+    }
+  }, [isOpen])
 
   return (
     <div ref={wrapperRef} className="relative">
 
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
         className="relative p-2 text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
         aria-expanded={isOpen}
-        aria-haspopup="true"
+        aria-haspopup="dialog"
       >
         <Bell className="w-5 h-5" />
 
         {/* Unread badge — caps at 9+ */}
         {unreadCount > 0 && (
           <span
+            aria-hidden="true"
             className={`absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full ring-2 ring-white ${
               !isOpen ? 'animate-pulse' : ''
             }`}
@@ -136,8 +151,9 @@ export default function NotificationBell() {
             ? 'opacity-100 translate-y-0 pointer-events-auto'
             : 'opacity-0 -translate-y-2 pointer-events-none'
         }`}
-        role="menu"
-        aria-label="Notifications panel"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Notifications panel"
       >
 
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
@@ -152,8 +168,12 @@ export default function NotificationBell() {
             )}
           </div>
           <button
+            ref={closeButtonRef}
             type="button"
-            onClick={() => setIsOpen(false)}
+            onClick={() => {
+              setIsOpen(false)
+              triggerRef.current?.focus()
+            }}
             className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
             aria-label="Close notifications"
           >
@@ -177,7 +197,7 @@ export default function NotificationBell() {
                 className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-colors hover:bg-gray-50 focus:outline-none focus:bg-gray-50 ${
                   !notification.is_read ? 'bg-primary-50/40' : ''
                 }`}
-                role="menuitem"
+               
               >
 
                 <div
