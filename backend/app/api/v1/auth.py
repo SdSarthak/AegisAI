@@ -162,6 +162,11 @@ def register(
     try:
         existing_user = db.query(User).filter(User.email == user_data.email).first()
         if existing_user:
+            _record_attempt(
+                _auth_registration_attempts_by_ip,
+                client_ip,
+                _AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
@@ -184,6 +189,11 @@ def register(
         raise
     except Exception:
         db.rollback()
+        _record_attempt(
+            _auth_registration_attempts_by_ip,
+            client_ip,
+            _AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+        )
         # Generic database error handler
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -191,12 +201,6 @@ def register(
                 "field": "general",
                 "message": "An error occurred during registration. Please try again."
             }
-        )
-    finally:
-        _record_attempt(
-            _auth_registration_attempts_by_ip,
-            client_ip,
-            _AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
         )
 
 

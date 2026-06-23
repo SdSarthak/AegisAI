@@ -278,21 +278,38 @@ def test_login_rate_limit_triggers_after_five_failures(client):
 
 
 def test_register_rate_limit_triggers_after_three_attempts(client):
-    """Test repeated registrations from the same IP return 429 on the fourth attempt."""
+    """Test repeated failed registrations from the same IP return 429 on the fourth attempt.
+
+    Only FAILED registrations (duplicate email, server error) consume the rate-limit
+    budget. Successful registrations do not count. This test uses duplicate emails
+    to trigger repeated failures from the same IP.
+    """
+    # First registration succeeds — does NOT consume rate-limit budget
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "ratelimit-register-success@example.com",
+            "password": VALID_TEST_PASSWORD,
+        },
+    )
+    assert response.status_code == 201
+
+    # Three failed attempts (duplicate email) consume the rate-limit budget
     for index in range(3):
         response = client.post(
             "/api/v1/auth/register",
             json={
-                "email": f"ratelimit-register-{index}@example.com",
+                "email": "ratelimit-register-success@example.com",
                 "password": VALID_TEST_PASSWORD,
             },
         )
-        assert response.status_code == 201
+        assert response.status_code == 400  # duplicate email
 
+    # Fourth duplicate triggers 429
     response = client.post(
         "/api/v1/auth/register",
         json={
-            "email": "ratelimit-register-3@example.com",
+            "email": "ratelimit-register-success@example.com",
             "password": VALID_TEST_PASSWORD,
         },
     )
