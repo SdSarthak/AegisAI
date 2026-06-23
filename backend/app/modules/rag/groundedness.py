@@ -15,9 +15,9 @@ EmbeddingsFn = Callable[[list[str]], list[list[float]]]
 
 def get_embeddings():
     """Return configured embeddings for legacy groundedness helpers."""
-    from app.modules.rag.vector_store import get_embeddings as load_embeddings
+    from app.modules.rag.embeddings import get_embeddings as _get_embeddings
 
-    return load_embeddings()
+    return _get_embeddings()
 
 
 def cosine_similarity(left: list[float], right: list[float]) -> float:
@@ -294,37 +294,6 @@ def _cosine_similarity(left: np.ndarray, right: np.ndarray) -> float:
     if left_norm == 0.0 or right_norm == 0.0:
         return 0.0
     return float(np.dot(left, right) / (left_norm * right_norm))
-
-
-def cosine_similarity(left: list[float], right: list[float]) -> float:
-    """Backward-compatible public cosine similarity helper for legacy tests."""
-    return _cosine_similarity(
-        np.asarray(left, dtype=float),
-        np.asarray(right, dtype=float),
-    )
-
-
-def get_embeddings():
-    """Lazy embeddings wrapper retained for older groundedness callers/tests."""
-    from .vector_store import get_embeddings as loader
-
-    return loader()
-
-
-def compute_groundedness(answer: str, chunks: list[str]) -> float:
-    """Return the legacy answer-to-source groundedness score."""
-    if not answer.strip() or not chunks:
-        return 0.0
-
-    try:
-        embeddings = get_embeddings()
-        answer_embedding = embeddings.embed_query(answer)
-        source_embedding = embeddings.embed_query("\n\n".join(chunks))
-    except Exception:
-        logger.warning("Legacy groundedness computation failed", exc_info=True)
-        return 0.0
-
-    return _clamp_score(cosine_similarity(answer_embedding, source_embedding))
 
 
 def _clamp_score(score: float) -> float:
