@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Dict, Any
 
 from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
@@ -136,12 +137,14 @@ app.add_middleware(RequestContextMiddleware)
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    headers = getattr(exc, "headers", None)
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "detail": exc.detail,
             "request_id": get_request_id(),
         },
+        headers=headers,
     )
 
 @app.exception_handler(RequestValidationError)
@@ -149,7 +152,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(
         status_code=422,
         content={
-            "detail": exc.errors(),
+            "detail": jsonable_encoder(exc.errors()),
             "request_id": get_request_id(),
         },
     )
