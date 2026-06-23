@@ -1,4 +1,5 @@
 import sys
+from tests.csrf_client import _CSRFClientWrapper
 import types
 from unittest.mock import patch
 
@@ -73,8 +74,8 @@ def client():
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = _fake_user
 
-    with TestClient(app) as c:
-        yield c
+    with TestClient(app) as tc:
+        yield _CSRFClientWrapper(tc)
     
     # 4. Cleanup
     db.close()
