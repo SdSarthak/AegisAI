@@ -17,11 +17,30 @@ import { Toaster } from 'react-hot-toast'
 import RagChat from './pages/RagChat'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore()
+  const { isAuthenticated, isRevalidating } = useAuthStore()
+
+  if (isRevalidating) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-primary-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+          <p className="text-sm text-gray-500">Verifying session...</p>
+        </div>
+      </div>
+    )
+  }
+
   return isAuthenticated ? <>{children}</> : <Navigate to="/login" />
 }
 
 function App() {
+  const { revalidateSession } = useAuthStore()
+
+  // Revalidate session on app startup to ensure token is still valid
+  useEffect(() => {
+    revalidateSession()
+  }, [revalidateSession])
+
   // ✅ Sync with system theme (only if no manual preference)
   useEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)")
