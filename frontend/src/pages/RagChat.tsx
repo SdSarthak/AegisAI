@@ -49,7 +49,9 @@ export default function RagChat() {
     setValidationError(null)
     setSubmittedQuestion(trimmed)
     setQuestion('')
+
     ask(trimmed)
+
   }
 
   const handleExport = () => {
