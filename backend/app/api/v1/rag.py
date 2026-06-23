@@ -40,7 +40,7 @@ from app.modules.llm.llm_client import LLMClient
 from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.streaming import stream_rag_answer
 from app.modules.rag.cache import get_cached_answer, set_cached_answer
-from app.modules.rag.vector_store import create_vector_store, load_vector_store
+from app.modules.rag.vector_store import create_vector_store, load_vector_store, _get_index_path
 from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
 
 router = APIRouter()
@@ -241,8 +241,8 @@ def _stored_filename(original_filename: str) -> str:
     return f"{uuid.uuid4().hex}_{safe_name}"
 
 
-def _index_size_bytes() -> int:
-    index_path = settings.FAISS_INDEX_PATH
+def _index_size_bytes(user_id: int | None = None) -> int:
+    index_path = _get_index_path(user_id)
     index_size_bytes = 0
     for fname in ("index.faiss", "index.pkl"):
         fpath = os.path.join(index_path, fname)
@@ -274,7 +274,7 @@ def _rebuild_index_from_documents(
         return 0
 
     create_vector_store(chunks, user_id=user_id)
-    return _index_size_bytes()
+    return _index_size_bytes(user_id)
 
 
 def _current_user_id(current_user: User) -> Optional[int]:
