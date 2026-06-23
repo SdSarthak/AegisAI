@@ -391,10 +391,12 @@ export const ragApi = {
     signal?: AbortSignal,
   ): Promise<void> => {
     const token = useAuthStore.getState().token
+    const requestId = crypto.randomUUID()
     const resp = await fetch(buildApiUrl('/rag/query/stream'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-Request-ID': requestId,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({ question }),
