@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from fastapi import Request, HTTPException, status
 from fastapi.testclient import TestClient
+from starlette.responses import Response
 
 # Set test database before importing app
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
@@ -107,8 +108,8 @@ def client(db_engine):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
-    client = TestClient(app)
-    yield client
+    raw_client = TestClient(app)
+    yield _CSRFClientWrapper(raw_client)
 
     session.close()
     transaction.rollback()
@@ -137,34 +138,40 @@ class _CSRFClientWrapper:
         headers["X-CSRF-Token"] = self._csrf_token
         kwargs["headers"] = headers
 
-    def get(self, url: str, **kwargs: object) -> TestClient.response:
+    def get(self, url: str, **kwargs: object) -> Response:
         return self._inner.get(url, **kwargs)
 
-    def post(self, url: str, **kwargs: object) -> TestClient.response:
+    def post(self, url: str, **kwargs: object) -> Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.post(url, **kwargs)
 
-    def put(self, url: str, **kwargs: object) -> TestClient.response:
+    def put(self, url: str, **kwargs: object) -> Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.put(url, **kwargs)
 
-    def patch(self, url: str, **kwargs: object) -> TestClient.response:
+    def patch(self, url: str, **kwargs: object) -> Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.patch(url, **kwargs)
 
-    def delete(self, url: str, **kwargs: object) -> TestClient.response:
+    def delete(self, url: str, **kwargs: object) -> Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.delete(url, **kwargs)
 
-    def request(self, method: str, url: str, **kwargs: object) -> TestClient.response:
+    def request(self, method: str, url: str, **kwargs: object) -> Response:
         if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
             self._ensure_csrf()
             self._inject_csrf(kwargs)
         return self._inner.request(method, url, **kwargs)
+
+    def stream(self, method: str, url: str, **kwargs):
+        if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+            self._ensure_csrf()
+            self._inject_csrf(kwargs)
+        return self._inner.stream(method, url, **kwargs)
 
     def __getattr__(self, name: str) -> object:
         return getattr(self._inner, name)
@@ -174,16 +181,16 @@ class _CSRFClientWrapper:
 def csrf_client(client: TestClient):
     """CSRF-aware test client.  Handles X-CSRF-Token automatically for
     state-changing requests (POST / PUT / PATCH / DELETE)."""
-    return _CSRFClientWrapper(client)
+    return client
 
 
 @pytest.fixture
-def auth_headers(csrf_client):
+def auth_headers(client):
     email = f"batch-scan-{uuid4()}@example.com"
     password = "TestPass123!"
 
-    # Register via csrf_client so the cookie is populated
-    csrf_client.post(
+    # Register via client so the cookie is populated
+    client.post(
         "/api/v1/auth/register",
         json={
             "email": email,
@@ -192,7 +199,7 @@ def auth_headers(csrf_client):
         },
     )
 
-    response = csrf_client.post(
+    response = client.post(
         "/api/v1/auth/login",
         data={"username": email, "password": password},
     )
@@ -200,20 +207,20 @@ def auth_headers(csrf_client):
 
     return {
         "Authorization": f"Bearer {token}",
-        "X-CSRF-Token": csrf_client._csrf_token,
+        "X-CSRF-Token": client._csrf_token,
     }
 
 
 @pytest.fixture
-def other_user_auth_headers(csrf_client, db_session):
+def other_user_auth_headers(client, db_session):
     # Register a different user
-    csrf_client.post("/api/v1/auth/register", json={
+    client.post("/api/v1/auth/register", json={
         "email": "other@example.com",
         "password": "OtherPass123!",
         "full_name": "Other User",
         "company_name": "Other Corp",
     })
-    response = csrf_client.post(
+    response = client.post(
         "/api/v1/auth/login",
         data={"username": "other@example.com", "password": "OtherPass123!"},
         headers={"Content-Type": "application/x-www-form-urlencoded"}
@@ -221,7 +228,7 @@ def other_user_auth_headers(csrf_client, db_session):
     token = response.json()["access_token"]
     return {
         "Authorization": f"Bearer {token}",
-        "X-CSRF-Token": csrf_client._csrf_token,
+        "X-CSRF-Token": client._csrf_token,
     }
 
 
