@@ -1,20 +1,18 @@
-"""Tests for PATCH /api/v1/ai-systems/{id}/status endpoint."""
-
-import os
+"""
+Tests for PATCH /api/v1/ai-systems/{id}/status endpoint.
+"""
 import pytest
-
-os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
-
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
-from sqlalchemy.pool import StaticPool
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
 from app.core.security import get_current_user
 from app.main import app
-from app.models.ai_system import AISystem, ComplianceStatus
 from app.models.user import User
+from app.models.ai_system import AISystem
+from app.models.ai_system import ComplianceStatus
 
 
 @pytest.fixture(scope="module")
@@ -38,6 +36,7 @@ def db(engine):
 
 @pytest.fixture
 def client(db):
+    from tests.conftest import _CSRFClientWrapper
     user = User(email="patch@test.com", hashed_password="x", full_name="Patcher")
     db.add(user)
     db.flush()
@@ -60,7 +59,7 @@ def client(db):
     app.dependency_overrides[get_current_user] = override_user
 
     with TestClient(app) as c:
-        yield c, system
+        yield _CSRFClientWrapper(c), system
 
     app.dependency_overrides.clear()
 
@@ -129,27 +128,20 @@ class TestPatchStatus:
             hashed_password="x",
             full_name="Owner",
         )
-
-        db.add(owner)
-        db.flush()
-
-        # Create another user
         other_user = User(
-            email="other@test.com",
+            email="attacker@test.com",
             hashed_password="x",
-            full_name="Other User",
+            full_name="Attacker",
         )
-
+        db.add(owner)
         db.add(other_user)
         db.flush()
 
-        # Create system owned by owner
         system = AISystem(
             owner_id=owner.id,
             name="Owner System",
             compliance_status=ComplianceStatus.NOT_STARTED,
         )
-
         db.add(system)
         db.flush()
 
@@ -162,8 +154,9 @@ class TestPatchStatus:
         app.dependency_overrides[get_db] = override_db
         app.dependency_overrides[get_current_user] = override_user
 
+        from tests.conftest import _CSRFClientWrapper
         with TestClient(app) as c:
-            resp = c.patch(
+            resp = _CSRFClientWrapper(c).patch(
                 f"/api/v1/ai-systems/{system.id}/status",
                 json={"compliance_status": "compliant"},
             )
