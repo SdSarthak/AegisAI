@@ -337,3 +337,38 @@ class TestQueryStreamEndpoint:
             assert "missing" in resp.json()["detail"].lower()
         finally:
             app.dependency_overrides.pop(get_current_user, None)
+
+async def test_client_disconnect_calls_db_close(db_session: Session) -> None:
+    """When GeneratorExit fires (client disconnect), db.close() is called."""
+    from unittest.mock import MagicMock, AsyncIterator
+    from app.modules.rag.streaming import stream_rag_answer
+
+    # Track calls to db.close
+    close_called = False
+    original_close = db_session.close
+    def track_close() -> None:
+        nonlocal close_called
+        close_called = True
+        original_close()
+    db_session.close = track_close  # type: ignore[method-assign]
+
+    retriever = MagicMock()
+    retriever.get_relevant_documents.return_value = [
+        MagicMock(page_content="regulation text", metadata={"source": "eu_ai_act.txt"})
+    ]
+    llm = MagicMock()
+    # Return an already-exhausted token stream
+    llm.stream.return_value = iter([])
+
+    gen = stream_rag_answer(
+        question="EU AI Act requirements",
+        retriever=retriever,
+        llm=llm,
+        db=db_session,
+    )
+    # Consume generator to completion
+    results = []
+    async for frame in gen:
+        results.append(frame)
+    # db.close should have been called on normal completion
+    assert close_called, "db.close() was not called after generator completed normally"
