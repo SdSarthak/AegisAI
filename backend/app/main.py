@@ -17,7 +17,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.core.logging import configure_logging
-from app.core.middleware import RequestContextMiddleware
+from app.core.middleware import RequestContextMiddleware, PIIAndHallucinationGuardMiddleware
 from app.middleware.csrf import CSRFMiddleware
 from app.core.telemetry import setup_telemetry
 from app.api.v1 import api_router, badge
@@ -117,6 +117,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(PIIAndHallucinationGuardMiddleware)
 
 # Added last => outermost: every request (incl. CORS preflight and error
 # responses) is assigned a request id and access-logged in JSON.

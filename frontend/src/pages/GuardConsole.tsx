@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import {
   Activity,
   AlertCircle,
@@ -8,14 +8,22 @@ import {
   Loader2,
   Send,
   ShieldCheck,
+  Sliders,
+  Save,
+  Download,
 } from 'lucide-react'
 import CopyButton from '../components/CopyButton'
 import GuardExplanation from '../components/GuardExplanation'
 import {
   guardApi,
+  guardHistoryApi,
   type GuardExplainResponse,
   type GuardScanResponse,
 } from '../services/api'
+
+import { useAuthStore } from '../stores/authStore'
+import toast from 'react-hot-toast'
+
 
 type GuardMetrics = {
   decision: string
@@ -70,6 +78,168 @@ export default function GuardConsole() {
   const [scannedAt, setScannedAt] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Safety Config States
+  const [sanitizationLevel, setSanitizationLevel] = useState('medium')
+  const [maliciousThreshold, setMaliciousThreshold] = useState(0.8)
+  const [suspiciousThreshold, setSuspiciousThreshold] = useState(0.5)
+  const [piiMaskingEnabled, setPiiMaskingEnabled] = useState(false)
+  const [hallucinationThreshold, setHallucinationThreshold] = useState(0.5)
+  const [isSavingConfig, setIsSavingConfig] = useState(false)
+
+  // Telemetry Log Export States & Handlers
+  const [exportFormat, setExportFormat] = useState('csv')
+  const [exportDays, setExportDays] = useState('')
+  const [isExporting, setIsExporting] = useState(false)
+
+  const handleExportLogs = async () => {
+    setIsExporting(true)
+    try {
+      const minDelay = new Promise((r) => setTimeout(r, 1000))
+      const fetchLogs = async () => {
+        const token = useAuthStore.getState().token
+        const params = new URLSearchParams()
+        params.append('format', exportFormat)
+        if (exportDays) {
+          const daysNum = parseInt(exportDays, 10)
+          if (!isNaN(daysNum)) {
+            const startDate = new Date(Date.now() - daysNum * 24 * 60 * 60 * 1000)
+            params.append('start_date', startDate.toISOString())
+          }
+        }
+
+        const response = await fetch(`/api/v1/guard/logs/export?${params.toString()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+
+        if (!response.ok) {
+          if (response.status === 403) {
+            throw new Error('Forbidden: Only administrators can export scan logs.')
+          }
+          throw new Error('Failed to export guard scan logs.')
+        }
+        return response.blob()
+      }
+
+      const [blob] = await Promise.all([fetchLogs(), minDelay])
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `guard_scan_logs.${exportFormat}`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Guard scan logs exported successfully!')
+    } catch (err: any) {
+      console.error('Export logs failed:', err)
+      toast.error(err.message || 'Failed to export guard scan logs.')
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  // Tab State
+  const [activeTab, setActiveTab] = useState<'console' | 'history'>('console')
+
+  // History / Audit Log States & Handlers
+  const [historyLogs, setHistoryLogs] = useState<any[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyNextCursor, setHistoryNextCursor] = useState<string | null>(null)
+  const [cursorHistory, setCursorHistory] = useState<(string | null)[]>([null])
+  const [cursorIndex, setCursorIndex] = useState(0)
+
+
+  const [filterDecision, setFilterDecision] = useState('')
+  const [filterIntent, setFilterIntent] = useState('')
+
+  const fetchHistoryLogs = async (cursor: string | null = null) => {
+    setHistoryLoading(true)
+    try {
+      const response = await guardHistoryApi.list({
+        cursor,
+        limit: 10,
+        decision: filterDecision || undefined,
+        intent: filterIntent || undefined,
+      })
+      setHistoryLogs(response.items || [])
+      setHistoryNextCursor(response.next_cursor)
+    } catch (err) {
+      console.error('Failed to fetch history logs', err)
+      toast.error('Failed to load scan history logs.')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (activeTab === 'history') {
+      setCursorHistory([null])
+      setCursorIndex(0)
+      fetchHistoryLogs(null)
+    }
+  }, [activeTab, filterDecision, filterIntent])
+
+
+  const handleNextPage = () => {
+    if (historyNextCursor) {
+      const nextIndex = cursorIndex + 1
+      const newHistory = [...cursorHistory]
+      newHistory[nextIndex] = historyNextCursor
+      setCursorHistory(newHistory)
+      setCursorIndex(nextIndex)
+      fetchHistoryLogs(historyNextCursor)
+    }
+  }
+
+
+  const handlePrevPage = () => {
+    if (cursorIndex > 0) {
+      const prevIndex = cursorIndex - 1
+      setCursorIndex(prevIndex)
+      const prevCursor = cursorHistory[prevIndex]
+      fetchHistoryLogs(prevCursor)
+    }
+  }
+
+
+
+
+  useEffect(() => {
+    const fetchConfig = async () => {
+      try {
+        const config = await guardApi.getConfig()
+        if (config) {
+          setSanitizationLevel(config.sanitization_level ?? 'medium')
+          setMaliciousThreshold(config.malicious_threshold ?? 0.8)
+          setSuspiciousThreshold(config.suspicious_threshold ?? 0.5)
+          setPiiMaskingEnabled(config.pii_masking_enabled ?? false)
+          setHallucinationThreshold(config.hallucination_threshold ?? 0.5)
+        }
+      } catch (err) {
+        console.error('Failed to load guard config', err)
+      }
+    }
+    fetchConfig()
+  }, [])
+
+  const handleSaveConfig = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setIsSavingConfig(true)
+    try {
+      await guardApi.updateConfig({
+        sanitization_level: sanitizationLevel,
+        malicious_threshold: maliciousThreshold,
+        suspicious_threshold: suspiciousThreshold,
+        pii_masking_enabled: piiMaskingEnabled,
+        hallucination_threshold: hallucinationThreshold,
+      })
+      toast.success('Guard configurations updated successfully!')
+    } catch (err) {
+      console.error('Failed to save config', err)
+      toast.error('Failed to save configuration settings.')
+    } finally {
+      setIsSavingConfig(false)
+    }
+  }
 
   const metrics = useMemo(
     () => buildMetrics(result, scannedAt),
@@ -169,11 +339,41 @@ export default function GuardConsole() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6">
-        <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Scan prompt</h2>
-          </div>
+      {/* Tabs */}
+      <div className="flex border-b border-gray-200 dark:border-gray-700 mb-6">
+        <button
+          type="button"
+          onClick={() => setActiveTab('console')}
+          className={`py-2.5 px-4 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === 'console'
+              ? 'border-primary-600 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+          }`}
+        >
+          Scanner Console
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab('history')}
+          className={`py-2.5 px-4 text-sm font-semibold border-b-2 transition-all ${
+            activeTab === 'history'
+              ? 'border-primary-600 text-primary-600'
+              : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+          }`}
+        >
+          Scan History & Audit Logs
+        </button>
+      </div>
+
+      {activeTab === 'console' ? (
+        <>
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6">
+
+        <div className="space-y-6">
+          <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Scan prompt</h2>
+            </div>
 
           <form onSubmit={handleScan} className="p-5 space-y-4">
             <label htmlFor="guard-prompt" className="sr-only">
@@ -216,7 +416,140 @@ export default function GuardConsole() {
           </form>
         </section>
 
-        <aside className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        {/* Guard settings panel */}
+        <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center gap-2">
+            <Sliders className="w-5 h-5 text-primary-600" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Guard settings</h2>
+          </div>
+
+          <form onSubmit={handleSaveConfig} className="p-5 space-y-6">
+            {/* Sanitization level selection */}
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                Sanitization aggressiveness
+              </label>
+              <select
+                value={sanitizationLevel}
+                onChange={(e) => setSanitizationLevel(e.target.value)}
+                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-950 dark:text-white bg-white dark:bg-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              >
+                <option value="low">Low (minimal filtering)</option>
+                <option value="medium">Medium (standard checks)</option>
+                <option value="high">High (strict scrub)</option>
+              </select>
+              <p className="text-xs text-gray-500">
+                Defines how aggressively prompt instructions and boundaries are neutralized.
+              </p>
+            </div>
+
+            {/* Threshold Sliders */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm font-semibold">
+                  <span className="text-gray-700 dark:text-gray-300">Malicious threshold</span>
+                  <span className="text-primary-600">{(maliciousThreshold * 100).toFixed(0)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={maliciousThreshold}
+                  onChange={(e) => setMaliciousThreshold(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary-600"
+                />
+                <p className="text-xs text-gray-500">Block queries scoring above this threat score.</p>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm font-semibold">
+                  <span className="text-gray-700 dark:text-gray-300">Suspicious threshold</span>
+                  <span className="text-primary-600">{(suspiciousThreshold * 100).toFixed(0)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={suspiciousThreshold}
+                  onChange={(e) => setSuspiciousThreshold(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary-600"
+                />
+                <p className="text-xs text-gray-500">Sanitize queries scoring above this warning level.</p>
+              </div>
+            </div>
+
+            <hr className="border-gray-200 dark:border-gray-700" />
+
+            {/* PII Masking Filter */}
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-0.5">
+                  <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    PII masking filter
+                  </label>
+                  <p className="text-xs text-gray-500">
+                    Detect and redact emails, API keys, and phone numbers before output is sent to clients.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPiiMaskingEnabled(!piiMaskingEnabled)}
+                  className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    piiMaskingEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-gray-700'
+                  }`}
+                >
+                  <span
+                    className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                      piiMaskingEnabled ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
+
+              {/* Hallucination Threshold */}
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm font-semibold">
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-700 dark:text-gray-300">Hallucination blocker threshold</span>
+                  </div>
+                  <span className="text-primary-600">{(hallucinationThreshold * 100).toFixed(0)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={hallucinationThreshold}
+                  onChange={(e) => setHallucinationThreshold(parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-primary-600"
+                />
+                <p className="text-xs text-gray-500">
+                  Verify response alignment with source documents. Block output if groundedness is below this.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                disabled={isSavingConfig}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isSavingConfig ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Save settings
+              </button>
+            </div>
+          </form>
+        </section>
+      </div>
+
+      <aside className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Audit exports</h2>
           </div>
@@ -247,8 +580,62 @@ export default function GuardConsole() {
                 disabled={!metrics}
               />
             </div>
+
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-2">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">Telemetry scan logs</h3>
+              
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Format</label>
+                    <select
+                      value={exportFormat}
+                      onChange={(e) => setExportFormat(e.target.value)}
+                      className="w-full text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 focus:ring-1 focus:ring-primary-500 focus:border-transparent outline-none transition-all cursor-pointer text-gray-700 dark:text-gray-300"
+                    >
+                      <option value="csv">CSV Format</option>
+                      <option value="json">JSON Format</option>
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-[11px] font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-1">Time Range</label>
+                    <select
+                      value={exportDays}
+                      onChange={(e) => setExportDays(e.target.value)}
+                      className="w-full text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 focus:ring-1 focus:ring-primary-500 focus:border-transparent outline-none transition-all cursor-pointer text-gray-700 dark:text-gray-300"
+                    >
+                      <option value="">All time</option>
+                      <option value="1">Last 24 hours</option>
+                      <option value="7">Last 7 days</option>
+                      <option value="30">Last 30 days</option>
+                    </select>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleExportLogs}
+                  disabled={isExporting}
+                  className="w-full flex items-center justify-center gap-2 rounded-lg bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900 hover:bg-gray-800 dark:hover:bg-white text-xs font-semibold py-2.5 px-4 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  {isExporting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      Exporting...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-3.5 h-3.5" />
+                      Export Scan Logs
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </aside>
+
       </div>
 
       {isLoading && (
@@ -412,6 +799,126 @@ export default function GuardConsole() {
               </div>
             </div>
           </aside>
+        </div>
+      )}
+      </>
+      ) : (
+        <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden p-6 space-y-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 dark:border-gray-700 pb-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Scan History & Audit Logs</h2>
+              <p className="text-xs text-gray-500">Telemetry logs of prompt scan decisions.</p>
+            </div>
+
+            {/* Filters */}
+            <div className="flex flex-wrap gap-2">
+              <div>
+                <select
+                  value={filterDecision}
+                  onChange={(e) => setFilterDecision(e.target.value)}
+                  className="text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 focus:ring-1 focus:ring-primary-500 outline-none transition-all cursor-pointer text-gray-700 dark:text-gray-300"
+                >
+                  <option value="">All Decisions</option>
+                  <option value="allow">Allow</option>
+                  <option value="block">Block</option>
+                  <option value="sanitize">Sanitize</option>
+                </select>
+              </div>
+
+              <div>
+                <select
+                  value={filterIntent}
+                  onChange={(e) => setFilterIntent(e.target.value)}
+                  className="text-xs bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg p-2 focus:ring-1 focus:ring-primary-500 outline-none transition-all cursor-pointer text-gray-700 dark:text-gray-300"
+                >
+                  <option value="">All Intents</option>
+                  <option value="benign">Benign</option>
+                  <option value="suspicious">Suspicious</option>
+                  <option value="malicious">Malicious</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          {historyLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-primary-600" />
+            </div>
+          ) : historyLogs.length === 0 ? (
+            <div className="text-center py-12">
+              <ShieldCheck className="w-12 h-12 text-gray-300 dark:text-gray-600 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">No scan history logs found.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    <th className="py-3 px-4">Timestamp</th>
+                    <th className="py-3 px-4">Prompt Hash</th>
+                    <th className="py-3 px-4">Decision</th>
+                    <th className="py-3 px-4">Confidence</th>
+                    <th className="py-3 px-4">Matched Patterns</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 dark:divide-gray-700/50 text-sm text-gray-700 dark:text-gray-300">
+                  {historyLogs.map((log) => (
+                    <tr key={log.id} className="hover:bg-gray-50/50 dark:hover:bg-gray-800/30 transition-all">
+                      <td className="py-3.5 px-4 font-mono text-xs whitespace-nowrap">
+                        {log.created_at ? new Date(log.created_at).toLocaleString() : 'N/A'}
+                      </td>
+                      <td className="py-3.5 px-4 font-mono text-xs max-w-[150px] truncate" title={log.prompt_hash}>
+                        {log.prompt_hash}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border ${decisionBadgeClass(log.decision)}`}>
+                          {log.decision}
+                        </span>
+                      </td>
+                      <td className="py-3.5 px-4 font-medium text-gray-900 dark:text-white">
+                        {(log.confidence * 100).toFixed(0)}%
+                      </td>
+                      <td className="py-3.5 px-4 max-w-[200px] truncate">
+                        {log.matched_patterns && log.matched_patterns.length > 0 ? (
+                          <span className="bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 px-2 py-0.5 rounded text-xs">
+                            {log.matched_patterns.join(', ')}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-xs">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Pagination Controls */}
+          {!historyLoading && historyLogs.length > 0 && (
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100 dark:border-gray-700">
+              <button
+                type="button"
+                onClick={handlePrevPage}
+                disabled={cursorIndex === 0}
+                className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                Previous
+              </button>
+              <span className="text-xs text-gray-500">
+                Page {cursorIndex + 1}
+              </span>
+              <button
+                type="button"
+                onClick={handleNextPage}
+                disabled={!historyNextCursor}
+                className="px-4 py-2 border border-gray-200 dark:border-gray-700 rounded-lg text-xs font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

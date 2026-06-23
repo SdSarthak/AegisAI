@@ -12,6 +12,9 @@ TODO for contributors (medium difficulty):
 import hashlib
 import logging
 import base64
+import io
+import csv
+import json
 
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
@@ -85,6 +88,8 @@ class GuardConfigRequest(BaseModel):
     sanitization_level: str
     malicious_threshold: float
     suspicious_threshold: float
+    pii_masking_enabled: bool = False
+    hallucination_threshold: float = 0.5
 
 
 class BulkScanRequest(BaseModel):
@@ -117,6 +122,8 @@ class UserGuardConfig(TypedDict):
     sanitization_level: str
     malicious_threshold: float
     suspicious_threshold: float
+    pii_masking_enabled: bool
+    hallucination_threshold: float
 
 
 # Temporary in-memory config store
@@ -892,6 +899,8 @@ def get_guard_config(current_user: User = Depends(get_current_user)):
         "sanitization_level": "medium",
         "malicious_threshold": 0.8,
         "suspicious_threshold": 0.5,
+        "pii_masking_enabled": False,
+        "hallucination_threshold": 0.5,
     }
 
     return user_guard_configs.get(current_user.id, default_config)
@@ -921,10 +930,18 @@ def update_guard_config(
             detail="suspicious_threshold must be between 0 and 1",
         )
 
+    if not (0.0 <= config.hallucination_threshold <= 1.0):
+        raise HTTPException(
+            status_code=400,
+            detail="hallucination_threshold must be between 0 and 1",
+        )
+
     user_guard_configs[current_user.id] = {
         "sanitization_level": config.sanitization_level,
         "malicious_threshold": config.malicious_threshold,
         "suspicious_threshold": config.suspicious_threshold,
+        "pii_masking_enabled": config.pii_masking_enabled,
+        "hallucination_threshold": config.hallucination_threshold,
     }
 
     return {
@@ -1049,3 +1066,7 @@ def bulk_scan_prompts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."
         )
+
+
+
+
