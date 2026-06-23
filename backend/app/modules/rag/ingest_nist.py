@@ -84,7 +84,7 @@ def ingest_nist_ai_rmf() -> None:
             vector_store = FAISS.load_local(
                 str(FAISS_INDEX_PATH),
                 embeddings,
-                allow_dangerous_deserialization=True,
+                allow_dangerous_deserialization=False,
             )
             vector_store.add_documents(chunks)
             logger.info("Added NIST chunks to existing index")

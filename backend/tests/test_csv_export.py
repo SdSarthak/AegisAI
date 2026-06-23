@@ -1,6 +1,7 @@
 """Tests for GET /api/v1/ai-systems/export endpoint."""
 
 import csv
+from conftest import _CSRFClientWrapper
 import io
 import os
 
@@ -58,8 +59,8 @@ def client(db):
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[get_current_user] = override_user
 
-    with TestClient(app) as c:
-        yield c, db, user
+    with TestClient(app) as tc:
+        yield _CSRFClientWrapper(tc), db, user
 
     app.dependency_overrides.clear()
 

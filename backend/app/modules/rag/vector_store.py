@@ -75,7 +75,7 @@ def create_vector_store(documents: list[Any], user_id: int | None = None) -> Any
             faiss_cls.load_local(
                 tmp_dir,
                 embeddings,
-                allow_dangerous_deserialization=True,
+                allow_dangerous_deserialization=False,
             )
 
             if os.path.exists(index_path):
@@ -89,7 +89,7 @@ def create_vector_store(documents: list[Any], user_id: int | None = None) -> Any
                 faiss_cls.load_local(
                     index_path,
                     embeddings,
-                    allow_dangerous_deserialization=True,
+                    allow_dangerous_deserialization=False,
                 )
 
         finally:
@@ -118,7 +118,7 @@ def load_vector_store(user_id: int | None = None) -> Any:
     embeddings = get_embeddings()
     faiss_cls = _get_faiss_class()
     return faiss_cls.load_local(
-        index_path, embeddings, allow_dangerous_deserialization=True
+        index_path, embeddings, allow_dangerous_deserialization=False
     )
 
 

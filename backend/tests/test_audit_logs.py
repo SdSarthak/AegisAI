@@ -6,6 +6,7 @@ import pytest
 os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 
 from fastapi.testclient import TestClient
+from tests.conftest import _CSRFClientWrapper
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -85,7 +86,7 @@ def client(db):
     app.dependency_overrides[get_current_user] = override_user
 
     with TestClient(app) as c:
-        yield c
+        yield _CSRFClientWrapper(c)
 
     app.dependency_overrides.clear()
 
