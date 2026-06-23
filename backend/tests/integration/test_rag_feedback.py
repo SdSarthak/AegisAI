@@ -12,6 +12,7 @@ from app.main import app
 from app.core.database import Base, get_db
 from app.core.security import get_current_user
 from app.models.user import User, SubscriptionTier
+from tests.csrf_client import _CSRFClientWrapper
 
 
 class DummyDoc:
@@ -73,8 +74,8 @@ def client():
     app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = _fake_user
 
-    with TestClient(app) as c:
-        yield c
+    with TestClient(app) as tc:
+        yield _CSRFClientWrapper(tc)
     
     # 4. Cleanup
     db.close()
