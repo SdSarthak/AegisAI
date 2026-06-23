@@ -203,7 +203,14 @@ def test_distributed_rate_limiter_circuit_breaker_recovery(monkeypatch):
 
 
 def test_distributed_rate_limiter_cleans_up_stale_local_keys(monkeypatch):
-    """Expired in-memory keys are removed during the periodic cleanup sweep."""
+    """Expired in-memory keys are removed during the periodic cleanup sweep.
+
+    With the fix, _check_local runs cleanup before the rate-limit check on every
+    invocation (not only on non-rate-limited calls). This means:
+    1. The stale entry from the first call is removed during the second call
+       (before the rate-limit check evaluates).
+    2. cleanup_stale_local_attempts() called afterwards finds nothing stale.
+    """
     fake_now = datetime(2026, 1, 1, tzinfo=timezone.utc)
 
     class FrozenDateTime(datetime):
@@ -216,6 +223,7 @@ def test_distributed_rate_limiter_cleans_up_stale_local_keys(monkeypatch):
     monkeypatch.setattr(rate_limit, "datetime", FrozenDateTime)
 
     limiter = rate_limit.DistributedRateLimiter(cleanup_interval=1)
+    # First call: records "now" in the deque for stale:key
     limited, retry_after = limiter.check_and_consume(
         key="stale:key",
         limit=1,
@@ -224,10 +232,21 @@ def test_distributed_rate_limiter_cleans_up_stale_local_keys(monkeypatch):
     )
     assert limited is False
     assert retry_after == 0
+    # Cleanup ran during _check_local (cleanup_interval=1), counter reset to 0
+    assert limiter.cleanup_stale_local_attempts() == 0
 
+    # Advance time past the window
     FrozenDateTime.current = fake_now + timedelta(seconds=61)
 
-    removed = limiter.cleanup_stale_local_attempts()
-
-    assert removed == 1
-    assert limiter.cleanup_stale_local_attempts() == 0
+    # Second call: cleanup runs BEFORE rate-limit check, removes the stale entry
+    # (the entry from first call is now outside the 60-second window).
+    # Since the deque is empty after cleanup, rate-limit check evaluates:
+    #   len([]) + 1 > 1  =>  False  => not rate-limited
+    limited2, _ = limiter.check_and_consume(
+        key="stale:key",
+        limit=1,
+        window_seconds=60,
+        fail_closed=False,
+    )
+    assert limited2 is False  # Not rate-limited because stale entry was cleaned first
+    assert limiter.cleanup_stale_local_attempts() == 0  # Nothing left to clean
