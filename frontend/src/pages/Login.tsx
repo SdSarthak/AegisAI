@@ -165,14 +165,6 @@ export default function Login() {
                 {errors.find((e: ValidationError) => e.field === 'password')?.message}
               </p>
             )}
-            <input
-              id="password"
-              type="password"
-              required
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500"
-            />
           </div>
 
           <button
