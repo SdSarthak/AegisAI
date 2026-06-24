@@ -11,6 +11,7 @@ TODO for contributors (medium difficulty):
 
 import hashlib
 import logging
+import re
 import base64
 
 from collections import Counter, defaultdict, deque
@@ -202,10 +203,13 @@ def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = N
 @router.post("/test", response_model=GuardTestResponse)
 def test_guard_layer(
     request: GuardTestRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     from app.modules.guard.llm_guard import LLMGuard
     from app.modules.guard.sanitizer import SanitizationLevel
+    from app.modules.guard.regex_rules import CustomRuleDef
+    from app.models.custom_regex_rule import CustomRegexRule
 
     level_map = {
         "low": SanitizationLevel.LOW,
@@ -218,7 +222,15 @@ def test_guard_layer(
         SanitizationLevel.MEDIUM,
     )
 
-    guard = LLMGuard(sanitization_level=san_level)
+    custom_rules = [
+        CustomRuleDef(pattern=r.pattern, name=r.name, severity=r.severity)
+        for r in db.query(CustomRegexRule).filter(
+            CustomRegexRule.user_id == current_user.id,
+            CustomRegexRule.is_active == True,
+        ).all()
+    ]
+
+    guard = LLMGuard(sanitization_level=san_level, custom_rules=custom_rules)
 
     if request.mode == "regex_only":
         regex_result = guard.regex_filter.check(request.prompt)
@@ -283,6 +295,8 @@ def scan_prompt(
     try:
         from app.modules.guard.llm_guard import LLMGuard
         from app.modules.guard.sanitizer import SanitizationLevel
+        from app.modules.guard.regex_rules import CustomRuleDef
+        from app.models.custom_regex_rule import CustomRegexRule
 
         level_map = {
             "low": SanitizationLevel.LOW,
@@ -294,7 +308,15 @@ def scan_prompt(
             SanitizationLevel.MEDIUM,
         )
 
-        guard = LLMGuard(sanitization_level=san_level)
+        custom_rules = [
+            CustomRuleDef(pattern=r.pattern, name=r.name, severity=r.severity)
+            for r in db.query(CustomRegexRule).filter(
+                CustomRegexRule.user_id == current_user.id,
+                CustomRegexRule.is_active == True,
+            ).all()
+        ]
+
+        guard = LLMGuard(sanitization_level=san_level, custom_rules=custom_rules)
         result = guard.guard(request.prompt)
 
         client_ip = http_request.client.host if http_request.client else None
@@ -976,6 +998,8 @@ def bulk_scan_prompts(
     try:
         from app.modules.guard.llm_guard import LLMGuard
         from app.modules.guard.sanitizer import SanitizationLevel
+        from app.modules.guard.regex_rules import CustomRuleDef
+        from app.models.custom_regex_rule import CustomRegexRule
 
         level_map = {
             "low": SanitizationLevel.LOW,
@@ -987,7 +1011,15 @@ def bulk_scan_prompts(
             SanitizationLevel.MEDIUM,
         )
 
-        guard = LLMGuard(sanitization_level=san_level)
+        custom_rules = [
+            CustomRuleDef(pattern=r.pattern, name=r.name, severity=r.severity)
+            for r in db.query(CustomRegexRule).filter(
+                CustomRegexRule.user_id == current_user.id,
+                CustomRegexRule.is_active == True,
+            ).all()
+        ]
+
+        guard = LLMGuard(sanitization_level=san_level, custom_rules=custom_rules)
         results: list[ScanResponse] = []
 
         for prompt in request.prompts:
@@ -1049,3 +1081,101 @@ def bulk_scan_prompts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."
         )
+
+
+# ---------------------------------------------------------------------------
+# Custom regex rules CRUD
+# ---------------------------------------------------------------------------
+
+
+from app.schemas.custom_regex_rule import (
+    CustomRegexRuleCreate as _CustomRegexRuleCreate,
+    CustomRegexRuleUpdate as _CustomRegexRuleUpdate,
+    CustomRegexRuleResponse as _CustomRegexRuleResponse,
+)
+from app.models.custom_regex_rule import CustomRegexRule as _CustomRegexRule
+
+
+@router.get("/rules", response_model=list[_CustomRegexRuleResponse])
+def list_custom_rules(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rules = (
+        db.query(_CustomRegexRule)
+        .filter(_CustomRegexRule.user_id == current_user.id)
+        .order_by(_CustomRegexRule.created_at.desc())
+        .all()
+    )
+    return rules
+
+
+@router.post("/rules", response_model=_CustomRegexRuleResponse, status_code=status.HTTP_201_CREATED)
+def create_custom_rule(
+    body: _CustomRegexRuleCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        re.compile(body.pattern)
+    except re.error as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid regex pattern: {exc}",
+        )
+
+    rule = _CustomRegexRule(
+        user_id=current_user.id,
+        pattern=body.pattern,
+        name=body.name,
+        severity=body.severity,
+    )
+    db.add(rule)
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+@router.patch("/rules/{rule_id}", response_model=_CustomRegexRuleResponse)
+def toggle_custom_rule(
+    rule_id: int,
+    body: _CustomRegexRuleUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rule = (
+        db.query(_CustomRegexRule)
+        .filter(
+            _CustomRegexRule.id == rule_id,
+            _CustomRegexRule.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not rule:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found")
+
+    rule.is_active = body.is_active
+    db.commit()
+    db.refresh(rule)
+    return rule
+
+
+@router.delete("/rules/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_custom_rule(
+    rule_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    rule = (
+        db.query(_CustomRegexRule)
+        .filter(
+            _CustomRegexRule.id == rule_id,
+            _CustomRegexRule.user_id == current_user.id,
+        )
+        .first()
+    )
+    if not rule:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rule not found")
+
+    db.delete(rule)
+    db.commit()

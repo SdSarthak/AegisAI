@@ -497,6 +497,17 @@ export interface GuardHistoryResponse {
   next_cursor: string | null
 }
 
+export interface CustomRegexRule {
+  id: number
+  user_id: number
+  pattern: string
+  name: string
+  severity: 'low' | 'medium' | 'high'
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
 export const guardApi = {
   scan: async (prompt: string): Promise<GuardScanResponse> => {
     const { data } = await api.post('/guard/scan', { prompt })
@@ -519,6 +530,25 @@ export const guardApi = {
       max_evals: opts.maxEvals ?? 200,
     })
     return data
+  },
+  listRules: async (): Promise<CustomRegexRule[]> => {
+    const { data } = await api.get('/guard/rules')
+    return data
+  },
+  createRule: async (rule: {
+    pattern: string
+    name: string
+    severity: string
+  }): Promise<CustomRegexRule> => {
+    const { data } = await api.post('/guard/rules', rule)
+    return data
+  },
+  toggleRule: async (ruleId: number, isActive: boolean): Promise<CustomRegexRule> => {
+    const { data } = await api.patch(`/guard/rules/${ruleId}`, { is_active: isActive })
+    return data
+  },
+  deleteRule: async (ruleId: number): Promise<void> => {
+    await api.delete(`/guard/rules/${ruleId}`)
   },
 }
 

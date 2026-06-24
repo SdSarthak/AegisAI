@@ -1,8 +1,8 @@
 """Regex-based heuristic filter for detecting obvious prompt injection attempts."""
 
 import re
-from typing import Dict, List
-from dataclasses import dataclass
+from typing import Dict, List, Optional
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -12,6 +12,17 @@ class RegexResult:
     flag: bool
     matched_patterns: List[str]
     score: float  # 0.0 to 1.0
+
+
+@dataclass
+class CustomRuleDef:
+    pattern: str
+    name: str
+    severity: str  # "low", "medium", or "high"
+    compiled: re.Pattern = field(init=False)
+
+    def __post_init__(self):
+        self.compiled = re.compile(self.pattern, re.IGNORECASE)
 
 
 class RegexFilter:
@@ -72,9 +83,10 @@ class RegexFilter:
         r"\b(backdoor|trojan|malware)\b",
     ]
 
-    def __init__(self):
+    def __init__(self, custom_rules: Optional[List[CustomRuleDef]] = None):
         """Initialize compiled regex patterns with flags."""
         self.patterns = self._compile_patterns()
+        self.custom_rules = custom_rules or []
 
     def _compile_patterns(self) -> Dict[str, List[re.Pattern]]:
         """Compile all regex patterns with appropriate flags."""
@@ -154,6 +166,14 @@ class RegexFilter:
                 match = pattern.search(prompt).group(0)
                 matched_patterns.append(f"suspicious_keyword: {match}")
                 severity_scores.append(0.3)
+
+        # Check custom rules
+        severity_map = {"low": 0.3, "medium": 0.6, "high": 0.9}
+        for rule in self.custom_rules:
+            if rule.compiled.search(prompt):
+                match = rule.compiled.search(prompt).group(0)
+                matched_patterns.append(f"custom_{rule.name}: {match}")
+                severity_scores.append(severity_map.get(rule.severity, 0.6))
 
         # Calculate overall risk score (max of all severities)
         risk_score = max(severity_scores) if severity_scores else 0.0

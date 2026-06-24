@@ -8,9 +8,10 @@ Addresses: Indirect prompt injection and poisoned document chunks before LLM con
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 
 from . import RegexFilter, IntentClassifier, DecisionEngine, PromptSanitizer
+from .regex_rules import CustomRuleDef
 from .decision_engine import Decision
 from .sanitizer import SanitizationLevel
 from .normalizer import normalize_prompt
@@ -31,6 +32,7 @@ class LLMGuard:
         self,
         classifier_model_path: Optional[str] = None,
         sanitization_level: SanitizationLevel = SanitizationLevel.MEDIUM,
+        custom_rules: Optional[List[CustomRuleDef]] = None,
     ):
         """
         Initialize the guard with all defense layers.
@@ -42,11 +44,12 @@ class LLMGuard:
             classifier_model_path: Path to fine-tuned classifier model.
                                   If None, auto-detects using config.get_trained_model_path()
             sanitization_level: How aggressively to sanitize prompts
+            custom_rules: Optional list of custom regex rules from the user
         """
         logger.info("Initializing LLM Guard...")
 
         # Layer 1: Fast regex filter
-        self.regex_filter = RegexFilter()
+        self.regex_filter = RegexFilter(custom_rules=custom_rules)
         logger.info("✓ Regex filter initialized")
 
         # Layer 2: Intent classifier (loads trained model or deterministic fallback)
