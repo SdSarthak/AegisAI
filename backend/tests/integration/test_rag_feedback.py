@@ -74,6 +74,7 @@ def client():
     app.dependency_overrides[get_current_user] = _fake_user
 
     with TestClient(app) as c:
+        c.get("/api/v1/auth/csrf-token")
         yield c
     
     # 4. Cleanup

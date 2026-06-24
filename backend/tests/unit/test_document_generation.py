@@ -89,6 +89,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_current_user] = override_current_user
 
         client = TestClient(app)
+        client.get("/api/v1/auth/csrf-token")
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -148,6 +149,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_current_user] = override_current_user
 
         client = TestClient(app)
+        client.get("/api/v1/auth/csrf-token")
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -209,6 +211,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_current_user] = override_current_user
 
         client = TestClient(app)
+        client.get("/api/v1/auth/csrf-token")
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -269,6 +272,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_current_user] = override_current_user
 
         client = TestClient(app)
+        client.get("/api/v1/auth/csrf-token")
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -304,6 +308,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_current_user] = override_current_user
 
         client = TestClient(app)
+        client.get("/api/v1/auth/csrf-token")
         response = client.post(
             "/api/v1/documents/generate",
             json={
