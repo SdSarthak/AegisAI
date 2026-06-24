@@ -50,7 +50,17 @@ class _CSRFClientWrapper:
     def __getattr__(self, name: str) -> Any:
         if name.startswith("_"):
             return object.__getattribute__(self, name)
-        return self._wrap_method(name)
+        attr = getattr(self._inner, name)
+        if name in ("post", "put", "patch", "delete", "request"):
+            return self._wrap_method(name)
+        if name == "stream":
+            def stream_wrapper(method: str, url: str, **kwargs: Any) -> Any:
+                if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+                    self._ensure_csrf()
+                    self._inject_csrf(kwargs)
+                return self._inner.stream(method, url, **kwargs)
+            return stream_wrapper
+        return attr
 
     def __enter__(self) -> "_CSRFClientWrapper":
         self._inner.__enter__()

@@ -58,7 +58,11 @@ def rag_user(db_session: Session) -> User:
 
 @pytest_asyncio.fixture
 async def async_client(db_session: Session, rag_user: User):
-    """Return an async test client with DB and auth overrides installed."""
+    """Return an async test client with DB and auth overrides installed.
+
+    Pre-fetches a CSRF token so that POST/PUT/PATCH/DELETE requests succeed
+    when CSRF protection is enabled on the app.
+    """
 
     def override_get_db():
         yield db_session
@@ -69,8 +73,25 @@ async def async_client(db_session: Session, rag_user: User):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
     transport = httpx.ASGITransport(app=app)
-    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+
+    _csrf_token: str | None = None
+
+    async def _inject_csrf(request: httpx.Request) -> None:
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            if _csrf_token:
+                request.headers["X-CSRF-Token"] = _csrf_token
+
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://test",
+        event_hooks={"request": [_inject_csrf]},
+    ) as client:
+        # Pre-fetch CSRF token for subsequent requests
+        csrf_resp = await client.get("/api/v1/auth/csrf-token")
+        if csrf_resp.status_code == 200:
+            _csrf_token = csrf_resp.json().get("token", "")
         yield client
+
     app.dependency_overrides.clear()
 
 
