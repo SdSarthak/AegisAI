@@ -155,33 +155,33 @@ const requirementContent: Record<string, RequirementContent> = {
   },
 }
 
+const INITIAL_FORM_DATA = {
+  use_case_category: 'hr_recruitment',
+  is_safety_component: false,
+  affects_fundamental_rights: true,
+  makes_automated_decisions: true,
+  uses_biometric_data: false,
+  hr_recruitment_screening: true,
+  hr_promotion_termination: false,
+  credit_worthiness: false,
+  insurance_risk_assessment: false,
+  law_enforcement: false,
+  border_control: false,
+  justice_system: false,
+  education_vocational_training: false,
+  interacts_with_humans: true,
+  generates_synthetic_content: false,
+  emotion_recognition: false,
+  biometric_categorization: false,
+}
+
 export default function Classification() {
   const { systemId } = useParams()
   const [activeTab, setActiveTab] = useState<Tab>('questionnaire')
   const [result, setResult] = useState<ClassificationResult | null>(null)
-  const initialFormData = {
-    use_case_category: 'hr_recruitment',
-    is_safety_component: false,
-    affects_fundamental_rights: true,
-    makes_automated_decisions: true,
-    uses_biometric_data: false,
-    hr_recruitment_screening: true,
-    hr_promotion_termination: false,
-    credit_worthiness: false,
-    insurance_risk_assessment: false,
-    law_enforcement: false,
-    border_control: false,
-    justice_system: false,
-    education_vocational_training: false,
-    interacts_with_humans: true,
-    generates_synthetic_content: false,
-    emotion_recognition: false,
-    biometric_categorization: false,
-  }
-
-  const [formData, setFormData] = useState(initialFormData)
+  const [formData, setFormData] = useState(INITIAL_FORM_DATA)
   const isFormDirty = useMemo(
-    () => JSON.stringify(formData) !== JSON.stringify(initialFormData),
+    () => JSON.stringify(formData) !== JSON.stringify(INITIAL_FORM_DATA),
     [formData],
   )
   const { dialog } = useUnsavedChanges(activeTab === 'questionnaire' && isFormDirty)
