@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from app.models.ai_system import RiskLevel, ComplianceStatus
@@ -10,6 +10,12 @@ class AISystemCreate(BaseModel):
     version: Optional[str] = None
     use_case: Optional[str] = None
     sector: Optional[str] = None
+    @field_validator("name", "description", "version", "use_case", "sector")
+    @classmethod
+    def strip_text_fields(cls, v: str | None) -> str | None:
+        if isinstance(v, str):
+            return v.strip()
+        return v
 
 
 class AISystemUpdate(BaseModel):
@@ -19,6 +25,12 @@ class AISystemUpdate(BaseModel):
     use_case: Optional[str] = None
     sector: Optional[str] = None
     questionnaire_responses: Optional[Dict[str, Any]] = None
+    @field_validator("name", "description", "version", "use_case", "sector")
+    @classmethod
+    def strip_text_fields(cls, v: str | None) -> str | None:
+        if isinstance(v, str):
+            return v.strip()
+        return v
 
 
 class AISystemResponse(BaseModel):
