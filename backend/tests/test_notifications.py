@@ -1,6 +1,7 @@
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
+from .csrf_helpers import _CSRFClientWrapper
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -38,7 +39,8 @@ def _make_client(tmp_path):
     app.dependency_overrides[get_current_user] = override_current_user
 
     client = TestClient(app)
-    return client, db, user, other_user
+    # Wrap in _CSRFClientWrapper so POST requests auto-inject CSRF tokens
+    return _CSRFClientWrapper(client), db, user, other_user
 
 
 def test_list_notifications_returns_current_user_only(tmp_path):

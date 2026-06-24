@@ -12,6 +12,7 @@ from app.main import app
 from app.core.database import Base, get_db
 from app.core.security import get_current_user
 from app.models.user import User, SubscriptionTier
+from ..csrf_helpers import _CSRFClientWrapper  # noqa: F401  # CSRF-aware test client wrapper
 
 
 class DummyDoc:
@@ -74,7 +75,7 @@ def client():
     app.dependency_overrides[get_current_user] = _fake_user
 
     with TestClient(app) as c:
-        yield c
+        yield _CSRFClientWrapper(c)
     
     # 4. Cleanup
     db.close()
