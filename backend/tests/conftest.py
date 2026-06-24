@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from fastapi import Request, HTTPException, status
 from fastapi.testclient import TestClient
-from httpx import Response
+from httpx import AsyncClient, Response
 
 # Set test database before importing app
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
@@ -173,6 +173,12 @@ class _CSRFClientWrapper:
             self._inject_csrf(kwargs)
         return self._inner.request(method, url, **kwargs)
 
+    def stream(self, method: str, url: str, **kwargs: object):
+        if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+            self._ensure_csrf()
+            self._inject_csrf(kwargs)
+        return self._inner.stream(method, url, **kwargs)
+
     def __getattr__(self, name: str) -> object:
         return getattr(self._inner, name)
 
@@ -188,6 +194,7 @@ def auto_csrf_for_test_clients(
         return
 
     original_request = TestClient.request
+    original_async_request = AsyncClient.request
 
     def request_with_csrf(
         client: TestClient,
@@ -220,6 +227,38 @@ def auto_csrf_for_test_clients(
         return original_request(client, method, url, **kwargs)
 
     monkeypatch.setattr(TestClient, "request", request_with_csrf)
+
+    async def async_request_with_csrf(
+        client: AsyncClient,
+        method: str,
+        url: str,
+        **kwargs: object,
+    ) -> Response:
+        if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+            headers = dict(kwargs.get("headers") or {})
+            if not any(name.lower() == "x-csrf-token" for name in headers):
+                token = getattr(client, "_aegis_csrf_token", None)
+                if token is None:
+                    response = await original_async_request(
+                        client,
+                        "GET",
+                        "/api/v1/auth/csrf-token",
+                    )
+                    assert response.status_code == 200, (
+                        f"CSRF token fetch failed: {response.status_code}"
+                    )
+                    token = response.json().get("token") or client.cookies.get(
+                        "csrf_token"
+                    )
+                    assert token, "CSRF token is empty"
+                    setattr(client, "_aegis_csrf_token", token)
+
+                headers["X-CSRF-Token"] = token
+                kwargs["headers"] = headers
+
+        return await original_async_request(client, method, url, **kwargs)
+
+    monkeypatch.setattr(AsyncClient, "request", async_request_with_csrf)
     yield
 
 
