@@ -46,7 +46,6 @@ class TestExtractKeywords:
         keywords = _extract_keywords(
             "Our AI screens CVs and ranks job applicants during recruitment"
         )
-        # 'recruitment' appears in the text; exact match returns 'recruitment'
         assert "recruitment" in keywords
         assert "cv" in keywords
         assert "screening" in keywords
@@ -54,8 +53,8 @@ class TestExtractKeywords:
 
     def test_minimum_word_length(self):
         keywords = _extract_keywords("a ai is")
-        assert "a" not in keywords
-        assert "ai" not in keywords  # 2 chars < 3
+        assert "a" not in keywords  # 1 char < 2
+        assert "ai" in keywords    # 2 chars >= 2
 
     def test_empty_description(self):
         keywords = _extract_keywords("")
