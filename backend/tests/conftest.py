@@ -108,8 +108,8 @@ def client(db_engine):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
-    client = TestClient(app)
-    yield client
+    test_client = TestClient(app)
+    yield _CSRFClientWrapper(test_client)
 
     session.close()
     transaction.rollback()
@@ -129,7 +129,9 @@ class _CSRFClientWrapper:
         if self._csrf_token is None:
             resp = self._inner.get("/api/v1/auth/csrf-token")
             assert resp.status_code == 200, f"CSRF token fetch failed: {resp.status_code}"
-            self._csrf_token = resp.json()["token"]
+            self._csrf_token = resp.json().get("token") or self._inner.cookies.get(
+                "csrf_token"
+            )
             assert self._csrf_token, "CSRF token is empty"
 
     def _inject_csrf(self, kwargs: dict) -> None:
@@ -172,10 +174,10 @@ class _CSRFClientWrapper:
 
 
 @pytest.fixture
-def csrf_client(client: TestClient):
+def csrf_client(client: _CSRFClientWrapper):
     """CSRF-aware test client.  Handles X-CSRF-Token automatically for
     state-changing requests (POST / PUT / PATCH / DELETE)."""
-    return _CSRFClientWrapper(client)
+    return client
 
 
 @pytest.fixture

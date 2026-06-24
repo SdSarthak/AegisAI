@@ -14,10 +14,22 @@ spec:
       labels:
         app: aegisai-backend
     spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchLabels:
+                app: aegisai-backend
+            topologyKey: kubernetes.io/hostname
       # 1. Production Native Python InitContainer to pre-cache exact model assets
       initContainers:
       - name: model-download
         image: python:3.11-slim
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
         command:
         - sh
         - "-c"
@@ -41,10 +53,22 @@ spec:
         volumeMounts:
         - name: model-storage
           mountPath: /app/models
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
 
       containers:
       - name: aegisai-backend
-        image: aegisai-backend:latest
+        image: aegisai-backend:0.1.0
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
         ports:
         - containerPort: 8000
         envFrom:
