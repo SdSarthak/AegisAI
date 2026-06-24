@@ -20,6 +20,7 @@ from app.core.security import get_current_user
 from app.models.user import User, SubscriptionTier
 from app.models.ai_system import AISystem, RiskLevel
 from app.models.document import Document, DocumentType, DocumentStatus
+from conftest import _CSRFClientWrapper  # noqa: F401  # CSRF-aware test client wrapper
 
 
 def _build_test_session_local(database_url: str):
