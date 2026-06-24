@@ -41,7 +41,14 @@ from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.streaming import stream_rag_answer
 from app.modules.rag.cache import get_cached_answer, set_cached_answer
 from app.modules.rag.vector_store import create_vector_store, load_vector_store
-from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
+from app.schemas.rag import RAGExportRequest, RAGQueryRequest, RAGQueryResponse
+
+from html import escape as html_escape
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -785,6 +792,77 @@ def get_low_quality_chunks(
             )
 
     return {"threshold": threshold, "low_quality_chunks": low_quality}
+
+
+def _escape_pdf_text(value: str) -> str:
+    """Escape user-controlled text before ReportLab Paragraph parses it."""
+    return html_escape(value, quote=False)
+
+
+def _build_pdf(messages: list) -> BytesIO:
+    """Build a PDF document from RAG chat messages using reportlab."""
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=20 * mm, bottomMargin=20 * mm)
+    styles = getSampleStyleSheet()
+
+    title_style = ParagraphStyle("ExportTitle", parent=styles["Title"], spaceAfter=6 * mm)
+    q_style = ParagraphStyle(
+        "Question", parent=styles["Heading2"], spaceBefore=6 * mm, spaceAfter=2 * mm,
+        textColor="#1d4ed8",
+    )
+    a_style = ParagraphStyle("Answer", parent=styles["Normal"], spaceAfter=3 * mm)
+    citation_style = ParagraphStyle(
+        "Citation", parent=styles["Normal"], fontSize=9, leftIndent=10 * mm,
+        textColor="#4b5563", spaceAfter=1 * mm,
+    )
+    meta_style = ParagraphStyle(
+        "Meta", parent=styles["Normal"], fontSize=8, textColor="#9ca3af", spaceAfter=4 * mm,
+    )
+
+    elements = []
+    elements.append(Paragraph("AegisAI RAG Chat Export", title_style))
+    from datetime import datetime as dt
+    elements.append(Paragraph(f"Exported: {dt.utcnow().strftime('%Y-%m-%d %H:%M UTC')}", meta_style))
+    elements.append(Spacer(1, 4 * mm))
+
+    for msg in messages:
+        elements.append(Paragraph(f"Q: {_escape_pdf_text(msg.question)}", q_style))
+        answer_html = _escape_pdf_text(msg.answer).replace("\n", "<br/>")
+        elements.append(Paragraph(answer_html, a_style))
+
+        for citation in msg.citations:
+            src = _escape_pdf_text(citation.source)
+            exc = _escape_pdf_text(citation.excerpt)
+            elements.append(Paragraph(f"<b>Source — {src}</b><br/>{exc}", citation_style))
+
+        if msg.responseTime is not None:
+            elements.append(Paragraph(
+                f"Response time: {msg.responseTime:.2f}s", meta_style,
+            ))
+
+        elements.append(Spacer(1, 3 * mm))
+
+    doc.build(elements)
+    buf.seek(0)
+    return buf
+
+
+@router.post("/export")
+def export_rag_chat(
+    payload: RAGExportRequest,
+    current_user: User = Depends(get_current_user),
+):
+    """Export RAG chat conversation as a PDF document."""
+    pdf_buf = _build_pdf(payload.messages)
+    from fastapi.responses import Response
+    return Response(
+        content=pdf_buf.read(),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": "attachment; filename=aegisai-rag-chat-export.pdf",
+            "Content-Type": "application/pdf",
+        },
+    )
 
 
 @router.get("/history")

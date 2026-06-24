@@ -403,6 +403,15 @@ function parseSseBuffer(
   return { events, remainder }
 }
 
+export interface ChatMessage {
+  id: string
+  question: string
+  answer: string
+  citations: RagCitation[]
+  responseTime: number | null
+  timestamp: number
+}
+
 export const ragApi = {
   /**
    * Stream a regulatory answer as Server-Sent Events.
@@ -574,6 +583,17 @@ export const analyticsApi = {
   summary: async () => {
     const { data } = await api.get('/analytics/summary')
     return data
+  },
+}
+
+  exportChat: async (
+    messages: ChatMessage[],
+    format: 'pdf',
+  ): Promise<Blob> => {
+    const { data } = await api.post('/rag/export', { messages, format }, {
+      responseType: 'blob',
+    })
+    return data as Blob
   },
 }
 

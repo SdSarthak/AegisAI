@@ -5,7 +5,7 @@ Why: Clients need visibility into sanitization, chunk drops, and answer support.
 Addresses: Silent prompt-injection handling and hidden hallucination risk.
 """
 
-from typing import Any, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -36,3 +36,26 @@ class RAGQueryResponse(BaseModel):
     confidence_tier: str | None = None
     per_verifier_scores: dict[str, float] = Field(default_factory=dict)
     flagged_reason: Optional[str] = None
+
+
+class ChatMessageCitation(BaseModel):
+    source: str
+    excerpt: str
+
+
+class ChatMessage(BaseModel):
+    id: str
+    question: str
+    answer: str
+    citations: list[ChatMessageCitation] = Field(default_factory=list)
+    responseTime: float | None = None
+    timestamp: float
+
+
+class RAGExportRequest(BaseModel):
+    messages: list[ChatMessage]
+    format: Literal["pdf"]
+
+
+class RAGExportResponse(BaseModel):
+    message: str
