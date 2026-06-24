@@ -14,6 +14,7 @@ import httpx
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SECRET_KEY"] = "testsecret"
 os.environ["REDIS_URL"] = ""
+os.environ["DISABLE_CSRF"] = "1"
 
 from app.core.database import Base, SessionLocal
 from app.core.security import decode_token, get_current_user
