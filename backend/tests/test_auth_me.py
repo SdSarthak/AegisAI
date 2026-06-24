@@ -50,6 +50,7 @@ def test_patch_me_updates_profile_fields(tmp_path):
     app.dependency_overrides[get_current_user] = override_current_user
 
     client = TestClient(app)
+    client.get("/api/v1/auth/csrf-token")
     response = client.patch(
         "/api/v1/users/me",
         json={"full_name": "New Name", "company_name": "New Company"},
