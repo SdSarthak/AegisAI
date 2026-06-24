@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   Activity,
   AlertCircle,
@@ -6,13 +6,18 @@ import {
   Gauge,
   ListChecks,
   Loader2,
+  Plus,
   Send,
   ShieldCheck,
+  Trash2,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react'
 import CopyButton from '../components/CopyButton'
 import GuardExplanation from '../components/GuardExplanation'
 import {
   guardApi,
+  type CustomRegexRule,
   type GuardExplainResponse,
   type GuardScanResponse,
 } from '../services/api'
@@ -71,6 +76,15 @@ export default function GuardConsole() {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const [rules, setRules] = useState<CustomRegexRule[]>([])
+  const [rulesLoading, setRulesLoading] = useState(false)
+  const [rulesError, setRulesError] = useState<string | null>(null)
+  const [showAddRule, setShowAddRule] = useState(false)
+  const [newRuleName, setNewRuleName] = useState('')
+  const [newRulePattern, setNewRulePattern] = useState('')
+  const [newRuleSeverity, setNewRuleSeverity] = useState<'low' | 'medium' | 'high'>('medium')
+  const [addingRule, setAddingRule] = useState(false)
+
   const metrics = useMemo(
     () => buildMetrics(result, scannedAt),
     [result, scannedAt]
@@ -127,6 +141,63 @@ export default function GuardConsole() {
       setError(message)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const loadRules = useCallback(async () => {
+    setRulesLoading(true)
+    setRulesError(null)
+    try {
+      const data = await guardApi.listRules()
+      setRules(data)
+    } catch {
+      setRulesError('Failed to load custom rules.')
+    } finally {
+      setRulesLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadRules()
+  }, [loadRules])
+
+  const handleAddRule = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newRuleName.trim() || !newRulePattern.trim()) return
+    setAddingRule(true)
+    try {
+      await guardApi.createRule({
+        pattern: newRulePattern.trim(),
+        name: newRuleName.trim(),
+        severity: newRuleSeverity,
+      })
+      setNewRuleName('')
+      setNewRulePattern('')
+      setNewRuleSeverity('medium')
+      setShowAddRule(false)
+      await loadRules()
+    } catch {
+      setRulesError('Failed to add rule. Check the pattern syntax.')
+    } finally {
+      setAddingRule(false)
+    }
+  }
+
+  const handleToggleRule = async (rule: CustomRegexRule) => {
+    try {
+      await guardApi.toggleRule(rule.id, !rule.is_active)
+      await loadRules()
+    } catch {
+      setRulesError('Failed to toggle rule.')
+    }
+  }
+
+  const handleDeleteRule = async (ruleId: number) => {
+    try {
+      await guardApi.deleteRule(ruleId)
+      await loadRules()
+    } catch {
+      setRulesError('Failed to delete rule.')
     }
   }
 
@@ -412,6 +483,172 @@ export default function GuardConsole() {
               </div>
             </div>
           </aside>
+        </div>
+      )}
+
+      <section className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Custom regex rules</h2>
+          <button
+            type="button"
+            onClick={() => setShowAddRule(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-700"
+          >
+            <Plus className="w-4 h-4" />
+            Add rule
+          </button>
+        </div>
+
+        <div className="p-5">
+          {rulesLoading && (
+            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Loading rules...
+            </div>
+          )}
+
+          {rulesError && (
+            <div className="text-sm text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg p-3 mb-4">
+              {rulesError}
+            </div>
+          )}
+
+          {!rulesLoading && rules.length === 0 && (
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              No custom rules yet. Add a regex pattern to extend the guard scanner.
+            </p>
+          )}
+
+          {rules.length > 0 && (
+            <div className="space-y-3">
+              {rules.map((rule) => (
+                <div
+                  key={rule.id}
+                  className="flex items-center justify-between rounded-xl border border-gray-200 dark:border-gray-700 p-4"
+                >
+                  <div className="flex-1 min-w-0 mr-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-900 dark:text-white truncate">
+                        {rule.name}
+                      </span>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                        rule.severity === 'high'
+                          ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                          : rule.severity === 'medium'
+                          ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                          : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                      }`}>
+                        {rule.severity}
+                      </span>
+                      {!rule.is_active && (
+                        <span className="text-xs text-gray-400 dark:text-gray-500">(disabled)</span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 font-mono truncate">
+                      {rule.pattern}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleRule(rule)}
+                      className="p-1.5 rounded-lg text-gray-500 hover:text-primary-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+                      title={rule.is_active ? 'Disable rule' : 'Enable rule'}
+                    >
+                      {rule.is_active ? (
+                        <ToggleRight className="w-4 h-4 text-primary-600" />
+                      ) : (
+                        <ToggleLeft className="w-4 h-4" />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteRule(rule.id)}
+                      className="p-1.5 rounded-lg text-gray-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20"
+                      title="Delete rule"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
+
+      {showAddRule && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-lg w-full max-w-md mx-4 overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Add custom rule</h3>
+            </div>
+            <form onSubmit={handleAddRule} className="p-5 space-y-4">
+              <div>
+                <label htmlFor="rule-name" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Name
+                </label>
+                <input
+                  id="rule-name"
+                  type="text"
+                  value={newRuleName}
+                  onChange={(e) => setNewRuleName(e.target.value)}
+                  placeholder="e.g. Block SQL comments"
+                  required
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label htmlFor="rule-pattern" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Regex pattern
+                </label>
+                <input
+                  id="rule-pattern"
+                  type="text"
+                  value={newRulePattern}
+                  onChange={(e) => setNewRulePattern(e.target.value)}
+                  placeholder="e.g. --\s*$|\/\*.*?\*\/"
+                  required
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500 font-mono"
+                />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Case-insensitive by default. Test your pattern carefully.
+                </p>
+              </div>
+              <div>
+                <label htmlFor="rule-severity" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Severity
+                </label>
+                <select
+                  id="rule-severity"
+                  value={newRuleSeverity}
+                  onChange={(e) => setNewRuleSeverity(e.target.value as 'low' | 'medium' | 'high')}
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-900 dark:text-white focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddRule(false)}
+                  className="rounded-lg px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={addingRule || !newRuleName.trim() || !newRulePattern.trim()}
+                  className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {addingRule ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                  Add rule
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

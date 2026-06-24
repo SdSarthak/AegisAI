@@ -9,6 +9,7 @@ from app.models.guard_scan_log import GuardScanLog
 from app.models.webhook import WebhookConfig
 from app.models.notification import Notification
 from app.models.compliance_snapshot import ComplianceSnapshot
+from app.models.custom_regex_rule import CustomRegexRule
 
 __all__ = [
     "User",
@@ -25,4 +26,5 @@ __all__ = [
     "ComplianceSnapshot",
     "Notification",
     "WebhookConfig",
+    "CustomRegexRule",
 ]
