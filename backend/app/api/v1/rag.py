@@ -317,19 +317,26 @@ def ingest_documents(
 
     total_size = 0
     for upload in pdf_files:
-        upload.file.seek(0, 2)
-        file_size = upload.file.tell()
-        upload.file.seek(0)
+    upload.file.seek(0, os.SEEK_END)
+    file_size = upload.file.tell()
+    upload.file.seek(0)
 
-        if file_size > settings.RAG_MAX_FILE_SIZE_BYTES:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=(
-                    f"File {upload.filename} exceeds the maximum size of "
-                    f"{settings.RAG_MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB."
-                ),
-            )
-        total_size += file_size
+    if file_size == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"File '{upload.filename}' is empty."
+        )
+
+    if file_size > settings.RAG_MAX_FILE_SIZE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=(
+                f"File {upload.filename} exceeds the maximum size of "
+                f"{settings.RAG_MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB."
+            ),
+        )
+
+    total_size += file_size
 
     if total_size > settings.RAG_TOTAL_BUDGET_BYTES:
         raise HTTPException(
