@@ -12,6 +12,98 @@ import {
 } from 'lucide-react'
 
 import { useRagStream } from '../hooks/useRagStream'
+import CopyButton from '../components/CopyButton'
+
+/**
+ * Render basic markdown as React elements without requiring a library.
+ * Supports: **bold**, *italic*, # Heading, ## Heading, - list items, `code`.
+ */
+function renderMarkdown(text: string): React.ReactNode[] {
+  const lines = text.split('\n')
+  const elements: React.ReactNode[] = []
+  let inList = false
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
+
+    // Heading
+    if (line.startsWith('### ')) {
+      if (inList) { elements.push(<ul key={`ul-${i}`} className="list-disc pl-5 space-y-1" /></ul>); inList = false }
+      elements.push(<h4 key={i} className="font-semibold text-gray-800 mt-3 mb-1">{line.slice(4)}</h4>)
+      continue
+    }
+    if (line.startsWith('## ')) {
+      if (inList) { elements.push(<ul key={`ul-${i}`} className="list-disc pl-5 space-y-1" /></ul>); inList = false }
+      elements.push(<h3 key={i} className="font-bold text-gray-900 mt-4 mb-1">{line.slice(3)}</h3>)
+      continue
+    }
+    if (line.startsWith('# ')) {
+      if (inList) { elements.push(<ul key={`ul-${i}`} className="list-disc pl-5 space-y-1" /></ul>); inList = false }
+      elements.push(<h2 key={i} className="font-bold text-lg text-gray-900 mt-4 mb-2">{line.slice(2)}</h2>)
+      continue
+    }
+
+    // Unordered list
+    if (line.match(/^[-*+] /)) {
+      if (!inList) { elements.push(<ul key={`ul-start-${i}`} className="list-disc pl-5 space-y-1 my-2">); inList = true }
+      elements.push(<li key={i} className="text-gray-700">{renderInline(line.slice(2))}</li>)
+      continue
+    }
+
+    // Close list on blank or non-list line
+    if (inList) { elements.push(<ul key={`ul-end-${i}`} className="list-disc pl-5 space-y-1" />); inList = false }
+
+    // Blank line
+    if (line.trim() === '') {
+      elements.push(<br key={`br-${i}`} />)
+      continue
+    }
+
+    // Paragraph
+    elements.push(<p key={i} className="text-gray-700 leading-relaxed">{renderInline(line)}</p>)
+  }
+
+  if (inList) elements.push(<ul key="ul-final" className="list-disc pl-5 space-y-1" />)
+  return elements
+}
+
+/** Render inline markdown (bold, italic, code) within a line. */
+function renderInline(text: string): React.ReactNode {
+  const parts: React.ReactNode[] = []
+  let remaining = text
+
+  while (remaining.length > 0) {
+    // Bold **text**
+    const boldMatch = remaining.match(/\*\*(.+?)\*\*/)
+    // Italic *text*
+    const italicMatch = remaining.match(/\*(.+?)\*/)
+    // Inline code `text`
+    const codeMatch = remaining.match(/`(.+?)`/)
+
+    const matches = [
+      boldMatch ? { type: 'bold' as const, match: boldMatch, start: boldMatch.index } : null,
+      italicMatch ? { type: 'italic' as const, match: italicMatch, start: italicMatch.index } : null,
+      codeMatch ? { type: 'code' as const, match: codeMatch, start: codeMatch.index } : null,
+    ].filter(Boolean).sort((a, b) => (a!.start) - (b!.start))
+
+    if (matches.length === 0 || matches[0]!.start !== 0) {
+      const next = matches.length > 0 ? matches[0]!.start : remaining.length
+      parts.push(remaining.slice(0, next))
+      remaining = remaining.slice(next)
+      continue
+    }
+
+    const m = matches[0]!
+    parts.push(remaining.slice(0, m.start))
+    const content = m.match[1]
+    if (m.type === 'bold') parts.push(<strong key={parts.length} className="font-semibold">{content}</strong>)
+    else if (m.type === 'italic') parts.push(<em key={parts.length}>{content}</em>)
+    else if (m.type === 'code') parts.push(<code key={parts.length} className="bg-gray-100 text-pink-600 px-1 py-0.5 rounded text-sm font-mono">{content}</code>)
+    remaining = remaining.slice(m.match[0].length)
+  }
+
+  return parts
+}
 
 function getResponseTimeColor(time: number): string {
   if (time < 1) return 'text-green-600 bg-green-50'
@@ -206,15 +298,15 @@ export default function RagChat() {
                           </div>
                         )}
 
-                        <p className="text-gray-700 leading-7 whitespace-pre-wrap">
-                          {tokens}
+                        <div className="prose-p:leading-relaxed space-y-2">
+                          {renderMarkdown(tokens)}
                           {isStreaming && (
                             <span
                               className="inline-block w-2 h-4 bg-primary-600 ml-0.5 align-text-bottom animate-pulse"
                               aria-hidden="true"
                             />
                           )}
-                        </p>
+                        </div>
 
                         {streamError && (
                           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
@@ -256,9 +348,17 @@ export default function RagChat() {
                                   key={index}
                                   className="border border-gray-200 rounded-lg p-3 bg-gray-50"
                                 >
-                                  <p className="font-medium text-sm text-gray-900">
-                                    {citation.source}
-                                  </p>
+                                  <div className="flex items-start justify-between gap-2">
+                                    <p className="font-medium text-sm text-gray-900">
+                                      {citation.source}
+                                    </p>
+                                    <CopyButton
+                                      text={`${citation.source}\n${citation.excerpt}`}
+                                      label="Copy"
+                                      iconOnly
+                                      className="flex-shrink-0"
+                                    />
+                                  </div>
                                   <p className="text-sm text-gray-600 mt-1">
                                     {citation.excerpt}
                                   </p>
