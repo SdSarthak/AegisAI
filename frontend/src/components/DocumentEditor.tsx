@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Save, Eye, EyeOff } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
@@ -22,7 +22,7 @@ export default function DocumentEditor({
   const [content, setContent] = useState(initialContent)
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [saveError, setSaveError] = useState('')
   const previewHtml = useMemo(
     () => DOMPurify.sanitize(marked.parse(content, { async: false }) as string),
@@ -50,7 +50,7 @@ export default function DocumentEditor({
   useEffect(() => {
     if (content === initialContent) return
 
-    if (saveTimeout) clearTimeout(saveTimeout)
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
 
     const timeout = setTimeout(async () => {
       setIsSaving(true)
@@ -58,12 +58,12 @@ export default function DocumentEditor({
       setIsSaving(false)
     }, 2000)
 
-    setSaveTimeout(timeout)
+    saveTimeoutRef.current = timeout
 
     return () => {
       if (timeout) clearTimeout(timeout)
     }
-  }, [content, handleSave, initialContent, saveTimeout])
+  }, [content, handleSave, initialContent])
 
   return (
     <div className="flex flex-col h-full border border-gray-200 rounded-xl overflow-hidden">
