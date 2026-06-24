@@ -72,7 +72,13 @@ def db_session(db_engine) -> Session:
 
 @pytest.fixture
 def client(db_engine):
-    """Create test client with test database."""
+    """Create CSRF-aware test client with test database.
+
+    Returns a _CSRFClientWrapper so that all state-changing requests
+    (POST / PUT / PATCH / DELETE) automatically include a CSRF token.
+    Tests that need the bare TestClient (e.g. CSRF rejection tests)
+    should use the bare_client fixture instead.
+    """
     from app.core.database import get_db
     from app.core.rate_limit import guard_scan_rate_limiter
 
@@ -89,7 +95,7 @@ def client(db_engine):
         if not auth_header.lower().startswith("bearer "):
             # Block unauthenticated requests!
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
+                status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Not authenticated"
             )
 
@@ -98,7 +104,58 @@ def client(db_engine):
         user_id = payload.get("sub")
         if user_id is None:
             raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED, 
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+
+        user = session.query(User).filter(User.id == int(user_id)).first()
+        return user or _mock_current_user()
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_current_user
+
+    test_client = TestClient(app)
+    csrf_aware_client = _CSRFClientWrapper(test_client)
+    yield csrf_aware_client
+
+    session.close()
+    transaction.rollback()
+    connection.close()
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def bare_client(db_engine):
+    """Create a bare TestClient without CSRF token auto-injection.
+
+    Use this fixture ONLY for tests that verify CSRF rejection behavior.
+    All other tests should use the 'client' fixture.
+    """
+    from app.core.database import get_db
+    from app.core.rate_limit import guard_scan_rate_limiter
+
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+    guard_scan_rate_limiter._local_attempts_by_key.clear()
+
+    def override_get_db():
+        yield session
+
+    def override_current_user(request: Request):
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header.lower().startswith("bearer "):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated"
+            )
+
+        token = auth_header.split(" ", 1)[1]
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid token"
             )
 
@@ -172,58 +229,176 @@ class _CSRFClientWrapper:
 
 
 @pytest.fixture
-def csrf_client(client: TestClient):
+def csrf_client(client):
     """CSRF-aware test client.  Handles X-CSRF-Token automatically for
-    state-changing requests (POST / PUT / PATCH / DELETE)."""
-    return _CSRFClientWrapper(client)
+    state-changing requests (POST / PUT / PATCH / DELETE).
+
+    Note: the 'client' fixture now already returns a _CSRFClientWrapper,
+    so this fixture simply returns 'client' for backward compatibility.
+    Tests that need the bare (non-CSRF-aware) TestClient should use
+    the 'bare_client' fixture instead.
+    """
+    return client
 
 
 @pytest.fixture
-def auth_headers(csrf_client):
+def auth_client(db_engine):
+    """CSRF-aware test client pre-authenticated as a fresh user.
+
+    The client is set up with:
+    - Isolated test database session
+    - Auto-injected CSRF tokens on POST/PUT/PATCH/DELETE
+    - A freshly registered and logged-in user session
+
+    Tests that need an authenticated CSRF-aware client should use this
+    fixture directly.  If you only need an Authorization header, use
+    auth_headers instead.
+    """
+    from app.core.database import get_db
+    from app.core.rate_limit import guard_scan_rate_limiter
+
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+    guard_scan_rate_limiter._local_attempts_by_key.clear()
+
+    def override_get_db():
+        yield session
+
+    def override_current_user(request: Request):
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header.lower().startswith("bearer "):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated"
+            )
+        token = auth_header.split(" ", 1)[1]
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+        user = session.query(User).filter(User.id == int(user_id)).first()
+        return user or _mock_current_user()
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_current_user
+
+    test_client = TestClient(app)
+    csrf_aware = _CSRFClientWrapper(test_client)
+
+    # Register and login so the client carries a valid user session
     email = f"batch-scan-{uuid4()}@example.com"
     password = "TestPass123!"
-
-    # Register via csrf_client so the cookie is populated
-    csrf_client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": email,
-            "password": password,
-            "full_name": "Batch Scan Test User",
-        },
-    )
-
-    response = csrf_client.post(
+    csrf_aware.post("/api/v1/auth/register", json={
+        "email": email,
+        "password": password,
+        "full_name": "Batch Scan Test User",
+        "company_name": "Test Company",
+    })
+    response = csrf_aware.post(
         "/api/v1/auth/login",
         data={"username": email, "password": password},
     )
     token = response.json()["access_token"]
 
-    return {
-        "Authorization": f"Bearer {token}",
-        "X-CSRF-Token": csrf_client._csrf_token,
-    }
+    yield csrf_aware
+
+    session.close()
+    transaction.rollback()
+    connection.close()
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
-def other_user_auth_headers(csrf_client, db_session):
-    # Register a different user
-    csrf_client.post("/api/v1/auth/register", json={
+def auth_headers(client):
+    """Return Authorization header for a freshly registered user.
+
+    The client fixture is CSRF-aware (auto-injects X-CSRF-Token on
+    POST/PUT/PATCH/DELETE), so this fixture returns only the
+    Authorization header.  The CSRF token is handled automatically by
+    the client wrapper when needed.
+    """
+    email = f"batch-scan-{uuid4()}@example.com"
+    password = "TestPass123!"
+    # Register and login via the CSRF-aware client (auth endpoints are exempt)
+    client.post("/api/v1/auth/register", json={
+        "email": email,
+        "password": password,
+        "full_name": "Batch Scan Test User",
+        "company_name": "Test Company",
+    })
+    resp = client.post(
+        "/api/v1/auth/login",
+        data={"username": email, "password": password},
+    )
+    token = resp.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def other_auth_client(db_engine):
+    """CSRF-aware test client pre-authenticated as a second user.
+
+    Same as auth_client but with a different user identity.
+    Use this when a test needs two different authenticated users.
+    """
+    from app.core.database import get_db
+    from app.core.rate_limit import guard_scan_rate_limiter
+
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+    guard_scan_rate_limiter._local_attempts_by_key.clear()
+
+    def override_get_db():
+        yield session
+
+    def override_current_user(request: Request):
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header.lower().startswith("bearer "):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated"
+            )
+        token = auth_header.split(" ", 1)[1]
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+        user = session.query(User).filter(User.id == int(user_id)).first()
+        return user or _mock_current_user()
+
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_current_user
+
+    test_client = TestClient(app)
+    csrf_aware = _CSRFClientWrapper(test_client)
+
+
+    csrf_aware.post("/api/v1/auth/register", json={
         "email": "other@example.com",
         "password": "OtherPass123!",
         "full_name": "Other User",
         "company_name": "Other Corp",
     })
-    response = csrf_client.post(
+    response = csrf_aware.post(
         "/api/v1/auth/login",
         data={"username": "other@example.com", "password": "OtherPass123!"},
-        headers={"Content-Type": "application/x-www-form-urlencoded"}
     )
-    token = response.json()["access_token"]
-    return {
-        "Authorization": f"Bearer {token}",
-        "X-CSRF-Token": csrf_client._csrf_token,
-    }
+
+    yield csrf_aware
+
+    session.close()
+    transaction.rollback()
+    connection.close()
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture(autouse=True)
