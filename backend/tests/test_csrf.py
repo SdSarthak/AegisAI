@@ -4,6 +4,7 @@ Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
+import os
 import pytest
 
 
@@ -55,6 +56,10 @@ class TestCSRFTokenEndpoint:
         assert resp.status_code != 403, resp.text
 
 
+@pytest.mark.skipif(
+    os.environ.get("DISABLE_CSRF") == "1",
+    reason="CSRF middleware disabled via DISABLE_CSRF env var",
+)
 class TestCSRFMiddleware:
     """
     Test CSRF protection on POST /api/v1/ai-systems (no password verification).
