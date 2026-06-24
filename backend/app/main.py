@@ -24,6 +24,7 @@ from app.core.database import engine, Base
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.middleware.csrf import CSRFMiddleware
+from app.middleware.origin import OriginCheckMiddleware
 from app.core.telemetry import setup_telemetry
 from app.api.v1 import api_router, badge
 from app.plugins.regulation_loader import init_registry
@@ -126,6 +127,10 @@ app.add_middleware(
 # Added last => outermost: every request (incl. CORS preflight and error
 # responses) is assigned a request id and access-logged in JSON.
 app.add_middleware(CSRFMiddleware)
+
+# Reject requests without an Origin header to prevent non-browser /
+# local-network access to the API during development.
+app.add_middleware(OriginCheckMiddleware)
 
 # Added last => outermost: every request (incl. CORS preflight and error
 # responses) is assigned a request id and access-logged in JSON.
