@@ -11,6 +11,7 @@ interface DocumentEditorProps {
   initialContent: string
   onSave?: (content: string) => void
   onClose?: () => void
+  onDirtyChange?: (dirty: boolean) => void
 }
 
 export default function DocumentEditor({
@@ -18,6 +19,7 @@ export default function DocumentEditor({
   initialContent,
   onSave,
   onClose,
+  onDirtyChange,
 }: DocumentEditorProps) {
   const [content, setContent] = useState(initialContent)
   const [showPreview, setShowPreview] = useState(false)
@@ -28,6 +30,11 @@ export default function DocumentEditor({
     () => DOMPurify.sanitize(marked.parse(content, { async: false }) as string),
     [content]
   )
+
+  const isDirty = content !== initialContent
+  useEffect(() => {
+    onDirtyChange?.(isDirty)
+  }, [isDirty, onDirtyChange])
 
   const handleSave = useCallback(async () => {
     setIsSaving(true)
@@ -99,7 +106,15 @@ export default function DocumentEditor({
           </button>
           {onClose && (
             <button
-              onClick={onClose}
+              onClick={() => {
+                if (isDirty) {
+                  if (window.confirm('You have unsaved changes. Are you sure you want to leave?')) {
+                    onClose()
+                  }
+                } else {
+                  onClose()
+                }
+              }}
               className="text-gray-500 hover:text-gray-700"
             >
               ✕

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { FileText, Download, Trash2, Plus, Edit, Copy, Check, GitCompare } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges'
 
 interface Document {
   id: number
@@ -30,6 +31,8 @@ export default function Documents() {
   const [filterType, setFilterType] = useState('all')
   const [filterStatus, setFilterStatus] = useState('all')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
+  const [isDocDirty, setIsDocDirty] = useState(false)
+  const { dialog, promptConfirm } = useUnsavedChanges(editingDoc !== null && isDocDirty)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
   const [copiedDocId, setCopiedDocId] = useState<number | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -519,14 +522,25 @@ export default function Documents() {
               documentId={editingDoc.id}
               initialContent={editingDoc.content || ''}
               onSave={handleSaveDocument}
+              onDirtyChange={setIsDocDirty}
               onClose={() => {
-                setEditingDoc(null)
-                setSaveError(null)
+                if (isDocDirty) {
+                  promptConfirm(() => {
+                    setEditingDoc(null)
+                    setSaveError(null)
+                    setIsDocDirty(false)
+                  })
+                } else {
+                  setEditingDoc(null)
+                  setSaveError(null)
+                }
               }}
             />
           </div>
         </div>
       )}
+
+      {dialog}
     </div>
   )
 }

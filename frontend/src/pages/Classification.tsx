@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { classificationApi } from '../services/api'
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges'
 import {
   AlertTriangle,
   BarChart2,
@@ -154,29 +155,36 @@ const requirementContent: Record<string, RequirementContent> = {
   },
 }
 
+const INITIAL_FORM_DATA = {
+  use_case_category: 'hr_recruitment',
+  is_safety_component: false,
+  affects_fundamental_rights: true,
+  makes_automated_decisions: true,
+  uses_biometric_data: false,
+  hr_recruitment_screening: true,
+  hr_promotion_termination: false,
+  credit_worthiness: false,
+  insurance_risk_assessment: false,
+  law_enforcement: false,
+  border_control: false,
+  justice_system: false,
+  education_vocational_training: false,
+  interacts_with_humans: true,
+  generates_synthetic_content: false,
+  emotion_recognition: false,
+  biometric_categorization: false,
+}
+
 export default function Classification() {
   const { systemId } = useParams()
   const [activeTab, setActiveTab] = useState<Tab>('questionnaire')
   const [result, setResult] = useState<ClassificationResult | null>(null)
-  const [formData, setFormData] = useState({
-    use_case_category: 'hr_recruitment',
-    is_safety_component: false,
-    affects_fundamental_rights: true,
-    uses_biometric_data: false,
-    makes_automated_decisions: true,
-    hr_recruitment_screening: true,
-    hr_promotion_termination: false,
-    credit_worthiness: false,
-    insurance_risk_assessment: false,
-    law_enforcement: false,
-    border_control: false,
-    justice_system: false,
-    education_vocational_training: false,
-    interacts_with_humans: true,
-    generates_synthetic_content: false,
-    emotion_recognition: false,
-    biometric_categorization: false,
-  })
+  const [formData, setFormData] = useState(INITIAL_FORM_DATA)
+  const isFormDirty = useMemo(
+    () => JSON.stringify(formData) !== JSON.stringify(INITIAL_FORM_DATA),
+    [formData],
+  )
+  const { dialog } = useUnsavedChanges(activeTab === 'questionnaire' && isFormDirty)
 
   const classifyMutation = useMutation({
     mutationFn: () => {
@@ -790,6 +798,8 @@ export default function Classification() {
       {activeTab === 'questionnaire' && renderQuestionnaire()}
       {activeTab === 'results' && renderResults()}
       {activeTab === 'requirements' && renderRequirements()}
+
+      {dialog}
     </div>
   )
 }
