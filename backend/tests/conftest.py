@@ -181,11 +181,10 @@ def csrf_client(client):
     """CSRF-aware test client.  Handles X-CSRF-Token automatically for
     state-changing requests (POST / PUT / PATCH / DELETE).
 
-    Returns a _CSRFClientWrapper around the bare TestClient so that
-    POST/PUT/PATCH/DELETE requests automatically include a CSRF token.
+    Returns the client fixture directly (which is already CSRF-aware).
     For CSRF rejection tests, use 'bare_client' instead.
     """
-    return _CSRFClientWrapper(client)
+    return client
 
 
 @pytest.fixture
