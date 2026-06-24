@@ -15,6 +15,7 @@ from app.core.security import get_current_user
 from app.main import app
 from app.models.ai_system import AISystem, ComplianceStatus
 from app.models.user import User
+from .csrf_helpers import _CSRFClientWrapper  # noqa: F401  # CSRF-aware test client wrapper
 
 
 @pytest.fixture(scope="module")
@@ -60,7 +61,7 @@ def client(db):
     app.dependency_overrides[get_current_user] = override_user
 
     with TestClient(app) as c:
-        yield c, system
+        yield _CSRFClientWrapper(c), system
 
     app.dependency_overrides.clear()
 
@@ -162,7 +163,7 @@ class TestPatchStatus:
         app.dependency_overrides[get_db] = override_db
         app.dependency_overrides[get_current_user] = override_user
 
-        with TestClient(app) as c:
+        with _CSRFClientWrapper(TestClient(app)) as c:
             resp = c.patch(
                 f"/api/v1/ai-systems/{system.id}/status",
                 json={"compliance_status": "compliant"},

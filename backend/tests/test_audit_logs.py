@@ -17,6 +17,7 @@ from app.main import app
 from app.models.user import User
 from app.models.ai_system import AISystem
 from app.models.ai_system import ComplianceStatus
+from .csrf_helpers import _CSRFClientWrapper  # noqa: F401  # CSRF-aware test client wrapper
 
 
 @pytest.fixture(scope="module")
@@ -85,7 +86,7 @@ def client(db):
     app.dependency_overrides[get_current_user] = override_user
 
     with TestClient(app) as c:
-        yield c
+        yield _CSRFClientWrapper(c)
 
     app.dependency_overrides.clear()
 

@@ -37,7 +37,7 @@ FACTOR_KEYWORDS: dict[str, List[str]] = {
     ],
     "hr_promotion_termination": [
         "promot", "terminat", "fire employee", "layoff", "performance evaluat",
-        "employee evaluat", "performance review", "task allocat",
+        "employee evaluat", "performance review", "performance", "task allocat",
         "workforce manag", "employee monitor",
     ],
     "credit_worthiness": [
@@ -224,7 +224,7 @@ def _normalize(text: str) -> str:
 
 
 def _extract_keywords(description: str) -> List[str]:
-    """Extract meaningful keywords from the description."""
+    """Extract meaningful keywords from the description, deduplicating while preserving order."""
     normalized = _normalize(description)
     # Remove common stop words, keep meaningful terms
     stop_words = {
@@ -236,8 +236,16 @@ def _extract_keywords(description: str) -> List[str]:
         "from", "as", "into", "through", "during", "our", "their",
         "its", "it", "we", "they", "system", "ai", "model", "tool",
     }
-    words = re.findall(r'\b[a-z]{3,}\b', normalized)
-    return [w for w in words if w not in stop_words]
+    words = re.findall(r'\b[a-z]{2,}\b', normalized)
+    # words extracted: assertion removed for production
+    # Deduplicate while preserving first-occurrence order
+    seen: set[str] = set()
+    unique: list[str] = []
+    for w in words:
+        if w not in stop_words and w not in seen:
+            seen.add(w)
+            unique.append(w)
+    return unique
 
 
 def _match_factors(
