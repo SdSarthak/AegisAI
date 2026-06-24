@@ -20,6 +20,9 @@ from app.core.security import decode_token, get_current_user
 from app.models.user import SubscriptionTier
 from app.models.user import User
 from app.main import app
+
+# _CSRFClientWrapper is defined in csrf_helpers.py for importability by test files
+from .csrf_helpers import _CSRFClientWrapper
 from uuid import uuid4
 
 def _mock_current_user():
@@ -115,7 +118,7 @@ def client(db_engine):
     app.dependency_overrides[get_current_user] = override_current_user
 
     test_client = TestClient(app)
-    yield test_client
+    yield _CSRFClientWrapper(test_client)
 
     session.close()
     transaction.rollback()
@@ -172,9 +175,6 @@ def bare_client(db_engine):
     connection.close()
     app.dependency_overrides.clear()
 
-
-# _CSRFClientWrapper is defined in csrf_helpers.py for importability by test files
-from .csrf_helpers import _CSRFClientWrapper
 
 @pytest.fixture
 def csrf_client(client):
