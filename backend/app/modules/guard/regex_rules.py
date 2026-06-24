@@ -57,10 +57,10 @@ class RegexFilter:
 
     # Medium-severity patterns: dangerous code patterns
     DANGEROUS_CODE_PATTERNS = [
-        r"\b(rm|del)\s+-rf\s+/\b",  # Destructive shell commands
-        r"DROP\s+TABLE\b",  # SQL injection
-        r"DELETE\s+FROM\b",  # SQL deletion
-        r"UNION\s+SELECT\b",  # SQL injection technique
+        r"(rm|del)\s+-rf\s+/$",  # Destructive shell commands
+        r"DROP\s+TABLE",  # SQL injection
+        r"DELETE\s+FROM",  # SQL deletion
+        r"UNION\s+SELECT",  # SQL injection technique
         r"exec\s*\(",  # Code execution
         r"eval\s*\(",  # Code evaluation
     ]
