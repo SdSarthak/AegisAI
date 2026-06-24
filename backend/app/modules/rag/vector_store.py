@@ -8,6 +8,7 @@ Addresses: Import-time provider failures, broken mocks, and partial index writes
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import tempfile
@@ -35,13 +36,10 @@ def _get_faiss_class() -> Any:
 
 
 def get_embeddings() -> Any:
-    """Return the configured embeddings model."""
-    from langchain_community.embeddings import OllamaEmbeddings
+    """Return the configured embeddings model from the shared factory."""
+    from app.modules.rag.embeddings import get_embeddings as _get_embeddings
 
-    base = settings.LLM_BASE_URL or "http://ollama:11434"
-    if base.endswith("/v1"):
-        base = base[:-3]
-    return OllamaEmbeddings(model=settings.EMBEDDINGS_MODEL, base_url=base)
+    return _get_embeddings()
 
 
 def _get_index_path(user_id: int | None = None) -> str:
@@ -127,3 +125,32 @@ def load_vector_store(user_id: int | None = None) -> Any:
 def check_index_exists(user_id: int | None = None) -> bool:
     """Check if FAISS index exists on disk for the given user (or globally)."""
     return os.path.exists(_get_index_path(user_id))
+
+
+def validate_embedding_consistency(user_id: int | None = None) -> None:
+    """Validate that the existing FAISS index dimension matches the current embedding model."""
+    index_path = _get_index_path(user_id)
+    if not os.path.exists(index_path):
+        return
+
+    try:
+        faiss_cls = _get_faiss_class()
+        embeddings = get_embeddings()
+        test_vector = embeddings.embed_query("dimension probe")
+        model_dim = len(test_vector)
+
+        store = faiss_cls.load_local(
+            index_path,
+            embeddings,
+            allow_dangerous_deserialization=True,
+        )
+        index_dim = store.index.d
+        if index_dim != model_dim:
+            logger.warning(
+                "FAISS index dimension (%d) doesn't match embedding model dimension (%d). "
+                "Reingest documents with the current embedding model.",
+                index_dim,
+                model_dim,
+            )
+    except Exception as exc:
+        logger.warning("Could not validate embedding consistency: %s", exc)

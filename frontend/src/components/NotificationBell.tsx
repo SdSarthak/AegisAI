@@ -51,7 +51,10 @@ export default function NotificationBell() {
   const queryClient = useQueryClient()
   const { data: notificationsResponse } = useQuery({
     queryKey: ['notifications', 'unread'],
-    queryFn: () => notificationsApi.list(true),
+    queryFn: async () => {
+      const result = await notificationsApi.list(true)
+      return Array.isArray(result) ? result : (result?.items ?? [])
+     },
     refetchInterval: 60_000,
   })
 
