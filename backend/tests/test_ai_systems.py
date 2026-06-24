@@ -51,9 +51,6 @@ def client(db):
     app.dependency_overrides[get_current_user] = override_user
 
     with TestClient(app) as c:
-        csrf_response = c.get("/api/v1/auth/csrf-token")
-        csrf_token = csrf_response.json()["token"]
-        c.headers["X-CSRF-Token"] = csrf_token
         yield c
 
     app.dependency_overrides.clear()

@@ -71,7 +71,7 @@ def db_session(db_engine) -> Session:
 
 
 @pytest.fixture
-def client(db_engine):
+def client(db_engine, request: pytest.FixtureRequest):
     """Create test client with test database."""
     from app.core.database import get_db
     from app.core.rate_limit import guard_scan_rate_limiter
@@ -109,7 +109,10 @@ def client(db_engine):
     app.dependency_overrides[get_current_user] = override_current_user
 
     test_client = TestClient(app)
-    yield _CSRFClientWrapper(test_client)
+    if request.node.path.name == "test_csrf.py":
+        yield test_client
+    else:
+        yield _CSRFClientWrapper(test_client)
 
     session.close()
     transaction.rollback()
@@ -136,8 +139,9 @@ class _CSRFClientWrapper:
 
     def _inject_csrf(self, kwargs: dict) -> None:
         """Add X-CSRF-Token header to state-changing request kwargs."""
-        headers = dict(kwargs.get("headers", {}))
-        headers["X-CSRF-Token"] = self._csrf_token
+        headers = dict(kwargs.get("headers") or {})
+        if not any(name.lower() == "x-csrf-token" for name in headers):
+            headers["X-CSRF-Token"] = self._csrf_token
         kwargs["headers"] = headers
 
     def get(self, url: str, **kwargs: object) -> Response:
@@ -173,6 +177,52 @@ class _CSRFClientWrapper:
         return getattr(self._inner, name)
 
 
+@pytest.fixture(autouse=True)
+def auto_csrf_for_test_clients(
+    request: pytest.FixtureRequest,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """Add CSRF tokens to raw TestClient instances outside CSRF-specific tests."""
+    if request.node.path.name == "test_csrf.py":
+        yield
+        return
+
+    original_request = TestClient.request
+
+    def request_with_csrf(
+        client: TestClient,
+        method: str,
+        url: str,
+        **kwargs: object,
+    ) -> Response:
+        if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+            headers = dict(kwargs.get("headers") or {})
+            if not any(name.lower() == "x-csrf-token" for name in headers):
+                token = getattr(client, "_aegis_csrf_token", None)
+                if token is None:
+                    response = original_request(
+                        client,
+                        "GET",
+                        "/api/v1/auth/csrf-token",
+                    )
+                    assert response.status_code == 200, (
+                        f"CSRF token fetch failed: {response.status_code}"
+                    )
+                    token = response.json().get("token") or client.cookies.get(
+                        "csrf_token"
+                    )
+                    assert token, "CSRF token is empty"
+                    setattr(client, "_aegis_csrf_token", token)
+
+                headers["X-CSRF-Token"] = token
+                kwargs["headers"] = headers
+
+        return original_request(client, method, url, **kwargs)
+
+    monkeypatch.setattr(TestClient, "request", request_with_csrf)
+    yield
+
+
 @pytest.fixture
 def csrf_client(client: _CSRFClientWrapper):
     """CSRF-aware test client.  Handles X-CSRF-Token automatically for
@@ -201,10 +251,13 @@ def auth_headers(csrf_client):
     )
     token = response.json()["access_token"]
 
-    return {
-        "Authorization": f"Bearer {token}",
-        "X-CSRF-Token": csrf_client._csrf_token,
-    }
+    headers = {"Authorization": f"Bearer {token}"}
+    csrf_token = getattr(csrf_client, "_csrf_token", None) or csrf_client.cookies.get(
+        "csrf_token"
+    )
+    if csrf_token:
+        headers["X-CSRF-Token"] = csrf_token
+    return headers
 
 
 @pytest.fixture
