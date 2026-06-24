@@ -12,19 +12,61 @@ function buildApiUrl(path: string): string {
   return `${API_BASE_URL}${normalizedPath}`
 }
 
+// CSRF token cache
+let _csrfToken: string | null = null
+let _csrfTokenPromise: Promise<string> | null = null
+
+async function fetchCsrfToken(): Promise<string> {
+  if (_csrfTokenPromise) return _csrfTokenPromise
+  _csrfTokenPromise = api.get('/auth/csrf-token').then(res => {
+    _csrfToken = res.data.token
+    return _csrfToken!
+  })
+  try {
+    return await _csrfTokenPromise
+  } catch {
+    _csrfTokenPromise = null
+    throw new Error('Failed to fetch CSRF token')
+  }
+}
+
+function invalidateCsrfToken(): void {
+  _csrfToken = null
+  _csrfTokenPromise = null
+}
+
+function isStateChangingMethod(method?: string): boolean {
+  if (!method) return false
+  return ['post', 'put', 'patch', 'delete'].includes(method.toLowerCase())
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Add auth token and request ID to every request
-api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
+// Add auth token, request ID, and CSRF token to every request
+api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const token = useAuthStore.getState().token
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
+
+  // Attach CSRF token for state-changing requests (login/register are exempt)
+  const url = config.url || ''
+  const isAuthEndpoint = url.includes('/auth/login') || url.includes('/auth/register')
+  if (!isAuthEndpoint && isStateChangingMethod(config.method)) {
+    try {
+      const csrf = await fetchCsrfToken()
+      config.headers['X-CSRF-Token'] = csrf
+    } catch {
+      // If CSRF token fetch fails, proceed without it — server will return 403
+    }
+  }
+
   // Generate a UUID for end-to-end request tracing.  Honours any
   // server-supplied X-Request-ID from previous responses so correlated
   // requests retain the same ID.
@@ -35,7 +77,7 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
 
 const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
 
-// Handle 401 errors
+// Handle 401 and 403 errors
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
   (error: unknown) => {
@@ -44,6 +86,12 @@ api.interceptors.response.use(
 }
     const url = error.config?.url || ''
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
+
+    // Invalidate CSRF token cache on CSRF failures so next request retries
+    if (error.response?.status === 403) {
+      invalidateCsrfToken()
+    }
+
     const isUnAuthorized = error.response?.status === 401 && !isAuthEndpoint
 
     if (isUnAuthorized && !isUnauthorizedHandlerRunning) {
@@ -355,7 +403,25 @@ function parseSseBuffer(
   return { events, remainder }
 }
 
+export interface ChatMessage {
+  id: string
+  question: string
+  answer: string
+  citations: RagCitation[]
+  responseTime: number | null
+  timestamp: number
+}
+
 export const ragApi = {
+  exportChat: async (
+    messages: ChatMessage[],
+    format: 'pdf',
+  ): Promise<Blob> => {
+    const { data } = await api.post('/rag/export', { messages, format }, {
+      responseType: 'blob',
+    })
+    return data as Blob
+  },
   /**
    * Stream a regulatory answer as Server-Sent Events.
    *

@@ -15,6 +15,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 from __future__ import annotations
 
+import os
 import secrets
 from typing import TYPE_CHECKING
 
@@ -82,6 +83,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: "ASGIApp"
     ) -> Response:
+        # Skip CSRF when DISABLE_CSRF is set (used in test suite).
+        if os.environ.get("DISABLE_CSRF") == "1":
+            return await call_next(request)
         # Skip exempt paths and safe methods entirely.
         if _is_csrf_exempt(request.url.path) or not _requires_csrf_check(
             request.method
