@@ -584,7 +584,6 @@ export const analyticsApi = {
     const { data } = await api.get('/analytics/summary')
     return data
   },
-}
 
   exportChat: async (
     messages: ChatMessage[],
