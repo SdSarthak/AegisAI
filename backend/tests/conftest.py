@@ -401,6 +401,22 @@ def other_auth_client(db_engine):
     app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def other_user_auth_headers(other_auth_client):
+    """Return Authorization header for the other_auth_client user.
+
+    This is a simple header-only version of other_auth_client for tests
+    that need to authenticate as a second user without needing the full
+    CSRF-aware client.
+    """
+    resp = other_auth_client.post(
+        "/api/v1/auth/login",
+        data={"username": "other@example.com", "password": "OtherPass123!"},
+    )
+    token = resp.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 @pytest.fixture(autouse=True)
 def clear_guard_rate_limits():
     """Keep in-memory and Redis guard rate limits isolated between tests."""

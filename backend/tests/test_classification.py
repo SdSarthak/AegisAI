@@ -72,6 +72,9 @@ def _make_client():
     """
     Return a FastAPI TestClient with authentication bypassed.
     Uses dependency_overrides to skip JWT validation entirely.
+
+    Pre-fetches a CSRF token so that POST/PUT/PATCH/DELETE requests
+    succeed when CSRF protection is enabled on the app.
     """
     from app.main import app
     from app.core.security import get_current_user
@@ -84,6 +87,8 @@ def _make_client():
     app.dependency_overrides[get_current_user] = lambda: mock_user
 
     client = TestClient(app)
+    # Pre-fetch CSRF token so subsequent POST requests succeed
+    client.get("/api/v1/auth/csrf-token")
     return client
  
  
