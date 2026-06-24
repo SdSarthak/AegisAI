@@ -38,29 +38,48 @@ class _CSRFClientWrapper:
             headers["X-CSRF-Token"] = self._csrf_token
             kwargs["headers"] = headers
 
-    def _wrap_method(self, name: str) -> Callable[..., Any]:
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            method = getattr(self._inner, name)
-            if name in ("post", "put", "patch", "delete", "request"):
-                self._ensure_csrf()
-                self._inject_csrf(kwargs)
-            return method(*args, **kwargs)
-        return wrapper
+    # Explicitly define HTTP verb methods so they always go through the wrapper
+    def get(self, url: str, **kwargs: Any) -> Any:
+        return self._inner.get(url, **kwargs)
 
-    def __getattr__(self, name: str) -> Any:
-        if name.startswith("_"):
-            return object.__getattribute__(self, name)
-        attr = getattr(self._inner, name)
-        if name in ("post", "put", "patch", "delete", "request"):
-            return self._wrap_method(name)
-        if name == "stream":
-            def stream_wrapper(method: str, url: str, **kwargs: Any) -> Any:
-                if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
-                    self._ensure_csrf()
-                    self._inject_csrf(kwargs)
-                return self._inner.stream(method, url, **kwargs)
-            return stream_wrapper
-        return attr
+    def post(self, url: str, **kwargs: Any) -> Any:
+        self._ensure_csrf()
+        self._inject_csrf(kwargs)
+        return self._inner.post(url, **kwargs)
+
+    def put(self, url: str, **kwargs: Any) -> Any:
+        self._ensure_csrf()
+        self._inject_csrf(kwargs)
+        return self._inner.put(url, **kwargs)
+
+    def patch(self, url: str, **kwargs: Any) -> Any:
+        self._ensure_csrf()
+        self._inject_csrf(kwargs)
+        return self._inner.patch(url, **kwargs)
+
+    def delete(self, url: str, **kwargs: Any) -> Any:
+        self._ensure_csrf()
+        self._inject_csrf(kwargs)
+        return self._inner.delete(url, **kwargs)
+
+    def request(self, method: str, url: str, **kwargs: Any) -> Any:
+        if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+            self._ensure_csrf()
+            self._inject_csrf(kwargs)
+        return self._inner.request(method, url, **kwargs)
+
+    def stream(self, method: str, url: str, **kwargs: Any) -> Any:
+        if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+            self._ensure_csrf()
+            self._inject_csrf(kwargs)
+        return self._inner.stream(method, url, **kwargs)
+
+    def __enter__(self) -> "_CSRFClientWrapper":
+        self._inner.__enter__()
+        return self
+
+    def __exit__(self, *args: Any) -> None:
+        self._inner.__exit__(*args)
 
     def __enter__(self) -> "_CSRFClientWrapper":
         self._inner.__enter__()
