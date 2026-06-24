@@ -17,6 +17,12 @@ from .normalizer import normalize_prompt
 from ..llm.llm_client import LLMClient
 from . import guard_config as config
 from app.core.telemetry import instrument_guard
+from .exceptions import (
+    AegisGuardException,
+    GuardConnectionError,
+    GuardTimeoutError,
+    GuardInvalidPayloadError,
+)
 
 # Logging is configured centrally in app.core.logging (configure_logging).
 # Importing this module must not call logging.basicConfig — doing so would
@@ -31,6 +37,7 @@ class LLMGuard:
         self,
         classifier_model_path: Optional[str] = None,
         sanitization_level: SanitizationLevel = SanitizationLevel.MEDIUM,
+        fail_safe_open: bool = False,
     ):
         """
         Initialize the guard with all defense layers.
@@ -42,6 +49,8 @@ class LLMGuard:
             classifier_model_path: Path to fine-tuned classifier model.
                                   If None, auto-detects using config.get_trained_model_path()
             sanitization_level: How aggressively to sanitize prompts
+            fail_safe_open: If True, allows prompts on Guard errors (fail-open).
+                            If False, blocks prompts on Guard errors (fail-closed, default).
         """
         logger.info("Initializing LLM Guard...")
 
@@ -75,6 +84,9 @@ class LLMGuard:
         except Exception as e:
             logger.error(f"Failed to initialize Gemini client: {e}")
             self.llm_client = None
+
+        # Fail-safe mode: if True, allow on exception; if False, block on exception (default)
+        self.fail_safe_open = fail_safe_open
 
     @instrument_guard
     def guard(self, user_prompt: str) -> Dict:
@@ -175,9 +187,16 @@ class LLMGuard:
                     response = self.llm_client.call(wrapped_prompt)
                     result["response"] = response
                     logger.info("Response generated successfully from Gemini")
+                except (GuardConnectionError, GuardTimeoutError, GuardInvalidPayloadError):
+                    raise
+                except TimeoutError as e:
+                    raise GuardTimeoutError(
+                        f"LLM call timed out during sanitization: {e}"
+                    ) from e
                 except Exception as e:
-                    logger.error(f"Gemini API call failed: {e}")
-                    result["response"] = f"Error calling LLM: {str(e)}"
+                    raise GuardConnectionError(
+                        f"LLM call failed during sanitization: {e}"
+                    ) from e
             else:
                 result["response"] = "LLM client not available"
 
@@ -190,13 +209,63 @@ class LLMGuard:
                     response = self.llm_client.call(normalized_prompt)
                     result["response"] = response
                     logger.info("Response generated successfully from Gemini")
+                except (GuardConnectionError, GuardTimeoutError, GuardInvalidPayloadError):
+                    raise
+                except TimeoutError as e:
+                    raise GuardTimeoutError(
+                        f"LLM call timed out during allow path: {e}"
+                    ) from e
                 except Exception as e:
-                    logger.error(f"Gemini API call failed: {e}")
-                    result["response"] = f"Error calling LLM: {str(e)}"
+                    raise GuardConnectionError(
+                        f"LLM call failed during allow path: {e}"
+                    ) from e
             else:
                 result["response"] = "LLM client not available"
 
         return result
+
+    def _safe_guard(self, user_prompt: str) -> Dict:
+        """Wrapper around guard() that catches exceptions and applies fail-safe policy.
+
+        Args:
+            user_prompt: Raw user input
+
+        Returns:
+            Dictionary with decision, response, and metadata.
+        """
+        try:
+            return self.guard(user_prompt)
+        except AegisGuardException as e:
+            logger.error(
+                "Guard exception (fail_safe_open=%s): %s",
+                self.fail_safe_open,
+                e.message,
+                exc_info=True,
+            )
+            if self.fail_safe_open:
+                return {
+                    "timestamp": datetime.now().isoformat(),
+                    "user_prompt": user_prompt,
+                    "normalized_prompt": user_prompt,
+                    "decision": "allowed",
+                    "response": self.decision_engine.get_safe_response(),
+                    "metadata": {
+                        "action": "allowed_on_guard_error",
+                        "guard_error": e.message,
+                    },
+                }
+            else:
+                return {
+                    "timestamp": datetime.now().isoformat(),
+                    "user_prompt": user_prompt,
+                    "normalized_prompt": user_prompt,
+                    "decision": "blocked",
+                    "response": self.decision_engine.get_safe_response(),
+                    "metadata": {
+                        "action": "blocked_on_guard_error",
+                        "guard_error": e.message,
+                    },
+                }
 
     def scan_chunk(self, chunk_text: str) -> Dict:
         """Scan retrieved RAG chunk text using only the fast regex layer.
