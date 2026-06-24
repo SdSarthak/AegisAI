@@ -237,6 +237,7 @@ def _extract_keywords(description: str) -> List[str]:
         "its", "it", "we", "they", "system", "ai", "model", "tool",
     }
     words = re.findall(r'\b[a-z]{2,}\b', normalized)
+    print(f'DEBUG words={words}', file=sys.stderr)
     # Deduplicate while preserving first-occurrence order
     seen: set[str] = set()
     unique: list[str] = []
