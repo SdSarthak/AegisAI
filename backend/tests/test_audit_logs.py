@@ -17,7 +17,7 @@ from app.main import app
 from app.models.user import User
 from app.models.ai_system import AISystem
 from app.models.ai_system import ComplianceStatus
-from csrf_helpers import _CSRFClientWrapper  # noqa: F401  # CSRF-aware test client wrapper
+from .csrf_helpers import _CSRFClientWrapper  # noqa: F401  # CSRF-aware test client wrapper
 
 
 @pytest.fixture(scope="module")
