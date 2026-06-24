@@ -1,10 +1,11 @@
-import React, { useState } from 'react'
+import React, { useMemo, useState } from 'react'
 import {
  useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import { useAuthStore } from '../stores/authStore'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Download } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges'
 
 interface AISystem {
   id: number
@@ -27,6 +28,12 @@ export default function AISystems() {
     use_case: '',
     sector: '',
   })
+  const isFormDirty = useMemo(
+    () => formData.name !== '' || formData.description !== '' || formData.use_case !== '' || formData.sector !== '',
+    [formData],
+  )
+  const { dialog, promptConfirm } = useUnsavedChanges(showModal && isFormDirty)
+
   const [searchTerm, setSearchTerm] = useState('')
   const [riskFilter, setRiskFilter] = useState('')
   const [complianceFilter, setComplianceFilter] = useState('')
@@ -549,7 +556,13 @@ export default function AISystems() {
               <div className="flex justify-end gap-3 pt-4">
                 <button
                   type="button"
-                  onClick={() => setShowModal(false)}
+                  onClick={() => {
+                    if (isFormDirty) {
+                      promptConfirm(() => setShowModal(false))
+                    } else {
+                      setShowModal(false)
+                    }
+                  }}
                   className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
                 >
                   Cancel
@@ -566,6 +579,8 @@ export default function AISystems() {
           </div>
         </div>
       )}
+
+      {dialog}
     </div>
   )
 }
