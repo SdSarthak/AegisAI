@@ -15,6 +15,7 @@ Follows the pattern established in backend/tests/test_guard.py.
 import pytest
 from unittest.mock import MagicMock, patch
 from fastapi.testclient import TestClient
+from .csrf_helpers import _CSRFClientWrapper
  
  
 # ---------------------------------------------------------------------------
@@ -72,6 +73,9 @@ def _make_client():
     """
     Return a FastAPI TestClient with authentication bypassed.
     Uses dependency_overrides to skip JWT validation entirely.
+
+    Pre-fetches a CSRF token so that POST/PUT/PATCH/DELETE requests
+    succeed when CSRF protection is enabled on the app.
     """
     from app.main import app
     from app.core.security import get_current_user
@@ -84,7 +88,8 @@ def _make_client():
     app.dependency_overrides[get_current_user] = lambda: mock_user
 
     client = TestClient(app)
-    return client
+    # Wrap in _CSRFClientWrapper so POST requests auto-inject CSRF tokens
+    return _CSRFClientWrapper(client)
  
  
 # ---------------------------------------------------------------------------
