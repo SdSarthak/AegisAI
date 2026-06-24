@@ -413,6 +413,15 @@ export interface ChatMessage {
 }
 
 export const ragApi = {
+  exportChat: async (
+    messages: ChatMessage[],
+    format: 'pdf',
+  ): Promise<Blob> => {
+    const { data } = await api.post('/rag/export', { messages, format }, {
+      responseType: 'blob',
+    })
+    return data as Blob
+  },
   /**
    * Stream a regulatory answer as Server-Sent Events.
    *
@@ -583,16 +592,6 @@ export const analyticsApi = {
   summary: async () => {
     const { data } = await api.get('/analytics/summary')
     return data
-  },
-
-  exportChat: async (
-    messages: ChatMessage[],
-    format: 'pdf',
-  ): Promise<Blob> => {
-    const { data } = await api.post('/rag/export', { messages, format }, {
-      responseType: 'blob',
-    })
-    return data as Blob
   },
 }
 
