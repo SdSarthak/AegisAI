@@ -9,7 +9,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 """
 
 from fastapi.testclient import TestClient
-from typing import Any, Callable, Iterator
+from typing import Any
 
 
 class _CSRFClientWrapper:
@@ -74,12 +74,9 @@ class _CSRFClientWrapper:
             self._inject_csrf(kwargs)
         return self._inner.stream(method, url, **kwargs)
 
-    def __enter__(self) -> "_CSRFClientWrapper":
-        self._inner.__enter__()
-        return self
-
-    def __exit__(self, *args: Any) -> None:
-        self._inner.__exit__(*args)
+    def __getattr__(self, name: str) -> Any:
+        """Delegate all other attributes to the inner TestClient (cookies, headers, etc.)."""
+        return getattr(self._inner, name)
 
     def __enter__(self) -> "_CSRFClientWrapper":
         self._inner.__enter__()
