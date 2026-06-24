@@ -37,6 +37,7 @@ def db(engine):
 
 @pytest.fixture
 def client(db):
+    from tests.conftest import _CSRFClientWrapper
     user = User(email="dup@test.com", hashed_password="x", full_name="Dupe")
     db.add(user)
     db.flush()
@@ -51,7 +52,7 @@ def client(db):
     app.dependency_overrides[get_current_user] = override_user
 
     with TestClient(app) as c:
-        yield c
+        yield _CSRFClientWrapper(c)
 
     app.dependency_overrides.clear()
 
