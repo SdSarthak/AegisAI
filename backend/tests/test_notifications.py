@@ -38,6 +38,8 @@ def _make_client(tmp_path):
     app.dependency_overrides[get_current_user] = override_current_user
 
     client = TestClient(app)
+    # Pre-fetch CSRF token so subsequent POST requests succeed
+    client.get("/api/v1/auth/csrf-token")
     return client, db, user, other_user
 
 
