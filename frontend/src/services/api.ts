@@ -287,9 +287,18 @@ export const documentsApi = {
 // Notifications API
 export const notificationsApi = {
   list: (unreadOnly = false) =>
-    api.get(`/notifications?unread_only=${unreadOnly}`).then((r: AxiosResponse) => r.data.items),
+    api
+      .get(`/notifications?unread_only=${unreadOnly}`)
+      .then((r: AxiosResponse) => r.data.items),
+
   markRead: (ids: number[]) =>
     api.post('/notifications/read', { ids }),
+
+  markAllRead: () =>
+    api.post('/notifications/read-all'),
+
+  delete: (id: number) =>
+    api.delete(`/notifications/${id}`),
 }
 
 // ---------------------------------------------------------------------------
