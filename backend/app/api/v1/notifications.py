@@ -35,8 +35,7 @@ def create_notification(
         resource_id=resource_id,
     )
     db.add(notification)
-    db.commit()
-    db.refresh(notification)
+    db.flush()
     return notification
 
 

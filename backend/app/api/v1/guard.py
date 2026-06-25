@@ -187,10 +187,9 @@ def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = N
                 )
                 db.commit()
             except Exception:
-                db.rollback()
+                # Log was already committed above. Log the notification failure
+                # but do not roll back the committed scan log or try to re-add it.
                 logger.warning("Failed to create block notification for scan %d", log.id)
-                db.add(log)
-                db.commit()
 
     except Exception:
         db.rollback()
@@ -989,36 +988,25 @@ def bulk_scan_prompts(
 
         guard = LLMGuard(sanitization_level=san_level)
         results: list[ScanResponse] = []
+        blocked_items: list[tuple[int, dict]] = []  # (log_id, result) for blocked prompts
 
         for prompt in request.prompts:
             result = guard.guard(prompt)
             log = _build_guard_scan_log(current_user.id, prompt, result, ip_address=client_ip)
 
             db.add(log)
-            db.flush()
+            db.flush()  # flush to get log.id before building notifications
 
             if log.decision == "block":
-                create_notification(
-                    db=db,
-                    user_id=current_user.id,
-                    notification_type=NotificationType.GUARD_BLOCK.value,
-                    title="Prompt blocked by LLM Guard",
-                    message="A prompt was blocked because it matched high-risk guard rules.",
-                    resource_type="guard_scan",
-                    resource_id=log.id,
-                )
-                background_tasks.add_task(
-                    deliver_webhook,
-                    db,
-                    current_user.id,
-                    "guard_block",
-                    {
-                        "decision": "block",
-                        "confidence": result["metadata"]["decision_reasoning"]["confidence"],
-                        "matched_patterns": result["metadata"]["regex_analysis"].get("matched_patterns", []),
-                        "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(),
-                    },
-                    background_tasks,
+                blocked_items.append(
+                    (
+                        log.id,
+                        {
+                            "confidence": result["metadata"]["decision_reasoning"]["confidence"],
+                            "matched_patterns": result["metadata"]["regex_analysis"].get("matched_patterns", []),
+                            "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(),
+                        },
+                    )
                 )
 
             results.append(
@@ -1032,6 +1020,40 @@ def bulk_scan_prompts(
                         [],
                     ),
                 )
+            )
+
+        # Create notifications after the loop so all scan logs are flushed and
+        # the batch commits atomically. create_notification uses db.flush() only,
+        # so notifications are not committed yet.
+        for log_id, block_info in blocked_items:
+            try:
+                create_notification(
+                    db=db,
+                    user_id=current_user.id,
+                    notification_type=NotificationType.GUARD_BLOCK.value,
+                    title="Prompt blocked by LLM Guard",
+                    message="A prompt was blocked because it matched high-risk guard rules.",
+                    resource_type="guard_scan",
+                    resource_id=log_id,
+                )
+            except Exception:
+                logger.warning("Failed to create block notification for scan %d", log_id)
+
+        # Queue webhooks after notifications so notification IDs are available
+        # if the webhook handler needs them.
+        for log_id, block_info in blocked_items:
+            background_tasks.add_task(
+                deliver_webhook,
+                db,
+                current_user.id,
+                "guard_block",
+                {
+                    "decision": "block",
+                    "confidence": block_info["confidence"],
+                    "matched_patterns": block_info["matched_patterns"],
+                    "prompt_hash": block_info["prompt_hash"],
+                },
+                background_tasks,
             )
 
         db.commit()
