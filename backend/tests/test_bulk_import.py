@@ -2,7 +2,6 @@
 
 import pytest
 from fastapi.testclient import TestClient
-from tests.conftest import _CSRFClientWrapper
 from io import BytesIO
 import textwrap
 from sqlalchemy import create_engine
@@ -48,7 +47,7 @@ def client(db):
     app.dependency_overrides[get_current_user] = override_user
 
     with TestClient(app) as c:
-        yield _CSRFClientWrapper(c), db
+        yield c, db
 
     app.dependency_overrides.clear()
 

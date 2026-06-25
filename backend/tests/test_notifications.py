@@ -37,9 +37,8 @@ def _make_client(tmp_path):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
-    from tests.conftest import _CSRFClientWrapper
-    raw_client = TestClient(app)
-    return _CSRFClientWrapper(raw_client), db, user, other_user
+    client = TestClient(app)
+    return client, db, user, other_user
 
 
 def test_list_notifications_returns_current_user_only(tmp_path):

@@ -3,7 +3,6 @@ import os
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 
 from fastapi.testclient import TestClient
-from tests.conftest import _CSRFClientWrapper
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -50,7 +49,7 @@ def test_patch_me_updates_profile_fields(tmp_path):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
-    client = _CSRFClientWrapper(TestClient(app))
+    client = TestClient(app)
     response = client.patch(
         "/api/v1/users/me",
         json={"full_name": "New Name", "company_name": "New Company"},

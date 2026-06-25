@@ -60,15 +60,20 @@ class TestCSRFMiddleware:
     Test CSRF protection on POST /api/v1/ai-systems (no password verification).
     auth_headers provides a real token for a freshly-registered user whose password
     we know (TestPass123!).
+
+    Tests that check CSRF REJECTION use unwrapped_client so the auto-injection
+    from the wrapped client does not interfere with the test's explicit token.
+    Tests that check CSRF PASSING use the wrapped client which handles tokens
+    automatically.
     """
 
-    def test_statechanging_without_token_returns_403(self, client, auth_headers):
+    def test_statechanging_without_token_returns_403(self, unwrapped_client, auth_headers):
         """POST with wrong X-CSRF-Token value is rejected with 403.
 
         We intentionally send a non-matching token so compare_digest fails.
-        (Sending no header would match the stale cookie via empty-string comparison.)
+        Uses unwrapped_client to prevent auto-injection of a valid CSRF token.
         """
-        resp = client.post(
+        resp = unwrapped_client.post(
             "/api/v1/ai-systems",
             json={},
             headers={**auth_headers, "X-CSRF-Token": "wrong_token_value"},
@@ -89,9 +94,9 @@ class TestCSRFMiddleware:
         # 422 = CSRF passed, validation error. 403 = CSRF still blocking.
         assert resp.status_code != 403, f"CSRF blocked: {resp.text}"
 
-    def test_statechanging_with_wrong_token_returns_403(self, client, auth_headers):
+    def test_statechanging_with_wrong_token_returns_403(self, unwrapped_client, auth_headers):
         """POST with a mismatched token is rejected with 403."""
-        resp = client.post(
+        resp = unwrapped_client.post(
             "/api/v1/ai-systems",
             json={},
             headers={**auth_headers, "X-CSRF-Token": "a" * 64},
@@ -115,10 +120,10 @@ class TestCSRFMiddleware:
         resp = client.post("/api/v1/auth/csrf-token")
         assert resp.status_code != 403, resp.text
 
-    def test_put_and_patch_also_require_csrf(self, client, auth_headers):
+    def test_put_and_patch_also_require_csrf(self, unwrapped_client, auth_headers):
         """PUT and PATCH methods are also protected."""
         for method in ("put", "patch"):
-            fn = getattr(client, method)
+            fn = getattr(unwrapped_client, method)
             resp = fn(
                 "/api/v1/ai-systems",
                 json={},
@@ -126,9 +131,9 @@ class TestCSRFMiddleware:
             )
             assert resp.status_code == 403, f"{method.upper()} got {resp.status_code}: {resp.text}"
 
-    def test_delete_also_requires_csrf(self, client, auth_headers):
+    def test_delete_also_requires_csrf(self, unwrapped_client, auth_headers):
         """DELETE method is also protected."""
-        resp = client.delete(
+        resp = unwrapped_client.delete(
             "/api/v1/ai-systems",
             headers={**auth_headers, "X-CSRF-Token": "wrong"},
         )

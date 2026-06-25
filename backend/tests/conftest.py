@@ -117,6 +117,55 @@ def client(db_engine):
     app.dependency_overrides.clear()
 
 
+@pytest.fixture
+def unwrapped_client(db_engine):
+    """Raw TestClient without CSRF auto-injection.
+
+    Use this when you need to send requests WITHOUT CSRF tokens,
+    e.g. for testing CSRF-rejection scenarios.
+    """
+    from app.core.database import get_db
+    from app.core.security import decode_token
+
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+
+    def override_get_db():
+        yield session
+
+    def override_current_user(request: Request):
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header.lower().startswith("bearer "):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated"
+            )
+
+        token = auth_header.split(" ", 1)[1]
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+
+        user = session.query(User).filter(User.id == int(user_id)).first()
+        return user or _mock_current_user()
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_current_user
+
+    client = TestClient(app)
+    yield client
+
+    session.close()
+    transaction.rollback()
+    connection.close()
+    app.dependency_overrides.clear()
+
+
 class _CSRFClientWrapper:
     """Wrap TestClient to auto-handle CSRF tokens for state-changing requests."""
 
