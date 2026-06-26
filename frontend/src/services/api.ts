@@ -1,16 +1,9 @@
 import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import { useAuthStore } from '../stores/authStore'
-
-const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
-const API_BASE_URL = configuredApiBaseUrl ? configuredApiBaseUrl.replace(/\/$/, '') : '/api/v1'
+import { API_BASE_URL, buildApiUrl } from '../utils/apiUrl'
 
 // Tracks whether the global 401-response handler is currently executing.
 let isUnauthorizedHandlerRunning = false
-
-function buildApiUrl(path: string): string {
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`
-  return `${API_BASE_URL}${normalizedPath}`
-}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
