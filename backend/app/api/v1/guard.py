@@ -189,8 +189,6 @@ def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = N
             except Exception:
                 db.rollback()
                 logger.warning("Failed to create block notification for scan %d", log.id)
-                db.add(log)
-                db.commit()
 
     except Exception:
         db.rollback()
