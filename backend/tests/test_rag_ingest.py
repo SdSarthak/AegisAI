@@ -160,6 +160,33 @@ class TestRagIngest:
 
     @patch(PATCH_CREATE_VS)
     @patch(PATCH_LOAD_DOCS)
+    def test_pdf_extension_with_non_pdf_content_returns_400(
+        self, mock_load, mock_create, client, mock_rag_user
+    ):
+        """
+        4b. A file with a .pdf extension but non-PDF byte content should
+        return 400 before any loader is invoked.
+        """
+        with patch(PATCH_AUTH, return_value=_mock_current_user()):
+            response = client.post(
+                "/api/v1/rag/ingest",
+                files={
+                    "files": (
+                        "malformed.pdf",
+                        io.BytesIO(b"This is not a PDF file, just plain text"),
+                        "application/pdf",
+                    )
+                },
+            )
+
+        assert response.status_code == 400
+        assert "valid PDF" in response.json()["detail"]
+        # Loader and FAISS builder must NOT have been called
+        mock_load.assert_not_called()
+        mock_create.assert_not_called()
+
+    @patch(PATCH_CREATE_VS)
+    @patch(PATCH_LOAD_DOCS)
     def test_empty_pdf_returns_400(self, mock_load, mock_create, client, mock_rag_user):
         """
         5. A valid-looking PDF that produces zero chunks should return 400.
