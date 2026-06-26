@@ -344,12 +344,27 @@ def ingest_documents(
     saved_paths: list[str] = []
     pending_documents: list[RAGDocument] = []
 
+    def _is_pdf_content_valid(path: str) -> bool:
+        """Check file content matches PDF magic bytes (not just the extension)."""
+        with open(path, "rb") as f:
+            header = f.read(5)
+        return header.startswith(b"%PDF-")
+
     try:
         for upload in pdf_files:
             filename = _stored_filename(upload.filename)
             dest = os.path.join(storage_dir, filename)
             with open(dest, "wb") as buf:
                 shutil.copyfileobj(upload.file, buf)
+            if not _is_pdf_content_valid(dest):
+                os.remove(dest)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"File '{upload.filename}' does not appear to be a valid PDF. "
+                        "Please ensure the file is a valid PDF document."
+                    ),
+                )
             saved_paths.append(dest)
             pending_documents.append(
                 RAGDocument(
