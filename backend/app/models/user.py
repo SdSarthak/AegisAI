@@ -41,3 +41,6 @@ class User(Base):
     documents = relationship("Document", back_populates="owner")
     webhook_configs = relationship("WebhookConfig", back_populates="user")
     notifications    = relationship("Notification",    back_populates="user")
+
+    email_notifications_enabled = Column(Boolean, default=True)
+    email_notification_frequency = Column(String, default="realtime")
