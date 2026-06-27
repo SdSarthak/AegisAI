@@ -44,6 +44,20 @@ from app.schemas.pagination import CursorPaginatedResponse
 
 from app.modules.guard import guard_config
 
+# CUSTOM GUARD LIFECYCLE EXCEPTIONS
+class AegisGuardException(Exception):
+    """Base exception class for all LLM Guard related failures."""
+    pass
+
+class GuardConnectionError(AegisGuardException):
+    """Raised when the SDK cannot establish a connection to the classifier."""
+    pass
+
+class GuardExecutionError(AegisGuardException):
+    """Raised when model inference or processing fails mid-execution."""
+    pass
+
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -261,7 +275,7 @@ def scan_prompt(
     current_user: User = Depends(get_current_user),
 ):
     """Scan a prompt for injection risks."""
-    limited, retry_after = guard_scan_rate_limiter.check_and_consume(
+    limited, retry_after = guard_scan_rate_limiter.check_and_consume(   
         key=f"guard:scan:{current_user.id}",
         limit=settings.GUARD_RATE_LIMIT_REQUESTS,
         window_seconds=settings.GUARD_RATE_LIMIT_WINDOW_SECONDS,
@@ -338,12 +352,19 @@ def scan_prompt(
 
         return response
 
-    except Exception:
-        logger.exception("Guard scan failed")
+    except (GuardConnectionError, GuardExecutionError) as guard_err:
+        logger.error(f"Guard SDK Operational Failure: {str(guard_err)}", exc_info=True)
+        # Fail-safe closed behavior: block execution on critical safety downtime
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Security scan unavailable. Connection dropped. Reason: {str(guard_err)}"
+        )
 
+    except Exception as general_sys_err:
+        logger.critical(f"Unhandled backend glitch caught inside Guard router: {str(general_sys_err)}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An internal error occurred while processing the Guard scan.",
+            detail="An internal error occurred while processing the Guard scan."
         )
     
 
