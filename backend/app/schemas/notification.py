@@ -4,14 +4,14 @@ Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
 
 
 class NotificationResponse(BaseModel):
     id: int
-    notification_type: str
+    notification_type: str = Field(validation_alias="type")
     title: str
     message: str
     is_read: bool
@@ -21,6 +21,7 @@ class NotificationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class NotificationMarkRead(BaseModel):
