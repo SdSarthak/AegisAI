@@ -110,7 +110,7 @@ def client(db_engine):
     app.dependency_overrides[get_current_user] = override_current_user
 
     client = TestClient(app)
-    yield client
+    yield _CSRFClientWrapper(client)
 
     session.close()
     transaction.rollback()
@@ -128,6 +128,11 @@ class _CSRFClientWrapper:
     def _ensure_csrf(self) -> None:
         """Fetch a CSRF token if we do not have one yet."""
         if self._csrf_token is None:
+            cookie_token = self._inner.cookies.get("csrf_token")
+            if cookie_token:
+                self._csrf_token = cookie_token
+                return
+
             resp = self._inner.get("/api/v1/auth/csrf-token")
             assert resp.status_code == 200, f"CSRF token fetch failed: {resp.status_code}"
             self._csrf_token = resp.json()["token"]
@@ -135,12 +140,16 @@ class _CSRFClientWrapper:
 
     def _inject_csrf(self, kwargs: dict) -> None:
         """Add X-CSRF-Token header to state-changing request kwargs."""
-        headers = dict(kwargs.get("headers", {}))
-        headers["X-CSRF-Token"] = self._csrf_token
+        headers = dict(kwargs.get("headers") or {})
+        if not any(key.lower() == "x-csrf-token" for key in headers):
+            headers["X-CSRF-Token"] = self._csrf_token
         kwargs["headers"] = headers
 
     def get(self, url: str, **kwargs: object) -> Any:
-        return self._inner.get(url, **kwargs)
+        response = self._inner.get(url, **kwargs)
+        if url.startswith("/api/v1/auth/csrf-token") and response.status_code == 200:
+            self._csrf_token = response.json()["token"]
+        return response
 
     def post(self, url: str, **kwargs: object) -> Any:
         self._ensure_csrf()
@@ -176,7 +185,7 @@ class _CSRFClientWrapper:
 def csrf_client(client: TestClient):
     """CSRF-aware test client.  Handles X-CSRF-Token automatically for
     state-changing requests (POST / PUT / PATCH / DELETE)."""
-    return _CSRFClientWrapper(client)
+    return client
 
 
 @pytest.fixture
