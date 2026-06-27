@@ -133,10 +133,15 @@ class _CSRFClientWrapper:
             assert self._csrf_token, "CSRF token is empty"
 
     def _inject_csrf(self, kwargs: dict) -> None:
-        """Add X-CSRF-Token header to state-changing request kwargs."""
+        """Add X-CSRF-Token header to state-changing request kwargs.
+
+        Only inject if no X-CSRF-Token header is already present so that
+        tests can override with explicit (e.g. wrong) token values.
+        """
         headers = dict(kwargs.get("headers", {}))
-        headers["X-CSRF-Token"] = self._csrf_token
-        kwargs["headers"] = headers
+        if "X-CSRF-Token" not in headers:
+            headers["X-CSRF-Token"] = self._csrf_token
+            kwargs["headers"] = headers
 
     def get(self, url: str, **kwargs: object) -> Response:
         return self._inner.get(url, **kwargs)
