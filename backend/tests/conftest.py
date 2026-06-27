@@ -3,7 +3,9 @@
 import os
 from typing import Any
 
+import httpx
 import pytest
+import pytest_asyncio
 from unittest.mock import MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
@@ -245,11 +247,121 @@ class _CSRFClientWrapper:
         return getattr(self._inner, name)
 
 
+class _AsyncCSRFClientWrapper:
+    """Wrap AsyncClient to auto-handle CSRF tokens for state-changing requests."""
+
+    def __init__(self, inner: httpx.AsyncClient) -> None:
+        self._inner = inner
+        self._csrf_token: str | None = None
+
+    async def _ensure_csrf(self) -> None:
+        """Fetch a CSRF token if we do not have one yet."""
+        if self._csrf_token is None:
+            cookie_token = self._inner.cookies.get("csrf_token")
+            if cookie_token:
+                self._csrf_token = cookie_token
+                return
+
+            resp = await self._inner.get("/api/v1/auth/csrf-token")
+            assert resp.status_code == 200, f"CSRF token fetch failed: {resp.status_code}"
+            self._csrf_token = resp.json()["token"]
+            assert self._csrf_token, "CSRF token is empty"
+
+    def _inject_csrf(self, kwargs: dict) -> None:
+        """Add X-CSRF-Token header to state-changing request kwargs."""
+        headers = dict(kwargs.get("headers") or {})
+        if not any(key.lower() == "x-csrf-token" for key in headers):
+            headers["X-CSRF-Token"] = self._csrf_token
+        kwargs["headers"] = headers
+
+    async def get(self, url: str, **kwargs: object) -> Any:
+        response = await self._inner.get(url, **kwargs)
+        if url.startswith("/api/v1/auth/csrf-token") and response.status_code == 200:
+            self._csrf_token = response.json()["token"]
+        return response
+
+    async def post(self, url: str, **kwargs: object) -> Any:
+        await self._ensure_csrf()
+        self._inject_csrf(kwargs)
+        return await self._inner.post(url, **kwargs)
+
+    async def put(self, url: str, **kwargs: object) -> Any:
+        await self._ensure_csrf()
+        self._inject_csrf(kwargs)
+        return await self._inner.put(url, **kwargs)
+
+    async def patch(self, url: str, **kwargs: object) -> Any:
+        await self._ensure_csrf()
+        self._inject_csrf(kwargs)
+        return await self._inner.patch(url, **kwargs)
+
+    async def delete(self, url: str, **kwargs: object) -> Any:
+        await self._ensure_csrf()
+        self._inject_csrf(kwargs)
+        return await self._inner.delete(url, **kwargs)
+
+    async def request(self, method: str, url: str, **kwargs: object) -> Any:
+        if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+            await self._ensure_csrf()
+            self._inject_csrf(kwargs)
+        return await self._inner.request(method, url, **kwargs)
+
+    def __getattr__(self, name: str) -> object:
+        return getattr(self._inner, name)
+
+
 @pytest.fixture
 def csrf_client(client: TestClient):
     """CSRF-aware test client.  Handles X-CSRF-Token automatically for
     state-changing requests (POST / PUT / PATCH / DELETE)."""
     return client
+
+
+@pytest_asyncio.fixture
+async def async_client(db_engine):
+    """Create async test client with test database and CSRF handling."""
+    from app.core.database import get_db
+    from app.core.rate_limit import guard_scan_rate_limiter
+
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+    guard_scan_rate_limiter._local_attempts_by_key.clear()
+
+    def override_get_db():
+        yield session
+
+    def override_current_user(request: Request):
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header.lower().startswith("bearer "):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated",
+            )
+
+        token = auth_header.split(" ", 1)[1]
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token",
+            )
+
+        user = session.query(User).filter(User.id == int(user_id)).first()
+        return user or _mock_current_user()
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_current_user
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        yield _AsyncCSRFClientWrapper(client)
+
+    session.close()
+    transaction.rollback()
+    connection.close()
+    app.dependency_overrides.clear()
 
 
 @pytest.fixture
