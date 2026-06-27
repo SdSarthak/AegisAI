@@ -1,6 +1,8 @@
 """Shared pytest fixtures for all tests."""
 
 import os
+from typing import Any
+
 import pytest
 from unittest.mock import MagicMock
 from sqlalchemy import create_engine
@@ -219,6 +221,10 @@ class _CSRFClientWrapper:
         return self._inner.delete(url, **kwargs)
 
     def request(self, method: str, url: str, **kwargs: object) -> Response:
+        if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+            self._ensure_csrf()
+            self._inject_csrf(kwargs)
+        return self._inner.request(method, url, **kwargs)
         if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
             self._ensure_csrf()
             self._inject_csrf(kwargs)
