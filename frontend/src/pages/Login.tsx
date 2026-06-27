@@ -48,9 +48,9 @@ export default function Login() {
 
     try {
       const tokenData = await authApi.login(trimmedEmail, password)
-      setAuth(tokenData.access_token, null)
+      setAuth(tokenData.access_token, tokenData.refresh_token, null)
       const user = await authApi.getMe(tokenData.access_token)
-      setAuth(tokenData.access_token, user)
+      setAuth(tokenData.access_token, tokenData.refresh_token, user)
       navigate('/')
     } catch (err) {
       if (axios.isAxiosError(err)) {
