@@ -295,6 +295,30 @@ def ingest_documents(
 ) -> RAGIngestResponse:
     """Upload regulatory PDFs, persist metadata, and rebuild the FAISS index."""
     user_id = current_user.id
+    # FILE VALIDATION LOGIC (EMPTY & MAX SIZE CHECK)
+    MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB Limit
+
+    for upload_file in files:
+        # 1. Check if empty
+        content = await upload_file.read(1)
+        if not content:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Upload failed: '{upload_file.filename}' is empty (0 bytes)."
+            )
+        await upload_file.seek(0)
+
+        # 2. Check maximum size ceiling limit
+        await upload_file.seek(0, 2)
+        file_size = await upload_file.tell()
+        await upload_file.seek(0)
+
+        if file_size > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Upload failed: '{upload_file.filename}' exceeds the maximum allowed size of 20MB."
+            )
+    # =====================================================================
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
