@@ -1,6 +1,11 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
+const API_BASE = configuredApiBaseUrl
+  ? configuredApiBaseUrl.replace(/\/$/, '')
+  : '/api/v1'
+
 interface User {
   id: number
   email: string
@@ -38,7 +43,7 @@ export const useAuthStore = create<AuthState>()(
         }
         set({ isRevalidating: true })
         try {
-          const response = await fetch('/api/v1/auth/me', {
+          const response = await fetch(`${API_BASE}/auth/me`, {
             headers: {
               Authorization: `Bearer ${token}`,
             },
