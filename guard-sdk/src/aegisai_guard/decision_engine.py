@@ -64,6 +64,10 @@ class DecisionEngine:
         Returns:
             DecisionResult with decision, confidence, and reasoning
         """
+        assert 0.0 <= regex_score <= 1.0, f"regex_score out of range: {regex_score}"
+        assert 0.0 <= intent_score <= 1.0, f"intent_score out of range: {intent_score}"
+        assert intent in ("benign", "suspicious", "malicious"), f"unknown intent: {intent}"
+
         # Combine signals
         combined_score = (self.regex_weight * regex_score) + (self.intent_weight * intent_score)
 
@@ -106,7 +110,7 @@ class DecisionEngine:
         # Default: Allow benign prompts
         return DecisionResult(
             decision=Decision.ALLOW,
-            confidence=1.0 - intent_score if intent == "benign" else 0.5,
+            confidence=intent_score,
             reasoning="Prompt classified as benign - no risk detected",
             rule_matched="default_allow",
         )

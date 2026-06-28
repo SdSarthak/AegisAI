@@ -40,6 +40,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import time
@@ -191,8 +192,7 @@ async def stream_rag_answer(
 
         # --- 2. Persist placeholder so we have an answer_id ----------------
         feedback = RAGFeedback(
-            question=question,
-            answer="",
+            question_hash=hashlib.sha256(question.encode("utf-8")).hexdigest(),
             source_chunks=[c["source"] for c in citations if c["source"]],
         )
         db.add(feedback)
@@ -272,7 +272,8 @@ async def stream_rag_answer(
         # may want to thumbs-up/down a partial answer.
         if feedback is not None and answer_buf:
             try:
-                feedback.answer = "".join(answer_buf)
+                full_answer = "".join(answer_buf)
+                feedback.answer_hash = hashlib.sha256(full_answer.encode("utf-8")).hexdigest()
                 db.add(feedback)
                 db.commit()
             except Exception:

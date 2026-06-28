@@ -184,9 +184,15 @@ return {current, ttl}
         cost: int = 1,
         fail_closed: Optional[bool] = None,
     ) -> tuple[bool, int]:
-        """Return whether a request should be limited and the retry-after value."""
+        """Return whether a request should be limited and the retry-after value.
+
+        When *fail_closed* is ``True`` (default) and the Redis call fails, the
+        request is treated as rate-limited so the system does not serve traffic
+        without protection.  Set *fail_closed* to ``False`` to fall back to an
+        in-process tracking window (useful for local development / tests).
+        """
         if fail_closed is None:
-            fail_closed = getattr(settings, "RATE_LIMIT_FAIL_CLOSED", False)
+            fail_closed = getattr(settings, "RATE_LIMIT_FAIL_CLOSED", True)
 
         now = datetime.now(timezone.utc)
         use_redis = False

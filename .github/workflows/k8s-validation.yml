@@ -1,0 +1,22 @@
+# --- ADDED NEW JOB FOR KUBERNETES MANIFEST VALIDATION ---
+name: Kubernetes Validation
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main]
+
+jobs:
+  validate-k8s:
+    name: Validate Kubernetes Manifests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Lint and Validate K8s Configurations
+        uses: stackrox/kube-linter-action@v1
+        with:
+          directory: infra/
