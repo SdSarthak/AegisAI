@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   AlertCircle,
   Bot,
@@ -11,6 +11,9 @@ import {
 } from 'lucide-react'
 
 import { useRagStream } from '../hooks/useRagStream'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
+import CopyButton from '../components/CopyButton'
 
 export default function RagChat() {
   const [question, setQuestion] = useState('')
@@ -30,6 +33,10 @@ export default function RagChat() {
   const isAwaitingFirstToken = isStreaming && tokens.length === 0
   const hasAnswer = tokens.length > 0
   const displayError = validationError ?? streamError
+
+  const parsedAnswer = useMemo(() => {
+    return DOMPurify.sanitize(marked.parse(tokens, { async: false }) as string)
+  }, [tokens])
 
   const handleAsk = (e: React.FormEvent) => {
     e.preventDefault()
@@ -175,15 +182,15 @@ export default function RagChat() {
                         <Bot className="w-5 h-5 text-primary-600" />
                       </div>
                       <div className="space-y-5 min-w-0 flex-1">
-                        <p className="text-gray-700 leading-7 whitespace-pre-wrap">
-                          {tokens}
+                        <div className="prose max-w-none text-gray-700 leading-7">
+                          <div dangerouslySetInnerHTML={{ __html: parsedAnswer }} className="inline" />
                           {isStreaming && (
                             <span
-                              className="inline-block w-2 h-4 bg-primary-600 ml-0.5 align-text-bottom animate-pulse"
+                              className="inline-block w-2 h-4 bg-primary-600 ml-1 align-text-bottom animate-pulse"
                               aria-hidden="true"
                             />
                           )}
-                        </p>
+                        </div>
 
                         {streamError && (
                           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
@@ -213,14 +220,22 @@ export default function RagChat() {
                               {citations.map((citation, index) => (
                                 <div
                                   key={index}
-                                  className="border border-gray-200 rounded-lg p-3 bg-gray-50"
+                                  className="border border-gray-200 rounded-lg p-3 bg-gray-50 flex items-start justify-between gap-4"
                                 >
-                                  <p className="font-medium text-sm text-gray-900">
-                                    {citation.source}
-                                  </p>
-                                  <p className="text-sm text-gray-600 mt-1">
-                                    {citation.excerpt}
-                                  </p>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-sm text-gray-900">
+                                      {citation.source}
+                                    </p>
+                                    <p className="text-sm text-gray-600 mt-1">
+                                      {citation.excerpt}
+                                    </p>
+                                  </div>
+                                  <CopyButton
+                                    text={`${citation.source}\n${citation.excerpt}`}
+                                    iconOnly
+                                    className="flex-shrink-0"
+                                    successMessage="Citation copied!"
+                                  />
                                 </div>
                               ))}
                             </div>
