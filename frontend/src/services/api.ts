@@ -520,6 +520,20 @@ export const guardApi = {
     })
     return data
   },
+  getConfig: async (): Promise<any> => {
+    const { data } = await api.get('/guard/config')
+    return data
+  },
+  updateConfig: async (config: {
+    sanitization_level: string
+    malicious_threshold: number
+    suspicious_threshold: number
+    pii_masking_enabled: boolean
+    hallucination_threshold: number
+  }): Promise<any> => {
+    const { data } = await api.patch('/guard/config', config)
+    return data
+  },
 }
 
 export const analyticsApi = {
