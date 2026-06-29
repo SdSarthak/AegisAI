@@ -292,21 +292,31 @@ class TestRagIngest:
         assert response.status_code == 413
         assert "too many files" in response.json()["detail"].lower()
 
-    def test_oversized_file_returns_413(self, client, mock_rag_user):
+    def test_oversized_file_returns_400(self, client, mock_rag_user):
         """
-        10. Uploading a file exceeding RAG_MAX_FILE_SIZE_BYTES should return 413.
+        10. Uploading a file exceeding 20MB should return 400.
         """
-        from app.core.config import settings
-        with (
-            patch(PATCH_AUTH, return_value=_mock_current_user()),
-            patch.object(settings, "RAG_MAX_FILE_SIZE_BYTES", 10)
-        ):
+        with patch(PATCH_AUTH, return_value=_mock_current_user()):
+            # 21MB of data exceeds the 20MB hard limit
+            large_content = b"A" * (21 * 1024 * 1024)
             response = client.post(
                 "/api/v1/rag/ingest",
-                files={"files": _make_pdf_upload("large.pdf", content=b"A" * 11)},
+                files={"files": _make_pdf_upload("large.pdf", content=large_content)},
             )
-        assert response.status_code == 413
-        assert "exceeds the maximum size" in response.json()["detail"].lower()
+        assert response.status_code == 400
+        assert "exceeds maximum size limit of 20mb" in response.json()["detail"].lower()
+
+    def test_empty_file_returns_400(self, client, mock_rag_user):
+        """
+        10b. Uploading a zero-byte file should return 400.
+        """
+        with patch(PATCH_AUTH, return_value=_mock_current_user()):
+            response = client.post(
+                "/api/v1/rag/ingest",
+                files={"files": _make_pdf_upload("empty.pdf", content=b"")},
+            )
+        assert response.status_code == 400
+        assert "empty" in response.json()["detail"].lower()
 
     def test_exceed_total_budget_returns_413(self, client, mock_rag_user):
         """
