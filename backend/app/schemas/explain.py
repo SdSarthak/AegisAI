@@ -6,7 +6,7 @@ POST /api/v1/classification/explain
 """
 
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List
 from app.models.ai_system import RiskLevel
 
 
@@ -16,7 +16,7 @@ class ExplainRequest(BaseModel):
     description: str = Field(
         ...,
         min_length=10,
-        max_length=2000,
+        max_length=5000,
         description="Plain text description of the AI system to classify and explain.",
         examples=[
             "An AI system that automatically screens job applications and ranks candidates based on their CVs.",
