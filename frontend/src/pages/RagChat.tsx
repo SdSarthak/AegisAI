@@ -7,6 +7,7 @@ import {
   Send,
   Sparkles,
   Square,
+  Trash2,
   User,
 } from 'lucide-react'
 
@@ -19,6 +20,7 @@ export default function RagChat() {
   const [question, setQuestion] = useState('')
   const [submittedQuestion, setSubmittedQuestion] = useState('')
   const [validationError, setValidationError] = useState<string | null>(null)
+  const [showClearConfirm, setShowClearConfirm] = useState(false)
 
   const {
     status,
@@ -27,6 +29,7 @@ export default function RagChat() {
     error: streamError,
     ask,
     stop,
+    reset,
   } = useRagStream()
 
   const isStreaming = status === 'streaming'
@@ -37,6 +40,8 @@ export default function RagChat() {
   const parsedAnswer = useMemo(() => {
     return DOMPurify.sanitize(marked.parse(tokens, { async: false }) as string)
   }, [tokens])
+
+  const hasChat = !!(submittedQuestion || hasAnswer || isStreaming)
 
   const handleAsk = (e: React.FormEvent) => {
     e.preventDefault()
@@ -50,6 +55,14 @@ export default function RagChat() {
     setSubmittedQuestion(trimmed)
     setQuestion('')
     ask(trimmed)
+  }
+
+  const handleConfirmClear = () => {
+    reset()
+    setSubmittedQuestion('')
+    setQuestion('')
+    setValidationError(null)
+    setShowClearConfirm(false)
   }
 
   const handleExport = () => {
@@ -79,7 +92,7 @@ export default function RagChat() {
 
   return (
     <div className="h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)] flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-white">
+      <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-white flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 sm:p-3 bg-primary-50 rounded-xl">
             <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-primary-600" />
@@ -91,6 +104,17 @@ export default function RagChat() {
             </p>
           </div>
         </div>
+        {hasChat && (
+          <button
+            type="button"
+            onClick={() => setShowClearConfirm(true)}
+            className="inline-flex items-center gap-2 px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 border border-transparent rounded-lg transition-colors"
+            title="Clear Chat"
+          >
+            <Trash2 className="w-4 h-4" />
+            <span className="hidden sm:inline">Clear Chat</span>
+          </button>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto bg-gray-50">
@@ -299,6 +323,36 @@ export default function RagChat() {
           </div>
         </form>
       </div>
+
+      {/* Clear Chat Confirmation Modal */}
+      {showClearConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md">
+            <h2 className="text-lg font-semibold text-gray-900 mb-2">
+              Clear Conversation
+            </h2>
+            <p className="text-gray-600 text-sm">
+              Are you sure you want to clear the conversation? This will delete the current chat history.
+            </p>
+            <div className="flex justify-end gap-3 pt-6">
+              <button
+                type="button"
+                onClick={() => setShowClearConfirm(false)}
+                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmClear}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm"
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
