@@ -321,13 +321,17 @@ def ingest_documents(
         file_size = upload.file.tell()
         upload.file.seek(0)
 
-        if file_size > settings.RAG_MAX_FILE_SIZE_BYTES:
+        if file_size == 0:
             raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=(
-                    f"File {upload.filename} exceeds the maximum size of "
-                    f"{settings.RAG_MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB."
-                ),
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Uploaded file '{upload.filename}' is empty.",
+            )
+
+        MAX_SIZE_BYTES = 20 * 1024 * 1024
+        if file_size > MAX_SIZE_BYTES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File exceeds maximum size limit of 20MB.",
             )
         total_size += file_size
 
