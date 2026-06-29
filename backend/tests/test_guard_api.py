@@ -1,7 +1,5 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from fastapi.testclient import TestClient
-from fastapi import status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -34,17 +32,17 @@ def test_user(db_session: Session) -> User:
 
 
 @pytest.fixture
-def authenticated_client(client: TestClient, test_user: User):
+def authenticated_client(csrf_client, test_user: User):
     def override_current_user():
         return test_user
     
     from app.main import app
     app.dependency_overrides[get_current_user] = override_current_user
-    yield client
+    yield csrf_client
     app.dependency_overrides.pop(get_current_user, None)
 
 
-def test_get_guard_config_default(authenticated_client: TestClient):
+def test_get_guard_config_default(authenticated_client):
     response = authenticated_client.get("/api/v1/guard/config")
     assert response.status_code == 200
     data = response.json()
@@ -53,7 +51,7 @@ def test_get_guard_config_default(authenticated_client: TestClient):
     assert data["suspicious_threshold"] == 0.5
 
 
-def test_update_guard_config_success(authenticated_client: TestClient):
+def test_update_guard_config_success(authenticated_client):
     payload = {
         "sanitization_level": "high",
         "malicious_threshold": 0.9,
@@ -91,13 +89,13 @@ def test_update_guard_config_success(authenticated_client: TestClient):
         ),
     ]
 )
-def test_update_guard_config_validation(authenticated_client: TestClient, invalid_payload, expected_detail):
+def test_update_guard_config_validation(authenticated_client, invalid_payload, expected_detail):
     response = authenticated_client.patch("/api/v1/guard/config", json=invalid_payload)
     assert response.status_code == 400
     assert response.json()["detail"] == expected_detail
 
 
-def test_scan_prompt_success(authenticated_client: TestClient):
+def test_scan_prompt_success(authenticated_client):
     mock_guard = MagicMock()
     mock_guard.guard.return_value = {
         "decision": "allow",
@@ -122,7 +120,7 @@ def test_scan_prompt_success(authenticated_client: TestClient):
     assert data["reasoning"] == "Safe prompt"
 
 
-def test_scan_prompt_rate_limit(authenticated_client: TestClient):
+def test_scan_prompt_rate_limit(authenticated_client):
     mock_guard = MagicMock()
     mock_guard.guard.return_value = {
         "decision": "allow",
@@ -150,7 +148,7 @@ def test_scan_prompt_rate_limit(authenticated_client: TestClient):
         assert "Retry-After" in resp.headers
 
 
-def test_bulk_scan_success(authenticated_client: TestClient):
+def test_bulk_scan_success(authenticated_client):
     mock_guard = MagicMock()
     mock_guard.guard.return_value = {
         "decision": "allow",
@@ -177,7 +175,7 @@ def test_bulk_scan_success(authenticated_client: TestClient):
         assert res["decision"] == "allow"
 
 
-def test_bulk_scan_validation_limit(authenticated_client: TestClient):
+def test_bulk_scan_validation_limit(authenticated_client):
     # Maximum 50 prompts, so 51 prompts should fail
     payload = {"prompts": ["prompt"] * 51}
     response = authenticated_client.post("/api/v1/guard/scan/batch", json=payload)
@@ -185,7 +183,7 @@ def test_bulk_scan_validation_limit(authenticated_client: TestClient):
     assert "Maximum 50 prompts allowed" in response.json()["detail"]
 
 
-def test_bulk_scan_rate_limiting(authenticated_client: TestClient):
+def test_bulk_scan_rate_limiting(authenticated_client):
     mock_guard = MagicMock()
     mock_guard.guard.return_value = {
         "decision": "allow",
@@ -211,7 +209,7 @@ def test_bulk_scan_rate_limiting(authenticated_client: TestClient):
     assert "Rate limit exceeded" in resp2.json()["detail"]
 
 
-def test_get_guard_history(authenticated_client: TestClient, db_session: Session, test_user: User):
+def test_get_guard_history(authenticated_client, db_session: Session, test_user: User):
     # Add a scan log
     log = GuardScanLog(
         user_id=test_user.id,

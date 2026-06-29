@@ -119,7 +119,46 @@ class UserGuardConfig(TypedDict):
     suspicious_threshold: float
 
 
-# Temporary in-memory config store
+DEFAULT_GUARD_CONFIG: UserGuardConfig = {
+    "sanitization_level": "medium",
+    "malicious_threshold": 0.8,
+    "suspicious_threshold": 0.5,
+}
+
+
+def _user_guard_config(user: User) -> UserGuardConfig:
+    """Read a user's guard config from the database, falling back to defaults."""
+    return {
+        "sanitization_level": user.guard_sanitization_level or "medium",
+        "malicious_threshold": (
+            (user.guard_malicious_threshold or 80) / 100.0
+        ),
+        "suspicious_threshold": (
+            (user.guard_suspicious_threshold or 50) / 100.0
+        ),
+    }
+
+
+def _set_user_guard_config(user: User, config: UserGuardConfig) -> None:
+    """Persist a user's guard config to the database."""
+    db = SessionLocal()
+    try:
+        db_user = db.query(User).filter(User.id == user.id).first()
+        if db_user:
+            db_user.guard_sanitization_level = config["sanitization_level"]
+            db_user.guard_malicious_threshold = int(config["malicious_threshold"] * 100)
+            db_user.guard_suspicious_threshold = int(config["suspicious_threshold"] * 100)
+            db.commit()
+            db.refresh(db_user)
+            # Update the passed-in user object to reflect persisted values
+            user.guard_sanitization_level = db_user.guard_sanitization_level
+            user.guard_malicious_threshold = db_user.guard_malicious_threshold
+            user.guard_suspicious_threshold = db_user.guard_suspicious_threshold
+    finally:
+        db.close()
+
+
+# Backward-compat alias for tests that import user_guard_configs
 user_guard_configs: dict[int, UserGuardConfig] = {}
 
 
@@ -888,13 +927,7 @@ def get_guard_stats(
 @router.get("/config", tags=["LLM Guard"])
 def get_guard_config(current_user: User = Depends(get_current_user)):
     """Return the current user's Guard configuration."""
-    default_config = {
-        "sanitization_level": "medium",
-        "malicious_threshold": 0.8,
-        "suspicious_threshold": 0.5,
-    }
-
-    return user_guard_configs.get(current_user.id, default_config)
+    return _user_guard_config(current_user)
 
 
 @router.patch("/config", tags=["LLM Guard"])
@@ -921,15 +954,16 @@ def update_guard_config(
             detail="suspicious_threshold must be between 0 and 1",
         )
 
-    user_guard_configs[current_user.id] = {
+    new_config: UserGuardConfig = {
         "sanitization_level": config.sanitization_level,
         "malicious_threshold": config.malicious_threshold,
         "suspicious_threshold": config.suspicious_threshold,
     }
+    _set_user_guard_config(current_user, new_config)
 
     return {
         "message": "Guard configuration updated successfully",
-        "config": user_guard_configs[current_user.id],
+        "config": _user_guard_config(current_user),
     }
 
 
