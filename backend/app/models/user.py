@@ -32,6 +32,11 @@ class User(Base):
     onboarding_completed = Column(Boolean, default=False)
     dashboard_layout = Column(JSON, nullable=True)
 
+    # Guard configuration
+    guard_sanitization_level = Column(String(10), default="medium")
+    guard_malicious_threshold = Column(Integer, default=80)  # stored as 0-100 integer
+    guard_suspicious_threshold = Column(Integer, default=50)  # stored as 0-100 integer
+
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
