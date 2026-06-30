@@ -20,6 +20,7 @@ from app.core.security import get_current_user
 from app.models.user import User, SubscriptionTier
 from app.models.ai_system import AISystem, RiskLevel
 from app.models.document import Document, DocumentType, DocumentStatus
+from tests.conftest import _CSRFClientWrapper
 
 
 def _build_test_session_local(database_url: str):
@@ -88,7 +89,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_current_user
 
-        client = TestClient(app)
+        client = _CSRFClientWrapper(TestClient(app))
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -147,7 +148,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_current_user
 
-        client = TestClient(app)
+        client = _CSRFClientWrapper(TestClient(app))
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -208,7 +209,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_current_user
 
-        client = TestClient(app)
+        client = _CSRFClientWrapper(TestClient(app))
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -268,7 +269,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_current_user
 
-        client = TestClient(app)
+        client = _CSRFClientWrapper(TestClient(app))
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -303,7 +304,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_current_user
 
-        client = TestClient(app)
+        client = _CSRFClientWrapper(TestClient(app))
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -339,7 +340,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_current_user
 
-        client = TestClient(app)
+        client = _CSRFClientWrapper(TestClient(app))
 
         # Generate all three template types
         template_types = [

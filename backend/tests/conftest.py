@@ -108,14 +108,22 @@ def client(db_engine):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
-    client = TestClient(app)
+    client = _CSRFClientWrapper(TestClient(app))
     yield client
 
 
 @pytest.fixture
+def plain_client():
+    """Return a plain TestClient without CSRF token injection.
+    Use this for tests that need to test CSRF middleware behavior directly.
+    """
+    return TestClient(app)
+
+
+@pytest.fixture
 def csrf_client(client):
-    """Wrap the client fixture with _CSRFClientWrapper for endpoints protected by CSRF."""
-    return _CSRFClientWrapper(client)
+    """Alias for client (which is now always CSRF-aware)."""
+    return client
 
 
     session.close()

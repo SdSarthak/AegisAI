@@ -7,6 +7,10 @@ SPDX-License-Identifier: AGPL-3.0-only
 import pytest
 
 
+# CSRF behavior tests need a plain TestClient to test middleware directly.
+# These tests use plain_client fixture (defined in conftest.py).
+
+
 class TestCSRFTokenEndpoint:
     def test_returns_token(self, client):
         """GET /csrf-token returns a 64-char hex token."""
@@ -62,13 +66,13 @@ class TestCSRFMiddleware:
     we know (TestPass123!).
     """
 
-    def test_statechanging_without_token_returns_403(self, client, auth_headers):
+    def test_statechanging_without_token_returns_403(self, plain_client, auth_headers):
         """POST with wrong X-CSRF-Token value is rejected with 403.
 
         We intentionally send a non-matching token so compare_digest fails.
         (Sending no header would match the stale cookie via empty-string comparison.)
         """
-        resp = client.post(
+        resp = plain_client.post(
             "/api/v1/ai-systems",
             json={},
             headers={**auth_headers, "X-CSRF-Token": "wrong_token_value"},
@@ -76,12 +80,12 @@ class TestCSRFMiddleware:
         assert resp.status_code == 403, f"Expected 403, got {resp.status_code}: {resp.text}"
         assert "CSRF" in resp.text or "csrf" in resp.text.lower()
 
-    def test_statechanging_with_valid_token_passes_csrf(self, client, auth_headers):
+    def test_statechanging_with_valid_token_passes_csrf(self, plain_client, auth_headers):
         """POST with matching cookie+header passes the CSRF check."""
-        csrf_resp = client.get("/api/v1/auth/csrf-token")
+        csrf_resp = plain_client.get("/api/v1/auth/csrf-token")
         assert csrf_resp.status_code == 200
         token = csrf_resp.json()["token"]
-        resp = client.post(
+        resp = plain_client.post(
             "/api/v1/ai-systems",
             json={},
             headers={**auth_headers, "X-CSRF-Token": token},
@@ -89,9 +93,9 @@ class TestCSRFMiddleware:
         # 422 = CSRF passed, validation error. 403 = CSRF still blocking.
         assert resp.status_code != 403, f"CSRF blocked: {resp.text}"
 
-    def test_statechanging_with_wrong_token_returns_403(self, client, auth_headers):
+    def test_statechanging_with_wrong_token_returns_403(self, plain_client, auth_headers):
         """POST with a mismatched token is rejected with 403."""
-        resp = client.post(
+        resp = plain_client.post(
             "/api/v1/ai-systems",
             json={},
             headers={**auth_headers, "X-CSRF-Token": "a" * 64},
@@ -115,10 +119,10 @@ class TestCSRFMiddleware:
         resp = client.post("/api/v1/auth/csrf-token")
         assert resp.status_code != 403, resp.text
 
-    def test_put_and_patch_also_require_csrf(self, client, auth_headers):
+    def test_put_and_patch_also_require_csrf(self, plain_client, auth_headers):
         """PUT and PATCH methods are also protected."""
         for method in ("put", "patch"):
-            fn = getattr(client, method)
+            fn = getattr(plain_client, method)
             resp = fn(
                 "/api/v1/ai-systems",
                 json={},
@@ -126,9 +130,9 @@ class TestCSRFMiddleware:
             )
             assert resp.status_code == 403, f"{method.upper()} got {resp.status_code}: {resp.text}"
 
-    def test_delete_also_requires_csrf(self, client, auth_headers):
+    def test_delete_also_requires_csrf(self, plain_client, auth_headers):
         """DELETE method is also protected."""
-        resp = client.delete(
+        resp = plain_client.delete(
             "/api/v1/ai-systems",
             headers={**auth_headers, "X-CSRF-Token": "wrong"},
         )
