@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import { formatLastUpdated } from "../utils/date";
 
 import ComplianceRiskChart from "../components/ComplianceRiskChart";
 
@@ -106,6 +107,7 @@ export default function Analytics() {
   const [riskPieData, setRiskPieData] = useState<RiskData[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDark, setIsDark] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     fetchRiskDistribution();
@@ -161,6 +163,7 @@ export default function Analytics() {
       ]);
     } finally {
       setLoading(false);
+      setLastUpdated(new Date());
     }
   };
 
@@ -171,6 +174,11 @@ export default function Analytics() {
         <p className="text-gray-600 dark:text-gray-300">
           Compliance score trends and risk analysis
         </p>
+        {lastUpdated && (
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Last Updated: {formatLastUpdated(lastUpdated)}
+          </p>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -305,3 +313,4 @@ export default function Analytics() {
     </div>
   );
 }
+

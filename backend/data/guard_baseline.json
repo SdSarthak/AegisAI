@@ -1,0 +1,74 @@
+{
+  "metrics": {
+    "accuracy": 0.43,
+    "weighted_f1": 0.3407389162561576,
+    "macro_f1": 0.33825944170771755,
+    "classification_report": {
+      "benign": {
+        "precision": 0.4146341463414634,
+        "recall": 1.0,
+        "f1-score": 0.5862068965517241,
+        "support": 34.0
+      },
+      "malicious": {
+        "precision": 0.8888888888888888,
+        "recall": 0.24242424242424243,
+        "f1-score": 0.38095238095238093,
+        "support": 33.0
+      },
+      "suspicious": {
+        "precision": 0.1111111111111111,
+        "recall": 0.030303030303030304,
+        "f1-score": 0.047619047619047616,
+        "support": 33.0
+      },
+      "accuracy": 0.43,
+      "macro avg": {
+        "precision": 0.47154471544715443,
+        "recall": 0.42424242424242425,
+        "f1-score": 0.33825944170771755,
+        "support": 100.0
+      },
+      "weighted avg": {
+        "precision": 0.47097560975609754,
+        "recall": 0.43,
+        "f1-score": 0.3407389162561576,
+        "support": 100.0
+      }
+    }
+  },
+  "confusion_matrix": {
+    "labels": [
+      "benign",
+      "suspicious",
+      "malicious"
+    ],
+    "matrix": [
+      [
+        34,
+        0,
+        0
+      ],
+      [
+        31,
+        1,
+        1
+      ],
+      [
+        17,
+        8,
+        8
+      ]
+    ]
+  },
+  "threshold": {
+    "metric": "weighted_f1",
+    "value": 0.0,
+    "actual": 0.3407389162561576,
+    "passed": true
+  },
+  "baseline_delta": null,
+  "n_samples": 100,
+  "model_path": "modules/guard/models/classifier",
+  "evaluated_at": "2026-06-17T16:57:47Z"
+}

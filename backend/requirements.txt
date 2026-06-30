@@ -5,13 +5,13 @@ python-multipart==0.0.6
 
 # ── Database ──────────────────────────────────────────────────────────────────
 sqlalchemy==2.0.25
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.12
 alembic==1.13.1
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
-bcrypt==3.2.2
+bcrypt==4.0.1
 
 # ── Settings & Validation ─────────────────────────────────────────────────────
 pydantic==2.5.3
@@ -56,6 +56,9 @@ opentelemetry-api==1.22.0
 opentelemetry-sdk==1.22.0
 
 prometheus-fastapi-instrumentator==6.1.0
+
+# ── Task Scheduling ──────────────────────────────────────────────────────────
+apscheduler>=3.10.4
 
 # ── PDF Utilities ────────────────────────────────────────────────────────────────
 pdfplumber==0.10.3

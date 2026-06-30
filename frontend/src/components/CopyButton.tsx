@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { notify } from '../utils/toast'
 import { copyTextToClipboard } from '../utils/clipboard'
@@ -81,3 +81,4 @@ export default function CopyButton({
     </button>
   )
 }
+

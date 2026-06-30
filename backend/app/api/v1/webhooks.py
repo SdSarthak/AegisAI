@@ -1,26 +1,21 @@
 """
-Webhooks API — configure outbound event delivery URLs.
+Webhooks API - configure outbound event delivery URLs.
+
+Changed: Resolved merge conflicts while preserving user-scoped webhook CRUD.
+Why: Webhooks must not be creatable or deletable on behalf of another user.
+Addresses: Cross-user webhook access and broken imports/docstrings after merge.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
-
-TODO for contributors (help wanted):
-  - Implement webhook delivery: when a Guard block decision is made in
-    POST /guard/scan, call `deliver_webhook(db, user_id, event="guard_block", payload={...})`.
-    Use `httpx` (already in requirements) to POST the payload to the configured URL.
-    Sign the body with HMAC-SHA256 using the stored secret and set the
-    X-AegisAI-Signature header.
-  - Acceptance criteria: configuring a webhook URL and triggering a guard
-    block results in a POST request to that URL within 5 seconds.
 """
 
-from typing import List
-
-from fastapi import APIRouter, Depends, HTTPException, status
 import hashlib
 import hmac
 import json
 import logging
 from typing import Any, List
+from urllib.parse import urlparse
+import ipaddress
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
@@ -29,15 +24,79 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.user import User
-from app.models.webhook import WebhookConfig  # Assuming this is the SQLAlchemy model
+from app.models.webhook import WebhookConfig
 from app.schemas.webhook import WebhookCreate, WebhookResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+class WebhookDeliveryError(Exception):
+    """Raised when a webhook payload fails to reach its configured endpoint."""
+
+    def __init__(
+        self,
+        url: str,
+        event: str,
+        reason: str,
+    ) -> None:
+        super().__init__(f"Webhook delivery failed for event={event} url={url}: {reason}")
+        self.url = url
+        self.event = event
+        self.reason = reason
+
+
+def _validate_webhook_url(url: str) -> None:
+    """Validate webhook URL to prevent SSRF attacks at delivery time."""
+    parsed = urlparse(url)
+
+    # Only allow http/https schemes
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("Only http and https URLs are allowed")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Invalid URL hostname")
+
+    # Check if hostname is an IP address
+    try:
+        ip = ipaddress.ip_address(hostname)
+        # Block private, link-local, loopback, and other special-use IPs
+        if ip.is_private:
+            raise ValueError("Private IP addresses are not allowed")
+        if ip.is_link_local:
+            raise ValueError("Link-local IP addresses are not allowed")
+        if ip.is_loopback:
+            raise ValueError("Loopback IP addresses are not allowed")
+        if ip.is_reserved:
+            raise ValueError("Reserved IP addresses are not allowed")
+        if ip.is_multicast:
+            raise ValueError("Multicast IP addresses are not allowed")
+        # Block cloud metadata endpoints (169.254.169.254)
+        if str(ip) == "169.254.169.254":
+            raise ValueError("Cloud metadata endpoints are not allowed")
+    except ValueError as e:
+        # Re-raise our own validation errors
+        if "not allowed" in str(e):
+            raise
+        # If it's not an IP address, it's a hostname - continue validation
+
+    # Block common internal hostnames
+    internal_hostnames = [
+        "localhost",
+        "metadata.google.internal",
+        "169.254.169.254",
+    ]
+    if hostname.lower() in internal_hostnames:
+        raise ValueError(f"Hostname '{hostname}' is not allowed")
+
+    # Block any hostname that resolves to internal networks
+    if hostname.endswith(".internal") or hostname.endswith(".local"):
+        raise ValueError("Internal domain names are not allowed")
+
+
 def _build_signature(secret: str, payload_body: bytes) -> str:
-    """Generate HMAC-SHA256 signature for webhook payload."""
+    """Generate an HMAC-SHA256 signature for a webhook payload."""
     return hmac.new(
         secret.encode("utf-8"),
         payload_body,
@@ -51,25 +110,43 @@ async def _post_webhook(
     payload: dict[str, Any],
     secret: str | None,
 ) -> None:
-    """Post webhook payload to a configured endpoint."""
+    """Post a webhook payload to a configured endpoint.
+
+    Raises:
+        WebhookDeliveryError: When the HTTP request fails (network error, timeout,
+                             or a non-2xx status code).
+    """
+    payload_body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    headers = {"X-AegisAI-Event": event}
+
+    if secret:
+        headers["X-AegisAI-Signature"] = _build_signature(secret, payload_body)
+
     try:
-        payload_body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
-
-        headers = {
-            "X-AegisAI-Event": event,
-        }
-
-        if secret:
-            headers["X-AegisAI-Signature"] = _build_signature(secret, payload_body)
+        # Validate URL before making request
+        _validate_webhook_url(url)
 
         async with httpx.AsyncClient(timeout=5.0) as client:
-            await client.post(
-                url,
-                content=payload_body,
-                headers=headers,
-            )
-    except Exception:
-        logger.exception("Webhook delivery failed for event=%s url=%s", event, url)
+            response = await client.post(url, content=payload_body, headers=headers)
+            response.raise_for_status()
+    except httpx.TimeoutException as exc:
+        raise WebhookDeliveryError(
+            url=url,
+            event=event,
+            reason=f"timeout after {exc.args[0] if exc.args else '5s'} (request timed out)",
+        ) from exc
+    except httpx.HTTPStatusError as exc:
+        raise WebhookDeliveryError(
+            url=url,
+            event=event,
+            reason=f"HTTP {exc.response.status_code} {exc.response.reason_phrase}",
+        ) from exc
+    except httpx.RequestError as exc:
+        raise WebhookDeliveryError(
+            url=url,
+            event=event,
+            reason=f"request error: {exc}",
+        ) from exc
 
 
 def deliver_webhook(
@@ -79,7 +156,12 @@ def deliver_webhook(
     payload: dict[str, Any],
     background_tasks: BackgroundTasks,
 ) -> None:
-    """Schedule delivery to active user webhooks subscribed to the event."""
+    """Schedule delivery to active user webhooks subscribed to the event.
+
+    Raises:
+        WebhookDeliveryError: When a background task cannot be scheduled
+                           for a subscribed webhook (e.g. task queue full).
+    """
     webhooks = (
         db.query(WebhookConfig)
         .filter(
@@ -90,18 +172,23 @@ def deliver_webhook(
     )
 
     for webhook in webhooks:
-        subscribed_events = webhook.events or []
-
-        if event not in subscribed_events:
+        if event not in (webhook.events or []):
             continue
 
-        background_tasks.add_task(
-            _post_webhook,
-            url=webhook.url,
-            event=event,
-            payload=payload,
-            secret=webhook.secret,
-        )
+        try:
+            background_tasks.add_task(
+                _post_webhook,
+                url=webhook.url,
+                event=event,
+                payload=payload,
+                secret=webhook.secret,
+            )
+        except Exception as exc:  # noqa: BLE001
+            raise WebhookDeliveryError(
+                url=webhook.url,
+                event=event,
+                reason=f"failed to schedule background task: {exc}",
+            ) from exc
 
 
 @router.post("", response_model=WebhookResponse, status_code=status.HTTP_201_CREATED)
@@ -109,20 +196,15 @@ def create_webhook(
     body: WebhookCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
-
+) -> WebhookConfig:
     """Register a new webhook endpoint for the current user."""
-    # Force the user_id to be the authenticated user to prevent spoofing
     webhook_data = body.model_dump()
-    db_webhook = WebhookConfig(
-        **webhook_data,
-        user_id=current_user.id
-    )
-    
+    db_webhook = WebhookConfig(**webhook_data, user_id=current_user.id)
+
     db.add(db_webhook)
     db.commit()
     db.refresh(db_webhook)
-    
+
     return db_webhook
 
 
@@ -130,12 +212,13 @@ def create_webhook(
 def list_webhooks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
-
+) -> list[WebhookConfig]:
     """List all webhook configurations for the current user."""
     # Fetch webhooks strictly scoped to the authenticated user
-    webhooks = db.query(WebhookConfig).filter(WebhookConfig.user_id == current_user.id).all()
-    
+    webhooks = (
+        db.query(WebhookConfig).filter(WebhookConfig.user_id == current_user.id).all()
+    )
+
     return webhooks
 
 
@@ -144,23 +227,23 @@ def delete_webhook(
     webhook_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
-
+) -> None:
     """Delete a webhook configuration owned by the current user."""
     # Query checking BOTH the webhook ID and the user ID
-    db_webhook = db.query(WebhookConfig).filter(
-        WebhookConfig.id == webhook_id,
-        WebhookConfig.user_id == current_user.id
-    ).first()
+    db_webhook = (
+        db.query(WebhookConfig)
+        .filter(
+            WebhookConfig.id == webhook_id, WebhookConfig.user_id == current_user.id
+        )
+        .first()
+    )
 
-    # Generic 404 error (hides existence of other users' webhooks)
     if not db_webhook:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Webhook not found"
+            status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found"
         )
 
     db.delete(db_webhook)
     db.commit()
-    
+
     return None

@@ -1,7 +1,7 @@
 from app.modules.llm.llm_client import LLMClient
 from app.modules.rag.vector_store import load_vector_store
 
-def generate_compliance_narrative(document_type, ai_system, risk_assessment, company_name):
+def generate_compliance_narrative(document_type, ai_system, risk_assessment, company_name, user_id: int | None = None):
     """
     Generates a professional compliance narrative using LLM + RAG.
     """
@@ -10,7 +10,7 @@ def generate_compliance_narrative(document_type, ai_system, risk_assessment, com
     
     # 2. Retrieve context using RAG
     try:
-        vector_store = load_vector_store()
+        vector_store = load_vector_store(user_id=user_id)
         docs = vector_store.similarity_search(query, k=5)
         rag_context = "\n\n".join([doc.page_content for doc in docs])
     except FileNotFoundError:
