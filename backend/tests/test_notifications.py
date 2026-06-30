@@ -1,6 +1,8 @@
 from unittest.mock import MagicMock, patch
 
 from fastapi.testclient import TestClient
+
+from tests.conftest import _CSRFClientWrapper
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -37,7 +39,8 @@ def _make_client(tmp_path):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
-    client = TestClient(app)
+    base_client = TestClient(app)
+    client = _CSRFClientWrapper(base_client)
     return client, db, user, other_user
 
 

@@ -111,6 +111,13 @@ def client(db_engine):
     client = TestClient(app)
     yield client
 
+
+@pytest.fixture
+def csrf_client(client):
+    """Wrap the client fixture with _CSRFClientWrapper for endpoints protected by CSRF."""
+    return _CSRFClientWrapper(client)
+
+
     session.close()
     transaction.rollback()
     connection.close()

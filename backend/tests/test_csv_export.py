@@ -18,6 +18,7 @@ from app.core.security import get_current_user
 from app.main import app
 from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.user import User
+from tests.conftest import _CSRFClientWrapper
 
 
 @pytest.fixture(scope="module")
@@ -59,7 +60,7 @@ def client(db):
     app.dependency_overrides[get_current_user] = override_user
 
     with TestClient(app) as c:
-        yield c, db, user
+        yield _CSRFClientWrapper(c), db, user
 
     app.dependency_overrides.clear()
 

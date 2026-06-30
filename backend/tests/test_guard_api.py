@@ -9,6 +9,7 @@ from app.core.security import get_current_user
 from app.models.user import User
 from app.models.guard_scan_log import GuardScanLog
 from app.api.v1.guard import user_guard_configs
+from tests.conftest import _CSRFClientWrapper
 
 @pytest.fixture(autouse=True)
 def mock_session_local(db_session):
@@ -40,7 +41,7 @@ def authenticated_client(client: TestClient, test_user: User):
     
     from app.main import app
     app.dependency_overrides[get_current_user] = override_current_user
-    yield client
+    yield _CSRFClientWrapper(client)
     app.dependency_overrides.pop(get_current_user, None)
 
 

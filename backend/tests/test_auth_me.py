@@ -10,6 +10,7 @@ from app.main import app
 from app.core.database import Base, get_db
 from app.core.security import get_current_user
 from app.models.user import User, SubscriptionTier
+from tests.conftest import _CSRFClientWrapper
 
 
 def _build_test_session_local(database_url: str):
@@ -49,7 +50,8 @@ def test_patch_me_updates_profile_fields(tmp_path):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
-    client = TestClient(app)
+    base_client = TestClient(app)
+    client = _CSRFClientWrapper(base_client)
     response = client.patch(
         "/api/v1/users/me",
         json={"full_name": "New Name", "company_name": "New Company"},
