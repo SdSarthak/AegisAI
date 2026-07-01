@@ -136,3 +136,15 @@ def test_custom_dir_overrides_builtin(tmp_path: Path) -> None:
 def test_uninitialized_registry_raises() -> None:
     with pytest.raises(RuntimeError):
         regulation_loader.get_regulation("EU AI Act")
+
+
+def test_get_registry_uninitialized_raises() -> None:
+    """get_registry() must raise RuntimeError when the module-level registry is None."""
+    with pytest.raises(RuntimeError, match="not initialized"):
+        regulation_loader.get_registry()
+
+
+def test_list_regulations_uninitialized_raises() -> None:
+    """list_regulations() must raise RuntimeError when the module-level registry is None."""
+    with pytest.raises(RuntimeError, match="not initialized"):
+        regulation_loader.list_regulations()
