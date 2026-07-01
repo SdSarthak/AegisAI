@@ -184,6 +184,11 @@ def register(
         raise
     except Exception:
         db.rollback()
+        _record_attempt(
+            _auth_registration_attempts_by_ip,
+            client_ip,
+            _AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+        )
         # Generic database error handler
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -191,12 +196,6 @@ def register(
                 "field": "general",
                 "message": "An error occurred during registration. Please try again."
             }
-        )
-    finally:
-        _record_attempt(
-            _auth_registration_attempts_by_ip,
-            client_ip,
-            _AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
         )
 
 
