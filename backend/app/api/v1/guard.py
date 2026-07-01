@@ -16,11 +16,11 @@ import base64
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
-from typing import Optional, TypedDict
+from typing import Optional, TypedDict, Literal
 
 from app.api.v1.webhooks import deliver_webhook
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Query, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func, and_, or_
 from sqlalchemy.orm import Session
@@ -54,12 +54,31 @@ class ScanRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=settings.GUARD_MAX_PROMPT_LENGTH)
 
 
+class GuardTestRequest(BaseModel):
+    prompt: str = Field(
+        ...,
+        min_length=1,
+        max_length=settings.GUARD_MAX_PROMPT_LENGTH,
+    )
+
+    mode: Literal[
+        "regex_only",
+        "classifier_only",
+        "full",
+    ]
+
+
 class ScanResponse(BaseModel):
     decision: str
     confidence: float
     reasoning: str
     sanitized_prompt: str | None = None
     matched_patterns: list[str] = []
+
+
+class GuardTestResponse(BaseModel):
+    mode: str
+    result: dict
 
 
 class GuardConfigRequest(BaseModel):
@@ -156,22 +175,81 @@ def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = N
         db.refresh(log)
 
         if log.decision == "block":
-            create_notification(
-                db=db,
-                user_id=user_id,
-                notification_type=NotificationType.GUARD_BLOCK.value,
-                title="Prompt blocked by LLM Guard",
-                message="A prompt was blocked because it matched high-risk guard rules.",
-                resource_type="guard_scan",
-                resource_id=log.id,
-            )
-            db.commit()
+            try:
+                create_notification(
+                    db=db,
+                    user_id=user_id,
+                    notification_type=NotificationType.GUARD_BLOCK.value,
+                    title="Prompt blocked by LLM Guard",
+                    message="A prompt was blocked because it matched high-risk guard rules.",
+                    resource_type="guard_scan",
+                    resource_id=log.id,
+                )
+                db.commit()
+            except Exception:
+                db.rollback()
+                logger.warning("Failed to create block notification for scan %d", log.id)
+                db.add(log)
+                db.commit()
 
     except Exception:
         db.rollback()
         raise
     finally:
         db.close()
+
+
+@router.post("/test", response_model=GuardTestResponse)
+def test_guard_layer(
+    request: GuardTestRequest,
+    current_user: User = Depends(get_current_user),
+):
+    from app.modules.guard.llm_guard import LLMGuard
+    from app.modules.guard.sanitizer import SanitizationLevel
+
+    level_map = {
+        "low": SanitizationLevel.LOW,
+        "medium": SanitizationLevel.MEDIUM,
+        "high": SanitizationLevel.HIGH,
+    }
+
+    san_level = level_map.get(
+        settings.GUARD_SANITIZATION_LEVEL,
+        SanitizationLevel.MEDIUM,
+    )
+
+    guard = LLMGuard(sanitization_level=san_level)
+
+    if request.mode == "regex_only":
+        regex_result = guard.regex_filter.check(request.prompt)
+
+        return GuardTestResponse(
+            mode=request.mode,
+            result={
+                "flag": regex_result.flag,
+                "matched_patterns": regex_result.matched_patterns,
+                "risk_score": regex_result.score,
+            },
+        )
+
+    if request.mode == "classifier_only":
+        intent_result = guard.classifier.classify(request.prompt)
+
+        return GuardTestResponse(
+            mode=request.mode,
+            result={
+                "intent": intent_result.intent,
+                "confidence": intent_result.confidence,
+                "class_scores": intent_result.class_scores,
+            },
+        )
+
+    result = guard.guard(request.prompt)
+
+    return GuardTestResponse(
+        mode=request.mode,
+        result=result,
+    )
 
 
 @router.post("/scan", response_model=ScanResponse)
@@ -244,16 +322,15 @@ def scan_prompt(
                     deliver_webhook,
                     db,
                     current_user.id,
-                   "guard_block",
+                    "guard_block",
                     {
-                       "decision": "block",
-                       "confidence": response.confidence,
-                       "matched_patterns": response.matched_patterns,
-                       "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
-        },             
+                        "decision": "block",
+                        "confidence": response.confidence,
+                        "matched_patterns": response.matched_patterns,
+                        "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
+                    },
                     background_tasks,
-
-)
+                )
             except Exception:
                 logger.exception(
                     "Failed to trigger guard_block webhook delivery"
@@ -566,6 +643,109 @@ def get_guard_history(
 )
 
 
+@router.get("/logs/export")
+def export_guard_scan_logs(
+    format: str = Query("csv", pattern="^(csv|json)$", description="Export format"),
+    decision: Optional[str] = Query(None, pattern="^(allow|sanitize|block)$"),
+    intent: Optional[str] = Query(None),
+    start_date: Optional[datetime] = Query(None),
+    end_date: Optional[datetime] = Query(None),
+    limit: int = Query(10000, ge=1, le=50000, description="Max records to export"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Export guard scan logs as a streamed CSV or JSON file.
+
+    Administrators can download scan history for compliance reporting without
+    hitting the browser memory limit on large datasets.
+    """
+    if start_date and end_date and start_date > end_date:
+        raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
+
+
+    export_filters = build_history_filters(
+        current_user.id,
+        decision,
+        intent,
+        start_date,
+        end_date,
+    )
+
+    query = db.query(GuardScanLog).filter(*export_filters).order_by(
+        GuardScanLog.scanned_at.desc()
+    ).limit(limit)
+
+    def csv_rows():
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.DictWriter(
+            output,
+            fieldnames=[
+                "id", "scanned_at", "decision", "confidence",
+                "detection_type", "regex_flag", "regex_score",
+                "intent", "ml_confidence", "combined_score",
+                "prompt_length", "ip_address",
+            ],
+        )
+        writer.writeheader()
+        for log in query.yield_per(500):
+            writer.writerow({
+                "id": log.id,
+                "scanned_at": log.scanned_at.isoformat() if log.scanned_at else "",
+                "decision": log.decision,
+                "confidence": round(log.confidence, 4),
+                "detection_type": log.detection_type,
+                "regex_flag": log.regex_flag,
+                "regex_score": round(log.regex_score, 4),
+                "intent": log.intent,
+                "ml_confidence": round(log.ml_confidence, 4),
+                "combined_score": round(log.combined_score, 4),
+                "prompt_length": log.prompt_length,
+                "ip_address": log.ip_address or "",
+            })
+            yield output.getvalue().encode()
+            output.seek(0)
+            output.truncate()
+
+    def json_rows():
+        import json
+        first = True
+        yield b'{"logs":['
+        for log in query.yield_per(500):
+            if not first:
+                yield b','
+            first = False
+            yield json.dumps({
+                "id": log.id,
+                "scanned_at": log.scanned_at.isoformat() if log.scanned_at else None,
+                "decision": log.decision,
+                "confidence": round(log.confidence, 4),
+                "detection_type": log.detection_type,
+                "regex_flag": log.regex_flag,
+                "regex_score": round(log.regex_score, 4),
+                "intent": log.intent,
+                "ml_confidence": round(log.ml_confidence, 4),
+                "combined_score": round(log.combined_score, 4),
+                "prompt_length": log.prompt_length,
+                "ip_address": log.ip_address,
+            }, default=str).encode()
+        yield b']}'
+    media_type = "text/csv" if format == "csv" else "application/json"
+    filename = f"guard_scan_logs.{format}"
+    rows_fn = csv_rows if format == "csv" else json_rows
+
+    return StreamingResponse(
+        rows_fn(),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
 @router.get("/stats", response_model=GuardStatsResponse)
 def get_guard_stats(
     window: str = Query("7d", pattern="^(24h|7d|30d|all)$"),
@@ -826,6 +1006,19 @@ def bulk_scan_prompts(
                     message="A prompt was blocked because it matched high-risk guard rules.",
                     resource_type="guard_scan",
                     resource_id=log.id,
+                )
+                background_tasks.add_task(
+                    deliver_webhook,
+                    db,
+                    current_user.id,
+                    "guard_block",
+                    {
+                        "decision": "block",
+                        "confidence": result["metadata"]["decision_reasoning"]["confidence"],
+                        "matched_patterns": result["metadata"]["regex_analysis"].get("matched_patterns", []),
+                        "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(),
+                    },
+                    background_tasks,
                 )
 
             results.append(

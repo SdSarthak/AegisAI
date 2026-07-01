@@ -57,8 +57,13 @@ class Settings(BaseSettings):
     RAG_CHUNK_SIZE: int = 1000
     RAG_CHUNK_OVERLAP: int = 200
     FAISS_INDEX_PATH: str = "faiss_index"
+    RAG_DOCUMENT_STORAGE_PATH: str = "rag_documents"
+    FAISS_INDEX_BASE_PATH: str = "faiss_data"
     MLFLOW_TRACKING_URI: str = ""
+    EMBEDDING_PROVIDER: str = "ollama"
     EMBEDDINGS_MODEL: str = "nomic-embed-text"
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    OPENAI_API_KEY: str = ""
     RAG_MAX_FILES_PER_REQUEST: int = 10
     RAG_MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024
     RAG_TOTAL_BUDGET_BYTES: int = 50 * 1024 * 1024

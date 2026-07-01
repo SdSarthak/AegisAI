@@ -3,7 +3,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 # We use the tiny HuggingFace stub model from your test suite
 model_id = "hf-internal-testing/tiny-random-DebertaV2ForSequenceClassification"
-save_path = "/app/app/modules/guard/models/classifier"
+save_path = "./app/modules/guard/models/classifier"
 
 print(f"Downloading stub model to {save_path}...")
 os.makedirs(save_path, exist_ok=True)

@@ -335,13 +335,18 @@ async def handle_query_regulations(arguments: dict) -> list[TextContent]:
         )]
 
 
-def main():
+async def main():
     """Run the MCP server with stdio transport."""
     from mcp.server.stdio import stdio_server
-    
-    # Run server with stdio
-    stdio_server(server)
+
+    async with stdio_server() as (read_stream, write_stream):
+        await server.run(
+            read_stream,
+            write_stream,
+            server.create_initialization_options(),
+        )
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())

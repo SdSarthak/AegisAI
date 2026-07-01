@@ -8,6 +8,7 @@ Addresses: Import-time provider failures, broken mocks, and partial index writes
 
 from __future__ import annotations
 
+import logging
 import os
 import shutil
 import tempfile
@@ -35,48 +36,78 @@ def _get_faiss_class() -> Any:
 
 
 def get_embeddings() -> Any:
-    """Return the configured embeddings model."""
-    from langchain_community.embeddings import OllamaEmbeddings
+    """Return the configured embeddings model from the shared factory."""
+    from app.modules.rag.embeddings import get_embeddings as _get_embeddings
 
-    base = settings.LLM_BASE_URL or "http://ollama:11434"
-    if base.endswith("/v1"):
-        base = base[:-3]
-    return OllamaEmbeddings(model=settings.EMBEDDINGS_MODEL, base_url=base)
+    return _get_embeddings()
 
 
-def create_vector_store(documents: list[Any]) -> Any:
+def _get_index_path(user_id: int | None = None) -> str:
+    """Return the FAISS index path, scoped to a user when provided."""
+    if user_id is not None:
+        return os.path.join(settings.FAISS_INDEX_BASE_PATH, f"user_{user_id}")
+    return settings.FAISS_INDEX_PATH
+
+
+def create_vector_store(documents: list[Any], user_id: int | None = None) -> Any:
     """
     Build a FAISS index from LangChain Document objects and persist it to disk.
 
     Args:
         documents: Loaded and chunked LangChain Document objects.
+        user_id: Optional user ID for tenant-isolated index storage.
 
     Returns:
         The populated FAISS vector store.
     """
+    index_path = _get_index_path(user_id)
+    os.makedirs(index_path, exist_ok=True)
     embeddings = get_embeddings()
     faiss_cls = _get_faiss_class()
     vector_store = faiss_cls.from_documents(documents, embeddings)
 
     with _rag_index_lock:
-        with tempfile.TemporaryDirectory(prefix="faiss_") as tmp_dir:
-            vector_store.save_local(tmp_dir)
-            faiss_cls.load_local(tmp_dir, embeddings, allow_dangerous_deserialization=True)
-            if os.path.exists(settings.FAISS_INDEX_PATH):
-                shutil.rmtree(settings.FAISS_INDEX_PATH, ignore_errors=True)
-            shutil.move(tmp_dir, settings.FAISS_INDEX_PATH)
+        tmp_dir = tempfile.mkdtemp(prefix="faiss_")
 
+        try:
+            vector_store.save_local(tmp_dir)
+
+            faiss_cls.load_local(
+                tmp_dir,
+                embeddings,
+                allow_dangerous_deserialization=True,
+            )
+
+            if os.path.exists(index_path):
+                shutil.rmtree(index_path, ignore_errors=True)
+
+            shutil.copytree(tmp_dir, index_path)
+            if not os.path.exists(os.path.join(index_path, "index.faiss")):
+                shutil.rmtree(index_path, ignore_errors=True)
+                os.makedirs(index_path, exist_ok=True)
+                vector_store.save_local(index_path)
+                faiss_cls.load_local(
+                    index_path,
+                    embeddings,
+                    allow_dangerous_deserialization=True,
+                )
+
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
     return vector_store
 
 
-def load_vector_store() -> Any:
+def load_vector_store(user_id: int | None = None) -> Any:
     """
     Load an existing FAISS index from disk.
+
+    Args:
+        user_id: Optional user ID for tenant-isolated index loading.
 
     Raises:
         FileNotFoundError: if the index has not been created yet.
     """
-    index_path = settings.FAISS_INDEX_PATH
+    index_path = _get_index_path(user_id)
     if not os.path.exists(index_path):
         raise FileNotFoundError(
             f"FAISS index not found at '{index_path}'. "
@@ -91,6 +122,35 @@ def load_vector_store() -> Any:
     )
 
 
-def check_index_exists() -> bool:
-    """Check if FAISS index exists on disk."""
-    return os.path.exists(settings.FAISS_INDEX_PATH)
+def check_index_exists(user_id: int | None = None) -> bool:
+    """Check if FAISS index exists on disk for the given user (or globally)."""
+    return os.path.exists(_get_index_path(user_id))
+
+
+def validate_embedding_consistency(user_id: int | None = None) -> None:
+    """Validate that the existing FAISS index dimension matches the current embedding model."""
+    index_path = _get_index_path(user_id)
+    if not os.path.exists(index_path):
+        return
+
+    try:
+        faiss_cls = _get_faiss_class()
+        embeddings = get_embeddings()
+        test_vector = embeddings.embed_query("dimension probe")
+        model_dim = len(test_vector)
+
+        store = faiss_cls.load_local(
+            index_path,
+            embeddings,
+            allow_dangerous_deserialization=True,
+        )
+        index_dim = store.index.d
+        if index_dim != model_dim:
+            logger.warning(
+                "FAISS index dimension (%d) doesn't match embedding model dimension (%d). "
+                "Reingest documents with the current embedding model.",
+                index_dim,
+                model_dim,
+            )
+    except Exception as exc:
+        logger.warning("Could not validate embedding consistency: %s", exc)

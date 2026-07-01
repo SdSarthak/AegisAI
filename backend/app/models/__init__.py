@@ -1,9 +1,10 @@
 from app.models.user import User
 from app.models.ai_system import AISystem, RiskAssessment
-from app.models.document import Document
+from app.models.document import Document, DocumentVersion
 from app.models.rag_feedback import RAGFeedback
 from app.models.audit_log import AISystemAuditLog, RAGAuditLog
 from app.models.rag_query import RagQuery
+from app.models.rag_document import RAGDocument
 from app.models.guard_scan_log import GuardScanLog
 from app.models.webhook import WebhookConfig
 from app.models.notification import Notification
@@ -14,9 +15,11 @@ __all__ = [
     "AISystem",
     "RiskAssessment",
     "Document",
+    "DocumentVersion",
     "RAGFeedback",
     "AISystemAuditLog",
     "RAGAuditLog",
+    "RAGDocument",
     "GuardScanLog",
     "RagQuery",
     "ComplianceSnapshot",
