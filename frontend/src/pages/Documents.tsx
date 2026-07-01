@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { Link } from 'react-router-dom'
-import { FileText, Download, Trash2, Plus, Edit, Copy, Check, GitCompare } from 'lucide-react'
+import { FileText, Download, Trash2, Plus, Edit, Copy, Check, GitCompare, FileCode } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
+import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 
 interface Document {
   id: number
@@ -48,6 +50,149 @@ export default function Documents() {
     } catch (error) {
       console.error('Failed to copy content:', error)
     }
+  }
+
+  const exportToHtml = (doc: Document) => {
+    const markdownContent = doc.content || '';
+    const parsedHtml = DOMPurify.sanitize(marked.parse(markdownContent, { async: false }) as string);
+
+    const htmlDocument = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${doc.title}</title>
+  <style>
+    body {
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+      line-height: 1.6;
+      color: #1a202c;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 0 20px;
+      background-color: #ffffff;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      color: #1a202c;
+      font-weight: 700;
+      margin-top: 24px;
+      margin-bottom: 16px;
+      line-height: 1.25;
+    }
+    h1 { font-size: 2em; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
+    h2 { font-size: 1.5em; border-bottom: 1px solid #e2e8f0; padding-bottom: 0.3em; }
+    h3 { font-size: 1.25em; }
+    p { margin-top: 0; margin-bottom: 16px; }
+    a { color: #3182ce; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 85%;
+      background-color: #f7fafc;
+      padding: 0.2em 0.4em;
+      border-radius: 3px;
+    }
+    pre {
+      background-color: #f7fafc;
+      padding: 16px;
+      overflow: auto;
+      border-radius: 6px;
+      border: 1px solid #edf2f7;
+    }
+    pre code {
+      background-color: transparent;
+      padding: 0;
+    }
+    blockquote {
+      margin: 0 0 16px 0;
+      padding: 0 1em;
+      color: #4a5568;
+      border-left: 0.25em solid #cbd5e0;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-bottom: 16px;
+    }
+    th, td {
+      border: 1px solid #e2e8f0;
+      padding: 8px 12px;
+      text-align: left;
+    }
+    th {
+      background-color: #f7fafc;
+    }
+    ul, ol {
+      margin-top: 0;
+      margin-bottom: 16px;
+      padding-left: 2em;
+    }
+    li {
+      margin-bottom: 4px;
+    }
+    .header {
+      margin-bottom: 40px;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 20px;
+    }
+    .header-title {
+      font-size: 2.5em;
+      margin: 0 0 10px 0;
+      color: #2d3748;
+    }
+    .meta {
+      font-size: 0.875em;
+      color: #718096;
+      display: flex;
+      gap: 15px;
+    }
+    .tag {
+      background-color: #edf2f7;
+      color: #4a5568;
+      padding: 2px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      font-weight: 600;
+      font-size: 0.75em;
+    }
+    @media print {
+      body {
+        margin: 20px;
+        max-width: 100%;
+        color: #000000;
+        background-color: #ffffff;
+      }
+      .no-print {
+        display: none;
+      }
+      pre, blockquote, tr {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1 class="header-title">${doc.title}</h1>
+    <div class="meta">
+      <span class="tag">${doc.document_type.replace(/_/g, ' ')}</span>
+      <span>Status: <strong>${doc.status}</strong></span>
+      <span>Generated on: ${new Date(doc.created_at).toLocaleDateString()}</span>
+    </div>
+  </div>
+  <div class="content">
+    ${parsedHtml}
+  </div>
+</body>
+</html>`;
+
+    const blob = new Blob([htmlDocument], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = doc.title + ".html";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   const {
@@ -362,8 +507,17 @@ export default function Documents() {
                       a.click()
                     }}
                     className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+                    title="Download Markdown"
                   >
                     <Download className="w-5 h-5" />
+                  </button>
+
+                  <button
+                    onClick={() => exportToHtml(doc)}
+                    className="p-2 text-gray-400 hover:text-orange-600 rounded-lg hover:bg-orange-50"
+                    title="Export as HTML"
+                  >
+                    <FileCode className="w-5 h-5" />
                   </button>
 
                   <button
