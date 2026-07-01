@@ -53,6 +53,12 @@ def generate_badge_svg(
     """
     Generate an SVG compliance badge.
     """
+    # Normalize enum values to their string representations
+    if hasattr(compliance_status, "value"):
+        compliance_status = compliance_status.value
+    if hasattr(risk_level, "value"):
+        risk_level = risk_level.value
+
     if compliance_status in STATUS_COLORS:
         status_key = compliance_status
         status_label = STATUS_LABELS.get(status_key, "Unknown")

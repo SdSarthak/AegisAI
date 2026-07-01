@@ -60,8 +60,8 @@ def get_compliance_badge(
         return {
             "system_id": system_id,
             "name": system.name,
-            "risk_level": system.risk_level,
-            "compliance_status": system.compliance_status,
+            "risk_level": system.risk_level.value if system.risk_level else None,
+            "compliance_status": system.compliance_status.value if system.compliance_status else None,
         }
 
     svg = generate_badge_svg(system.name, system.risk_level, system.compliance_status)
