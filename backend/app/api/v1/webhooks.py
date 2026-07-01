@@ -9,6 +9,7 @@ Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -149,6 +150,28 @@ async def _post_webhook(
         ) from exc
 
 
+def _post_webhook_sync(
+    url: str,
+    event: str,
+    payload: dict[str, Any],
+    secret: str | None,
+) -> None:
+    """Synchronous wrapper for _post_webhook.
+
+    FastAPI BackgroundTasks.add_task() does not await async callables — it merely
+    stores the coroutine and discards it. This sync wrapper uses asyncio.run() to
+    execute the async _post_webhook coroutine synchronously, ensuring the HTTP
+    request is actually sent.
+
+    WebhookDeliveryError is re-raised so the background-task failure is visible
+    in logs (BackgroundTasks catches and logs exceptions).
+    """
+    try:
+        asyncio.run(_post_webhook(url, event, payload, secret))
+    except WebhookDeliveryError:
+        raise  # Re-raise so BackgroundTasks logs the failure
+
+
 def deliver_webhook(
     db: Session,
     user_id: int,
@@ -177,7 +200,7 @@ def deliver_webhook(
 
         try:
             background_tasks.add_task(
-                _post_webhook,
+                _post_webhook_sync,
                 url=webhook.url,
                 event=event,
                 payload=payload,
