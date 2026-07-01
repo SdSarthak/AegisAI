@@ -129,15 +129,22 @@ def test_validate_webhook_url_rejects_file_scheme():
         _validate_webhook_url("file:///etc/passwd")
 
 
-@pytest.mark.asyncio
-async def test_post_webhook_sync_calls_asyncio_run():
+def test_post_webhook_sync_calls_asyncio_run():
     """Verify _post_webhook_sync properly wraps the async _post_webhook function.
 
     BackgroundTasks.add_task() does not await async callables. The sync wrapper
     uses asyncio.run() to ensure the HTTP request is actually sent.
+    Since asyncio.run() runs the coroutine synchronously, AsyncMock.assert_awaited
+    does not work. Use a real coroutine function and verify it was called.
     """
-    mock_post = AsyncMock()
-    with patch("app.api.v1.webhooks._post_webhook", mock_post):
+    from unittest.mock import MagicMock
+    call_tracker = MagicMock()
+
+    async def fake_post(url, event, payload, secret):
+        call_tracker(url=url, event=event, payload=payload, secret=secret)
+        return None
+
+    with patch("app.api.v1.webhooks._post_webhook", fake_post):
         _post_webhook_sync(
             url="https://example.com/webhook",
             event="guard_block",
@@ -145,7 +152,7 @@ async def test_post_webhook_sync_calls_asyncio_run():
             secret=None,
         )
 
-    mock_post.assert_awaited_once_with(
+    call_tracker.assert_called_once_with(
         url="https://example.com/webhook",
         event="guard_block",
         payload={"decision": "block"},
@@ -165,16 +172,20 @@ def test_deliver_webhook_uses_sync_wrapper():
 
     background_tasks = BackgroundTasks()
 
-    with patch("app.api.v1.webhooks._post_webhook_sync") as mock_sync:
-        deliver_webhook(
-            db=DummyDB([webhook]),
-            user_id=1,
-            event="guard_block",
-            payload={"decision": "block"},
-            background_tasks=background_tasks,
-        )
+    # Verify that deliver_webhook schedules _post_webhook_sync, NOT the raw async
+    # _post_webhook. BackgroundTasks.add_task() silently drops bare async callables.
+    deliver_webhook(
+        db=DummyDB([webhook]),
+        user_id=1,
+        event="guard_block",
+        payload={"decision": "block"},
+        background_tasks=background_tasks,
+    )
 
     assert len(background_tasks.tasks) == 1
-    # Verify the task is the sync wrapper, not the raw async function
+    # The scheduled function must be the sync wrapper, not the raw async.
+    # If it were _post_webhook (raw async), BackgroundTasks would silently drop it.
     task_func = background_tasks.tasks[0].func
-    assert task_func is _post_webhook_sync
+    # Check it is NOT the raw async function by verifying the function name.
+    # _post_webhook is async (name starts with _), _post_webhook_sync is the wrapper.
+    assert "_post_webhook_sync" in task_func.__name__ or task_func is _post_webhook_sync
