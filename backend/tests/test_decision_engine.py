@@ -22,6 +22,15 @@ def engine():
     return DecisionEngine()
 
 
+def test_get_safe_response_returns_string(engine: DecisionEngine) -> None:
+    """get_safe_response() must return a non-empty string for blocked prompts."""
+    response = engine.get_safe_response()
+
+    assert isinstance(response, str)
+    assert len(response) > 0
+    assert "cannot process" in response.lower() or "rephrase" in response.lower()
+
+
 @pytest.mark.parametrize(
     ("regex_flag", "regex_score", "intent", "intent_score", "decision", "confidence", "rule_matched"),
     [
