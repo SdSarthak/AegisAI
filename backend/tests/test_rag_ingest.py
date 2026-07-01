@@ -178,6 +178,30 @@ class TestRagIngest:
         assert "text" in response.json()["detail"].lower()
         mock_create.assert_not_called()
 
+    @patch(PATCH_CREATE_VS)
+    @patch(PATCH_LOAD_DOCS)
+    def test_malformed_pdf_raises_ValueError_returns_400(
+        self, mock_load, mock_create, client, mock_rag_user
+    ):
+        """
+        5b. A PDF that causes load_documents_from_paths to raise ValueError
+        (e.g., corrupted file, file below minimum size) should return 400.
+        Previously this propagated as an unhandled 500.
+        """
+        mock_load.side_effect = ValueError(
+            "File(s) below minimum size (100 bytes): ['malformed.pdf']"
+        )
+        mock_create.return_value = MagicMock()
+
+        with patch(PATCH_AUTH, return_value=_mock_current_user()):
+            response = client.post(
+                "/api/v1/rag/ingest",
+                files={"files": _make_pdf_upload("malformed.pdf", content=b"X" * 500)},
+            )
+
+        assert response.status_code == 400
+        assert "minimum size" in response.json()["detail"].lower()
+
     # ------------------------------------------------------------------
     # Downstream failures
     # ------------------------------------------------------------------

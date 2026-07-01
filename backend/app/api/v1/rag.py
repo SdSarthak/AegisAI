@@ -362,7 +362,13 @@ def ingest_documents(
                 )
             )
 
-        chunks = _valid_text_chunks(saved_paths)
+        try:
+            chunks = _valid_text_chunks(saved_paths)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            )
 
         if not chunks:
             raise HTTPException(
