@@ -5,6 +5,7 @@ Why: RAG chunks can contain injected instructions even when the user query is sa
 Addresses: Indirect prompt injection and poisoned document chunks before LLM context assembly.
 """
 
+import hashlib
 import json
 import logging
 from datetime import datetime
@@ -95,7 +96,10 @@ class LLMGuard:
 
         result = {
             "timestamp": timestamp,
-            "user_prompt": user_prompt,
+            # Omit raw user_prompt to prevent PII leakage in API responses.
+            # Callers that need the original text can use prompt_hash for audit
+            # correlation instead.
+            "prompt_hash": hashlib.sha256(user_prompt.encode()).hexdigest(),
             "normalized_prompt": normalized_prompt,
             "decision": None,
             "response": None,

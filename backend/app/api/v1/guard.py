@@ -171,8 +171,7 @@ def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = N
         log = _build_guard_scan_log(user_id, prompt, result, ip_address=ip_address)
 
         db.add(log)
-        db.commit()
-        db.refresh(log)
+        db.flush()  # Assign log.id so we can reference it in the notification.
 
         if log.decision == "block":
             try:
@@ -189,8 +188,9 @@ def log_scan(user_id: int, prompt: str, result: dict, ip_address: str | None = N
             except Exception:
                 db.rollback()
                 logger.warning("Failed to create block notification for scan %d", log.id)
-                db.add(log)
-                db.commit()
+                return
+        else:
+            db.commit()
 
     except Exception:
         db.rollback()
