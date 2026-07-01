@@ -1,7 +1,13 @@
 import pytest
+from unittest.mock import AsyncMock, patch
 from fastapi import BackgroundTasks
 
-from app.api.v1.webhooks import _build_signature, _validate_webhook_url, deliver_webhook
+from app.api.v1.webhooks import (
+    _build_signature,
+    _post_webhook_sync,
+    _validate_webhook_url,
+    deliver_webhook,
+)
 from app.models.webhook import WebhookConfig
 
 
@@ -121,3 +127,54 @@ def test_validate_webhook_url_rejects_ftp_scheme():
 def test_validate_webhook_url_rejects_file_scheme():
     with pytest.raises(ValueError, match="Only http and https URLs are allowed"):
         _validate_webhook_url("file:///etc/passwd")
+
+
+@pytest.mark.asyncio
+async def test_post_webhook_sync_calls_asyncio_run():
+    """Verify _post_webhook_sync properly wraps the async _post_webhook function.
+
+    BackgroundTasks.add_task() does not await async callables. The sync wrapper
+    uses asyncio.run() to ensure the HTTP request is actually sent.
+    """
+    mock_post = AsyncMock()
+    with patch("app.api.v1.webhooks._post_webhook", mock_post):
+        _post_webhook_sync(
+            url="https://example.com/webhook",
+            event="guard_block",
+            payload={"decision": "block"},
+            secret=None,
+        )
+
+    mock_post.assert_awaited_once_with(
+        url="https://example.com/webhook",
+        event="guard_block",
+        payload={"decision": "block"},
+        secret=None,
+    )
+
+
+def test_deliver_webhook_uses_sync_wrapper():
+    """Verify deliver_webhook schedules the sync wrapper, not the raw async function."""
+    webhook = WebhookConfig(
+        user_id=1,
+        url="https://example.com/webhook",
+        secret=None,
+        is_active=True,
+        events=["guard_block"],
+    )
+
+    background_tasks = BackgroundTasks()
+
+    with patch("app.api.v1.webhooks._post_webhook_sync") as mock_sync:
+        deliver_webhook(
+            db=DummyDB([webhook]),
+            user_id=1,
+            event="guard_block",
+            payload={"decision": "block"},
+            background_tasks=background_tasks,
+        )
+
+    assert len(background_tasks.tasks) == 1
+    # Verify the task is the sync wrapper, not the raw async function
+    task_func = background_tasks.tasks[0].func
+    assert task_func is _post_webhook_sync
