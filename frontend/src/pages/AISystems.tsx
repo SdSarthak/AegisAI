@@ -1,8 +1,7 @@
 import React, { useState } from 'react'
 import {
  useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { aiSystemsApi } from '../services/api'
-import { useAuthStore } from '../stores/authStore'
+import api, { aiSystemsApi } from '../services/api'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Download } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -42,11 +41,10 @@ export default function AISystems() {
       // Guarantee the loading state is visible for at least 1 second
       const minDelay = new Promise((r) => setTimeout(r, 1000))
       const fetchExport = async () => {
-        const token = useAuthStore.getState().token
-        const response = await fetch('/api/v1/ai-systems/export', {
-          headers: { Authorization: `Bearer ${token}` },
+        const response = await api.get('/ai-systems/export', {
+          responseType: 'blob',
         })
-        return response.blob()
+        return response.data
       }
       const [blob] = await Promise.all([fetchExport(), minDelay])
       const url = URL.createObjectURL(blob)
