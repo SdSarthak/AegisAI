@@ -53,6 +53,6 @@ def generate_compliance_narrative(document_type, ai_system, risk_assessment, com
     
     # 4. Call the LLM
     client = LLMClient()
-    final_document = client.call(prompt=prompt, system_prompt=system_prompt,max_tokens=2500)
+    final_document = client.call(prompt=prompt, system_prompt=system_prompt, max_tokens=2500, response_format={"type": "text"})
     
     return final_document

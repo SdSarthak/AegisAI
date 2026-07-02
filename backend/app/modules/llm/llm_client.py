@@ -77,6 +77,7 @@ class LLMClient:
         max_retries: int = 3,
         retry_delay: float = 2.0,
         timeout: Optional[float] = None,
+        response_format: Optional[dict] = None,
     ) -> str:
         """
         Send a prompt and return the response text.
@@ -105,13 +106,16 @@ class LLMClient:
 
         for attempt in range(max_retries):
             try:
-                response = self.client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                    timeout=t_out,
-                )
+                request_kwargs = {
+                    "model": self.model,
+                    "messages": messages,
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "timeout": t_out,
+                }
+                if response_format is not None:
+                    request_kwargs["response_format"] = response_format
+                response = self.client.chat.completions.create(**request_kwargs)
                 return response.choices[0].message.content or ""
 
             except APIError as e:
