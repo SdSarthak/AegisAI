@@ -18,6 +18,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 - **RAG Plaintext Privacy (#1034)** — Replaced plaintext question/answer storage with SHA-256 hashes in `RagQuery` and `RAGFeedback` models; history endpoint returns hashes and lengths instead of raw text, preventing accidental plaintext exposure in the database and API responses.
 - **Per-user FAISS Isolation (#920)** — Added `FAISS_INDEX_BASE_PATH` config and `_get_index_path(user_id)` helper. Vector store functions now accept a `user_id` parameter to store/load indexes under `{FAISS_INDEX_BASE_PATH}/user_{user_id}/`, preventing cross-user data leakage in RAG queries.
+- **GuardScanLog datetime timezone** — Replaced deprecated `datetime.utcnow()` with timezone-aware `datetime.now(timezone.utc)` for `scanned_at` and `created_at` fields. Fixes naive/aware datetime mismatch errors in cursor-based pagination on PostgreSQL.
 - **Frontend Theme** — Fixed dark mode flash of unstyled content (FOUC), eliminated duplicate CSS, fixed React state overwrite bugs, and improved system preference synchronization.
 - **Documents API** — Validate `ai_system_id` ownership before creating documents so users cannot link documents to another user's AI system.
 - **PDF Export** — Escape user-controlled document text before ReportLab rendering and sanitize generated download filenames.
