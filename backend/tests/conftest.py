@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from fastapi import Request, HTTPException, status
 from fastapi.testclient import TestClient
+import requests
 
 # Set test database before importing app
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
