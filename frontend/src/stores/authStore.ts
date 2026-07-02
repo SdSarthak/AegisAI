@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { authApi } from '../services/api'
 
 interface User {
   id: number
@@ -38,20 +39,10 @@ export const useAuthStore = create<AuthState>()(
         }
         set({ isRevalidating: true })
         try {
-          const response = await fetch('/api/v1/auth/me', {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          })
-          if (response.ok) {
-            const user = await response.json()
-            set({ user, isAuthenticated: true })
-          } else {
-            // Token expired or revoked — log out
-            set({ token: null, user: null, isAuthenticated: false })
-          }
+          const user = await authApi.getMe(token)
+          set({ user, isAuthenticated: true })
         } catch {
-          // Network error — log out to be safe
+          // Token expired or revoked — log out
           set({ token: null, user: null, isAuthenticated: false })
         } finally {
           set({ isRevalidating: false })
