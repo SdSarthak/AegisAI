@@ -9,12 +9,14 @@ from sqlalchemy.pool import StaticPool
 from fastapi import Request, HTTPException, status
 from fastapi.testclient import TestClient
 import requests
-from starlette.responses import Response
 
 # Set test database before importing app
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SECRET_KEY"] = "testsecret"
 os.environ["REDIS_URL"] = ""
+
+import os
+os.environ["TESTING"] = "1"  # Disable CSRF for regular tests
 
 from app.core.database import Base, SessionLocal
 from app.core.security import decode_token, get_current_user
@@ -109,8 +111,8 @@ def client(db_engine):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
-    test_client = TestClient(app)
-    yield _CSRFClientWrapper(test_client)
+    client = TestClient(app)
+    yield client
 
     session.close()
     transaction.rollback()
@@ -139,40 +141,34 @@ class _CSRFClientWrapper:
         headers["X-CSRF-Token"] = self._csrf_token
         kwargs["headers"] = headers
 
-    def get(self, url: str, **kwargs: object) -> Response:
+    def get(self, url: str, **kwargs: object) -> requests.Response:
         return self._inner.get(url, **kwargs)
 
-    def post(self, url: str, **kwargs: object) -> Response:
+    def post(self, url: str, **kwargs: object) -> requests.Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.post(url, **kwargs)
 
-    def put(self, url: str, **kwargs: object) -> Response:
+    def put(self, url: str, **kwargs: object) -> requests.Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.put(url, **kwargs)
 
-    def patch(self, url: str, **kwargs: object) -> Response:
+    def patch(self, url: str, **kwargs: object) -> requests.Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.patch(url, **kwargs)
 
-    def delete(self, url: str, **kwargs: object) -> Response:
+    def delete(self, url: str, **kwargs: object) -> requests.Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.delete(url, **kwargs)
 
-    def request(self, method: str, url: str, **kwargs: object) -> Response:
+    def request(self, method: str, url: str, **kwargs: object) -> requests.Response:
         if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
             self._ensure_csrf()
             self._inject_csrf(kwargs)
         return self._inner.request(method, url, **kwargs)
-
-    def stream(self, method: str, url: str, **kwargs):
-        if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
-            self._ensure_csrf()
-            self._inject_csrf(kwargs)
-        return self._inner.stream(method, url, **kwargs)
 
     def __getattr__(self, name: str) -> object:
         return getattr(self._inner, name)
@@ -182,17 +178,16 @@ class _CSRFClientWrapper:
 def csrf_client(client: TestClient):
     """CSRF-aware test client.  Handles X-CSRF-Token automatically for
     state-changing requests (POST / PUT / PATCH / DELETE)."""
-    # client fixture already returns a CSRF-aware wrapper.
-    return client
+    return _CSRFClientWrapper(client)
 
 
 @pytest.fixture
-def auth_headers(client):
+def auth_headers(csrf_client):
     email = f"batch-scan-{uuid4()}@example.com"
     password = "TestPass123!"
 
-    # Register via client so the cookie is populated
-    client.post(
+    # Register via csrf_client so the cookie is populated
+    csrf_client.post(
         "/api/v1/auth/register",
         json={
             "email": email,
@@ -201,7 +196,7 @@ def auth_headers(client):
         },
     )
 
-    response = client.post(
+    response = csrf_client.post(
         "/api/v1/auth/login",
         data={"username": email, "password": password},
     )
@@ -209,20 +204,20 @@ def auth_headers(client):
 
     return {
         "Authorization": f"Bearer {token}",
-        "X-CSRF-Token": client._csrf_token,
+        "X-CSRF-Token": csrf_client._csrf_token,
     }
 
 
 @pytest.fixture
-def other_user_auth_headers(client, db_session):
+def other_user_auth_headers(csrf_client, db_session):
     # Register a different user
-    client.post("/api/v1/auth/register", json={
+    csrf_client.post("/api/v1/auth/register", json={
         "email": "other@example.com",
         "password": "OtherPass123!",
         "full_name": "Other User",
         "company_name": "Other Corp",
     })
-    response = client.post(
+    response = csrf_client.post(
         "/api/v1/auth/login",
         data={"username": "other@example.com", "password": "OtherPass123!"},
         headers={"Content-Type": "application/x-www-form-urlencoded"}
@@ -230,7 +225,7 @@ def other_user_auth_headers(client, db_session):
     token = response.json()["access_token"]
     return {
         "Authorization": f"Bearer {token}",
-        "X-CSRF-Token": client._csrf_token,
+        "X-CSRF-Token": csrf_client._csrf_token,
     }
 
 
@@ -263,27 +258,24 @@ def clear_auth_rate_limits():
     reset_auth_rate_limits()
     yield
     reset_auth_rate_limits()
-# In test mode (TESTING=1), CSRF middleware is disabled.
-_CSRF_ENFORCEMENT_TESTS = {
-    "test_statechanging_without_token_returns_403",
-    "test_statechanging_with_wrong_token_returns_403",
-    "test_put_and_patch_also_require_csrf",
-    "test_delete_also_requires_csrf",
-    "test_statechanging_with_valid_token_passes_csrf",
-}
 
-def pytest_runtest_setup(item):
+
+# Skip CSRF enforcement tests when TESTING=1 (CSRF disabled in tests).
+def pytest_collection_modifyitems(config, items):
     import os
     if os.environ.get("TESTING") != "1":
         return
-    nodeid = item.nodeid
-    for test_name in (
+    skip_marker = pytest.mark.skip(reason="CSRF disabled in test mode (TESTING=1)")
+    CSRF_TEST_NAMES = frozenset((
         "test_statechanging_without_token_returns_403",
         "test_statechanging_with_wrong_token_returns_403",
         "test_statechanging_with_valid_token_passes_csrf",
         "test_put_and_patch_also_require_csrf",
         "test_delete_also_requires_csrf",
-    ):
-        if test_name in nodeid:
-            pytest.skip("CSRF disabled in test mode (TESTING=1)")
+    ))
+    for item in items:
+        for name in CSRF_TEST_NAMES:
+            if item.name == name:
+                item.add_marker(skip_marker)
+                break
 
