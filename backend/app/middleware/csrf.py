@@ -50,9 +50,6 @@ _EXEMPT_PREFIXES: tuple[str, ...] = (
 
 
 def _is_csrf_exempt(path: str) -> bool:
-    import os
-    if os.environ.get("TESTING") == "1":
-        return True
     if path in _EXEMPT_PATHS:
         return True
     for prefix in _EXEMPT_PREFIXES:

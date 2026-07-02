@@ -11,10 +11,12 @@ from fastapi.testclient import TestClient
 import requests
 
 # Set test database before importing app
-os.environ["TESTING"] = "1"  # Disable CSRF middleware in tests
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SECRET_KEY"] = "testsecret"
 os.environ["REDIS_URL"] = ""
+
+import os
+os.environ["TESTING"] = "1"  # Disable CSRF for regular tests
 
 from app.core.database import Base, SessionLocal
 from app.core.security import decode_token, get_current_user
