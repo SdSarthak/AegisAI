@@ -92,7 +92,16 @@ function ensureListResponse<T>(
   if (Array.isArray(data)) {
     return data as T[]
   }
-
+  // Handle paginated response shape { items: T[], total, skip, limit, ... }
+  if (
+    data !== null &&
+    typeof data === 'object' &&
+    !Array.isArray(data) &&
+    'items' in data &&
+    Array.isArray((data as Record<string, unknown>).items)
+  ) {
+    return (data as Record<string, unknown>).items as T[]
+  }
   throw new Error(`${resourceName} response was empty or invalid.`)
 }
 
