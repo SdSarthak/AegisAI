@@ -9,6 +9,7 @@ Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
+import asyncio
 import hashlib
 import hmac
 import json
@@ -95,6 +96,21 @@ def _validate_webhook_url(url: str) -> None:
         raise ValueError("Internal domain names are not allowed")
 
 
+def _post_webhook_sync(
+    url: str,
+    event: str,
+    payload: dict[str, Any],
+    secret: str | None,
+) -> None:
+    """Synchronous wrapper so FastAPI BackgroundTasks can run the async _post_webhook.
+
+    FastAPI BackgroundTasks does not await coroutines — passing an async callable
+    to add_task() silently drops the request. This wrapper uses asyncio.run()
+    to execute the async delivery function synchronously in a worker thread.
+    """
+    asyncio.run(_post_webhook(url, event, payload, secret))
+
+
 def _build_signature(secret: str, payload_body: bytes) -> str:
     """Generate an HMAC-SHA256 signature for a webhook payload."""
     return hmac.new(
@@ -177,7 +193,7 @@ def deliver_webhook(
 
         try:
             background_tasks.add_task(
-                _post_webhook,
+                _post_webhook_sync,
                 url=webhook.url,
                 event=event,
                 payload=payload,
