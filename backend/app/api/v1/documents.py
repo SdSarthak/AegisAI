@@ -531,6 +531,7 @@ def list_document_templates(
         DocumentType.CONFORMITY_DECLARATION: "Generate an EU declaration of conformity for an AI system.",
         DocumentType.DATA_GOVERNANCE: "Generate a data governance policy covering quality, provenance, and retention controls.",
         DocumentType.TRANSPARENCY_NOTICE: "Generate a user-facing transparency notice for limited risk AI systems.",
+        DocumentType.HUMAN_OVERSIGHT_PLAN: "Generate a human oversight plan describing how humans remain in control of the AI system.",
     }
 
     return [
