@@ -12,6 +12,7 @@ TODO for contributors (help wanted):
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -164,3 +165,110 @@ def get_audit_logs(
     logs = base_query.order_by(GuardScanLog.scanned_at.desc()).offset(skip).limit(limit).all()
 
     return PaginatedResponse(items=logs, total=total, skip=skip, limit=limit)
+
+
+@router.get("/audit-logs/export")
+def export_audit_logs(
+    format: str = Query("csv", pattern="^(csv|json)$", description="Export format"),
+    user_id: Optional[int] = Query(None, description="Filter by user ID"),
+    decision: Optional[str] = Query(None, pattern="^(allow|sanitize|block)$", description="Filter by decision"),
+    days: Optional[int] = Query(None, ge=1, description="Only include logs from the last N days"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Export guard scan audit logs as a streamed CSV or JSON file.
+
+    Applies the same filtering as the paginated audit-logs endpoint.
+    Uses prompt_hash instead of raw prompt text for data-privacy compliance.
+    """
+    is_admin = getattr(current_user, "role", None) == "admin"
+    if user_id is not None and user_id != current_user.id and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to export audit logs for another user.",
+        )
+
+    target_user_id = user_id if user_id is not None else current_user.id
+    filters = [GuardScanLog.user_id == target_user_id]
+
+    if decision:
+        filters.append(GuardScanLog.decision == decision)
+    if days:
+        since = datetime.utcnow() - timedelta(days=days)
+        filters.append(GuardScanLog.scanned_at >= since)
+
+    query = db.query(GuardScanLog).filter(*filters).order_by(
+        GuardScanLog.scanned_at.desc()
+    )
+
+    def csv_rows():
+        import csv
+        import io
+        output = io.StringIO()
+        writer = csv.DictWriter(
+            output,
+            fieldnames=[
+                "id", "scanned_at", "decision", "confidence",
+                "detection_type", "regex_flag", "regex_score",
+                "intent", "ml_confidence", "combined_score",
+                "prompt_length", "prompt_hash", "ip_address",
+            ],
+        )
+        writer.writeheader()
+        for log in query.yield_per(500):
+            writer.writerow({
+                "id": log.id,
+                "scanned_at": log.scanned_at.isoformat() if log.scanned_at else "",
+                "decision": log.decision,
+                "confidence": round(log.confidence, 4),
+                "detection_type": log.detection_type,
+                "regex_flag": log.regex_flag,
+                "regex_score": round(log.regex_score, 4),
+                "intent": log.intent,
+                "ml_confidence": round(log.ml_confidence, 4),
+                "combined_score": round(log.combined_score, 4),
+                "prompt_length": log.prompt_length,
+                "prompt_hash": log.prompt_hash,
+                "ip_address": log.ip_address or "",
+            })
+            yield output.getvalue().encode()
+            output.seek(0)
+            output.truncate()
+
+    def json_rows():
+        import json
+        first = True
+        yield b'{"logs":['
+        for log in query.yield_per(500):
+            if not first:
+                yield b','
+            first = False
+            yield json.dumps({
+                "id": log.id,
+                "scanned_at": log.scanned_at.isoformat() if log.scanned_at else None,
+                "decision": log.decision,
+                "confidence": round(log.confidence, 4),
+                "detection_type": log.detection_type,
+                "regex_flag": log.regex_flag,
+                "regex_score": round(log.regex_score, 4),
+                "intent": log.intent,
+                "ml_confidence": round(log.ml_confidence, 4),
+                "combined_score": round(log.combined_score, 4),
+                "prompt_length": log.prompt_length,
+                "prompt_hash": log.prompt_hash,
+                "ip_address": log.ip_address,
+            }, default=str).encode()
+        yield b']}'
+
+    media_type = "text/csv" if format == "csv" else "application/json"
+    filename = f"audit_logs.{format}"
+    rows_fn = csv_rows if format == "csv" else json_rows
+
+    return StreamingResponse(
+        rows_fn(),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
