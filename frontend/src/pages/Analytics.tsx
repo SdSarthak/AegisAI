@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { formatLastUpdated } from "../utils/date";
+import { analyticsApi } from "../services/api";
 
 import ComplianceRiskChart from "../components/ComplianceRiskChart";
 
@@ -134,26 +135,14 @@ export default function Analytics() {
 
   const fetchRiskDistribution = async () => {
     try {
-      const res = await fetch("/api/v1/analytics/summary");
-
-      if (res.ok) {
-        const json = await res.json();
-        const mapped: RiskData[] = [
-          { name: "Minimal Risk", value: json.counts?.minimal || 0 },
-          { name: "Limited Risk", value: json.counts?.limited || 0 },
-          { name: "High Risk", value: json.counts?.high || 0 },
-          { name: "Unacceptable Risk", value: json.counts?.unacceptable || 0 },
-        ];
-
-        setRiskPieData(mapped);
-      } else {
-        setRiskPieData([
-          { name: "Minimal Risk", value: 4 },
-          { name: "Limited Risk", value: 3 },
-          { name: "High Risk", value: 2 },
-          { name: "Unacceptable Risk", value: 1 },
-        ]);
-      }
+      const json = await analyticsApi.summary();
+      const mapped: RiskData[] = [
+        { name: "Minimal Risk", value: json.counts?.minimal || 0 },
+        { name: "Limited Risk", value: json.counts?.limited || 0 },
+        { name: "High Risk", value: json.counts?.high || 0 },
+        { name: "Unacceptable Risk", value: json.counts?.unacceptable || 0 },
+      ];
+      setRiskPieData(mapped);
     } catch {
       setRiskPieData([
         { name: "Minimal Risk", value: 4 },
