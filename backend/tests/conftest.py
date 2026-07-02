@@ -260,30 +260,23 @@ def clear_auth_rate_limits():
     reset_auth_rate_limits()
 
 
-# In test mode (TESTING=1), CSRF middleware is disabled.  Skip the 4 tests that
-# specifically verify CSRF enforcement, since they will fail without CSRF active.
-_CSRF_ENFORCEMENT_TESTS = {
-    "test_statechanging_without_token_returns_403",
-    "test_statechanging_with_wrong_token_returns_403",
-    "test_put_and_patch_also_require_csrf",
-    "test_delete_also_requires_csrf",
-    "test_statechanging_with_valid_token_passes_csrf",
-}
-
-
-def pytest_runtest_setup(item):
-    """Skip CSRF enforcement tests when TESTING=1 (CSRF disabled)."""
+# Skip CSRF enforcement tests when TESTING=1 (CSRF disabled in tests).
+def pytest_collection_modifyitems(config, items):
     import os
     if os.environ.get("TESTING") != "1":
         return
-    nodeid = item.nodeid
-    for test_name in (
+    skip_marker = pytest.mark.skip(reason="CSRF disabled in test mode (TESTING=1)")
+    CSRF_TEST_NAMES = frozenset((
         "test_statechanging_without_token_returns_403",
         "test_statechanging_with_wrong_token_returns_403",
         "test_statechanging_with_valid_token_passes_csrf",
         "test_put_and_patch_also_require_csrf",
         "test_delete_also_requires_csrf",
-    ):
-        if test_name in nodeid:
-            pytest.skip("CSRF disabled in test mode (TESTING=1)")
+    ))
+    for item in items:
+        # Match by test function name only (e.g. "test_statechanging_without_token_returns_403")
+        for name in CSRF_TEST_NAMES:
+            if item.name == name:
+                item.add_marker(skip_marker)
+                break
 
