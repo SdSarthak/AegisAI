@@ -11,12 +11,12 @@ interface NotificationPreview {
   title: string
   message: string
   is_read: boolean
-  created_at: string               // ISO‑8601 date string
-  type: 'alert' | 'update' | 'ai' | 'news'
+  created_at: string               // ISO-8601 date string
+  notification_type: string
 }
 
 
-/** Relative‑time formatter (e.g. "5m ago", "2h ago"). */
+/** Relative-time formatter (e.g. "5m ago", "2h ago"). */
 function timeAgo(isoDate: string): string {
   const seconds = Math.floor(
     (Date.now() - new Date(isoDate).getTime()) / 1000,
@@ -31,12 +31,14 @@ function timeAgo(isoDate: string): string {
 }
 
 /** Accent colour for the notification type stripe. */
-function typeColor(type: NotificationPreview['type']): string {
-  switch (type) {
-    case 'alert':  return 'bg-red-500'
-    case 'update': return 'bg-green-500'
-    case 'ai':     return 'bg-purple-500'
-    case 'news':   return 'bg-primary-500'
+function typeColor(notificationType: string): string {
+  switch (notificationType) {
+    case 'guard_block':       return 'bg-red-500'
+    case 'document_generated': return 'bg-green-500'
+    case 'system_classified': return 'bg-purple-500'
+    case 'compliance_drift':  return 'bg-yellow-500'
+    case 'reassessment_due':  return 'bg-blue-500'
+    default:                  return 'bg-primary-500'
   }
 }
 
@@ -58,7 +60,7 @@ export default function NotificationBell() {
     refetchInterval: 60_000,
   })
 
-  // Normalize response — API may return a plain array or { items, total }
+  // Normalize response - API may return a plain array or { items, total }
   const notifications: NotificationPreview[] = Array.isArray(notificationsResponse)
     ? notificationsResponse
     : notificationsResponse?.items ?? []
@@ -117,7 +119,7 @@ export default function NotificationBell() {
       >
         <Bell className="w-5 h-5" />
 
-        {/* Unread badge — caps at 9+ */}
+        {/* Unread badge - caps at 9+ */}
         {unreadCount > 0 && (
           <span
             className={`absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full ring-2 ring-white ${
@@ -182,7 +184,7 @@ export default function NotificationBell() {
 
                 <div
                   className={`w-1 self-stretch rounded-full flex-shrink-0 ${typeColor(
-                    notification.type,
+                    notification.notification_type,
                   )}`}
                 />
 
