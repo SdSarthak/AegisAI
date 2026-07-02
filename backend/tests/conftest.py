@@ -259,3 +259,22 @@ def clear_auth_rate_limits():
     yield
     reset_auth_rate_limits()
 
+
+# In test mode (TESTING=1), CSRF middleware is disabled.
+# Skip the 4 CSRF enforcement tests (they need CSRF active to work).
+_CSRF_ENFORCEMENT_TESTS = {
+    "test_statechanging_without_token_returns_403",
+    "test_statechanging_with_wrong_token_returns_403",
+    "test_put_and_patch_also_require_csrf",
+    "test_delete_also_requires_csrf",
+}
+
+
+def pytest_collection_modifyitems(items):
+    import os
+    if os.environ.get("TESTING") == "1":
+        skip_csrf = pytest.mark.skip(reason="CSRF disabled in test mode (TESTING=1)")
+        for item in items:
+            if item.name in _CSRF_ENFORCEMENT_TESTS:
+                item.add_marker(skip_csrf)
+
