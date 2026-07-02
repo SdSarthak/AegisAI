@@ -270,15 +270,19 @@ _CSRF_ENFORCEMENT_TESTS = {
     "test_statechanging_with_valid_token_passes_csrf",
 }
 
-
-def pytest_collection_modifyitems(items):
+def pytest_runtest_setup(item):
+    """Skip CSRF enforcement tests when TESTING=1 (CSRF disabled)."""
     import os
-    if os.environ.get("TESTING") == "1":
-        skip_csrf = pytest.mark.skip(reason="CSRF disabled in test mode (TESTING=1)")
-        for item in items:
-            nodeid = item.nodeid
-            for test_name in _CSRF_ENFORCEMENT_TESTS:
-                if test_name in nodeid:
-                    item.add_marker(skip_csrf)
-                    break
+    if os.environ.get("TESTING") != "1":
+        return
+    nodeid = item.nodeid
+    for test_name in (
+        "test_statechanging_without_token_returns_403",
+        "test_statechanging_with_wrong_token_returns_403",
+        "test_statechanging_with_valid_token_passes_csrf",
+        "test_put_and_patch_also_require_csrf",
+        "test_delete_also_requires_csrf",
+    ):
+        if test_name in nodeid:
+            pytest.skip("CSRF disabled in test mode (TESTING=1)")
 
