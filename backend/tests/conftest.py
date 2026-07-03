@@ -1,6 +1,7 @@
 """Shared pytest fixtures for all tests."""
 
 import os
+import requests
 import pytest
 from unittest.mock import MagicMock
 from sqlalchemy import create_engine
