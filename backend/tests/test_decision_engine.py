@@ -52,3 +52,21 @@ def test_decision_engine_branches(
     assert result.decision == decision
     assert result.confidence == confidence
     assert result.rule_matched == rule_matched
+
+
+class TestGetSafeResponse:
+    def test_get_safe_response_returns_non_empty_string(self, engine):
+        result = engine.get_safe_response()
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_get_safe_response_returns_expected_message(self, engine):
+        result = engine.get_safe_response()
+        # The safe response should mention inability to process or guidelines
+        assert "cannot" in result.lower() or "unable" in result.lower()
+        assert "." in result  # Should be a complete sentence
+
+    def test_get_safe_response_does_not_raise(self, engine):
+        # Should not raise any exception
+        result = engine.get_safe_response()
+        assert result is not None
