@@ -114,7 +114,7 @@ class TestRegulationBody:
                     ComplianceQuestion(id="q-1", text="Q1", maps_to="rf-1"),
                 ],
             )
-        assert "less_than_min_length" in str(exc_info.value)
+        assert "too_short" in str(exc_info.value)
 
     def test_rejects_empty_prohibited_uses(self):
         with pytest.raises(ValidationError) as exc_info:
@@ -130,7 +130,7 @@ class TestRegulationBody:
                     ComplianceQuestion(id="q-1", text="Q1", maps_to="rf-1"),
                 ],
             )
-        assert "less_than_min_length" in str(exc_info.value)
+        assert "too_short" in str(exc_info.value)
 
     def test_rejects_empty_compliance_questions(self):
         with pytest.raises(ValidationError) as exc_info:
@@ -144,7 +144,7 @@ class TestRegulationBody:
                 required_documents=["Report"],
                 compliance_questions=[],
             )
-        assert "less_than_min_length" in str(exc_info.value)
+        assert "too_short" in str(exc_info.value)
 
     def test_get_risk_factor_returns_correct_factor(self):
         body = RegulationBody(
