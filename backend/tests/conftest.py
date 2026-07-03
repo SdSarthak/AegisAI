@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from fastapi import Request, HTTPException, status
 from fastapi.testclient import TestClient
+from starlette.responses import Response
 import requests
 
 # Set test database before importing app
@@ -111,8 +112,8 @@ def client(db_engine):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
-    client = TestClient(app)
-    yield client
+    plain_client = TestClient(app)
+    yield _CSRFClientWrapper(plain_client)
 
     session.close()
     transaction.rollback()
