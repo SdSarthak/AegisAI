@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from fastapi import Request, HTTPException, status
-from fastapi.testclient import TestClient as _OriginalTestClient, TestClient
+from fastapi.testclient import TestClient
 from starlette.responses import Response
 
 # Set test database before importing app
@@ -260,6 +260,9 @@ def clear_auth_rate_limits():
 def pytest_configure(config):
     """Patch TestClient globally so all instances auto-handle CSRF tokens."""
     import fastapi.testclient as tc_module
+
+    # Store original class on the module so _CSRFClientWrapper can reference it
+    tc_module._OriginalTestClient = tc_module.TestClient
 
     class _CSRFTestClient(_CSRFClientWrapper):
         """A TestClient subclass that auto-handles CSRF tokens."""
