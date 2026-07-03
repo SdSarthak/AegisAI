@@ -1,21 +1,6 @@
-import { Bell, Check, Trash2 } from 'lucide-react'
-
-/**
- * Notifications page — full list of in-app events.
- *
- * TODO (good first issue — static layout):
- *   - Build the static page shell with a header and a list of placeholder
- *     notification cards (icon, title, message, timestamp, read/unread dot).
- *   - No API calls needed — use hardcoded dummy data.
- *   - Acceptance criteria: page renders a list of at least 3 dummy notifications.
- *
- * TODO (help wanted — API wiring):
- *   - Replace dummy data with useQuery to GET /api/v1/notifications.
- *   - Wire the "Mark all read" button to POST /api/v1/notifications/read.
- *   - Wire individual delete buttons to DELETE /api/v1/notifications/{id}.
- *   - Acceptance criteria: after marking as read, unread count in
- *     NotificationBell updates to 0.
- */
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Bell, Check, Trash2, Loader2 } from 'lucide-react'
+import { notificationsApi } from '../services/api'
 
 interface Notification {
   id: number
@@ -26,38 +11,40 @@ interface Notification {
   created_at: string
 }
 
-// TODO (help wanted): implement this API service object
-// const notificationsApi = {
-//   list: () => axios.get('/api/v1/notifications').then(r => r.data),
-//   markRead: (ids: number[]) => axios.post('/api/v1/notifications/read', { ids }),
-//   delete: (id: number) => axios.delete(`/api/v1/notifications/${id}`),
-// }
-
-const DUMMY_NOTIFICATIONS: Notification[] = [
-  {
-    id: 1,
-    notification_type: 'system_classified',
-    title: 'AI system classified',
-    message: 'CV Screening AI was classified as High Risk under the EU AI Act.',
-    is_read: false,
-    created_at: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    notification_type: 'document_generated',
-    title: 'Document generated',
-    message: 'Technical Documentation for CV Screening AI is ready to review.',
-    is_read: true,
-    created_at: new Date().toISOString(),
-  },
-]
-
 export default function Notifications() {
+  const queryClient = useQueryClient()
 
-  // TODO (help wanted): replace dummy data with real query
+  // Fetch notifications
+  const {
+    data: notifications = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery<Notification[]>({
+    queryKey: ['notifications'],
+    queryFn: () => notificationsApi.list(),
+  })
 
-  // const { data: notifications = [] } = useQuery({ queryKey: ['notifications'], queryFn: notificationsApi.list })
-  const notifications = DUMMY_NOTIFICATIONS
+  // Mark all read mutation
+  const markAllReadMutation = useMutation({
+    mutationFn: notificationsApi.markAllRead,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] })
+    },
+  })
+
+  // Delete individual notification mutation
+  const deleteMutation = useMutation({
+    mutationFn: notificationsApi.delete,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] })
+      queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] })
+    },
+  })
+
+  const unreadNotifications = notifications.filter((n) => !n.is_read)
 
   return (
     <div className="space-y-6">
@@ -67,15 +54,53 @@ export default function Notifications() {
           <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
           <p className="text-gray-600">Your recent compliance and system events</p>
         </div>
-        {/* TODO (help wanted): wire to POST /notifications/read with all unread IDs */}
-        <button className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg border border-gray-200">
-          <Check className="w-4 h-4" />
+        <button
+          onClick={() => markAllReadMutation.mutate()}
+          disabled={markAllReadMutation.isPending || unreadNotifications.length === 0}
+          className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg border border-gray-200 transition-colors"
+        >
+          {markAllReadMutation.isPending ? (
+            <Loader2 className="w-4 h-4 animate-spin text-gray-500" />
+          ) : (
+            <Check className="w-4 h-4" />
+          )}
           Mark all read
         </button>
       </div>
 
       {/* Notification list */}
-      {notifications.length === 0 ? (
+      {isLoading ? (
+        <div className="space-y-4">
+          {[...Array(3)].map((_, idx) => (
+            <div
+              key={idx}
+              className="bg-white rounded-xl border border-gray-200 p-6 animate-pulse"
+            >
+              <div className="flex justify-between items-start">
+                <div className="space-y-3 flex-1">
+                  <div className="h-5 bg-gray-200 rounded w-1/4"></div>
+                  <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                  <div className="h-3 bg-gray-200 rounded w-32"></div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : isError ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <Bell className="w-16 h-16 mx-auto mb-4 text-red-300" />
+          <h3 className="text-lg font-medium text-gray-900">Unable to load notifications</h3>
+          <p className="text-gray-500 mt-1">
+            {error instanceof Error ? error.message : 'Please try again.'}
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      ) : notifications.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Bell className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-medium text-gray-900">No notifications</h3>
@@ -86,8 +111,8 @@ export default function Notifications() {
           {notifications.map((n) => (
             <div
               key={n.id}
-              className={`bg-white rounded-xl border p-4 flex items-start gap-4 ${
-                n.is_read ? 'border-gray-200' : 'border-primary-200 bg-primary-50'
+              className={`bg-white rounded-xl border p-4 flex items-start gap-4 transition-colors ${
+                n.is_read ? 'border-gray-200' : 'border-primary-200 bg-primary-50/30'
               }`}
             >
               <div
@@ -96,14 +121,18 @@ export default function Notifications() {
                 }`}
               />
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-gray-900 text-sm">{n.title}</p>
+                <p className="font-semibold text-gray-900 text-sm">{n.title}</p>
                 <p className="text-gray-600 text-sm mt-0.5">{n.message}</p>
                 <p className="text-gray-400 text-xs mt-1">
                   {new Date(n.created_at).toLocaleString()}
                 </p>
               </div>
-              {/* TODO (help wanted): wire to DELETE /notifications/{id} */}
-              <button className="p-1 text-gray-400 hover:text-red-500 rounded">
+              <button
+                onClick={() => deleteMutation.mutate(n.id)}
+                disabled={deleteMutation.isPending}
+                className="p-1 text-gray-400 hover:text-red-500 rounded disabled:opacity-50 hover:bg-gray-100 transition-colors"
+                aria-label="Delete notification"
+              >
                 <Trash2 className="w-4 h-4" />
               </button>
             </div>

@@ -291,10 +291,23 @@ export const documentsApi = {
 
 // Notifications API
 export const notificationsApi = {
-  list: (unreadOnly = false) =>
-    api.get(`/notifications?unread_only=${unreadOnly}`).then((r: AxiosResponse) => r.data.items),
-  markRead: (ids: number[]) =>
-    api.post('/notifications/read', { ids }),
+  list: async (params?: { unread_only?: boolean; skip?: number; limit?: number } | boolean) => {
+    const actualParams = typeof params === 'object' ? params : { unread_only: !!params }
+    const { data } = await api.get('/notifications', { params: actualParams })
+    return data && typeof data === 'object' && 'items' in data ? data.items : data
+  },
+  markRead: async (ids: number[]) => {
+    await api.post('/notifications/read', { ids })
+  },
+  markAllRead: async () => {
+    await api.post('/notifications/read-all')
+  },
+  delete: async (id: number) => {
+    await api.delete(`/notifications/${id}`)
+  },
+  deleteRead: async () => {
+    await api.delete('/notifications/read')
+  },
 }
 
 // ---------------------------------------------------------------------------
