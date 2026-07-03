@@ -88,7 +88,6 @@ class LLMGuard:
 
         result = {
             "timestamp": timestamp,
-            "user_prompt": user_prompt,
             "normalized_prompt": normalized_prompt,
             "decision": None,
             "response": None,
