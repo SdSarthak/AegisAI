@@ -98,6 +98,10 @@ function ensureListResponse<T>(
     return data as T[]
   }
 
+  if (isRecord(data) && Array.isArray(data.items)) {
+    return data.items as T[]
+  }
+
   throw new Error(`${resourceName} response was empty or invalid.`)
 }
 
