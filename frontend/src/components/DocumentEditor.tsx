@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { Save, Eye, EyeOff } from 'lucide-react'
 import CodeMirror from '@uiw/react-codemirror'
 import { markdown } from '@codemirror/lang-markdown'
@@ -22,8 +22,8 @@ export default function DocumentEditor({
   const [content, setContent] = useState(initialContent)
   const [showPreview, setShowPreview] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
-  const [saveTimeout, setSaveTimeout] = useState<ReturnType<typeof setTimeout> | null>(null)
-  const [saveError, setSaveError] = useState('')
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const previewHtml = useMemo(
     () => DOMPurify.sanitize(marked.parse(content, { async: false }) as string),
     [content]
@@ -31,18 +31,16 @@ export default function DocumentEditor({
 
   const handleSave = useCallback(async () => {
     setIsSaving(true)
+    setSaveError(null)
     try {
       await api.put(`/documents/${documentId}`, { content })
       onSave?.(content)
-      setSaveError('')
     } catch (error) {
-  console.error('Save failed:', error)
-  setSaveError(
-    error instanceof Error
-      ? error.message
-      : 'Failed to save changes'
-  )
-}
+      console.error('Save failed:', error)
+      setSaveError(
+        error instanceof Error ? error.message : 'Failed to save changes'
+      )
+    }
     setIsSaving(false)
   }, [content, documentId, onSave])
 
@@ -50,20 +48,16 @@ export default function DocumentEditor({
   useEffect(() => {
     if (content === initialContent) return
 
-    if (saveTimeout) clearTimeout(saveTimeout)
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
 
-    const timeout = setTimeout(async () => {
-      setIsSaving(true)
+    saveTimeoutRef.current = setTimeout(async () => {
       await handleSave()
-      setIsSaving(false)
     }, 2000)
 
-    setSaveTimeout(timeout)
-
     return () => {
-      if (timeout) clearTimeout(timeout)
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current)
     }
-  }, [content, handleSave, initialContent, saveTimeout])
+  }, [content, handleSave, initialContent])
 
   return (
     <div className="flex flex-col h-full border border-gray-200 rounded-xl overflow-hidden">
@@ -78,16 +72,8 @@ export default function DocumentEditor({
           {showPreview ? 'Edit' : 'Preview'}
         </button>
         <div className="flex items-center gap-3">
-         {saveError && (
-            <span className="text-sm text-red-500">
-              {saveError}
-            </span>
-          )}
-          {isSaving && (
-            <span className="text-sm text-gray-500">
-              Saving...
-            </span>
-          )} 
+          {saveError && <span className="text-sm text-red-600">{saveError}</span>}
+          {isSaving && <span className="text-sm text-gray-500">Saving...</span>}
           <button
             type="button"
             onClick={handleSave}
