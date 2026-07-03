@@ -132,6 +132,28 @@ def get_analytics_summary(
     }
 
 
+@router.get("/system-risk")
+def get_system_risk(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return per-system risk scores for the current user."""
+    systems = (
+        db.query(AISystem.id, AISystem.name, AISystem.compliance_score, AISystem.risk_level)
+        .filter(AISystem.owner_id == current_user.id)
+        .all()
+    )
+    return [
+        {
+            "id": system.id,
+            "name": system.name,
+            "risk_score": system.compliance_score if system.compliance_score is not None else 0,
+            "risk_level": system.risk_level.value if system.risk_level else "unknown",
+        }
+        for system in systems
+    ]
+
+
 @router.get("/audit-logs", response_model=PaginatedResponse[GuardAuditLogResponse])
 def get_audit_logs(
     skip: int = Query(0, ge=0, description="Items to skip"),
