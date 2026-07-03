@@ -158,7 +158,7 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: s
         ml_confidence=intent_analysis.get("confidence", 0.0),
         combined_score=decision_reasoning.get("confidence", 0.0),
         prompt_length=len(prompt),
-        scanned_at=datetime.utcnow(),
+        scanned_at=datetime.now(timezone.utc),
         ip_address=ip_address,
     )
 
@@ -761,7 +761,7 @@ def get_guard_stats(
             detail="You do not have permission to query stats for another user.",
         )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if window == "24h":
         start_date = now - timedelta(hours=24)
     elif window == "7d":
