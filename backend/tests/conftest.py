@@ -109,8 +109,8 @@ def client(db_engine):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
-    client = TestClient(app)
-    yield client
+    plain_client = TestClient(app)
+    yield _CSRFClientWrapper(plain_client)
 
     session.close()
     transaction.rollback()
@@ -173,10 +173,21 @@ class _CSRFClientWrapper:
 
 
 @pytest.fixture
-def csrf_client(client: TestClient):
+def plain_client(client: _CSRFClientWrapper) -> TestClient:
+    """Raw TestClient without CSRF handling. Use only for CSRF-specific tests."""
+    return client._inner  # type: ignore[return-value]
+
+
+@pytest.fixture
+def csrf_client(client: _CSRFClientWrapper):
     """CSRF-aware test client.  Handles X-CSRF-Token automatically for
-    state-changing requests (POST / PUT / PATCH / DELETE)."""
-    return _CSRFClientWrapper(client)
+    state-changing requests (POST / PUT / PATCH / DELETE).
+
+    Note: the default 'client' fixture now returns a CSRF-aware wrapper,
+    so most tests can use 'client' directly.
+    This fixture is kept for explicit CSRF-testing intent.
+    """
+    return client
 
 
 @pytest.fixture
