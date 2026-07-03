@@ -14,6 +14,10 @@ from app.core.database import SessionLocal
 from app.models.ai_system import AISystem, RiskAssessment
 from app.models.compliance_snapshot import ComplianceSnapshot
 from app.models.notification import Notification, NotificationType
+from app.tasks.email_notifications import (
+    send_compliance_deadline_email_alerts,
+    send_reassessment_email_reminders,
+)
 
 logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
@@ -52,7 +56,7 @@ def snapshot_compliance_scores():
 
 
 def send_reassessment_reminders():
-    """Send notifications for risk assessments expiring within 30 days."""
+    """Send in-app notifications for risk assessments expiring within 30 days."""
     db: Session = SessionLocal()
     try:
         thirty_days = datetime.utcnow() + timedelta(days=30)
@@ -98,3 +102,48 @@ def send_reassessment_reminders():
         logger.exception("Failed to send reassessment reminders")
     finally:
         db.close()
+
+
+def register_jobs() -> None:
+    """Register all scheduled jobs including email notification tasks."""
+    # Daily compliance snapshot at 00:00 UTC
+    scheduler.add_job(
+        snapshot_compliance_scores,
+        trigger="cron",
+        hour=0,
+        minute=0,
+        id="compliance_snapshot",
+        replace_existing=True,
+    )
+
+    # Daily in-app reassessment reminders at 08:00 UTC
+    scheduler.add_job(
+        send_reassessment_reminders,
+        trigger="cron",
+        hour=8,
+        minute=0,
+        id="reassessment_reminders",
+        replace_existing=True,
+    )
+
+    # Daily compliance deadline email alerts at 08:30 UTC
+    scheduler.add_job(
+        send_compliance_deadline_email_alerts,
+        trigger="cron",
+        hour=8,
+        minute=30,
+        id="compliance_deadline_email_alerts",
+        replace_existing=True,
+    )
+
+    # Daily reassessment email reminders at 09:00 UTC
+    scheduler.add_job(
+        send_reassessment_email_reminders,
+        trigger="cron",
+        hour=9,
+        minute=0,
+        id="reassessment_email_reminders",
+        replace_existing=True,
+    )
+
+    logger.info("All scheduled jobs registered successfully")
