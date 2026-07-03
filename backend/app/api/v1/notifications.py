@@ -25,6 +25,7 @@ def create_notification(
     message: str,
     resource_type: str | None = None,
     resource_id: int | None = None,
+    commit: bool = True,
 ) -> Notification:
     notification = Notification(
         user_id=user_id,
@@ -35,8 +36,9 @@ def create_notification(
         resource_id=resource_id,
     )
     db.add(notification)
-    db.commit()
-    db.refresh(notification)
+    if commit:
+        db.commit()
+        db.refresh(notification)
     return notification
 
 
