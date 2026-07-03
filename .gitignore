@@ -121,4 +121,4 @@ pdf_export.txt
 rag_ingest.txt
 
 # Models
-backend/app/modules/guard/models/*
+backend/app/modules/guard/models/*backend/rag_documents/
