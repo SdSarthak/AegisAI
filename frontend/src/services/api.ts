@@ -4,9 +4,6 @@ import { useAuthStore } from '../stores/authStore'
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
 const API_BASE_URL = configuredApiBaseUrl ? configuredApiBaseUrl.replace(/\/$/, '') : '/api/v1'
 
-// Tracks whether the global 401-response handler is currently executing.
-let isUnauthorizedHandlerRunning = false
-
 function buildApiUrl(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
   return `${API_BASE_URL}${normalizedPath}`
@@ -33,39 +30,93 @@ api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config
 })
 
-const AUTH_ENDPOINTS = ['/auth/login', '/auth/register']
-
 // Handle 401 errors
+const AUTH_ENDPOINTS = [
+  '/auth/login',
+  '/auth/register',
+  '/auth/refresh',
+]
+
+let isRefreshing = false
+let refreshPromise: Promise<void> | null = null
+
 api.interceptors.response.use(
   (response: AxiosResponse) => response,
-  (error: unknown) => {
+  async (error: unknown) => {
     if (!axios.isAxiosError(error)) {
-  return Promise.reject(error)
-}
-    const url = error.config?.url || ''
-    const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
-    const isUnAuthorized = error.response?.status === 401 && !isAuthEndpoint
+      return Promise.reject(error)
+    }
 
-    if (isUnAuthorized && !isUnauthorizedHandlerRunning) {
+    if (!error.config) {
+      return Promise.reject(error)
+    }
 
-      // Block concurrent 401 responses from entering the unauthorized handler.
-      isUnauthorizedHandlerRunning = true
-
-      // Logout and navigate to login without forcing a full page reload.
-      useAuthStore.getState().logout()
-      try {
-        window.history.pushState({}, '', '/login')
-        // Notify router listeners (e.g., react-router) to handle navigation.
-        window.dispatchEvent(new PopStateEvent('popstate'))
-      } catch (e) {
-        // Fallback: if SPA navigation fails, perform a safe replace.
-        window.location.replace('/login')
+    const originalRequest =
+      error.config as InternalAxiosRequestConfig & {
+        _retry?: boolean
       }
-      finally {
-        // Allow future unauthorized responses after current logout/navigation flow has finished.
-        isUnauthorizedHandlerRunning = false
+
+    const url = originalRequest.url || ''
+    const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) =>
+      url.includes(endpoint)
+    )
+
+    if (
+      error.response?.status === 401 &&
+      !isAuthEndpoint &&
+      !originalRequest._retry
+    ) {
+      originalRequest._retry = true
+
+      const authStore = useAuthStore.getState()
+      try {
+        if (!authStore.refreshToken) {
+          throw new Error('Refresh token is unavailable')
+        }
+
+        if (!isRefreshing) {
+          isRefreshing = true
+
+          refreshPromise = axios
+            .post(`${API_BASE_URL}/auth/refresh`, {
+              refresh_token: authStore.refreshToken,
+            })
+            .then((response) => {
+              authStore.updateTokens(
+                response.data.access_token,
+                response.data.refresh_token
+              )
+            })
+            .finally(() => {
+              isRefreshing = false
+              refreshPromise = null
+            })
+        }
+
+        await refreshPromise
+
+        const newToken = useAuthStore.getState().token
+
+        if (newToken && originalRequest.headers) {
+          originalRequest.headers.Authorization = `Bearer ${newToken}`
+        }
+
+        return api(originalRequest)
+      } catch {
+        isRefreshing = false
+        authStore.logout()
+
+        try {
+          window.history.pushState({}, '', '/login')
+          window.dispatchEvent(new PopStateEvent('popstate'))
+        } catch {
+          window.location.replace('/login')
+        }
+
+        return Promise.reject(error)
       }
     }
+
     return Promise.reject(error)
   }
 )

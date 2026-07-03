@@ -15,6 +15,7 @@ Dependencies:
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
+import hashlib
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -26,8 +27,11 @@ from app.core.security import (
     verify_password,
     get_password_hash,
     create_access_token,
+    create_refresh_token,
+    validate_refresh_token,
     get_current_user,
 )
+
 from app.core.config import settings
 from app.models.user import User
 from app.models.ai_system import AISystem, ComplianceStatus
@@ -41,6 +45,7 @@ from app.schemas.user import (
     ChangePasswordRequest,
     DashboardLayoutUpdate,
     DashboardLayoutResponse,
+    RefreshTokenRequest,
 )
 
 # Pre-computed bcrypt hash used when the looked-up user is None so that the
@@ -70,6 +75,10 @@ DEFAULT_DASHBOARD_LAYOUT = {
     ],
     "hidden": [],
 }
+
+
+def _hash_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def _get_request_ip(request: Request) -> str:
@@ -254,8 +263,80 @@ def login(
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
     )
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    refresh_token = create_refresh_token(
+        data={"sub": str(user.id)},
+        expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+    )
 
+    user.refresh_token_hash = _hash_token(refresh_token)
+    db.commit()
+
+    return {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+    }
+
+
+@router.post("/refresh", response_model=Token)
+def refresh_access_token(
+    payload: RefreshTokenRequest,
+    db: Session = Depends(get_db),
+):
+    token_payload = validate_refresh_token(payload.refresh_token)
+
+    user_id_str = token_payload.get("sub")
+
+    try:
+        user_id = int(user_id_str)
+    except (ValueError, TypeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"field": "general", "message": "Invalid refresh token"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = db.query(User).filter(User.id == user_id).first()
+
+    if not user or not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"field": "general", "message": "Invalid refresh token"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if not user.refresh_token_hash:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"field": "general", "message": "Invalid refresh token"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    if user.refresh_token_hash != _hash_token(payload.refresh_token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"field": "general", "message": "Invalid refresh token"},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    new_access_token = create_access_token(
+        data={"sub": str(user.id)},
+        expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+    )
+
+    new_refresh_token = create_refresh_token(
+        data={"sub": str(user.id)},
+        expires_delta=timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
+    )
+
+    user.refresh_token_hash = _hash_token(new_refresh_token)
+    db.commit()
+
+    return {
+        "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer",
+    }
 
 @router.get("/me", response_model=UserResponse)
 def get_current_user_info(current_user: User = Depends(get_current_user)):
