@@ -884,20 +884,23 @@ def get_guard_stats(
 
 
 @router.get("/config", tags=["LLM Guard"])
-def get_guard_config(current_user: User = Depends(get_current_user)):
-    """Return the current user's Guard configuration."""
-    default_config = {
-        "sanitization_level": "medium",
-        "malicious_threshold": 0.8,
-        "suspicious_threshold": 0.5,
-    }
+def get_guard_config(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    db_user = db.get(User, current_user.id)
 
-    return user_guard_configs.get(current_user.id, default_config)
+    return {
+        "sanitization_level": db_user.guard_sanitization_level,
+        "malicious_threshold": db_user.guard_malicious_threshold,
+        "suspicious_threshold": db_user.guard_suspicious_threshold,
+    }
 
 
 @router.patch("/config", tags=["LLM Guard"])
 def update_guard_config(
     config: GuardConfigRequest,
+    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Update the current user's Guard configuration."""
@@ -919,17 +922,22 @@ def update_guard_config(
             detail="suspicious_threshold must be between 0 and 1",
         )
 
-    user_guard_configs[current_user.id] = {
-        "sanitization_level": config.sanitization_level,
-        "malicious_threshold": config.malicious_threshold,
-        "suspicious_threshold": config.suspicious_threshold,
-    }
+    db_user = db.get(User, current_user.id)
+
+    db_user.guard_sanitization_level = config.sanitization_level
+    db_user.guard_malicious_threshold = config.malicious_threshold
+    db_user.guard_suspicious_threshold = config.suspicious_threshold
+
+    db.commit()
 
     return {
         "message": "Guard configuration updated successfully",
-        "config": user_guard_configs[current_user.id],
+        "config": {
+            "sanitization_level": db_user.guard_sanitization_level,
+            "malicious_threshold": db_user.guard_malicious_threshold,
+            "suspicious_threshold": db_user.guard_suspicious_threshold,
+        },
     }
-
 
 @router.post("/scan/batch", response_model=BulkScanResponse)
 def bulk_scan_prompts(
@@ -1045,3 +1053,4 @@ def bulk_scan_prompts(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An internal error occurred while processing the batch Guard scan."
         )
+
