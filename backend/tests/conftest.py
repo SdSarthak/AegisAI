@@ -261,6 +261,9 @@ def pytest_configure(config):
     """Patch TestClient globally so all instances auto-handle CSRF tokens."""
     import fastapi.testclient as tc_module
 
+    # Store original class on the module so _CSRFClientWrapper can reference it
+    tc_module._OriginalTestClient = tc_module.TestClient
+
     class _CSRFTestClient(_CSRFClientWrapper):
         """A TestClient subclass that auto-handles CSRF tokens."""
 
