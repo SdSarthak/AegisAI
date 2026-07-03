@@ -2,6 +2,7 @@
 
 import os
 import pytest
+import requests
 from unittest.mock import MagicMock
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
@@ -161,21 +162,85 @@ class _CSRFClientWrapper:
         self._inject_csrf(kwargs)
         return self._inner.delete(url, **kwargs)
 
-    def request(self, url: str, **kwargs: object) -> Response:
+    def request(self, method: str, url: str, **kwargs: object) -> Response:
         if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
             self._ensure_csrf()
             self._inject_csrf(kwargs)
         return self._inner.request(method, url, **kwargs)
+
+    def stream(self, method: str, url: str, **kwargs: object) -> object:
+        """CSRF-aware streaming request wrapper."""
+        if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+            self._ensure_csrf()
+            self._inject_csrf(kwargs)
+        return self._inner.stream(method, url, **kwargs)
+
+    def __enter__(self) -> "_CSRFClientWrapper":
+        # Manually bootstrap the inner TestClient (don't call __enter__ on it)
+        # since we manage the lifecycle via our own __enter__/__exit__
+        import contextlib
+        self._inner_exit_stack = contextlib.ExitStack()
+        self._inner_exit_stack.enter_context(self._inner)
+        return self
+
+    def __exit__(self, *args: object) -> None:
+        self._inner_exit_stack.close()
+
+    def __setattr__(self, name: str, value: object) -> None:
+        # Delegate write access to _inner for normal attributes.
+        # Use object.__setattr__ for our own _inner / _csrf_token / _inner_exit_stack.
+        if name in ("_inner", "_csrf_token", "_inner_exit_stack"):
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self._inner, name, value)
+
+    def __delattr__(self, name: str) -> None:
+        delattr(self._inner, name)
 
     def __getattr__(self, name: str) -> object:
         return getattr(self._inner, name)
 
 
 @pytest.fixture
-def csrf_client(client: TestClient):
+def plain_client(client: _CSRFClientWrapper) -> TestClient:
+    """Raw TestClient without CSRF handling and without following redirects.
+
+    Use only for CSRF-specific tests that verify CSRF rejection (403).
+    Redirects are disabled because httpx converts POST+307 to GET,
+    which would bypass the CSRF check.
+    """
+    plain = client._inner
+    # client._inner is _CSRFTestClient (patched). We need the RAW inner TestClient.
+    # _CSRFTestClient._inner is the original TestClient.
+    if hasattr(plain, '_inner'):
+        raw_inner = plain._inner
+        raw_inner.follow_redirects = False
+        # Return a minimal wrapper that has no CSRF auto-handling
+        class _NoCSRFWrapper:
+            """Minimal wrapper that just passes through to the raw TestClient with no CSRF."""
+            def __init__(self, inner):
+                self._inner = inner
+            def __getattr__(self, name): return getattr(self._inner, name)
+            def __setattr__(self, name, value):
+                if name.startswith('_'): object.__setattr__(self, name, value)
+                else: setattr(self._inner, name, value)
+            def __enter__(self): return self
+            def __exit__(self, *a): self._inner.__exit__(*a)
+        return _NoCSRFWrapper(raw_inner)
+    plain.follow_redirects = False
+    return plain
+
+
+@pytest.fixture
+def csrf_client(client: _CSRFClientWrapper):
     """CSRF-aware test client.  Handles X-CSRF-Token automatically for
-    state-changing requests (POST / PUT / PATCH / DELETE)."""
-    return _CSRFClientWrapper(client)
+    state-changing requests (POST / PUT / PATCH / DELETE).
+
+    Note: the default 'client' fixture now returns a CSRF-aware wrapper,
+    so most tests can use 'client' directly.
+    This fixture is kept for explicit CSRF-testing intent.
+    """
+    return client
 
 
 @pytest.fixture
@@ -261,9 +326,11 @@ def pytest_configure(config):
     """Patch TestClient globally so all instances auto-handle CSRF tokens."""
     import fastapi.testclient as tc_module
 
-    # Store original class on the module so _CSRFClientWrapper can reference it
+    # Store original class for _CSRFClientWrapper internal use
     tc_module._OriginalTestClient = tc_module.TestClient
 
+    # Replace TestClient with CSRF-aware version in the fastapi.testclient namespace
+    # This affects all imports of TestClient from fastapi.testclient
     class _CSRFTestClient(_CSRFClientWrapper):
         """A TestClient subclass that auto-handles CSRF tokens."""
 
@@ -272,6 +339,7 @@ def pytest_configure(config):
 
     tc_module.TestClient = _CSRFTestClient  # type: ignore
 
+    # Also patch it in the module where test files import it from
     import sys as _sys
     for _mod_name, _mod in list(_sys.modules.items()):
         if _mod_name.startswith("tests.") and hasattr(_mod, "TestClient"):
@@ -279,10 +347,17 @@ def pytest_configure(config):
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip test_rag_guard.py tests that use httpx.AsyncClient without CSRF token support."""
+    """Skip test_rag_guard.py tests that use httpx.AsyncClient directly.
+
+    These tests use httpx.AsyncClient via async_client fixture which cannot
+    auto-inject CSRF tokens (the TestClient interception pattern does not apply).
+    They were written before CSRF middleware was added (commit d058c2d).
+    Pre-existing failures; unrelated to changes in these PRs.
+    """
     skip_rag_guard = pytest.mark.skip(reason=(
-        "test_rag_guard.py uses httpx.AsyncClient without CSRF token. "
-        "Pre-existing failure."
+        "test_rag_guard.py uses httpx.AsyncClient without CSRF token injection. "
+        "Pre-existing failure from commit d058c2d (CSRF added without updating "
+        "httpx.AsyncClient fixtures). Unrelated to changes in these PRs."
     ))
     for item in items:
         if item.path and item.path.name == "test_rag_guard.py":
