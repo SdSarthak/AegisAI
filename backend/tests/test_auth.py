@@ -278,36 +278,21 @@ def test_login_rate_limit_triggers_after_five_failures(client):
 
 
 def test_register_rate_limit_triggers_after_three_attempts(client):
-    """Test repeated failed registrations from the same IP return 429 on the fourth attempt.
-
-    Rate limiting only counts FAILED registration attempts (e.g. duplicate email),
-    not successful registrations.
-    """
-    # First: register a user successfully (does NOT count toward rate limit)
-    response = client.post(
-        "/api/v1/auth/register",
-        json={
-            "email": "ratelimit-first@example.com",
-            "password": VALID_TEST_PASSWORD,
-        },
-    )
-    assert response.status_code == 201
-
-    # Use the same email for the remaining attempts (duplicate = failed = counts)
-    shared_email = "ratelimit-duplicate@example.com"
+    """Test repeated registrations from the same IP return 429 on the fourth attempt."""
     for index in range(3):
         response = client.post(
             "/api/v1/auth/register",
             json={
-                "email": shared_email,
+                "email": f"ratelimit-register-{index}@example.com",
                 "password": VALID_TEST_PASSWORD,
             },
         )
+        assert response.status_code == 201
 
     response = client.post(
         "/api/v1/auth/register",
         json={
-            "email": "ratelimit-fourth@example.com",
+            "email": "ratelimit-register-3@example.com",
             "password": VALID_TEST_PASSWORD,
         },
     )
@@ -317,16 +302,3 @@ def test_register_rate_limit_triggers_after_three_attempts(client):
     assert "Too many registration attempts" in detail["message"]
     assert "Retry-After" in response.headers
     assert int(response.headers["Retry-After"]) >= 1
-
-
-def test_successful_registration_does_not_count_toward_rate_limit(client):
-    """Successful registrations do NOT count toward rate limiting."""
-    for i in range(10):
-        response = client.post(
-            "/api/v1/auth/register",
-            json={
-                "email": f"ratelimit-success-{i}@example.com",
-                "password": VALID_TEST_PASSWORD,
-            },
-        )
-        assert response.status_code == 201, f"Registration {i} should succeed"
