@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from fastapi import Request, HTTPException, status
-from fastapi.testclient import TestClient as _OriginalTestClient
+from fastapi.testclient import TestClient
 from starlette.responses import Response
 
 # Set test database before importing app
