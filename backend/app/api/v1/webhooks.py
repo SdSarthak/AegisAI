@@ -19,6 +19,7 @@ import ipaddress
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from starlette.concurrency import run_sync
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -149,6 +150,16 @@ async def _post_webhook(
         ) from exc
 
 
+def _post_webhook_sync(
+    url: str,
+    event: str,
+    payload: dict[str, Any],
+    secret: str | None,
+) -> None:
+    """Synchronous wrapper for _post_webhook so BackgroundTasks can defer it."""
+    return run_sync(_post_webhook(url, event=event, payload=payload, secret=secret))
+
+
 def deliver_webhook(
     db: Session,
     user_id: int,
@@ -177,7 +188,7 @@ def deliver_webhook(
 
         try:
             background_tasks.add_task(
-                _post_webhook,
+                _post_webhook_sync,
                 url=webhook.url,
                 event=event,
                 payload=payload,
