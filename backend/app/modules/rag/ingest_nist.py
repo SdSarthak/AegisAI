@@ -21,6 +21,11 @@ from langchain_community.vectorstores import FAISS
 from app.core.config import settings
 from app.modules.rag.embeddings import get_embeddings
 
+from app.modules.rag.vector_store import (
+    _verify_index_integrity,
+    _write_integrity_hash,
+)
+
 logger = logging.getLogger(__name__)
 
 # Path to the NIST AI RMF PDF
@@ -81,6 +86,7 @@ def ingest_nist_ai_rmf() -> None:
     try:
         if FAISS_INDEX_PATH.exists():
             logger.info("Loading existing FAISS index from %s", FAISS_INDEX_PATH)
+            _verify_index_integrity(str(FAISS_INDEX_PATH))
             vector_store = FAISS.load_local(
                 str(FAISS_INDEX_PATH),
                 embeddings,
@@ -101,6 +107,7 @@ def ingest_nist_ai_rmf() -> None:
     try:
         FAISS_INDEX_PATH.mkdir(parents=True, exist_ok=True)
         vector_store.save_local(str(FAISS_INDEX_PATH))
+        _write_integrity_hash(str(FAISS_INDEX_PATH))
         logger.info(
             "FAISS index saved to %s with NIST AI RMF chunks", FAISS_INDEX_PATH
         )
