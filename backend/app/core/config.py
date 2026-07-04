@@ -67,6 +67,8 @@ class Settings(BaseSettings):
     RAG_MAX_FILES_PER_REQUEST: int = 10
     RAG_MAX_FILE_SIZE_BYTES: int = 10 * 1024 * 1024
     RAG_TOTAL_BUDGET_BYTES: int = 50 * 1024 * 1024
+    RAG_CACHE_TTL_SECONDS: int = 24 * 60 * 60
+    RAG_CACHE_SIMILARITY_THRESHOLD: float = 0.92
 
     # Observability (OpenTelemetry)
     OTEL_SERVICE_NAME: str = "aegis-backend"

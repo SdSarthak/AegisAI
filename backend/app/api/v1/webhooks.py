@@ -1,10 +1,6 @@
 """
 Webhooks API - configure outbound event delivery URLs.
 
-Changed: Resolved merge conflicts while preserving user-scoped webhook CRUD.
-Why: Webhooks must not be creatable or deletable on behalf of another user.
-Addresses: Cross-user webhook access and broken imports/docstrings after merge.
-
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
@@ -13,12 +9,13 @@ import hashlib
 import hmac
 import json
 import logging
+import time
 from typing import Any, List
 from urllib.parse import urlparse
 import ipaddress
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -104,49 +101,41 @@ def _build_signature(secret: str, payload_body: bytes) -> str:
     ).hexdigest()
 
 
-async def _post_webhook(
+def _post_webhook(
     url: str,
     event: str,
     payload: dict[str, Any],
     secret: str | None,
 ) -> None:
-    """Post a webhook payload to a configured endpoint.
-
-    Raises:
-        WebhookDeliveryError: When the HTTP request fails (network error, timeout,
-                             or a non-2xx status code).
-    """
+    """Post a webhook payload to a configured endpoint with retry logic."""
+    max_retries = 3
     payload_body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
     headers = {"X-AegisAI-Event": event}
 
     if secret:
         headers["X-AegisAI-Signature"] = _build_signature(secret, payload_body)
 
-    try:
-        # Validate URL before making request
-        _validate_webhook_url(url)
+    _validate_webhook_url(url)
 
-        async with httpx.AsyncClient(timeout=5.0) as client:
-            response = await client.post(url, content=payload_body, headers=headers)
-            response.raise_for_status()
-    except httpx.TimeoutException as exc:
-        raise WebhookDeliveryError(
-            url=url,
-            event=event,
-            reason=f"timeout after {exc.args[0] if exc.args else '5s'} (request timed out)",
-        ) from exc
-    except httpx.HTTPStatusError as exc:
-        raise WebhookDeliveryError(
-            url=url,
-            event=event,
-            reason=f"HTTP {exc.response.status_code} {exc.response.reason_phrase}",
-        ) from exc
-    except httpx.RequestError as exc:
-        raise WebhookDeliveryError(
-            url=url,
-            event=event,
-            reason=f"request error: {exc}",
-        ) from exc
+    for attempt in range(max_retries):
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                response = client.post(url, content=payload_body, headers=headers)
+                response.raise_for_status()
+            return
+        except Exception as exc:
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt
+                logger.warning(
+                    "Webhook attempt %d/%d failed for %s, retrying in %ds: %s",
+                    attempt + 1, max_retries, url, wait, exc,
+                )
+                time.sleep(wait)
+            else:
+                logger.exception(
+                    "Webhook delivery failed after %d attempts for event=%s url=%s",
+                    max_retries, event, url,
+                )
 
 
 def deliver_webhook(
@@ -154,14 +143,8 @@ def deliver_webhook(
     user_id: int,
     event: str,
     payload: dict[str, Any],
-    background_tasks: BackgroundTasks,
 ) -> None:
-    """Schedule delivery to active user webhooks subscribed to the event.
-
-    Raises:
-        WebhookDeliveryError: When a background task cannot be scheduled
-                           for a subscribed webhook (e.g. task queue full).
-    """
+    """Deliver event to active user webhooks subscribed to the event."""
     webhooks = (
         db.query(WebhookConfig)
         .filter(
@@ -175,20 +158,12 @@ def deliver_webhook(
         if event not in (webhook.events or []):
             continue
 
-        try:
-            background_tasks.add_task(
-                _post_webhook,
-                url=webhook.url,
-                event=event,
-                payload=payload,
-                secret=webhook.secret,
-            )
-        except Exception as exc:  # noqa: BLE001
-            raise WebhookDeliveryError(
-                url=webhook.url,
-                event=event,
-                reason=f"failed to schedule background task: {exc}",
-            ) from exc
+        _post_webhook(
+            url=webhook.url,
+            event=event,
+            payload=payload,
+            secret=webhook.secret,
+        )
 
 
 @router.post("", response_model=WebhookResponse, status_code=status.HTTP_201_CREATED)

@@ -17,6 +17,7 @@ from .grounding import GroundingChecker
 logger = logging.getLogger(__name__)
 ChatOpenAI = None
 _CHUNK_GUARD: Any | None = None
+_RAG_CACHE: Any | None = None
 
 SAFE_CONTEXT_FALLBACK = (
     "Retrieved context could not be verified as safe. "
@@ -134,6 +135,29 @@ def load_vector_store(user_id: int | None = None) -> Any:
     from .vector_store import load_vector_store as loader
 
     return loader(user_id=user_id)
+
+
+def get_rag_cache() -> Any:
+    """Return the process-wide cache with a lazily loaded embedding model."""
+    global _RAG_CACHE
+    if _RAG_CACHE is None:
+        from .cache import SemanticCache
+
+        def embed_question(question: str) -> list[float]:
+            from .vector_store import get_embeddings
+
+            embeddings = get_embeddings()
+            if hasattr(embeddings, "embed_query"):
+                return embeddings.embed_query(question)
+            return embeddings.embed_documents([question])[0]
+
+        _RAG_CACHE = SemanticCache(
+            settings.REDIS_URL,
+            embed_question,
+            ttl_seconds=settings.RAG_CACHE_TTL_SECONDS,
+            similarity_threshold=settings.RAG_CACHE_SIMILARITY_THRESHOLD,
+        )
+    return _RAG_CACHE
 
 
 def get_qa_chain(user_id: int | None = None):

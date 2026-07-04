@@ -41,6 +41,8 @@ ENV/
 guard/models/
 faiss_index/
 backend/data/regulatory_docs/
+backend/faiss_data/
+backend/mlruns/
 
 # Node / frontend
 node_modules/
@@ -119,4 +121,4 @@ pdf_export.txt
 rag_ingest.txt
 
 # Models
-backend/app/modules/guard/models/*
+backend/app/modules/guard/models/*backend/rag_documents/
