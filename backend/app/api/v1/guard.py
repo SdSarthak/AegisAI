@@ -294,7 +294,6 @@ def scan_prompt(
             headers={"Retry-After": str(retry_after)},
         )
 
-    try:
         from app.modules.guard.llm_guard import LLMGuard
         from app.modules.guard.sanitizer import SanitizationLevel
 
@@ -308,9 +307,13 @@ def scan_prompt(
             SanitizationLevel.MEDIUM,
         )
 
-        guard = LLMGuard(sanitization_level=san_level)
-        result = guard.guard(request.prompt)
-
+        try:
+            guard = LLMGuard(sanitization_level=san_level)
+            result = guard.guard(request.prompt)
+        except ConnectionError as conn_err:
+            raise GuardConnectionError(f"Failed to connect to LLMGuard server: {str(conn_err)}")
+        except Exception as exec_err:
+            raise GuardExecutionError(f"LLMGuard inference execution failed: {str(exec_err)}")
         client_ip = http_request.client.host if http_request.client else None
         background_tasks.add_task(
             log_scan,
