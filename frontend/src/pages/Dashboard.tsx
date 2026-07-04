@@ -4,9 +4,12 @@ import { Link } from 'react-router-dom'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 import BackendStatus from '../components/BackendStatus'
+<<<<<<< HEAD
 import ComplianceSummaryWidget from '../components/ComplianceSummaryWidget'
+=======
+import RecentlyViewedSystems from '../components/RecentlyViewedSystems'
+>>>>>>> a1fb205 (feat(dashboard) : add recently viewed systems section)
 import { formatLastUpdated } from '../utils/date'
-
 export default function Dashboard() {
   const {
     data: systemsData,
@@ -177,6 +180,8 @@ export default function Dashboard() {
           </Link>
         </div>
       </div>
+
+      <RecentlyViewedSystems />
 
       {/* Recent AI Systems */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
