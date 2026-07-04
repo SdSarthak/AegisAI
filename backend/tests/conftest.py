@@ -14,6 +14,7 @@ from starlette.responses import Response
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["SECRET_KEY"] = "testsecret"
 os.environ["REDIS_URL"] = ""
+os.environ["DEBUG"] = "True"
 
 from app.core.database import Base
 from app.core.security import decode_token, get_current_user
