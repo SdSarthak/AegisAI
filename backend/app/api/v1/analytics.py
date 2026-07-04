@@ -11,8 +11,15 @@ TODO for contributors (help wanted):
     least one data point per system.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+import csv
+import io
+from datetime import datetime, timedelta
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
+from sqlalchemy.orm import Session
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -21,11 +28,6 @@ from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
 from app.models.compliance_snapshot import ComplianceSnapshot
-from sqlalchemy import func
-from datetime import datetime, timedelta
-from typing import Optional
-
-from fastapi import Query
 
 from app.models.guard_scan_log import GuardScanLog
 from app.schemas.audit_log import GuardAuditLogResponse
@@ -186,3 +188,54 @@ def get_audit_logs(
     logs = base_query.order_by(GuardScanLog.scanned_at.desc()).offset(skip).limit(limit).all()
 
     return PaginatedResponse(items=logs, total=total, skip=skip, limit=limit)
+
+
+@router.get("/audit-logs/export")
+def export_audit_logs(
+    decision: Optional[str] = Query(None, pattern="^(allow|sanitize|block)$", description="Filter by decision"),
+    days: Optional[int] = Query(None, ge=1, description="Only include logs from the last N days"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Export guard scan audit logs as a streaming CSV download.
+
+    Uses StreamingResponse to avoid loading large datasets into memory.
+    """
+    filters = [GuardScanLog.user_id == current_user.id]
+
+    if decision:
+        filters.append(GuardScanLog.decision == decision)
+    if days:
+        since = datetime.utcnow() - timedelta(days=days)
+        filters.append(GuardScanLog.scanned_at >= since)
+
+    query = db.query(GuardScanLog).filter(*filters).order_by(GuardScanLog.scanned_at.desc())
+
+    def generate() -> str:
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "id", "decision", "confidence", "detection_type",
+            "intent", "scanned_at", "ip_address",
+        ])
+        yield output.getvalue()
+
+        for log in query.yield_per(100):
+            output = io.StringIO()
+            writer = csv.writer(output)
+            writer.writerow([
+                log.id,
+                log.decision,
+                log.confidence,
+                log.detection_type,
+                log.intent,
+                log.scanned_at.isoformat() if log.scanned_at else "",
+                log.ip_address or "",
+            ])
+            yield output.getvalue()
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=audit_logs.csv"},
+    )
