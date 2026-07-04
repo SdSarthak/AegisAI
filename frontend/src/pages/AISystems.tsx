@@ -3,7 +3,10 @@ import {
  useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Download } from 'lucide-react'
+import { useAuthStore } from '../stores/authStore'
+import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Download, SearchX } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
+import EmptyState from '../components/EmptyState'
 
 interface AISystem {
   id: number
@@ -344,38 +347,40 @@ export default function AISystems() {
           </button>
         </div>
       ) : filteredSystems.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-medium text-gray-900">
-            {searchTerm || riskFilter || complianceFilter
+        <EmptyState
+          icon={searchTerm || riskFilter || complianceFilter ? SearchX : Bot}
+          title={
+            searchTerm || riskFilter || complianceFilter
               ? 'No matching AI systems'
-              : 'No AI systems yet'}
-          </h3>
-          <p className="text-gray-500 mt-1">
-            {searchTerm || riskFilter || complianceFilter
+              : 'No AI systems yet'
+          }
+          message={
+            searchTerm || riskFilter || complianceFilter
               ? 'Try adjusting your filters or search term'
-              : 'Add your first AI system to start tracking compliance'}
-          </p>
-          {!searchTerm && !riskFilter && !complianceFilter && (
-            <div className="flex items-center gap-3">
-              <button
-                onClick={handleExport}
-                disabled={exporting}
-                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Download className="w-5 h-5" />
-                {exporting ? 'Exporting...' : 'Export CSV'}
-              </button>
-              <button
-                onClick={() => setShowModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-              >
-                <Plus className="w-5 h-5" />
-                Add AI System
-              </button>
-            </div>
-          )}
-        </div>
+              : 'Add your first AI system to start tracking compliance'
+          }
+          action={
+            !searchTerm && !riskFilter && !complianceFilter ? (
+              <>
+                <button
+                  onClick={handleExport}
+                  disabled={exporting}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <Download className="w-5 h-5" />
+                  {exporting ? 'Exporting...' : 'Export CSV'}
+                </button>
+                <button
+                  onClick={() => setShowModal(true)}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+                >
+                  <Plus className="w-5 h-5" />
+                  Add AI System
+                </button>
+              </>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="grid gap-4">
           {filteredSystems.map((system: AISystem) => (

@@ -3,8 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { Link } from 'react-router-dom'
 import { FileText, Download, Trash2, Plus, Edit, GitCompare } from 'lucide-react'
+import { FileText, Download, Trash2, Plus, Edit, Copy, Check, GitCompare, SearchX } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
+import EmptyState from '../components/EmptyState'
 
 interface Document {
   id: number
@@ -249,23 +251,28 @@ export default function Documents() {
           </button>
         </div>
       ) : documents.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-medium text-gray-900">No documents yet</h3>
-          <p className="text-gray-500 mt-1">
-            Generate your first compliance document
-          </p>
-        </div>
+        <EmptyState
+          icon={FileText}
+          title="No documents yet"
+          message="Generate your first compliance document"
+          action={
+            <button
+              onClick={() => setShowModal(true)}
+              disabled={systems.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+            >
+              <Plus className="w-5 h-5" />
+              Generate Document
+            </button>
+          }
+        />
       ) : (
         filteredDocuments.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">
-            No matching documents
-          </h3>
-          <p className="text-gray-500 mt-1">
-            Try adjusting your search or filters
-          </p>
-        </div>
+        <EmptyState
+          icon={SearchX}
+          title="No matching documents"
+          message="Try adjusting your search or filters"
+        />
       ) : (
         <div className="grid gap-4">
           {filteredDocuments.map((doc: Document) => (
