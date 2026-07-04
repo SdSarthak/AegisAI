@@ -535,10 +535,30 @@ export const guardApi = {
   },
 }
 
+export interface ComplianceWidgetSummary {
+  total: number
+  compliant: number
+  pending_review: number
+  high_risk: number
+  documents_missing: number
+}
+
 export const analyticsApi = {
   summary: async () => {
     const { data } = await api.get('/analytics/summary')
     return data
+  },
+  widgetSummary: async (): Promise<ComplianceWidgetSummary> => {
+    const { data } = await api.get('/analytics/summary')
+    const responseData = ensureObjectResponse<Record<string, unknown>>(
+      data,
+      'Analytics summary'
+    )
+    const widget = responseData.widget_summary
+    if (!widget || typeof widget !== 'object') {
+      throw new Error('Analytics summary response was missing widget_summary.')
+    }
+    return widget as ComplianceWidgetSummary
   },
   complianceTimeline: async (systemId: number, days = 30) => {
     const { data } = await api.get('/analytics/compliance-timeline', {

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 import BackendStatus from '../components/BackendStatus'
+import ComplianceSummaryWidget from '../components/ComplianceSummaryWidget'
 import { formatLastUpdated } from '../utils/date'
 
 export default function Dashboard() {
@@ -146,6 +147,8 @@ export default function Dashboard() {
           ))}
         </div>
       )}
+
+      <ComplianceSummaryWidget />
 
       {/* Quick Actions */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
