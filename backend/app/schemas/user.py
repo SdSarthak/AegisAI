@@ -12,12 +12,6 @@ class UserCreate(BaseModel):
     full_name: Optional[str] = Field(None, max_length=100)
     company_name: Optional[str] = Field(None, max_length=100)
 
-    @field_validator("password")
-    @classmethod
-    def validate_password(cls, v: str) -> str:
-
-        return validate_password_strength(v)
-
 
 class UserLogin(BaseModel):
     email: EmailStr

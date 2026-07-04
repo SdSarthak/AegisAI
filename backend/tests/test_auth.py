@@ -32,15 +32,15 @@ def test_register_weak_password(client):
         }
     )
 
-    # Pydantic validation error
-    assert response.status_code == 422
+    assert response.status_code == 400
     data = response.json()
     assert "detail" in data
-    # Verify it's a validation error
-    assert isinstance(data["detail"], list) or "Password must contain" in str(data["detail"])
+    assert isinstance(data["detail"], dict)
+    assert data["detail"]["field"] == "password"
+    assert "Password must contain" in data["detail"]["message"]
 
 
-def test_register_password_over_72_bytes_returns_422(client):
+def test_register_password_over_72_bytes_returns_400(client):
     """Test registration rejects passwords that exceed bcrypt's 72-byte limit."""
     long_password = ("é" * 36) + "A1!"
     response = client.post(
@@ -51,8 +51,10 @@ def test_register_password_over_72_bytes_returns_422(client):
         }
     )
 
-    assert response.status_code == 422
-    assert "72 bytes" in str(response.json())
+    assert response.status_code == 400
+    data = response.json()
+    assert data["detail"]["field"] == "password"
+    assert "72 bytes" in data["detail"]["message"]
 
 
 def test_register_duplicate_email(client):

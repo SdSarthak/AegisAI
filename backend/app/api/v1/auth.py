@@ -18,15 +18,15 @@ from threading import Lock
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-
+from app.core.database import get_db
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
 from app.core.security import (
     verify_password,
     get_password_hash,
     create_access_token,
     get_current_user,
+    validate_password_strength,
 )
 from app.core.config import settings
 from app.models.user import User
@@ -170,6 +170,8 @@ def register(
                 }
             )
 
+        # Validate password strength — raises ValueError with details if weak
+        validate_password_strength(user_data.password)
         user = User(
             email=user_data.email,
             hashed_password=get_password_hash(user_data.password),
@@ -182,6 +184,15 @@ def register(
         return user
     except HTTPException:
         raise
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "field": "password",
+                "message": str(e),
+            },
+        )
     except Exception:
         db.rollback()
         # Generic database error handler
