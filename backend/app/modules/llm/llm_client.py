@@ -13,15 +13,22 @@ SPDX-License-Identifier: AGPL-3.0-only
 """
 
 import time
+import json
 import asyncio
 import logging
-from typing import Optional, Iterator, AsyncIterator
+import re
+from typing import Any, Optional, Iterator, AsyncIterator, Type
 
 from openai import OpenAI, AsyncOpenAI, APIError
+from pydantic import BaseModel, ValidationError
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+class StructuredLLMGenerationError(Exception):
+    """Raised when an LLM response cannot be validated against a schema."""
 
 
 class LLMClient:
@@ -44,6 +51,7 @@ class LLMClient:
         self.base_url = base_url or settings.LLM_BASE_URL or None
         self.model = model or settings.LLM_MODEL
         self.timeout = timeout if timeout is not None else getattr(settings, "LLM_TIMEOUT", 30.0)
+        self.supports_json_schema = getattr(settings, "LLM_SUPPORTS_JSON_SCHEMA", False)
 
         if not self.api_key:
             raise ValueError(
@@ -136,6 +144,158 @@ class LLMClient:
                     raise Exception(
                         f"LLM API call failed after {max_retries} attempts: {e}"
                     ) from e
+
+    def generate_structured(
+        self,
+        messages: list[dict[str, str]],
+        output_schema: Type[BaseModel],
+        max_retries: int = 3,
+        temperature: float = 0.2,
+        max_tokens: int = 2500,
+        retry_delay: float = 1.0,
+        timeout: Optional[float] = None,
+    ) -> dict[str, Any]:
+        """
+        Generate JSON that validates against a Pydantic schema.
+
+        The primary path uses OpenAI-compatible json_schema response_format when
+        enabled. If the provider rejects that option, or if validation fails, the
+        client falls back to plain chat completions with self-correction prompts.
+        """
+        t_out = timeout if timeout is not None else self.timeout
+        schema_name = output_schema.__name__
+        validation_error: Exception | None = None
+
+        if self.supports_json_schema:
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=t_out,
+                    response_format={
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": schema_name,
+                            "strict": True,
+                            "schema": output_schema.model_json_schema(),
+                        },
+                    },
+                )
+                content = response.choices[0].message.content or ""
+                return self._validate_structured_content(content, output_schema)
+            except (APIError, ValidationError, json.JSONDecodeError, ValueError) as e:
+                validation_error = e
+                logger.warning(
+                    "Structured LLM json_schema path failed for %s: %s",
+                    schema_name,
+                    e,
+                )
+
+        correction_messages = self._with_json_instructions(messages, output_schema)
+        last_content = ""
+
+        for attempt in range(max_retries):
+            try:
+                response = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=correction_messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout=t_out,
+                )
+                last_content = response.choices[0].message.content or ""
+                return self._validate_structured_content(last_content, output_schema)
+            except (ValidationError, json.JSONDecodeError, ValueError) as e:
+                validation_error = e
+                logger.warning(
+                    "Structured LLM validation failed for %s attempt=%d/%d: %s",
+                    schema_name,
+                    attempt + 1,
+                    max_retries,
+                    e,
+                )
+                if attempt < max_retries - 1:
+                    correction_messages = self._append_correction_prompt(
+                        correction_messages,
+                        last_content,
+                        str(e),
+                        output_schema,
+                    )
+                    continue
+            except APIError as e:
+                validation_error = e
+                logger.error(
+                    "Structured LLM API error for %s attempt=%d/%d status_code=%s error=%s",
+                    schema_name,
+                    attempt + 1,
+                    max_retries,
+                    getattr(e, "status_code", "None"),
+                    str(e),
+                )
+                if attempt < max_retries - 1:
+                    time.sleep(retry_delay * (2**attempt))
+                    continue
+
+        raise StructuredLLMGenerationError(
+            f"Structured LLM generation failed for {schema_name} after {max_retries} attempts"
+        ) from validation_error
+
+    def _validate_structured_content(
+        self, content: str, output_schema: Type[BaseModel]
+    ) -> dict[str, Any]:
+        data = json.loads(self._extract_json_object(content))
+        return output_schema.model_validate(data).model_dump(mode="json")
+
+    def _with_json_instructions(
+        self, messages: list[dict[str, str]], output_schema: Type[BaseModel]
+    ) -> list[dict[str, str]]:
+        schema_json = json.dumps(output_schema.model_json_schema(), indent=2)
+        instructions = (
+            "Return only one valid JSON object. Do not include markdown fences, "
+            "comments, prose, or fields outside this JSON schema:\n"
+            f"{schema_json}"
+        )
+        return [{"role": "system", "content": instructions}, *messages]
+
+    def _append_correction_prompt(
+        self,
+        messages: list[dict[str, str]],
+        invalid_content: str,
+        error: str,
+        output_schema: Type[BaseModel],
+    ) -> list[dict[str, str]]:
+        schema_json = json.dumps(output_schema.model_json_schema(), indent=2)
+        return [
+            *messages,
+            {"role": "assistant", "content": invalid_content},
+            {
+                "role": "user",
+                "content": (
+                    "The previous response failed JSON schema validation. "
+                    f"Validation error: {error}\n"
+                    "Return a corrected response as one JSON object only, matching this schema:\n"
+                    f"{schema_json}"
+                ),
+            },
+        ]
+
+    def _extract_json_object(self, content: str) -> str:
+        stripped = content.strip()
+        fence_match = re.fullmatch(r"```(?:json)?\s*(.*?)\s*```", stripped, re.DOTALL)
+        if fence_match:
+            stripped = fence_match.group(1).strip()
+
+        if stripped.startswith("{") and stripped.endswith("}"):
+            return stripped
+
+        start = stripped.find("{")
+        end = stripped.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            return stripped[start : end + 1]
+
+        raise ValueError("LLM response did not contain a JSON object")
 
     def stream(
         self,

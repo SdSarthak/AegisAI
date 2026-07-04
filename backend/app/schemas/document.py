@@ -1,5 +1,7 @@
-from pydantic import BaseModel
-from typing import Optional
+import json
+from typing import Any, Optional
+
+from pydantic import BaseModel, field_validator
 from datetime import datetime
 from app.models.document import DocumentType, DocumentStatus
 
@@ -35,7 +37,7 @@ class DocumentResponse(BaseModel):
     title: str
     document_type: DocumentType
     status: DocumentStatus
-    content: Optional[str]
+    content: Optional[str | dict[str, Any]]
     file_path: Optional[str]
     version: str
     ai_system_id: Optional[int]
@@ -44,6 +46,23 @@ class DocumentResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def parse_json_content(cls, value):
+        if not isinstance(value, str):
+            return value
+
+        stripped = value.strip()
+        if not stripped.startswith("{"):
+            return value
+
+        try:
+            parsed = json.loads(stripped)
+        except json.JSONDecodeError:
+            return value
+
+        return parsed if isinstance(parsed, dict) else value
 
 
 class DocumentGenerateRequest(BaseModel):
