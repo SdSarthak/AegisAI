@@ -26,6 +26,9 @@ class User(Base):
     stripe_customer_id = Column(String(255), nullable=True)
     stripe_subscription_id = Column(String(255), nullable=True)
 
+    # Token versioning - incremented on password change to invalidate existing tokens
+    token_version = Column(Integer, default=0)
+
     # Status
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
