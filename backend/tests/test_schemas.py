@@ -100,6 +100,7 @@ class TestCursorPaginatedResponseSchema:
         assert set(schema["properties"]) >= {"items", "limit", "next_cursor"}
         assert set(schema["required"]) == {"items", "limit"}
         assert schema["properties"]["items"]["type"] == "array"
+        assert schema["properties"]["limit"]["type"] == "integer"
         assert schema["properties"]["next_cursor"]["anyOf"] == [
             {"type": "string"},
             {"type": "null"},
