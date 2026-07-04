@@ -23,6 +23,18 @@ from app.main import app
 from uuid import uuid4
 
 
+def _patch_csrf_middleware(test_client):
+    """Patch BaseHTTPMiddleware.dispatch_func to bypass CSRF for tests."""
+    for m in getattr(test_client.app, "middleware_stack", []) or []:
+        if m.__class__.__name__ == "CSRFMiddleware":
+            async def csrf_bypass_dispatch(request, call_next):
+                return await call_next(request)
+            m.dispatch_func = csrf_bypass_dispatch
+            break
+
+
+
+
 @pytest.fixture(autouse=True)
 def bypass_csrf_for_tests(monkeypatch, request):
     """Keep endpoint tests focused on application behavior, not CSRF transport."""
@@ -117,6 +129,7 @@ def client(db_engine):
     app.dependency_overrides[get_current_user] = override_current_user
 
     raw_client = TestClient(app)
+    _patch_csrf_middleware(raw_client)
     yield _CSRFClientWrapper(raw_client)
 
     session.close()
@@ -165,8 +178,9 @@ def unwrapped_client(db_engine):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
-    client = TestClient(app)
-    yield client
+    raw_client = TestClient(app)
+    _patch_csrf_middleware(raw_client)
+    yield raw_client
 
     session.close()
     transaction.rollback()
