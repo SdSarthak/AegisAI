@@ -386,6 +386,14 @@ def ingest_documents(
             dest = os.path.join(storage_dir, filename)
             with open(dest, "wb") as buf:
                 shutil.copyfileobj(upload.file, buf)
+            file_size_bytes = os.path.getsize(dest)
+            if file_size_bytes == 0:
+                if os.path.exists(dest):
+                    os.remove(dest)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File {upload.filename} is empty (0 bytes).",
+                )
             saved_paths.append(dest)
             pending_documents.append(
                 RAGDocument(
@@ -393,7 +401,7 @@ def ingest_documents(
                     original_filename=os.path.basename(upload.filename),
                     storage_path=dest,
                     content_type=upload.content_type,
-                    file_size_bytes=os.path.getsize(dest),
+                    file_size_bytes=file_size_bytes,
                     uploaded_by_id=_current_user_id(current_user),
                 )
             )
