@@ -23,6 +23,15 @@ from app.main import app
 from uuid import uuid4
 
 
+def _patch_csrf_middleware(test_client):
+    """Patch BaseHTTPMiddleware.dispatch_func to bypass CSRF for tests."""
+    for m in getattr(test_client.app, "middleware_stack", []) or []:
+        if m.__class__.__name__ == "CSRFMiddleware":
+            async def csrf_bypass_dispatch(request, call_next):
+                return await call_next(request)
+            m.dispatch_func = csrf_bypass_dispatch
+            break
+
 
 
 @pytest.fixture(autouse=True)
@@ -67,7 +76,6 @@ def db_engine():
     yield engine
     Base.metadata.drop_all(bind=engine)
 
-
 @pytest.fixture
 def db_session(db_engine) -> Session:
     """Create a new database session for each test."""
@@ -78,7 +86,6 @@ def db_session(db_engine) -> Session:
     session.close()
     transaction.rollback()
     connection.close()
-
 
 @pytest.fixture
 def client(db_engine):
@@ -135,7 +142,6 @@ def client(db_engine):
     connection.close()
     app.dependency_overrides.clear()
 
-
 @pytest.fixture
 def unwrapped_client(db_engine):
     """Raw TestClient without CSRF auto-injection.
@@ -176,14 +182,14 @@ def unwrapped_client(db_engine):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
-    client = TestClient(app)
-    yield client
+    raw_client = TestClient(app)
+    _patch_csrf_middleware(raw_client)
+    yield raw_client
 
     session.close()
     transaction.rollback()
     connection.close()
     app.dependency_overrides.clear()
-
 
 class _CSRFClientWrapper:
     """Wrap TestClient to auto-handle CSRF tokens for state-changing requests."""
@@ -244,13 +250,11 @@ class _CSRFClientWrapper:
     def __getattr__(self, name: str) -> object:
         return getattr(self._inner, name)
 
-
 @pytest.fixture
 def csrf_client(client: TestClient):
     """CSRF-aware test client.  Handles X-CSRF-Token automatically for
     state-changing requests (POST / PUT / PATCH / DELETE)."""
     return client
-
 
 @pytest.fixture
 def auth_headers(client):
@@ -278,7 +282,6 @@ def auth_headers(client):
         "X-CSRF-Token": client._csrf_token,
     }
 
-
 @pytest.fixture
 def other_user_auth_headers(client, db_session):
     # Register a different user
@@ -299,7 +302,6 @@ def other_user_auth_headers(client, db_session):
         "X-CSRF-Token": client._csrf_token,
     }
 
-
 @pytest.fixture(autouse=True)
 def clear_guard_rate_limits():
     """Keep in-memory and Redis guard rate limits isolated between tests."""
@@ -319,7 +321,6 @@ def clear_guard_rate_limits():
     guard_scan_rate_limiter.clear_local_attempts()
     if redis_client is not None:
         redis_client.flushdb()
-
 
 @pytest.fixture(autouse=True)
 def clear_auth_rate_limits():
