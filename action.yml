@@ -1,0 +1,50 @@
+name: 'AegisAI Compliance Check'
+description: 'Fails the build if any registered AI system is HIGH/UNACCEPTABLE risk without a valid compliance document (EU AI Act).'
+author: 'AegisAI'
+branding:
+  icon: 'shield'
+  color: 'purple'
+
+inputs:
+  aegisai-token:
+    description: 'AegisAI API bearer token (store as a repo/org secret).'
+    required: true
+  api-url:
+    description: 'Base URL of the AegisAI API.'
+    required: false
+    default: 'https://api.aegisai.dev/api/v1'
+  config-path:
+    description: 'Path to the aegisai.yml config file in the calling repo.'
+    required: false
+    default: 'aegisai.yml'
+  fail-on:
+    description: 'Comma-separated risk levels that require a valid compliance document (default: high,unacceptable).'
+    required: false
+    default: 'high,unacceptable'
+
+outputs:
+  report:
+    description: 'Path to the generated JSON compliance report.'
+    value: ${{ steps.check.outputs.report }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      shell: bash
+      run: pip install --quiet requests pyyaml
+
+    - name: Run AegisAI compliance check
+      id: check
+      shell: bash
+      env:
+        AEGISAI_TOKEN: ${{ inputs.aegisai-token }}
+        AEGISAI_API_URL: ${{ inputs.api-url }}
+        AEGISAI_CONFIG_PATH: ${{ inputs.config-path }}
+        AEGISAI_FAIL_ON: ${{ inputs.fail-on }}
+      run: python "${{ github.action_path }}/scripts/compliance_check.py"
