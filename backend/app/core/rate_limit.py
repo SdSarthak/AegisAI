@@ -51,6 +51,7 @@ return {current, ttl}
         self.cb_state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
         self.consecutive_failures = 0
         self.last_state_change: datetime = datetime.now(timezone.utc)
+        self._half_open_probe_in_progress = False
 
         # Health metrics
         self.metrics = {
@@ -61,6 +62,7 @@ return {current, ttl}
             "blocked_by_circuit_breaker": 0,
             "failures_closed": 0,
             "failures_open": 0,
+            "half_open_probes_skipped": 0,
         }
 
     def clear_local_attempts(self) -> None:
@@ -207,11 +209,19 @@ return {current, ttl}
                 if elapsed >= self.recovery_timeout:
                     self.cb_state = "HALF_OPEN"
                     self.last_state_change = now
+                    self._half_open_probe_in_progress = False
                     logger.warning("Circuit breaker transitioning from OPEN to HALF_OPEN for rate limiter.")
-                    use_redis = True
                 else:
                     self.metrics["blocked_by_circuit_breaker"] += 1
-            else:
+
+            if self.cb_state == "HALF_OPEN":
+                if self._half_open_probe_in_progress:
+                    # A probe is already in-flight; skip Redis for this request
+                    self.metrics["half_open_probes_skipped"] += 1
+                else:
+                    self._half_open_probe_in_progress = True
+                    use_redis = True
+            elif self.cb_state == "CLOSED":
                 use_redis = True
 
             if use_redis:
@@ -229,6 +239,7 @@ return {current, ttl}
                 limited, retry_after = self._check_redis(client, key, limit, window_seconds, cost)
 
                 with self._local_lock:
+                    self._half_open_probe_in_progress = False
                     if self.cb_state == "HALF_OPEN":
                         self.cb_state = "CLOSED"
                         self.consecutive_failures = 0
@@ -243,6 +254,7 @@ return {current, ttl}
                 logger.exception("Redis rate limiting failed for %s", key)
 
                 with self._local_lock:
+                    self._half_open_probe_in_progress = False
                     self.metrics["redis_failures"] += 1
                     self.consecutive_failures += 1
 

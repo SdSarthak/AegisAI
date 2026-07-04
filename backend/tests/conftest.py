@@ -297,7 +297,12 @@ def clear_guard_rate_limits():
     # 1. Clear local memory
     guard_scan_rate_limiter.clear_local_attempts()
     
-    # 2. Clear Redis
+    # 2. Reset circuit breaker state to prevent test pollution
+    guard_scan_rate_limiter.cb_state = "CLOSED"
+    guard_scan_rate_limiter.consecutive_failures = 0
+    guard_scan_rate_limiter._half_open_probe_in_progress = False
+    
+    # 3. Clear Redis
     redis_client = guard_scan_rate_limiter._get_redis_client()
     if redis_client is not None:
         redis_client.flushdb()
@@ -306,6 +311,9 @@ def clear_guard_rate_limits():
     
     # Clean up after the test completes
     guard_scan_rate_limiter.clear_local_attempts()
+    guard_scan_rate_limiter.cb_state = "CLOSED"
+    guard_scan_rate_limiter.consecutive_failures = 0
+    guard_scan_rate_limiter._half_open_probe_in_progress = False
     if redis_client is not None:
         redis_client.flushdb()
 
