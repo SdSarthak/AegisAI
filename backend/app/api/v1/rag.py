@@ -590,8 +590,9 @@ def query_knowledge_base(
         latency_ms = (time.monotonic() - t_start) * 1000
 
         source_docs = result.get("source_documents", [])
+        from app.modules.rag.retrieval_chain import _build_source_citation
         sources = result.get("cached_sources") or [
-            dict(getattr(doc, "metadata", {}) or {}) for doc in source_docs
+            _build_source_citation(doc) for doc in source_docs
         ]
         source_labels = [str(source.get("source", "")) for source in sources]
         answer = str(result.get("result", ""))
