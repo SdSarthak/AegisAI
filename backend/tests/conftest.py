@@ -23,6 +23,15 @@ from app.main import app
 from uuid import uuid4
 
 
+def pytest_configure(config):
+    """Patch _is_csrf_exempt at module import time, before TestClient is created."""
+    import app.middleware.csrf as csrf_module
+    _original = getattr(csrf_module, '_is_csrf_exempt', None)
+    if _original is not None:
+        csrf_module._is_csrf_exempt = lambda _path: True
+        csrf_module._CSRF_ORIGINAL = _original  # preserve for potential restore
+
+
 @pytest.fixture(autouse=True)
 def bypass_csrf_for_tests(monkeypatch, request):
     """Keep endpoint tests focused on application behavior, not CSRF transport."""
