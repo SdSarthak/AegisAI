@@ -23,13 +23,6 @@ from app.main import app
 from uuid import uuid4
 
 
-def pytest_configure(config):
-    """Patch _is_csrf_exempt at module import time, before TestClient is created."""
-    import app.middleware.csrf as csrf_module
-    _original = getattr(csrf_module, '_is_csrf_exempt', None)
-    if _original is not None:
-        csrf_module._is_csrf_exempt = lambda _path: True
-        csrf_module._CSRF_ORIGINAL = _original  # preserve for potential restore
 
 
 @pytest.fixture(autouse=True)
@@ -126,6 +119,13 @@ def client(db_engine):
     app.dependency_overrides[get_current_user] = override_current_user
 
     raw_client = TestClient(app)
+    # Patch middleware dispatch after TestClient creation so the patch applies
+    for m in getattr(raw_client.app, "middleware_stack", []) or []:
+        if m.__class__.__name__ == "CSRFMiddleware":
+            async def bypass_dispatch(self, request, call_next):
+                return await call_next(request)
+            m.dispatch = bypass_dispatch.__get__(m, m.__class__)
+            break
     yield _CSRFClientWrapper(raw_client)
 
     session.close()
