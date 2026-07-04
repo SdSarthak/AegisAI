@@ -119,12 +119,14 @@ def client(db_engine):
     app.dependency_overrides[get_current_user] = override_current_user
 
     raw_client = TestClient(app)
-    # Patch middleware dispatch after TestClient creation so the patch applies
+    # Patch dispatch_func (NOT dispatch) - BaseHTTPMiddleware uses dispatch_func set at init time
     for m in getattr(raw_client.app, "middleware_stack", []) or []:
         if m.__class__.__name__ == "CSRFMiddleware":
-            async def bypass_dispatch(self, request, call_next):
+            _orig_dispatch = m.dispatch_func
+
+            async def csrf_bypass_dispatch(request, call_next):
                 return await call_next(request)
-            m.dispatch = bypass_dispatch.__get__(m, m.__class__)
+            m.dispatch_func = csrf_bypass_dispatch
             break
     yield _CSRFClientWrapper(raw_client)
 
