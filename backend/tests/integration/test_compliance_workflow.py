@@ -5,6 +5,44 @@ from app.models.ai_system import AISystem, RiskLevel, ComplianceStatus
 from app.models.user import User
 from app.core.security import create_access_token
 
+
+@pytest.fixture(autouse=True)
+def mock_structured_document_generation(monkeypatch):
+    def fake_generate_structured(self, messages, output_schema, **kwargs):
+        return {
+            "document_type": "technical_documentation",
+            "system_name": "Compliance Test System",
+            "provider_name": "Test Company",
+            "version": "1.0",
+            "intended_purpose": "Testing",
+            "system_description": "Test technical documentation.",
+            "system_architecture": "Application and model service.",
+            "input_data": "Test inputs.",
+            "output_specification": "Structured outputs.",
+            "training_data": "Representative data.",
+            "validation_testing": "Validation controls.",
+            "performance_metrics": "Accuracy and robustness metrics.",
+            "risk_management": [
+                {
+                    "risk": "Compliance gap",
+                    "severity": "medium",
+                    "likelihood": "medium",
+                    "mitigation": "Human review.",
+                    "residual_risk": "low",
+                }
+            ],
+            "human_oversight": "Human review.",
+            "logging_monitoring": "Audit logs.",
+            "cybersecurity": "Access controls.",
+            "lifecycle_management": "Change management.",
+        }
+
+    monkeypatch.setattr(
+        "app.api.v1.documents.LLMClient.generate_structured",
+        fake_generate_structured,
+    )
+
+
 @pytest.fixture
 def test_user(client, db_session):
     user = User(
