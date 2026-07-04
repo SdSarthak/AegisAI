@@ -4,9 +4,15 @@ import { useAuthStore } from '../stores/authStore'
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
 const API_BASE_URL = configuredApiBaseUrl ? configuredApiBaseUrl.replace(/\/$/, '') : '/api/v1'
 
-// Promise that resolves when the current 401 handler finishes.  Concurrent
-// 401 responses wait on this promise instead of being silently dropped.
-let unauthorizedHandlerPromise: Promise<void> | null = null
+// Queue for synchronizing concurrent 401 responses.  When a 401 arrives the
+// first request triggers logout + navigation; all other in-flight 401s
+// wait for that handler to finish before rejecting with their own error so
+// no rejection is silently dropped and no duplicate navigation occurs.
+let isHandling401 = false
+const pending401s: Array<{
+  reject: (reason: unknown) => void
+  error: unknown
+}> = []
 
 function buildApiUrl(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
@@ -48,28 +54,35 @@ api.interceptors.response.use(
     const isUnAuthorized = error.response?.status === 401 && !isAuthEndpoint
 
     if (isUnAuthorized) {
-      // If a logout handler is already running, chain onto it so concurrent
-      // 401s wait for the navigation to complete rather than being dropped.
-      if (unauthorizedHandlerPromise !== null) {
-        return unauthorizedHandlerPromise.then(() => Promise.reject(error))
+      if (isHandling401) {
+        // Another 401 is already being processed.  Queue this rejection so it
+        // fires after the handler completes instead of being silently dropped.
+        return new Promise((_, reject) => {
+          pending401s.push({ reject, error })
+        })
       }
 
-      unauthorizedHandlerPromise = (async () => {
-        // Logout and navigate to login without forcing a full page reload.
-        useAuthStore.getState().logout()
-        try {
-          window.history.pushState({}, '', '/login')
-          // Notify router listeners (e.g., react-router) to handle navigation.
-          window.dispatchEvent(new PopStateEvent('popstate'))
-        } catch (e) {
-          // Fallback: if SPA navigation fails, perform a safe replace.
-          window.location.replace('/login')
-        }
-      })().finally(() => {
-        unauthorizedHandlerPromise = null
-      })
+      isHandling401 = true
+      const currentError = error
 
-      return unauthorizedHandlerPromise.then(() => Promise.reject(error))
+      // Logout and navigate to login without forcing a full page reload.
+      useAuthStore.getState().logout()
+      try {
+        window.history.pushState({}, '', '/login')
+        // Notify router listeners (e.g., react-router) to handle navigation.
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      } catch (e) {
+        // Fallback: if SPA navigation fails, perform a safe replace.
+        window.location.replace('/login')
+      }
+
+      // Reject all queued promises with their original error so no caller is
+      // left hanging after the handler finishes.
+      const queue = pending401s.splice(0)
+      isHandling401 = false
+      queue.forEach(({ reject, error }) => reject(error))
+
+      return Promise.reject(currentError)
     }
     return Promise.reject(error)
   }
