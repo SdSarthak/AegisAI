@@ -16,6 +16,7 @@ from app.models.ai_system import AISystem, ComplianceStatus, RiskAssessment
 from app.models.audit_log import AISystemAuditLog
 from app.models.compliance_snapshot import ComplianceSnapshot
 from app.models.document import Document
+from app.models.notification import Notification
 from app.schemas.ai_system import (
     AISystemCreate,
     AISystemUpdate,
@@ -530,6 +531,10 @@ def delete_ai_system(
     db.query(Document).filter(
         Document.ai_system_id == system_id,
     ).update({Document.ai_system_id: None}, synchronize_session=False)
+    db.query(Notification).filter(
+        Notification.resource_type == "ai_system",
+        Notification.resource_id == system_id,
+    ).delete(synchronize_session=False)
 
     db.delete(system)
     db.commit()
