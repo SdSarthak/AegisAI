@@ -238,6 +238,14 @@ export const aiSystemsApi = {
   delete: async (id: number) => {
     await api.delete(`/ai-systems/${id}`)
   },
+  exportCsv: async () => {
+    const token = useAuthStore.getState().token
+    const { data } = await api.get('/ai-systems/export', {
+      responseType: 'blob',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    })
+    return data
+  },
 }
 
 // Classification API
