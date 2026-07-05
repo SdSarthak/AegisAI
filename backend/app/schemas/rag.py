@@ -28,6 +28,9 @@ class RAGQueryResponse(BaseModel):
     chunks_total: int = 0
     chunks_dropped: int = 0
     warning: str | None = None
+    cache_hit: bool = False
+    cache_type: str | None = None
+    cache_age_seconds: int | None = None
 
     # Legacy fields retained as optional compatibility aliases for older clients.
     answer_id: Optional[str] = None
