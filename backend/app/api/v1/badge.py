@@ -65,4 +65,8 @@ def get_compliance_badge(
         }
 
     svg = generate_badge_svg(system.name, system.risk_level, system.compliance_status)
-    return Response(content=svg, media_type="image/svg+xml")
+    return Response(
+        content=svg,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=3600, stale-while-revalidate=86400"},
+    )

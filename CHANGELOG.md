@@ -17,6 +17,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Fixed
 - **Analytics Dashboard (#921)** — Replaced hardcoded mock data with live API calls (`/analytics/summary`, `/analytics/compliance-timeline`, `/analytics/system-risk`). Added loading skeletons, error states with retry buttons, system selector dropdown, and dynamic dark/light chart theming.
+- **Badge Cache-Control (#1476)** — Added Cache-Control headers to public SVG badge endpoint for browser caching (public, max-age=3600).
 - **RAG Plaintext Privacy (#1034)** — Replaced plaintext question/answer storage with SHA-256 hashes in `RagQuery` and `RAGFeedback` models; history endpoint returns hashes and lengths instead of raw text, preventing accidental plaintext exposure in the database and API responses.
 - **Webhook Delivery (#1033)** — Changed webhook delivery from `BackgroundTasks` to direct synchronous `_post_webhook` call with retry logic, ensuring immediate delivery during request lifecycle.
 - **Per-user FAISS Isolation (#920)** — Added `FAISS_INDEX_BASE_PATH` config and `_get_index_path(user_id)` helper. Vector store functions now accept a `user_id` parameter to store/load indexes under `{FAISS_INDEX_BASE_PATH}/user_{user_id}/`, preventing cross-user data leakage in RAG queries.
