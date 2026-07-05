@@ -16,6 +16,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Unit and integration tests for bypass payloads (`test_normalizer.py` and `test_guard.py`)
 
 ### Fixed
+- **RAG Ingest Empty File Guard (#1396)** — Added explicit check for zero-byte PDF uploads in the ingest endpoint, returning a 400 error with a clear message instead of silently saving and processing empty files.
 - **Analytics Dashboard (#921)** — Replaced hardcoded mock data with live API calls (`/analytics/summary`, `/analytics/compliance-timeline`, `/analytics/system-risk`). Added loading skeletons, error states with retry buttons, system selector dropdown, and dynamic dark/light chart theming.
 - **RAG Plaintext Privacy (#1034)** — Replaced plaintext question/answer storage with SHA-256 hashes in `RagQuery` and `RAGFeedback` models; history endpoint returns hashes and lengths instead of raw text, preventing accidental plaintext exposure in the database and API responses.
 - **Webhook Delivery (#1033)** — Changed webhook delivery from `BackgroundTasks` to direct synchronous `_post_webhook` call with retry logic, ensuring immediate delivery during request lifecycle.
