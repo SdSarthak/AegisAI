@@ -38,7 +38,7 @@ jobs:
 
       - name: Run AegisAI compliance check
         id: compliance
-        uses: SdSarthak/AegisAI@v1
+        uses: SdSarthak/AegisAI@main
         with:
           aegisai-token: ${{ secrets.AEGISAI_TOKEN }}
           api-url: ${{ inputs.api-url }}

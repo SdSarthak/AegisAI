@@ -53,6 +53,27 @@ def api_get(session, base_url, path, **params):
     return resp.json()
 
 
+def api_get_all(session, base_url, path, **params):
+    """Follow cursor-based pagination and return every item across all pages."""
+    items = []
+    cursor = None
+    while True:
+        page_params = dict(params)
+        if cursor:
+            page_params["cursor"] = cursor
+        page = api_get(session, base_url, path, **page_params)
+
+        if isinstance(page, list):
+            items.extend(page)
+            break  # non-paginated endpoint, single page only
+
+        items.extend(page.get("results", page.get("data", [])))
+        cursor = page.get("next_cursor")
+        if not cursor:
+            break
+    return items
+
+
 def main():
     token = env("AEGISAI_TOKEN", required=True)
     base_url = env("AEGISAI_API_URL", "https://api.aegisai.dev/api/v1")
@@ -65,9 +86,9 @@ def main():
     session = requests.Session()
     session.headers.update({"Authorization": f"Bearer {token}"})
 
-    # Fetch every document once, then filter per system in memory
-    # (the API lists all documents owned by the token's user).
-    all_documents = api_get(session, base_url, "/documents")
+    # Fetch every document once (across all pages), then filter per
+    # system in memory (the API lists all documents owned by the token's user).
+    all_documents = api_get_all(session, base_url, "/documents")
 
     results = []
     failures = []
