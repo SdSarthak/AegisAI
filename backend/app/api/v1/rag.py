@@ -800,25 +800,15 @@ async def query_knowledge_base_stream(
 
 @router.get("/health", tags=["RAG Intelligence"])
 def rag_health() -> dict[str, Any]:
-    """Check if the RAG module is available."""
-    from app.modules.rag.vector_store import check_index_exists
+    """Check if the RAG module is available.
 
-    index_loaded = check_index_exists()
-
-    if not index_loaded:
-        return {
-            "module": "rag_intelligence",
-            "status": "unavailable",
-            "index_loaded": False,
-            "message": (
-                "FAISS index not found. RAG module requires document ingestion before use."
-            ),
-        }
-
+    Note: Per-user index availability is checked per-user during ingest/query.
+    This endpoint reports general module availability rather than a specific
+    user's index state.
+    """
     return {
         "module": "rag_intelligence",
         "status": "available",
-        "index_loaded": True,
     }
 
 
