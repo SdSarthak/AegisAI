@@ -473,7 +473,7 @@ def get_shared_document(
 
     if hasattr(document, "is_deleted") and document.is_deleted:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Share link revoked"
         )
 
