@@ -29,6 +29,7 @@ class User(Base):
     # Status
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    is_admin = Column(Boolean, default=False)
     onboarding_completed = Column(Boolean, default=False)
     dashboard_layout = Column(JSON, nullable=True)
 

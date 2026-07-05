@@ -661,6 +661,12 @@ def export_guard_scan_logs(
     if start_date and end_date and start_date > end_date:
         raise HTTPException(status_code=400, detail="start_date cannot be after end_date")
 
+    if not getattr(current_user, "is_admin", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required to export scan logs.",
+        )
+
 
     export_filters = build_history_filters(
         current_user.id,
