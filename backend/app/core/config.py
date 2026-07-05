@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import List
 
 
@@ -14,8 +15,27 @@ class Settings(BaseSettings):
 
     # JWT
     SECRET_KEY: str
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key(cls, v: str) -> str:
+        import os
+        env = os.environ.get("ENVIRONMENT", "")
+        if env in ("test", "development"):
+            if not v:
+                raise ValueError("SECRET_KEY cannot be empty even in test mode")
+            return v
+        if not v or len(v) < 32:
+            raise ValueError(
+                "SECRET_KEY must be set and be at least 32 characters. "
+                "Generate with: openssl rand -hex 32"
+            )
+        return v
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # Security
+    BCRYPT_ROUNDS: int = 12
 
     # Stripe (optional — leave blank to disable billing)
     STRIPE_SECRET_KEY: str = ""

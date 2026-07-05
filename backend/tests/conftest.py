@@ -12,7 +12,8 @@ from starlette.responses import Response
 
 # Set test database before importing app
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
-os.environ["SECRET_KEY"] = "testsecret"
+os.environ["ENVIRONMENT"] = "test"
+os.environ["SECRET_KEY"] = "testsecret_testsecret_testsecret_testse"
 os.environ["REDIS_URL"] = ""
 
 from app.core.database import Base
