@@ -711,9 +711,13 @@ def query_knowledge_base(
             detail=str(exc),
         )
     except Exception as exc:
+        logger.exception("RAG query failed — returning safe 503 to client")
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"RAG module error: {str(exc)}",
+            detail={
+                "error": "rag_unavailable",
+                "safe_message": "The RAG query service is temporarily unavailable. Please try again later.",
+            },
         )
 
 
