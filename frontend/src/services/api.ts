@@ -4,8 +4,9 @@ import { useAuthStore } from '../stores/authStore'
 const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
 const API_BASE_URL = configuredApiBaseUrl ? configuredApiBaseUrl.replace(/\/$/, '') : '/api/v1'
 
-// Tracks whether the global 401-response handler is currently executing.
-let isUnauthorizedHandlerRunning = false
+// Promise that resolves when the current 401 handler finishes.  Concurrent
+// 401 responses wait on this promise instead of being silently dropped.
+let unauthorizedHandlerPromise: Promise<void> | null = null
 
 function buildApiUrl(path: string): string {
   const normalizedPath = path.startsWith('/') ? path : `/${path}`
@@ -46,25 +47,29 @@ api.interceptors.response.use(
     const isAuthEndpoint = AUTH_ENDPOINTS.some((endpoint) => url.includes(endpoint))
     const isUnAuthorized = error.response?.status === 401 && !isAuthEndpoint
 
-    if (isUnAuthorized && !isUnauthorizedHandlerRunning) {
-
-      // Block concurrent 401 responses from entering the unauthorized handler.
-      isUnauthorizedHandlerRunning = true
-
-      // Logout and navigate to login without forcing a full page reload.
-      useAuthStore.getState().logout()
-      try {
-        window.history.pushState({}, '', '/login')
-        // Notify router listeners (e.g., react-router) to handle navigation.
-        window.dispatchEvent(new PopStateEvent('popstate'))
-      } catch (e) {
-        // Fallback: if SPA navigation fails, perform a safe replace.
-        window.location.replace('/login')
+    if (isUnAuthorized) {
+      // If a logout handler is already running, chain onto it so concurrent
+      // 401s wait for the navigation to complete rather than being dropped.
+      if (unauthorizedHandlerPromise !== null) {
+        return unauthorizedHandlerPromise.then(() => Promise.reject(error))
       }
-      finally {
-        // Allow future unauthorized responses after current logout/navigation flow has finished.
-        isUnauthorizedHandlerRunning = false
-      }
+
+      unauthorizedHandlerPromise = (async () => {
+        // Logout and navigate to login without forcing a full page reload.
+        useAuthStore.getState().logout()
+        try {
+          window.history.pushState({}, '', '/login')
+          // Notify router listeners (e.g., react-router) to handle navigation.
+          window.dispatchEvent(new PopStateEvent('popstate'))
+        } catch (e) {
+          // Fallback: if SPA navigation fails, perform a safe replace.
+          window.location.replace('/login')
+        }
+      })().finally(() => {
+        unauthorizedHandlerPromise = null
+      })
+
+      return unauthorizedHandlerPromise.then(() => Promise.reject(error))
     }
     return Promise.reject(error)
   }
@@ -91,6 +96,10 @@ function ensureListResponse<T>(
 ): T[] {
   if (Array.isArray(data)) {
     return data as T[]
+  }
+
+  if (isRecord(data) && Array.isArray(data.items)) {
+    return data.items as T[]
   }
 
   throw new Error(`${resourceName} response was empty or invalid.`)
@@ -290,6 +299,10 @@ export const notificationsApi = {
     api.get(`/notifications?unread_only=${unreadOnly}`).then((r: AxiosResponse) => r.data.items),
   markRead: (ids: number[]) =>
     api.post('/notifications/read', { ids }),
+  markAllRead: () =>
+    api.post('/notifications/read-all'),
+  delete: (id: number) =>
+    api.delete(`/notifications/${id}`),
 }
 
 // ---------------------------------------------------------------------------
@@ -525,6 +538,16 @@ export const guardApi = {
 export const analyticsApi = {
   summary: async () => {
     const { data } = await api.get('/analytics/summary')
+    return data
+  },
+  complianceTimeline: async (systemId: number, days = 30) => {
+    const { data } = await api.get('/analytics/compliance-timeline', {
+      params: { system_id: systemId, days },
+    })
+    return data
+  },
+  systemRisk: async () => {
+    const { data } = await api.get('/analytics/system-risk')
     return data
   },
 }

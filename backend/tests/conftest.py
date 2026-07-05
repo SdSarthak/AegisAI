@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from fastapi import Request, HTTPException, status
 from fastapi.testclient import TestClient
+from starlette.responses import Response
 
 # Set test database before importing app
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
@@ -20,6 +21,14 @@ from app.core.security import decode_token, get_current_user
 from app.models.user import SubscriptionTier
 from app.main import app
 from uuid import uuid4
+
+
+@pytest.fixture(autouse=True)
+def bypass_csrf_for_tests(monkeypatch, request):
+    """Keep endpoint tests focused on application behavior, not CSRF transport."""
+    if request.node.path.name == "test_csrf.py":
+        return
+    monkeypatch.setattr("app.middleware.csrf._is_csrf_exempt", lambda _path: True)
 
 def _mock_current_user():
     user = MagicMock()
@@ -108,6 +117,55 @@ def client(db_engine):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
+    raw_client = TestClient(app)
+    yield _CSRFClientWrapper(raw_client)
+
+    session.close()
+    transaction.rollback()
+    connection.close()
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def unwrapped_client(db_engine):
+    """Raw TestClient without CSRF auto-injection.
+
+    Use this when you need to send requests WITHOUT CSRF tokens,
+    e.g. for testing CSRF-rejection scenarios.
+    """
+    from app.core.database import get_db
+    from app.core.security import decode_token
+
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    session = sessionmaker(autocommit=False, autoflush=False, bind=connection)()
+
+    def override_get_db():
+        yield session
+
+    def override_current_user(request: Request):
+        auth_header = request.headers.get("authorization", "")
+        if not auth_header.lower().startswith("bearer "):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Not authenticated"
+            )
+
+        token = auth_header.split(" ", 1)[1]
+        payload = decode_token(token)
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid token"
+            )
+
+        user = session.query(User).filter(User.id == int(user_id)).first()
+        return user or _mock_current_user()
+
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_current_user] = override_current_user
+
     client = TestClient(app)
     yield client
 
@@ -167,6 +225,12 @@ class _CSRFClientWrapper:
             self._inject_csrf(kwargs)
         return self._inner.request(method, url, **kwargs)
 
+    def stream(self, method: str, url: str, **kwargs):
+        if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
+            self._ensure_csrf()
+            self._inject_csrf(kwargs)
+        return self._inner.stream(method, url, **kwargs)
+
     def __getattr__(self, name: str) -> object:
         return getattr(self._inner, name)
 
@@ -175,16 +239,16 @@ class _CSRFClientWrapper:
 def csrf_client(client: TestClient):
     """CSRF-aware test client.  Handles X-CSRF-Token automatically for
     state-changing requests (POST / PUT / PATCH / DELETE)."""
-    return _CSRFClientWrapper(client)
+    return client
 
 
 @pytest.fixture
-def auth_headers(csrf_client):
+def auth_headers(client):
     email = f"batch-scan-{uuid4()}@example.com"
     password = "TestPass123!"
 
-    # Register via csrf_client so the cookie is populated
-    csrf_client.post(
+    # Register via client so the cookie is populated
+    client.post(
         "/api/v1/auth/register",
         json={
             "email": email,
@@ -193,7 +257,7 @@ def auth_headers(csrf_client):
         },
     )
 
-    response = csrf_client.post(
+    response = client.post(
         "/api/v1/auth/login",
         data={"username": email, "password": password},
         headers={"Content-Type": "application/x-www-form-urlencoded"}
@@ -202,20 +266,20 @@ def auth_headers(csrf_client):
 
     return {
         "Authorization": f"Bearer {token}",
-        "X-CSRF-Token": csrf_client._csrf_token,
+        "X-CSRF-Token": client._csrf_token,
     }
 
 
 @pytest.fixture
-def other_user_auth_headers(csrf_client, db_session):
+def other_user_auth_headers(client, db_session):
     # Register a different user
-    csrf_client.post("/api/v1/auth/register", json={
+    client.post("/api/v1/auth/register", json={
         "email": "other@example.com",
         "password": "OtherPass123!",
         "full_name": "Other User",
         "company_name": "Other Corp",
     })
-    response = csrf_client.post(
+    response = client.post(
         "/api/v1/auth/login",
         data={"username": "other@example.com", "password": "OtherPass123!"},
         headers={"Content-Type": "application/x-www-form-urlencoded"}
@@ -223,7 +287,7 @@ def other_user_auth_headers(csrf_client, db_session):
     token = response.json()["access_token"]
     return {
         "Authorization": f"Bearer {token}",
-        "X-CSRF-Token": csrf_client._csrf_token,
+        "X-CSRF-Token": client._csrf_token,
     }
 
 

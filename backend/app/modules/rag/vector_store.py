@@ -8,11 +8,13 @@ Addresses: Import-time provider failures, broken mocks, and partial index writes
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import os
 import shutil
 import tempfile
 import threading
+from pathlib import Path
 from typing import Any
 
 from app.core.config import settings
@@ -22,6 +24,7 @@ try:
 except ImportError:  # pragma: no cover - exercised only when optional provider is absent
     FAISS = None
 
+logger = logging.getLogger(__name__)
 _rag_index_lock = threading.Lock()
 
 
@@ -47,6 +50,53 @@ def _get_index_path(user_id: int | None = None) -> str:
     if user_id is not None:
         return os.path.join(settings.FAISS_INDEX_BASE_PATH, f"user_{user_id}")
     return settings.FAISS_INDEX_PATH
+
+
+def _compute_index_hash(index_dir: str) -> str:
+    """Compute SHA256 hex digest of the FAISS index file."""
+    index_file = Path(index_dir) / "index.faiss"
+    if not index_file.exists():
+        return ""
+    sha256 = hashlib.sha256()
+    with open(index_file, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            sha256.update(chunk)
+    return sha256.hexdigest()
+
+
+def _write_integrity_hash(index_dir: str) -> None:
+    """Compute and write SHA256 hash file for the FAISS index."""
+    digest = _compute_index_hash(index_dir)
+    if digest:
+        Path(index_dir, "index.sha256").write_text(digest)
+
+
+def _verify_index_integrity(index_dir: str) -> bool:
+    """Verify FAISS index integrity against stored SHA256 hash.
+
+    Returns True if the hash matches or no hash file exists (legacy index).
+    Logs a warning if the hash file is missing or the check fails.
+    """
+    hash_file = Path(index_dir, "index.sha256")
+    if not hash_file.exists():
+        logger.warning(
+            "FAISS index at %s has no integrity hash (index.sha256 missing). "
+            "The index will be loaded but tampering cannot be detected. "
+            "Re-save the index to enable integrity verification.",
+            index_dir,
+        )
+        return True
+
+    expected = hash_file.read_text().strip()
+    actual = _compute_index_hash(index_dir)
+    if actual != expected:
+        logger.error(
+            "FAISS index integrity check FAILED at %s. "
+            "The index may have been tampered with.",
+            index_dir,
+        )
+        return False
+    return True
 
 
 def create_vector_store(documents: list[Any], user_id: int | None = None) -> Any:
@@ -92,6 +142,8 @@ def create_vector_store(documents: list[Any], user_id: int | None = None) -> Any
                     allow_dangerous_deserialization=True,
                 )
 
+            _write_integrity_hash(index_path)
+
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
     return vector_store
@@ -113,6 +165,13 @@ def load_vector_store(user_id: int | None = None) -> Any:
             f"FAISS index not found at '{index_path}'. "
             "The RAG module requires regulatory documents to be ingested first. "
             "Please contact your administrator or check the documentation for setup instructions."
+        )
+
+    if not _verify_index_integrity(index_path):
+        raise RuntimeError(
+            f"FAISS index integrity check failed at '{index_path}'. "
+            "The index file may have been tampered with. "
+            "Restore the index from a trusted backup or reingest documents."
         )
 
     embeddings = get_embeddings()
@@ -154,3 +213,17 @@ def validate_embedding_consistency(user_id: int | None = None) -> None:
             )
     except Exception as exc:
         logger.warning("Could not validate embedding consistency: %s", exc)
+
+
+def validate_vector_store_security() -> None:
+    """Log a warning if existing FAISS indexes lack integrity verification."""
+    for candidate in (settings.FAISS_INDEX_PATH, settings.FAISS_INDEX_BASE_PATH):
+        index_path = Path(candidate)
+        if index_path.exists() and index_path.is_dir():
+            hash_file = index_path / "index.sha256"
+            if not hash_file.exists():
+                logger.warning(
+                    "FAISS index at %s has no integrity verification. "
+                    "Re-save the index to enable tamper detection.",
+                    index_path,
+                )
