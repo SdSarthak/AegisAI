@@ -97,5 +97,31 @@ class Settings(BaseSettings):
             )
         return v
 
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key(cls, v, info):
+        known_weak_secrets = {
+            "changeme",
+            "secret",
+            "your-secret-key",
+            "your-secret-key-here",
+            "change-me",
+            "change_me",
+            "insecure",
+            "password",
+            "test",
+        }
+        if v.strip().lower() in known_weak_secrets:
+            raise ValueError(
+                "SECRET_KEY is set to a well-known insecure default value. "
+                "Generate a strong secret with: openssl rand -hex 32"
+            )
+        if not info.data.get("DEBUG") and len(v) < 32:
+            raise ValueError(
+                "SECRET_KEY must be at least 32 characters in production mode. "
+                "Generate one with: openssl rand -hex 32"
+            )
+        return v
+
 
 settings = Settings()
