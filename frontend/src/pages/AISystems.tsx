@@ -355,13 +355,13 @@ export default function AISystems() {
               key={system.id}
               className="bg-white rounded-xl border border-gray-200 p-6"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-primary-50 rounded-lg">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-4 min-w-0 flex-1">
+                  <div className="p-3 bg-primary-50 rounded-lg shrink-0">
                     <Bot className="w-6 h-6 text-primary-600" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{system.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-gray-900 break-words">{system.name}</h3>
                     {system.description && (
                       <p className="text-gray-600 text-sm mt-1">{system.description}</p>
                     )}
