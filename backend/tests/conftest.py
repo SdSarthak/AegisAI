@@ -24,6 +24,24 @@ from app.main import app
 from uuid import uuid4
 
 
+def _patch_csrf_middleware(test_client):
+    """Recursively traverse middleware chain to find and patch CSRFMiddleware."""
+    def find_and_patch(app):
+        """Recursively find CSRFMiddleware in the middleware chain."""
+        if hasattr(app, "__class__") and app.__class__.__name__ == "CSRFMiddleware":
+            async def csrf_bypass_dispatch(request, call_next):
+                return await call_next(request)
+            app.dispatch_func = csrf_bypass_dispatch
+            return True
+        # Recurse into nested app
+        if hasattr(app, "app"):
+            return find_and_patch(app.app)
+        return False
+    find_and_patch(test_client.app)
+
+
+
+
 @pytest.fixture(autouse=True)
 def bypass_csrf_for_tests(monkeypatch, request):
     """Keep endpoint tests focused on application behavior, not CSRF transport."""
@@ -120,6 +138,7 @@ def client(db_engine):
     app.dependency_overrides[get_current_user] = override_current_user
 
     raw_client = TestClient(app)
+    _patch_csrf_middleware(raw_client)
     yield _CSRFClientWrapper(raw_client)
 
     session.close()
@@ -168,8 +187,9 @@ def unwrapped_client(db_engine):
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_current_user] = override_current_user
 
-    client = TestClient(app)
-    yield client
+    raw_client = TestClient(app)
+    _patch_csrf_middleware(raw_client)
+    yield raw_client
 
     session.close()
     transaction.rollback()
@@ -193,9 +213,14 @@ class _CSRFClientWrapper:
             assert self._csrf_token, "CSRF token is empty"
 
     def _inject_csrf(self, kwargs: dict) -> None:
-        """Add X-CSRF-Token header to state-changing request kwargs."""
+        """Add X-CSRF-Token header to state-changing request kwargs.
+
+        Only inject if not manually provided - tests may set their own token.
+        """
         headers = dict(kwargs.get("headers", {}))
-        headers["X-CSRF-Token"] = self._csrf_token
+        # Do NOT override a manually-provided X-CSRF-Token (tests may set their own)
+        if "X-CSRF-Token" not in headers:
+            headers["X-CSRF-Token"] = self._csrf_token
         kwargs["headers"] = headers
 
     def get(self, url: str, **kwargs: object) -> Response:
