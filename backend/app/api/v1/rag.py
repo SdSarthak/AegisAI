@@ -180,6 +180,7 @@ def _log_rag_audit(
     except Exception:
         db.rollback()
         logger.exception("Failed to write RAG audit log")
+        raise
 
 
 def _decision_reasoning(result: dict[str, Any]) -> str | None:
