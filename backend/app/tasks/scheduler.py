@@ -5,7 +5,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from sqlalchemy.orm import Session
@@ -55,12 +55,12 @@ def send_reassessment_reminders():
     """Send notifications for risk assessments expiring within 30 days."""
     db: Session = SessionLocal()
     try:
-        thirty_days = datetime.utcnow() + timedelta(days=30)
+        thirty_days = datetime.now(timezone.utc) + timedelta(days=30)
         expiring = (
             db.query(RiskAssessment)
             .filter(
                 RiskAssessment.valid_until <= thirty_days,
-                RiskAssessment.valid_until > datetime.utcnow(),
+                RiskAssessment.valid_until > datetime.now(timezone.utc),
             )
             .all()
         )
