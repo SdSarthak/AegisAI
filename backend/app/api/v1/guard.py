@@ -298,14 +298,41 @@ def scan_prompt(
         result = guard.guard(request.prompt)
 
         client_ip = http_request.client.host if http_request.client else None
-        background_tasks.add_task(
-            log_scan,
-            current_user.id,
-            request.prompt,
-            result,
-            client_ip,
-        )
-        response = ScanResponse(
+
+        log = _build_guard_scan_log(current_user.id, request.prompt, result, ip_address=client_ip)
+        db.add(log)
+        db.flush()
+
+        if log.decision == "block":
+            create_notification(
+                db=db,
+                user_id=current_user.id,
+                notification_type=NotificationType.GUARD_BLOCK.value,
+                title="Prompt blocked by LLM Guard",
+                message="A prompt was blocked because it matched high-risk guard rules.",
+                resource_type="guard_scan",
+                resource_id=log.id,
+            )
+            try:
+                deliver_webhook(
+                    db,
+                    current_user.id,
+                    "guard_block",
+                    {
+                        "decision": "block",
+                        "confidence": result["metadata"]["decision_reasoning"]["confidence"],
+                        "matched_patterns": result["metadata"]["regex_analysis"].get("matched_patterns", []),
+                        "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to trigger guard_block webhook delivery"
+                )
+
+        db.commit()
+
+        return ScanResponse(
             decision=result["decision"],
             confidence=result["metadata"]["decision_reasoning"]["confidence"],
             reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
@@ -316,27 +343,8 @@ def scan_prompt(
             ),
         )
 
-        if result["decision"] == "block":
-            try:
-                deliver_webhook(
-                    db,
-                    current_user.id,
-                    "guard_block",
-                    {
-                        "decision": "block",
-                        "confidence": response.confidence,
-                        "matched_patterns": response.matched_patterns,
-                        "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
-                    },
-                )
-            except Exception:
-                logger.exception(
-                    "Failed to trigger guard_block webhook delivery"
-                )
-
-        return response
-
     except Exception:
+        db.rollback()
         logger.exception("Guard scan failed")
 
         raise HTTPException(
