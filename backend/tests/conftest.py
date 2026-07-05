@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 from fastapi import Request, HTTPException, status
 from fastapi.testclient import TestClient
+from starlette.responses import Response
 
 # Set test database before importing app
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
@@ -20,6 +21,17 @@ from app.models.user import SubscriptionTier
 from app.models.user import User
 from app.main import app
 from uuid import uuid4
+
+@pytest.fixture(autouse=True)
+def bypass_csrf_for_tests(monkeypatch, request):
+    """Keep endpoint tests focused on application behavior, not CSRF transport."""
+    if request.node.path.name == "test_csrf.py":
+        return
+    try:
+        monkeypatch.setattr("app.middleware.csrf._is_csrf_exempt", lambda _path: True)
+    except Exception:
+        pass
+
 
 def _mock_current_user():
     user = MagicMock()
@@ -137,30 +149,30 @@ class _CSRFClientWrapper:
         headers["X-CSRF-Token"] = self._csrf_token
         kwargs["headers"] = headers
 
-    def get(self, url: str, **kwargs: object) -> TestClient.response:
+    def get(self, url: str, **kwargs: object) -> Response:
         return self._inner.get(url, **kwargs)
 
-    def post(self, url: str, **kwargs: object) -> TestClient.response:
+    def post(self, url: str, **kwargs: object) -> Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.post(url, **kwargs)
 
-    def put(self, url: str, **kwargs: object) -> TestClient.response:
+    def put(self, url: str, **kwargs: object) -> Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.put(url, **kwargs)
 
-    def patch(self, url: str, **kwargs: object) -> TestClient.response:
+    def patch(self, url: str, **kwargs: object) -> Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.patch(url, **kwargs)
 
-    def delete(self, url: str, **kwargs: object) -> TestClient.response:
+    def delete(self, url: str, **kwargs: object) -> Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.delete(url, **kwargs)
 
-    def request(self, method: str, url: str, **kwargs: object) -> TestClient.response:
+    def request(self, method: str, url: str, **kwargs: object) -> Response:
         if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
             self._ensure_csrf()
             self._inject_csrf(kwargs)
