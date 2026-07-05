@@ -1012,6 +1012,7 @@ def bulk_scan_prompts(
                     message="A prompt was blocked because it matched high-risk guard rules.",
                     resource_type="guard_scan",
                     resource_id=log.id,
+                    commit=False,
                 )
                 deliver_webhook(
                     db,
