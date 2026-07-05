@@ -12,9 +12,7 @@ Dependencies:
   - pydantic      : request/response schema validation
 """
 
-from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
-from threading import Lock
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
@@ -29,6 +27,7 @@ from app.core.security import (
     get_current_user,
 )
 from app.core.config import settings
+from app.core.rate_limit import DistributedRateLimiter
 from app.models.user import User
 from app.models.ai_system import AISystem, ComplianceStatus
 from app.models.document import Document
@@ -54,9 +53,8 @@ _AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS = 60
 _AUTH_REGISTER_RATE_LIMIT_REQUESTS = 3
 _AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS = 3600
 
-_auth_login_failures_by_key: dict[str, deque[datetime]] = defaultdict(deque)
-_auth_registration_attempts_by_ip: dict[str, deque[datetime]] = defaultdict(deque)
-_auth_rate_limit_lock = Lock()
+auth_login_rate_limiter = DistributedRateLimiter(failure_threshold=5, recovery_timeout=30)
+auth_register_rate_limiter = DistributedRateLimiter(failure_threshold=5, recovery_timeout=30)
 
 router = APIRouter()
 users_router = APIRouter()
@@ -77,60 +75,10 @@ def _get_request_ip(request: Request) -> str:
     return client.host if client and client.host else "unknown"
 
 
-def _prune_attempts(
-    attempts: deque[datetime],
-    window_seconds: int,
-    now: datetime,
-) -> None:
-    cutoff = now - timedelta(seconds=window_seconds)
-    while attempts and attempts[0] <= cutoff:
-        attempts.popleft()
-
-
-def _retry_after_seconds(
-    attempts: deque[datetime],
-    window_seconds: int,
-    now: datetime,
-) -> int:
-    if not attempts:
-        return window_seconds
-
-    oldest = attempts[0]
-    return max(1, int((window_seconds - (now - oldest).total_seconds()) + 0.999))
-
-
-def _is_rate_limited(
-    store: dict[str, deque[datetime]],
-    key: str,
-    limit: int,
-    window_seconds: int,
-) -> tuple[bool, int]:
-    now = datetime.now(timezone.utc)
-    with _auth_rate_limit_lock:
-        attempts = store[key]
-        _prune_attempts(attempts, window_seconds, now)
-        if len(attempts) >= limit:
-            return True, _retry_after_seconds(attempts, window_seconds, now)
-        return False, 0
-
-
-def _record_attempt(
-    store: dict[str, deque[datetime]],
-    key: str,
-    window_seconds: int,
-) -> None:
-    now = datetime.now(timezone.utc)
-    with _auth_rate_limit_lock:
-        attempts = store[key]
-        _prune_attempts(attempts, window_seconds, now)
-        attempts.append(now)
-
-
 def clear_auth_rate_limits() -> None:
-    """Reset in-memory auth rate limit state for tests."""
-    with _auth_rate_limit_lock:
-        _auth_login_failures_by_key.clear()
-        _auth_registration_attempts_by_ip.clear()
+    """Reset auth rate limit state for tests."""
+    auth_login_rate_limiter.clear_local_attempts()
+    auth_register_rate_limiter.clear_local_attempts()
 
 
 @router.post(
@@ -143,11 +91,11 @@ def register(
 ):
     """Register a new user account."""
     client_ip = _get_request_ip(request)
-    limited, retry_after = _is_rate_limited(
-        _auth_registration_attempts_by_ip,
-        client_ip,
-        _AUTH_REGISTER_RATE_LIMIT_REQUESTS,
-        _AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+    limited, retry_after = auth_register_rate_limiter.check_and_consume(
+        key=f"auth:register:{client_ip}",
+        limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
+        window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+        fail_closed=True,
     )
     if limited:
         raise HTTPException(
@@ -192,12 +140,6 @@ def register(
                 "message": "An error occurred during registration. Please try again."
             }
         )
-    finally:
-        _record_attempt(
-            _auth_registration_attempts_by_ip,
-            client_ip,
-            _AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
-        )
 
 
 @router.post("/login", response_model=Token)
@@ -208,12 +150,12 @@ def login(
 ):
     """Authenticate a user and return an access token."""
     client_ip = _get_request_ip(request)
-    login_key = f"{form_data.username.lower()}:{client_ip}"
-    limited, retry_after = _is_rate_limited(
-        _auth_login_failures_by_key,
-        login_key,
-        _AUTH_LOGIN_RATE_LIMIT_REQUESTS,
-        _AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+    login_key = f"auth:login:{form_data.username.lower()}:{client_ip}"
+    limited, retry_after = auth_login_rate_limiter.check_and_consume(
+        key=login_key,
+        limit=_AUTH_LOGIN_RATE_LIMIT_REQUESTS,
+        window_seconds=_AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+        fail_closed=True,
     )
     if limited:
         raise HTTPException(
@@ -235,11 +177,6 @@ def login(
     password_ok = verify_password(form_data.password, hashed)
 
     if not user or not user.is_active or not password_ok:
-        _record_attempt(
-            _auth_login_failures_by_key,
-            login_key,
-            _AUTH_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
-        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={

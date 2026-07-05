@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 from typing import List
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
@@ -47,7 +48,7 @@ class Settings(BaseSettings):
     GUARD_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
     # Rate Limiting & Outage Policies
-    RATE_LIMIT_FAIL_CLOSED: bool = False
+    RATE_LIMIT_FAIL_CLOSED: bool = True
     BADGE_RATE_LIMIT_REQUESTS: int = 5
     BADGE_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
@@ -85,6 +86,15 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = True
         extra = "ignore"
+
+    @field_validator("REDIS_URL")
+    @classmethod
+    def validate_redis_url(cls, v, info):
+        if not info.data.get("DEBUG") and not v:
+            raise ValueError(
+                "REDIS_URL is required in production mode. Set REDIS_URL in your .env file."
+            )
+        return v
 
 
 settings = Settings()
