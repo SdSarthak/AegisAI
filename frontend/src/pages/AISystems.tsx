@@ -18,6 +18,14 @@ interface AISystem {
   updated_at: string
 }
 
+const RISK_CHIPS: { value: string; label: string }[] = [
+  { value: '', label: 'All' },
+  { value: 'minimal', label: 'Minimal Risk' },
+  { value: 'limited', label: 'Limited Risk' },
+  { value: 'high', label: 'High Risk' },
+  { value: 'unacceptable', label: 'Unacceptable Risk' },
+]
+
 export default function AISystems() {
   const queryClient = useQueryClient()
   const [showModal, setShowModal] = useState(false)
@@ -185,6 +193,31 @@ export default function AISystems() {
             Add AI System
           </button>
         </div>
+      </div>
+
+      {/* Quick Filter Chips (Risk Level) */}
+      <div className="flex flex-wrap gap-2">
+        {RISK_CHIPS.map((chip) => {
+          const isActive = riskFilter === chip.value
+          return (
+            <button
+              key={chip.value || 'all'}
+              type="button"
+              onClick={() => {
+                setRiskFilter(chip.value)
+                setCurrentPage(1)
+              }}
+              aria-pressed={isActive}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                isActive
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-primary-300 hover:text-primary-700'
+              }`}
+            >
+              {chip.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Search and Filters */}
