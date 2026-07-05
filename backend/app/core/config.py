@@ -1,19 +1,19 @@
 from pydantic_settings import BaseSettings
-from typing import List
+from typing import List, Optional
 
 
 class Settings(BaseSettings):
     DOCUMENT_SHARE_EXPIRE_DAYS: int = 7
     # App
     APP_NAME: str = "AegisAI"
-    DEBUG: bool = False
+    DEBUG: bool = True
     API_V1_PREFIX: str = "/api/v1"
 
     # Database
-    DATABASE_URL: str
+    DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/aegisai_db"
 
     # JWT
-    SECRET_KEY: str
+    SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
@@ -33,6 +33,14 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "http://localhost:11434/v1"
     LLM_MODEL: str = "llama3.2"
     LLM_TIMEOUT: float = 30.0
+    COMPLIANCE_MONITOR_CRON: str = "0 2 * * *"
+
+     # Shared infrastructure
+    REDIS_URL: str = ""
+
+    # Module 1: AI System bulk import
+    AI_SYSTEM_BULK_IMPORT_MAX_BYTES: int = 5 * 1024 * 1024
+    AI_SYSTEM_BULK_IMPORT_MAX_ROWS: int = 5000
 
     # Module 2: LLM Guard
     GUARD_SANITIZATION_LEVEL: str = "medium"

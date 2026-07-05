@@ -746,12 +746,25 @@ def export_guard_scan_logs(
 
 @router.get("/stats", response_model=GuardStatsResponse)
 def get_guard_stats(
+    user_id: Optional[int] = Query(None),
     window: str = Query("7d", pattern="^(24h|7d|30d|all)$"),
-    user_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return Guard scan statistics for a time window and user."""
+    """Return Guard scan statistics for a time window and user.
+
+    Args:
+        window: Time window to aggregate over (24h, 7d, 30d, or all).
+        user_id: Optional user ID to query; defaults to the current user.
+        db: Database session used to aggregate scan statistics.
+        current_user: Authenticated user requesting the statistics.
+
+    Returns:
+        GuardStatsResponse containing decision, detection, and trend statistics.
+
+    Raises:
+        HTTPException: If the caller is not allowed to query another user's stats.
+    """
     target_user_id = user_id if user_id is not None else current_user.id
     is_admin = getattr(current_user, "role", None) == "admin"
 

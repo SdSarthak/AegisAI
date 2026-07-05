@@ -1,5 +1,6 @@
 """Shared pytest fixtures for all tests."""
 
+import httpx
 import os
 import pytest
 from unittest.mock import MagicMock
@@ -18,7 +19,6 @@ os.environ["REDIS_URL"] = ""
 from app.core.database import Base
 from app.core.security import decode_token, get_current_user
 from app.models.user import SubscriptionTier
-from app.models.user import User
 from app.main import app
 from uuid import uuid4
 
@@ -32,11 +32,11 @@ def bypass_csrf_for_tests(monkeypatch, request):
 
 def _mock_current_user():
     user = MagicMock()
-    user.id = 1                                # ✅ integer
+    user.id = 1
     user.email = "test@example.com"
-    user.full_name = "Test User"               # ✅ string
+    user.full_name = "Test User"
     user.company_name = "Test Company"
-    user.subscription_tier = SubscriptionTier.FREE  # ✅ proper enum
+    user.subscription_tier = SubscriptionTier.FREE
     user.is_active = True
     user.is_verified = True
     return user
@@ -110,6 +110,7 @@ def client(db_engine):
                 detail="Invalid token"
             )
 
+        from app.models.user import User
         user = session.query(User).filter(User.id == int(user_id)).first()
         return user or _mock_current_user()
 
@@ -195,30 +196,30 @@ class _CSRFClientWrapper:
         headers["X-CSRF-Token"] = self._csrf_token
         kwargs["headers"] = headers
 
-    def get(self, url: str, **kwargs: object) -> Response:
+    def get(self, url: str, **kwargs: object) -> httpx.Response:
         return self._inner.get(url, **kwargs)
 
-    def post(self, url: str, **kwargs: object) -> Response:
+    def post(self, url: str, **kwargs: object) -> httpx.Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.post(url, **kwargs)
 
-    def put(self, url: str, **kwargs: object) -> Response:
+    def put(self, url: str, **kwargs: object) -> httpx.Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.put(url, **kwargs)
 
-    def patch(self, url: str, **kwargs: object) -> Response:
+    def patch(self, url: str, **kwargs: object) -> httpx.Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.patch(url, **kwargs)
 
-    def delete(self, url: str, **kwargs: object) -> Response:
+    def delete(self, url: str, **kwargs: object) -> httpx.Response:
         self._ensure_csrf()
         self._inject_csrf(kwargs)
         return self._inner.delete(url, **kwargs)
 
-    def request(self, method: str, url: str, **kwargs: object) -> Response:
+    def request(self, method: str, url: str, **kwargs: object) -> httpx.Response:
         if method.upper() in ("POST", "PUT", "PATCH", "DELETE"):
             self._ensure_csrf()
             self._inject_csrf(kwargs)
@@ -259,6 +260,7 @@ def auth_headers(client):
     response = client.post(
         "/api/v1/auth/login",
         data={"username": email, "password": password},
+        headers={"Content-Type": "application/x-www-form-urlencoded"}
     )
     token = response.json()["access_token"]
 
@@ -287,6 +289,34 @@ def other_user_auth_headers(client, db_session):
         "Authorization": f"Bearer {token}",
         "X-CSRF-Token": client._csrf_token,
     }
+
+
+@pytest.fixture
+def test_user(db_session) -> MagicMock:
+    """Create a mock test user to avoid circular model dependencies."""
+    user = MagicMock()
+    user.id = 1
+    user.email = "test@example.com"
+    user.full_name = "Test User"
+    user.company_name = "Test Company"
+    user.subscription_tier = SubscriptionTier.FREE
+    user.is_active = True
+    user.is_verified = True
+    return user
+
+
+@pytest.fixture
+def other_user(db_session) -> MagicMock:
+    """Create another mock test user to avoid circular model dependencies."""
+    user = MagicMock()
+    user.id = 2
+    user.email = "other@example.com"
+    user.full_name = "Other User"
+    user.company_name = "Other Company"
+    user.subscription_tier = SubscriptionTier.FREE
+    user.is_active = True
+    user.is_verified = True
+    return user
 
 
 @pytest.fixture(autouse=True)

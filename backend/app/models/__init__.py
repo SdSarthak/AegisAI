@@ -9,6 +9,7 @@ from app.models.guard_scan_log import GuardScanLog
 from app.models.webhook import WebhookConfig
 from app.models.notification import Notification
 from app.models.compliance_snapshot import ComplianceSnapshot
+from app.models.compliance_drift_event import ComplianceDriftEvent
 
 __all__ = [
     "User",
@@ -25,4 +26,5 @@ __all__ = [
     "ComplianceSnapshot",
     "Notification",
     "WebhookConfig",
+    "ComplianceDriftEvent"
 ]
