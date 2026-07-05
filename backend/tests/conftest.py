@@ -180,7 +180,11 @@ class _CSRFClientWrapper:
 
     def __init__(self, inner: TestClient) -> None:
         self._inner = inner
-        self._csrf_token: str | None = None
+
+    # Class-level token so all wrapper instances share the same token.
+    # This allows auth_headers to capture the token on one instance and
+    # have it visible on the client used in the test.
+    _csrf_token: str | None = None
 
     def _ensure_csrf(self) -> None:
         """Fetch a CSRF token if we do not have one yet."""
@@ -191,12 +195,21 @@ class _CSRFClientWrapper:
             assert self._csrf_token, "CSRF token is empty"
 
     def _inject_csrf(self, kwargs: dict) -> None:
-        """Add X-CSRF-Token header to state-changing request kwargs."""
+        """Add X-CSRF-Token header if not already provided.
+
+        This allows tests that manually fetch and pass a token (e.g. via
+        client.get('/api/v1/auth/csrf-token')) to use that token without
+        it being overwritten by the wrapper's cached token.
+        """
         headers = dict(kwargs.get("headers", {}))
-        headers["X-CSRF-Token"] = self._csrf_token
+        if "X-CSRF-Token" not in headers:
+            headers["X-CSRF-Token"] = self._csrf_token
         kwargs["headers"] = headers
 
     def get(self, url: str, **kwargs: object) -> Response:
+        # Do NOT update _csrf_token here. auth_headers captures _csrf_token
+        # during fixture setup; tests that manually call client.get() expect
+        # that captured token to remain valid throughout the test.
         return self._inner.get(url, **kwargs)
 
     def post(self, url: str, **kwargs: object) -> Response:
