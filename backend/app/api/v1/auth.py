@@ -252,6 +252,7 @@ def login(
     access_token = create_access_token(
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES),
+        token_version=user.token_version,
     )
 
     return {"access_token": access_token, "token_type": "bearer"}
@@ -296,6 +297,7 @@ def change_password(
         )
 
     current_user.hashed_password = get_password_hash(payload.new_password)
+    current_user.token_version += 1
     current_user = db.merge(current_user)
     db.commit()
     return {"message": "Password updated successfully"}

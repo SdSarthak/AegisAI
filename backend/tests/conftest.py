@@ -39,6 +39,7 @@ def _mock_current_user():
     user.subscription_tier = SubscriptionTier.FREE  # ✅ proper enum
     user.is_active = True
     user.is_verified = True
+    user.token_version = 0
     return user
 
 def _mock_other_user():
@@ -50,6 +51,7 @@ def _mock_other_user():
     user.subscription_tier = SubscriptionTier.FREE  # ✅ proper enum
     user.is_active = True
     user.is_verified = True
+    user.token_version = 0
     return user
 
 @pytest.fixture(scope="session")
@@ -297,7 +299,11 @@ def clear_guard_rate_limits():
     # 1. Clear local memory
     guard_scan_rate_limiter.clear_local_attempts()
     
-    # 2. Clear Redis
+    # 2. Reset circuit breaker state to prevent test pollution
+    guard_scan_rate_limiter.cb_state = "CLOSED"
+    guard_scan_rate_limiter.consecutive_failures = 0
+    
+    # 3. Clear Redis
     redis_client = guard_scan_rate_limiter._get_redis_client()
     if redis_client is not None:
         redis_client.flushdb()
@@ -306,6 +312,8 @@ def clear_guard_rate_limits():
     
     # Clean up after the test completes
     guard_scan_rate_limiter.clear_local_attempts()
+    guard_scan_rate_limiter.cb_state = "CLOSED"
+    guard_scan_rate_limiter.consecutive_failures = 0
     if redis_client is not None:
         redis_client.flushdb()
 
@@ -314,7 +322,12 @@ def clear_guard_rate_limits():
 def clear_auth_rate_limits():
     """Keep in-memory auth rate limits isolated between tests."""
     from app.api.v1.auth import clear_auth_rate_limits as reset_auth_rate_limits
+    from app.api.v1.auth import auth_login_rate_limiter, auth_register_rate_limiter
 
     reset_auth_rate_limits()
+    auth_login_rate_limiter.cb_state = "CLOSED"
+    auth_login_rate_limiter.consecutive_failures = 0
+    auth_register_rate_limiter.cb_state = "CLOSED"
+    auth_register_rate_limiter.consecutive_failures = 0
     yield
     reset_auth_rate_limits()
