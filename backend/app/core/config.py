@@ -5,6 +5,7 @@ from pydantic import field_validator
 
 class Settings(BaseSettings):
     DOCUMENT_SHARE_EXPIRE_DAYS: int = 7
+    DOCUMENT_SHARE_SECRET_KEY: str = ""
     # App
     APP_NAME: str = "AegisAI"
     DEBUG: bool = False
