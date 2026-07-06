@@ -25,7 +25,7 @@ def send_email(
     Returns True if sent successfully, False otherwise.
     """
     if not settings.SMTP_ENABLED:
-        logger.info("SMTP disabled — skipping email to %s: %s", to_email, subject)
+        logger.info("SMTP disabled - skipping email to %s: %s", to_email, subject)
         return False
 
     try:
@@ -53,13 +53,13 @@ def send_email(
 
 def build_deadline_alert_email(system_name: str, deadline_date: str, days_remaining: int) -> dict:
     """Build HTML and text email for compliance deadline alerts."""
-    subject = f"⚠️ Compliance Deadline Alert: {system_name} ({days_remaining} days remaining)"
+    subject = f"Compliance Deadline Alert: {system_name} ({days_remaining} days remaining)"
 
     html_body = f"""
     <html>
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: #1a1a2e; color: #e2e8f0; padding: 24px; border-radius: 8px;">
-            <h2 style="color: #f59e0b;">⚠️ Compliance Deadline Alert</h2>
+            <h2 style="color: #f59e0b;">Compliance Deadline Alert</h2>
             <p>Your AI system <strong>{system_name}</strong> has a compliance deadline approaching.</p>
             <div style="background: #2d2d44; padding: 16px; border-radius: 6px; margin: 16px 0;">
                 <p><strong>Deadline:</strong> {deadline_date}</p>
@@ -88,13 +88,13 @@ def build_deadline_alert_email(system_name: str, deadline_date: str, days_remain
 
 def build_reassessment_email(system_name: str, expiry_date: str) -> dict:
     """Build HTML and text email for risk reassessment reminders."""
-    subject = f"🔄 Risk Reassessment Due: {system_name}"
+    subject = f"Risk Reassessment Due: {system_name}"
 
     html_body = f"""
     <html>
     <body style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
         <div style="background: #1a1a2e; color: #e2e8f0; padding: 24px; border-radius: 8px;">
-            <h2 style="color: #6366f1;">🔄 Risk Reassessment Reminder</h2>
+            <h2 style="color: #6366f1;">Risk Reassessment Reminder</h2>
             <p>The risk assessment for your AI system <strong>{system_name}</strong>
                is expiring soon.</p>
             <div style="background: #2d2d44; padding: 16px; border-radius: 6px; margin: 16px 0;">
