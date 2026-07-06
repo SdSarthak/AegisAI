@@ -91,7 +91,7 @@ def register(
 ):
     """Register a new user account."""
     client_ip = _get_request_ip(request)
-    limited, retry_after = auth_register_rate_limiter.check_and_consume(
+    limited, retry_after = auth_register_rate_limiter.check(
         key=f"auth:register:{client_ip}",
         limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
         window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
@@ -129,10 +129,21 @@ def register(
         db.refresh(user)
         return user
     except HTTPException:
+        # Record the failed registration attempt so repeated abuse is rate-limited
+        auth_register_rate_limiter.record_attempt(
+            key=f"auth:register:{client_ip}",
+            limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
+            window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+        )
         raise
     except Exception:
         db.rollback()
-        # Generic database error handler
+        # Record the failed registration attempt so repeated abuse is rate-limited
+        auth_register_rate_limiter.record_attempt(
+            key=f"auth:register:{client_ip}",
+            limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
+            window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
