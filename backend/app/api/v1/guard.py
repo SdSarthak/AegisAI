@@ -831,6 +831,7 @@ def get_guard_stats(
     logs_with_patterns = (
         db.query(GuardScanLog.matched_patterns)
         .filter(*base_filters)
+        .limit(10000)
         .all()
     )
 
