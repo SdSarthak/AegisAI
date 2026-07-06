@@ -180,6 +180,7 @@ def _log_rag_audit(
     except Exception:
         db.rollback()
         logger.exception("Failed to write RAG audit log")
+        raise
 
 
 def _decision_reasoning(result: dict[str, Any]) -> str | None:
@@ -386,6 +387,14 @@ def ingest_documents(
             dest = os.path.join(storage_dir, filename)
             with open(dest, "wb") as buf:
                 shutil.copyfileobj(upload.file, buf)
+            file_size_bytes = os.path.getsize(dest)
+            if file_size_bytes == 0:
+                if os.path.exists(dest):
+                    os.remove(dest)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File {upload.filename} is empty (0 bytes).",
+                )
             saved_paths.append(dest)
             pending_documents.append(
                 RAGDocument(
@@ -393,12 +402,18 @@ def ingest_documents(
                     original_filename=os.path.basename(upload.filename),
                     storage_path=dest,
                     content_type=upload.content_type,
-                    file_size_bytes=os.path.getsize(dest),
+                    file_size_bytes=file_size_bytes,
                     uploaded_by_id=_current_user_id(current_user),
                 )
             )
 
-        chunks = _valid_text_chunks(saved_paths)
+        try:
+            chunks = _valid_text_chunks(saved_paths)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
 
         if not chunks:
             raise HTTPException(
@@ -590,8 +605,9 @@ def query_knowledge_base(
         latency_ms = (time.monotonic() - t_start) * 1000
 
         source_docs = result.get("source_documents", [])
+        from app.modules.rag.retrieval_chain import _build_source_citation
         sources = result.get("cached_sources") or [
-            dict(getattr(doc, "metadata", {}) or {}) for doc in source_docs
+            _build_source_citation(doc) for doc in source_docs
         ]
         source_labels = [str(source.get("source", "")) for source in sources]
         answer = str(result.get("result", ""))

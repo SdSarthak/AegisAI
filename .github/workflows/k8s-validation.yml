@@ -1,26 +1,27 @@
 name: Kubernetes Validation
 
 on:
-  pull_request:
-    branches: [main]
-    paths:
-      - "infra/**/*.yaml"
-      - "infra/**/*.yml"
-      - ".github/workflows/kubernetes-validation.yml"
   push:
     branches: [main, dev]
     paths:
       - "infra/**/*.yaml"
       - "infra/**/*.yml"
-      - ".github/workflows/kubernetes-validation.yml"
+      - ".github/workflows/k8s-validation.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "infra/**/*.yaml"
+      - "infra/**/*.yml"
+      - ".github/workflows/k8s-validation.yml"
 
 jobs:
-  validate:
+  validate-k8s:
     name: Validate Kubernetes Manifests
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Install YAML parser
         run: python -m pip install PyYAML

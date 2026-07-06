@@ -158,7 +158,7 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: s
         ml_confidence=intent_analysis.get("confidence", 0.0),
         combined_score=decision_reasoning.get("confidence", 0.0),
         prompt_length=len(prompt),
-        scanned_at=datetime.utcnow(),
+        scanned_at=datetime.now(timezone.utc),
         ip_address=ip_address,
     )
 
@@ -298,14 +298,41 @@ def scan_prompt(
         result = guard.guard(request.prompt)
 
         client_ip = http_request.client.host if http_request.client else None
-        background_tasks.add_task(
-            log_scan,
-            current_user.id,
-            request.prompt,
-            result,
-            client_ip,
-        )
-        response = ScanResponse(
+
+        log = _build_guard_scan_log(current_user.id, request.prompt, result, ip_address=client_ip)
+        db.add(log)
+        db.flush()
+
+        if log.decision == "block":
+            create_notification(
+                db=db,
+                user_id=current_user.id,
+                notification_type=NotificationType.GUARD_BLOCK.value,
+                title="Prompt blocked by LLM Guard",
+                message="A prompt was blocked because it matched high-risk guard rules.",
+                resource_type="guard_scan",
+                resource_id=log.id,
+            )
+            try:
+                deliver_webhook(
+                    db,
+                    current_user.id,
+                    "guard_block",
+                    {
+                        "decision": "block",
+                        "confidence": result["metadata"]["decision_reasoning"]["confidence"],
+                        "matched_patterns": result["metadata"]["regex_analysis"].get("matched_patterns", []),
+                        "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to trigger guard_block webhook delivery"
+                )
+
+        db.commit()
+
+        return ScanResponse(
             decision=result["decision"],
             confidence=result["metadata"]["decision_reasoning"]["confidence"],
             reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
@@ -316,29 +343,8 @@ def scan_prompt(
             ),
         )
 
-        if result["decision"] == "block":
-            try:
-                background_tasks.add_task(
-                    deliver_webhook,
-                    db,
-                    current_user.id,
-                    "guard_block",
-                    {
-                        "decision": "block",
-                        "confidence": response.confidence,
-                        "matched_patterns": response.matched_patterns,
-                        "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
-                    },
-                    background_tasks,
-                )
-            except Exception:
-                logger.exception(
-                    "Failed to trigger guard_block webhook delivery"
-                )
-
-        return response
-
     except Exception:
+        db.rollback()
         logger.exception("Guard scan failed")
 
         raise HTTPException(
@@ -763,7 +769,7 @@ def get_guard_stats(
             detail="You do not have permission to query stats for another user.",
         )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if window == "24h":
         start_date = now - timedelta(hours=24)
     elif window == "7d":
@@ -1006,9 +1012,9 @@ def bulk_scan_prompts(
                     message="A prompt was blocked because it matched high-risk guard rules.",
                     resource_type="guard_scan",
                     resource_id=log.id,
+                    commit=False,
                 )
-                background_tasks.add_task(
-                    deliver_webhook,
+                deliver_webhook(
                     db,
                     current_user.id,
                     "guard_block",
@@ -1018,7 +1024,6 @@ def bulk_scan_prompts(
                         "matched_patterns": result["metadata"]["regex_analysis"].get("matched_patterns", []),
                         "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(),
                     },
-                    background_tasks,
                 )
 
             results.append(

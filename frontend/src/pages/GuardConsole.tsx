@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react'
+import { formatRelativeTime } from '../utils/date'
 import {
   Activity,
   AlertCircle,
@@ -279,8 +280,8 @@ export default function GuardConsole() {
               <div>
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Scan result</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Scanned {new Date(scannedAt).toLocaleString()}
-                </p>
+  Scanned {formatRelativeTime(new Date(scannedAt))}
+</p>
               </div>
 
               <div className="flex items-center gap-2">

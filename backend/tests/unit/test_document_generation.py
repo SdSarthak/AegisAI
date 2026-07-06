@@ -13,6 +13,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key")
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.conftest import _CSRFClientWrapper
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -175,7 +176,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_current_user
 
-        client = TestClient(app)
+        client = _CSRFClientWrapper(TestClient(app))
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -234,7 +235,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_current_user
 
-        client = TestClient(app)
+        client = _CSRFClientWrapper(TestClient(app))
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -295,7 +296,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_current_user
 
-        client = TestClient(app)
+        client = _CSRFClientWrapper(TestClient(app))
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -355,7 +356,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_current_user
 
-        client = TestClient(app)
+        client = _CSRFClientWrapper(TestClient(app))
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -390,7 +391,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_current_user
 
-        client = TestClient(app)
+        client = _CSRFClientWrapper(TestClient(app))
         response = client.post(
             "/api/v1/documents/generate",
             json={
@@ -426,7 +427,7 @@ class TestDocumentGeneration:
         app.dependency_overrides[get_db] = override_get_db
         app.dependency_overrides[get_current_user] = override_current_user
 
-        client = TestClient(app)
+        client = _CSRFClientWrapper(TestClient(app))
 
         # Generate all three template types
         template_types = [

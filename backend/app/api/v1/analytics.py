@@ -21,6 +21,7 @@ from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
 from app.models.compliance_snapshot import ComplianceSnapshot
+from app.models.document import Document
 from sqlalchemy import func
 from datetime import datetime, timedelta
 from typing import Optional
@@ -104,6 +105,16 @@ def get_analytics_summary(
         or 0
     )
 
+    # Systems with zero associated documents ("Documents Missing" widget stat).
+    documents_missing = (
+        db.query(func.count(AISystem.id))
+        .outerjoin(Document, Document.ai_system_id == AISystem.id)
+        .filter(AISystem.owner_id == current_user.id)
+        .group_by(AISystem.id)
+        .having(func.count(Document.id) == 0)
+        .count()
+    )
+
     counts = {risk.value: 0 for risk in RiskLevel}
     for risk_level, count in risk_rows:
         if risk_level:
@@ -129,7 +140,38 @@ def get_analytics_summary(
         "average_compliance_score": average_compliance_score,
         "counts": counts,
         "compliance_statuses": compliance_statuses,
+        # Flat summary consumed by the dashboard's Compliance Progress
+        # Summary Widget (issue #1341).
+        "widget_summary": {
+            "total": int(total_systems),
+            "compliant": compliance_statuses.get("compliant", 0),
+            "pending_review": compliance_statuses.get("under_review", 0),
+            "high_risk": counts.get("high", 0),
+            "documents_missing": int(documents_missing),
+        },
     }
+
+
+@router.get("/system-risk")
+def get_system_risk(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return per-system risk scores for the current user."""
+    systems = (
+        db.query(AISystem.id, AISystem.name, AISystem.compliance_score, AISystem.risk_level)
+        .filter(AISystem.owner_id == current_user.id)
+        .all()
+    )
+    return [
+        {
+            "id": system.id,
+            "name": system.name,
+            "risk_score": system.compliance_score if system.compliance_score is not None else 0,
+            "risk_level": system.risk_level.value if system.risk_level else "unknown",
+        }
+        for system in systems
+    ]
 
 
 @router.get("/audit-logs", response_model=PaginatedResponse[GuardAuditLogResponse])

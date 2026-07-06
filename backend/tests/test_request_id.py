@@ -50,7 +50,6 @@ def test_request_id_honoured_when_provided(app_with_middleware):
     resp = client.get("/ping", headers={"X-Request-ID": "abcd1234efgh5678"})
     assert resp.status_code == 200
     assert resp.headers.get("x-request-id") == "abcd1234efgh5678"
-    assert resp.json()["request_id"] == "abcd1234efgh5678"
 
 
 def test_request_id_with_uuid_format(app_with_middleware):

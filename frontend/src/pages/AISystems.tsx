@@ -2,7 +2,6 @@ import React, { useState } from 'react'
 import {
  useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
-import { useAuthStore } from '../stores/authStore'
 import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Download } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -17,6 +16,14 @@ interface AISystem {
   compliance_score: number
   updated_at: string
 }
+
+const RISK_CHIPS: { value: string; label: string }[] = [
+  { value: '', label: 'All' },
+  { value: 'minimal', label: 'Minimal Risk' },
+  { value: 'limited', label: 'Limited Risk' },
+  { value: 'high', label: 'High Risk' },
+  { value: 'unacceptable', label: 'Unacceptable Risk' },
+]
 
 export default function AISystems() {
   const queryClient = useQueryClient()
@@ -42,11 +49,7 @@ export default function AISystems() {
       // Guarantee the loading state is visible for at least 1 second
       const minDelay = new Promise((r) => setTimeout(r, 1000))
       const fetchExport = async () => {
-        const token = useAuthStore.getState().token
-        const response = await fetch('/api/v1/ai-systems/export', {
-          headers: { Authorization: `Bearer ${token}` },
-        })
-        return response.blob()
+        return aiSystemsApi.exportCsv()
       }
       const [blob] = await Promise.all([fetchExport(), minDelay])
       const url = URL.createObjectURL(blob)
@@ -185,6 +188,31 @@ export default function AISystems() {
             Add AI System
           </button>
         </div>
+      </div>
+
+      {/* Quick Filter Chips (Risk Level) */}
+      <div className="flex flex-wrap gap-2">
+        {RISK_CHIPS.map((chip) => {
+          const isActive = riskFilter === chip.value
+          return (
+            <button
+              key={chip.value || 'all'}
+              type="button"
+              onClick={() => {
+                setRiskFilter(chip.value)
+                setCurrentPage(1)
+              }}
+              aria-pressed={isActive}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                isActive
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-primary-300 hover:text-primary-700'
+              }`}
+            >
+              {chip.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Search and Filters */}
@@ -355,13 +383,13 @@ export default function AISystems() {
               key={system.id}
               className="bg-white rounded-xl border border-gray-200 p-6"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-primary-50 rounded-lg">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-4 min-w-0 flex-1">
+                  <div className="p-3 bg-primary-50 rounded-lg shrink-0">
                     <Bot className="w-6 h-6 text-primary-600" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{system.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-gray-900 break-words">{system.name}</h3>
                     {system.description && (
                       <p className="text-gray-600 text-sm mt-1">{system.description}</p>
                     )}

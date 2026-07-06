@@ -12,13 +12,19 @@ Run once:
 from __future__ import annotations
 
 import logging
-import os
 from pathlib import Path
 
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_community.vectorstores import FAISS
-from langchain_openai import OpenAIEmbeddings
+
+from app.core.config import settings
+from app.modules.rag.embeddings import get_embeddings
+
+from app.modules.rag.vector_store import (
+    _verify_index_integrity,
+    _write_integrity_hash,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +33,8 @@ NIST_PDF_PATH = Path(__file__).parent.parent.parent.parent / (
     "data/regulatory_docs/NIST_AI_RMF_1.0.pdf"
 )
 
-# FAISS index path same as used by the existing RAG module
-FAISS_INDEX_PATH = Path(__file__).parent.parent.parent.parent / (
-    "data/faiss_index"
-)
+# FAISS index path from settings
+FAISS_INDEX_PATH = Path(settings.FAISS_INDEX_PATH)
 
 # Chunk settings keep consistent with existing ingestion
 CHUNK_SIZE = 1000
@@ -70,25 +74,19 @@ def ingest_nist_ai_rmf() -> None:
         if "framework" not in chunk.metadata:
             chunk.metadata["framework"] = "NIST AI RMF 1.0"
 
-    # Load embeddings — validate key presence first
-    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
-    if not api_key:
-        raise RuntimeError(
-            "OPENAI_API_KEY environment variable is not set. "
-            "Set it to a valid OpenAI API key before running NIST ingestion."
-        )
-
+    # Load embeddings using the shared factory
     try:
-        embeddings = OpenAIEmbeddings(openai_api_key=api_key)
-    except Exception as exc:  # noqa: BLE001
+        embeddings = get_embeddings()
+    except Exception as exc:
         raise RuntimeError(
-            f"Failed to initialise OpenAI embeddings (check OPENAI_API_KEY): {exc}"
+            f"Failed to initialise embeddings: {exc}"
         ) from exc
 
     # Load existing FAISS index and merge, or create new if none exists
     try:
         if FAISS_INDEX_PATH.exists():
             logger.info("Loading existing FAISS index from %s", FAISS_INDEX_PATH)
+            _verify_index_integrity(str(FAISS_INDEX_PATH))
             vector_store = FAISS.load_local(
                 str(FAISS_INDEX_PATH),
                 embeddings,
@@ -109,6 +107,7 @@ def ingest_nist_ai_rmf() -> None:
     try:
         FAISS_INDEX_PATH.mkdir(parents=True, exist_ok=True)
         vector_store.save_local(str(FAISS_INDEX_PATH))
+        _write_integrity_hash(str(FAISS_INDEX_PATH))
         logger.info(
             "FAISS index saved to %s with NIST AI RMF chunks", FAISS_INDEX_PATH
         )
