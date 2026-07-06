@@ -722,14 +722,16 @@ def query_knowledge_base(
     except HTTPException:
         raise
     except FileNotFoundError as exc:
+        logger.error("RAG file not found: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
+            detail="The AI analysis service is temporarily unavailable. Please try again later.",
         )
     except Exception as exc:
+        logger.error("RAG query error: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"RAG module error: {str(exc)}",
+            detail="The AI analysis service is temporarily unavailable. Please try again later.",
         )
 
 
