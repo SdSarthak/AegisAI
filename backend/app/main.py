@@ -63,6 +63,23 @@ async def lifespan(app: FastAPI):
     app.state.registry = init_registry(builtin_dir, custom_dir)
     logger.info("Regulation registry initialized.")
 
+    # Validate and pre-load FAISS index on startup for improved performance
+    try:
+        from app.modules.rag.vector_store import (
+            check_index_exists,
+            validate_embedding_consistency,
+            validate_vector_store_security,
+        )
+        if check_index_exists():
+            logger.info("FAISS index found. Validating integrity and embedding consistency...")
+            validate_embedding_consistency()
+            validate_vector_store_security()
+            logger.info("FAISS index validated and ready to serve queries.")
+        else:
+            logger.info("No FAISS index found. RAG module will require document ingestion on first use.")
+    except Exception:
+        logger.warning("Failed to validate FAISS index during startup", exc_info=True)
+
     # Initialize background scheduler for periodic jobs
     scheduler.add_job(
         snapshot_compliance_scores,
