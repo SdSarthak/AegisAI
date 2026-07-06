@@ -40,8 +40,6 @@ def _patch_csrf_middleware(test_client):
     find_and_patch(test_client.app)
 
 
-
-
 @pytest.fixture(autouse=True)
 def bypass_csrf_for_tests(monkeypatch, request):
     """Keep endpoint tests focused on application behavior, not CSRF transport."""
@@ -321,21 +319,21 @@ def other_user_auth_headers(client, db_session):
 def clear_guard_rate_limits():
     """Keep in-memory and Redis guard rate limits isolated between tests."""
     from app.core.rate_limit import guard_scan_rate_limiter
-    
+
     # 1. Clear local memory
     guard_scan_rate_limiter.clear_local_attempts()
-    
+
     # 2. Reset circuit breaker state to prevent test pollution
     guard_scan_rate_limiter.cb_state = "CLOSED"
     guard_scan_rate_limiter.consecutive_failures = 0
-    
+
     # 3. Clear Redis
     redis_client = guard_scan_rate_limiter._get_redis_client()
     if redis_client is not None:
         redis_client.flushdb()
-        
+
     yield
-    
+
     # Clean up after the test completes
     guard_scan_rate_limiter.clear_local_attempts()
     guard_scan_rate_limiter.cb_state = "CLOSED"

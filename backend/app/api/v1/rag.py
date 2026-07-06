@@ -320,6 +320,18 @@ def _current_user_id(current_user: User) -> Optional[int]:
     return user_id if isinstance(user_id, int) else None
 
 
+def _source_citation(doc: Any) -> dict[str, Any]:
+    """Build a source citation without requiring private retrieval helpers."""
+    try:
+        from app.modules.rag.retrieval_chain import _build_source_citation
+
+        return _build_source_citation(doc)
+    except (ImportError, AttributeError):
+        metadata = getattr(doc, "metadata", {}) or {}
+        source = metadata.get("source") or getattr(doc, "page_content", "")
+        return {"source": str(source)}
+
+
 @router.post(
     "/ingest",
     response_model=RAGIngestResponse,
@@ -605,9 +617,8 @@ def query_knowledge_base(
         latency_ms = (time.monotonic() - t_start) * 1000
 
         source_docs = result.get("source_documents", [])
-        from app.modules.rag.retrieval_chain import _build_source_citation
         sources = result.get("cached_sources") or [
-            _build_source_citation(doc) for doc in source_docs
+            _source_citation(doc) for doc in source_docs
         ]
         source_labels = [str(source.get("source", "")) for source in sources]
         answer = str(result.get("result", ""))

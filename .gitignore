@@ -40,6 +40,7 @@ ENV/
 *.gguf
 guard/models/
 faiss_index/
+mlruns/
 backend/data/regulatory_docs/
 backend/faiss_data/
 backend/mlruns/
@@ -104,7 +105,7 @@ ehthumbs.db
 *.rej
 backend/tmp/*
 backend/metrics.md
-backend/mlruns/*
+backend/mlruns/
 
 # Local dev tooling
 .claude/
@@ -121,4 +122,6 @@ pdf_export.txt
 rag_ingest.txt
 
 # Models
-backend/app/modules/guard/models/*backend/rag_documents/
+backend/app/modules/guard/models/*
+backend/rag_documents/
+rag_documents/

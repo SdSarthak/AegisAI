@@ -6,10 +6,12 @@ Tests the generate_document endpoint with three template types:
 - CONFORMITY_DECLARATION
 """
 
+import json
 import os
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key")
 
+import pytest
 from fastapi.testclient import TestClient
 from tests.conftest import _CSRFClientWrapper
 from sqlalchemy import create_engine
@@ -21,6 +23,91 @@ from app.core.security import get_current_user
 from app.models.user import User, SubscriptionTier
 from app.models.ai_system import AISystem, RiskLevel
 from app.models.document import Document, DocumentType, DocumentStatus
+
+
+def _fake_structured_document_payload(output_schema):
+    base_risk = {
+        "risk": "Compliance gap",
+        "severity": "medium",
+        "likelihood": "medium",
+        "mitigation": "Document controls and human review.",
+        "residual_risk": "low",
+    }
+    if output_schema.__name__ == "TechnicalDocumentationOutput":
+        return {
+            "document_type": "technical_documentation",
+            "system_name": "Test AI System",
+            "provider_name": "Test Company",
+            "version": "1.0",
+            "intended_purpose": "Testing in the Tech sector.",
+            "system_description": "General Description for Test AI System.",
+            "system_architecture": "Application and model service.",
+            "input_data": "Testing inputs.",
+            "output_specification": "Structured outputs.",
+            "training_data": "Representative data.",
+            "validation_testing": "Validation and testing controls.",
+            "performance_metrics": "Accuracy and robustness metrics.",
+            "risk_management": [base_risk],
+            "human_oversight": "Human review.",
+            "logging_monitoring": "Audit logs.",
+            "cybersecurity": "Access controls.",
+            "lifecycle_management": "Change management.",
+        }
+    if output_schema.__name__ == "RiskAssessmentOutput":
+        return {
+            "document_type": "risk_assessment",
+            "system_name": "Test AI System",
+            "provider_name": "Test Company",
+            "intended_purpose": "Testing",
+            "risk_classification": "limited",
+            "classification_rationale": "Risk Assessment Report, Risk Level, Risk Classification, Identified Risks, Mitigation Measures, Compliance Requirements.",
+            "foreseeable_misuse": ["Unreviewed use."],
+            "identified_risks": [base_risk],
+            "data_governance_risks": ["Data quality."],
+            "transparency_risks": ["Disclosure gaps."],
+            "human_oversight_risks": ["Automation bias."],
+            "robustness_cybersecurity_risks": ["Model drift."],
+            "overall_residual_risk": "limited",
+            "monitoring_plan": "Periodic review.",
+        }
+    return {
+        "document_type": "conformity_declaration",
+        "system_name": "Test AI System",
+        "provider_name": "Test Company",
+        "provider_address": "Not specified",
+        "version": "1.0",
+        "intended_purpose": "Testing",
+        "risk_classification": "limited",
+        "applicable_regulation": "Regulation (EU) 2024/1689",
+        "harmonised_standards": ["Not specified"],
+        "conformity_assessment_procedure": "Internal control.",
+        "requirements": [
+            {
+                "requirement": "Article 9, Article 10, Article 14",
+                "evidence": "EU AI Act evidence.",
+                "status": "addressed",
+            }
+        ],
+        "declaration_statement": "Declaration of Conformity for Test AI System.",
+        "signatory_name": "Not specified",
+        "signatory_title": "Not specified",
+        "place_and_date": "Not specified",
+    }
+
+
+@pytest.fixture(autouse=True)
+def mock_structured_document_generation(monkeypatch):
+    def fake_generate_structured(self, messages, output_schema, **kwargs):
+        return _fake_structured_document_payload(output_schema)
+
+    monkeypatch.setattr(
+        "app.api.v1.documents.LLMClient.generate_structured",
+        fake_generate_structured,
+    )
+
+
+def _content_text(content) -> str:
+    return json.dumps(content) if isinstance(content, dict) else content
 
 
 def _build_test_session_local(database_url: str):
@@ -112,7 +199,7 @@ class TestDocumentGeneration:
         assert data["document_type"] == "technical_documentation"
 
         # Verify placeholder replacement in content
-        content = data["content"]
+        content = _content_text(data["content"])
         assert "Test AI System" in content, "system_name not replaced"
         assert "1.0" in content, "version not replaced"
         assert "Testing" in content, "use_case not replaced"
@@ -170,7 +257,7 @@ class TestDocumentGeneration:
         assert data["document_type"] == "risk_assessment"
 
         # Verify placeholder replacement in content
-        content = data["content"]
+        content = _content_text(data["content"])
         assert "Test AI System" in content, "system_name not replaced"
         assert "Testing" in content, "use_case not replaced"
         assert "limited" in content.lower(), "risk_level not replaced"
@@ -231,7 +318,7 @@ class TestDocumentGeneration:
         assert data["document_type"] == "conformity_declaration"
 
         # Verify placeholder replacement in content
-        content = data["content"]
+        content = _content_text(data["content"])
         assert "Test AI System" in content, "system_name not replaced"
         assert "1.0" in content, "version not replaced"
         assert "Test Company" in content, "company_name not replaced"
@@ -359,7 +446,7 @@ class TestDocumentGeneration:
                 },
             )
             assert response.status_code == 201
-            contents[doc_type] = response.json()["content"]
+            contents[doc_type] = _content_text(response.json()["content"])
 
         # Verify each template has unique content
         assert contents["technical_documentation"] != contents["risk_assessment"]

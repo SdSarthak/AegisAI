@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "http://localhost:11434/v1"
     LLM_MODEL: str = "llama3.2"
     LLM_TIMEOUT: float = 30.0
+    LLM_SUPPORTS_JSON_SCHEMA: bool = False
 
     # Module 2: LLM Guard
     GUARD_SANITIZATION_LEVEL: str = "medium"
