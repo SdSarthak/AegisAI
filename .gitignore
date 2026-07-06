@@ -40,6 +40,7 @@ ENV/
 *.gguf
 guard/models/
 faiss_index/
+mlruns/
 backend/data/regulatory_docs/
 
 # Node / frontend
@@ -102,7 +103,7 @@ ehthumbs.db
 *.rej
 backend/tmp/*
 backend/metrics.md
-backend/mlruns/*
+backend/mlruns/
 
 # Local dev tooling
 .claude/
