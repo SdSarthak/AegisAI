@@ -667,7 +667,6 @@ def export_guard_scan_logs(
             detail="Admin access required to export scan logs.",
         )
 
-
     export_filters = build_history_filters(
         current_user.id,
         decision,

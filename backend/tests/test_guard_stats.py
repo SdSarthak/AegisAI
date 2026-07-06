@@ -148,3 +148,13 @@ def test_admin_access(client, db_session):
         )
         assert response.status_code == 200
         assert response.json()["total_scans"] == 0
+
+
+def test_export_scan_logs_rejects_non_admin(client, other_user_auth_headers):
+    """Non-admin users must receive 403 when attempting to export scan logs."""
+    response = client.get(
+        "/api/v1/guard/logs/export",
+        headers=other_user_auth_headers
+    )
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Admin access required to export scan logs."
