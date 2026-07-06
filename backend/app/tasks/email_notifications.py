@@ -4,7 +4,7 @@ Integrates with the existing APScheduler setup in scheduler.py.
 """
 
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
 
@@ -27,7 +27,7 @@ def send_compliance_deadline_email_alerts() -> None:
     """
     db: Session = SessionLocal()
     try:
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         alert_thresholds = [7, 14, 30]
 
         systems = db.query(AISystem).filter(
@@ -85,12 +85,12 @@ def send_reassessment_email_reminders() -> None:
     """
     db: Session = SessionLocal()
     try:
-        thirty_days = datetime.utcnow() + timedelta(days=30)
+        thirty_days = datetime.now(timezone.utc) + timedelta(days=30)
         expiring = (
             db.query(RiskAssessment)
             .filter(
                 RiskAssessment.valid_until <= thirty_days,
-                RiskAssessment.valid_until > datetime.utcnow(),
+                RiskAssessment.valid_until > datetime.now(timezone.utc),
             )
             .all()
         )
@@ -135,3 +135,4 @@ def send_reassessment_email_reminders() -> None:
         logger.exception("Failed to send reassessment email reminders")
     finally:
         db.close()
+        
