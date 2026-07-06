@@ -18,7 +18,7 @@ class GuardScanLog(Base):
     __tablename__ = "guard_scan_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     prompt_hash = Column(String(64), nullable=False)  # SHA-256 hex digest
     decision = Column(String(16), nullable=False)      # allow | sanitize | block

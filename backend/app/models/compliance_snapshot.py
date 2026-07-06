@@ -14,7 +14,7 @@ class ComplianceSnapshot(Base):
     __tablename__ = "compliance_snapshots"
 
     id = Column(Integer, primary_key=True, index=True)
-    ai_system_id = Column(Integer, ForeignKey("ai_systems.id"), nullable=False)
+    ai_system_id = Column(Integer, ForeignKey("ai_systems.id", ondelete="CASCADE"), nullable=False)
 
     # Captured values at snapshot time
     compliance_score = Column(Integer, nullable=False)  # 0-100
