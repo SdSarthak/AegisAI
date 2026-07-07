@@ -469,7 +469,12 @@ def list_rag_documents(
     db: Session = Depends(get_db),
 ):
     """List documents currently included in the RAG knowledge base."""
-    documents = db.query(RAGDocument).order_by(RAGDocument.created_at.desc()).all()
+    documents = (
+        db.query(RAGDocument)
+        .filter(RAGDocument.uploaded_by_id == current_user.id)
+        .order_by(RAGDocument.created_at.desc())
+        .all()
+    )
     return RAGDocumentListResponse(items=documents, total=len(documents))
 
 
@@ -484,6 +489,12 @@ def delete_rag_document(
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="RAG document not found")
 
+    if document.uploaded_by_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to delete this document.",
+        )
+
     storage_path = document.storage_path
     db.delete(document)
     db.flush()
@@ -493,11 +504,11 @@ def delete_rag_document(
         index_size_bytes = _rebuild_index_from_documents(
             remaining_documents, user_id=current_user.id
         )
-    except Exception as exc:
+    except Exception:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to rebuild FAISS index: {exc}",
+            detail="Failed to rebuild the RAG index. Please try again.",
         )
 
     db.commit()
