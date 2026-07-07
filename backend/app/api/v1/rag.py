@@ -721,15 +721,15 @@ def query_knowledge_base(
         return response
     except HTTPException:
         raise
-    except FileNotFoundError as exc:
+    except FileNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
+            detail="The RAG knowledge base is not initialised. Please upload documents first.",
         )
-    except Exception as exc:
+    except Exception:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"RAG module error: {str(exc)}",
+            detail="An internal error occurred while processing the query. Please try again.",
         )
 
 
