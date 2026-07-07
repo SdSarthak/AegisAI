@@ -9,6 +9,7 @@ Addresses: Import-time provider failures, broken mocks, and partial index writes
 from __future__ import annotations
 
 import hashlib
+import hmac
 import logging
 import os
 import shutil
@@ -26,6 +27,74 @@ except ImportError:  # pragma: no cover - exercised only when optional provider 
 
 logger = logging.getLogger(__name__)
 _rag_index_lock = threading.Lock()
+
+_HASH_ALGORITHM = "sha256"
+
+
+def _index_hmac_key() -> bytes:
+    return settings.SECRET_KEY.encode("utf-8")
+
+
+def _compute_index_hash(index_path: str) -> str:
+    sha = hashlib.sha256()
+    for filename in sorted(os.listdir(index_path)):
+        filepath = os.path.join(index_path, filename)
+        if os.path.isfile(filepath):
+            with open(filepath, "rb") as f:
+                while True:
+                    buf = f.read(65536)
+                    if not buf:
+                        break
+                    sha.update(buf)
+    return sha.hexdigest()
+
+
+def _sign_hash(hash_value: str) -> str:
+    return hmac.new(
+        _index_hmac_key(),
+        hash_value.encode("utf-8"),
+        _HASH_ALGORITHM,
+    ).hexdigest()
+
+
+def _get_hash_path(index_path: str) -> str:
+    return f"{index_path}.sha256"
+
+
+def verify_index_integrity(index_path: str) -> None:
+    hash_path = _get_hash_path(index_path)
+    if not os.path.exists(hash_path):
+        raise ValueError(
+            f"Integrity hash not found at '{hash_path}'. "
+            "The FAISS index may have been tampered with."
+        )
+    with open(hash_path) as f:
+        stored = f.read().strip()
+    parts = stored.split(":", 1)
+    if len(parts) != 2:
+        raise ValueError(f"Invalid integrity hash format at '{hash_path}'.")
+    stored_hash, stored_sig = parts
+    expected_sig = _sign_hash(stored_hash)
+    if not hmac.compare_digest(stored_sig, expected_sig):
+        raise ValueError(
+            "Integrity hash signature verification failed at "
+            f"'{hash_path}'. The hash file may have been tampered with."
+        )
+    current_hash = _compute_index_hash(index_path)
+    if not hmac.compare_digest(current_hash, stored_hash):
+        raise ValueError(
+            f"FAISS index integrity check failed at '{index_path}'. "
+            "The index contents do not match the stored hash."
+        )
+
+
+def store_index_integrity_hash(index_path: str) -> str:
+    hash_value = _compute_index_hash(index_path)
+    signature = _sign_hash(hash_value)
+    hash_path = _get_hash_path(index_path)
+    with open(hash_path, "w") as f:
+        f.write(f"{hash_value}:{signature}")
+    return hash_value
 
 
 def _get_faiss_class() -> Any:
@@ -52,53 +121,6 @@ def _get_index_path(user_id: int | None = None) -> str:
     return settings.FAISS_INDEX_PATH
 
 
-def _compute_index_hash(index_dir: str) -> str:
-    """Compute SHA256 hex digest of the FAISS index file."""
-    index_file = Path(index_dir) / "index.faiss"
-    if not index_file.exists():
-        return ""
-    sha256 = hashlib.sha256()
-    with open(index_file, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            sha256.update(chunk)
-    return sha256.hexdigest()
-
-
-def _write_integrity_hash(index_dir: str) -> None:
-    """Compute and write SHA256 hash file for the FAISS index."""
-    digest = _compute_index_hash(index_dir)
-    if digest:
-        Path(index_dir, "index.sha256").write_text(digest)
-
-
-def _verify_index_integrity(index_dir: str) -> bool:
-    """Verify FAISS index integrity against stored SHA256 hash.
-
-    Returns True if the hash matches or no hash file exists (legacy index).
-    Logs a warning if the hash file is missing or the check fails.
-    """
-    hash_file = Path(index_dir, "index.sha256")
-    if not hash_file.exists():
-        logger.warning(
-            "FAISS index at %s has no integrity hash (index.sha256 missing). "
-            "The index will be loaded but tampering cannot be detected. "
-            "Re-save the index to enable integrity verification.",
-            index_dir,
-        )
-        return True
-
-    expected = hash_file.read_text().strip()
-    actual = _compute_index_hash(index_dir)
-    if actual != expected:
-        logger.error(
-            "FAISS index integrity check FAILED at %s. "
-            "The index may have been tampered with.",
-            index_dir,
-        )
-        return False
-    return True
-
-
 def create_vector_store(documents: list[Any], user_id: int | None = None) -> Any:
     """
     Build a FAISS index from LangChain Document objects and persist it to disk.
@@ -121,7 +143,9 @@ def create_vector_store(documents: list[Any], user_id: int | None = None) -> Any
 
         try:
             vector_store.save_local(tmp_dir)
+            store_index_integrity_hash(tmp_dir)
 
+            verify_index_integrity(tmp_dir)
             faiss_cls.load_local(
                 tmp_dir,
                 embeddings,
@@ -136,13 +160,15 @@ def create_vector_store(documents: list[Any], user_id: int | None = None) -> Any
                 shutil.rmtree(index_path, ignore_errors=True)
                 os.makedirs(index_path, exist_ok=True)
                 vector_store.save_local(index_path)
+                store_index_integrity_hash(index_path)
+                verify_index_integrity(index_path)
                 faiss_cls.load_local(
                     index_path,
                     embeddings,
                     allow_dangerous_deserialization=True,
                 )
 
-            _write_integrity_hash(index_path)
+            store_index_integrity_hash(index_path)
 
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -167,12 +193,7 @@ def load_vector_store(user_id: int | None = None) -> Any:
             "Please contact your administrator or check the documentation for setup instructions."
         )
 
-    if not _verify_index_integrity(index_path):
-        raise RuntimeError(
-            f"FAISS index integrity check failed at '{index_path}'. "
-            "The index file may have been tampered with. "
-            "Restore the index from a trusted backup or reingest documents."
-        )
+    verify_index_integrity(index_path)
 
     embeddings = get_embeddings()
     faiss_cls = _get_faiss_class()
