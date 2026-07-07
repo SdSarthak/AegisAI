@@ -23,7 +23,7 @@ from app.schemas.analytics import ComplianceTimelineResponse
 from app.models.compliance_snapshot import ComplianceSnapshot
 from app.models.document import Document
 from sqlalchemy import func
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import Query
@@ -54,7 +54,7 @@ def get_compliance_timeline(
             detail="AI system not found"
         )
 
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(timezone.utc) - timedelta(days=days)
 
     snapshots = db.query(ComplianceSnapshot).filter(
         ComplianceSnapshot.ai_system_id == system_id,
@@ -198,7 +198,7 @@ def get_audit_logs(
     if decision:
         filters.append(GuardScanLog.decision == decision)
     if days:
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
         filters.append(GuardScanLog.scanned_at >= since)
 
     base_query = db.query(GuardScanLog).filter(*filters)
