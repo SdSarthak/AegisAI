@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { FileText, Download, Trash2, Plus, Edit, GitCompare } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
 
@@ -30,23 +31,9 @@ export default function Documents() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
-  const [copiedDocId, setCopiedDocId] = useState<number | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const limit = 10
-
-  const handleCopy = async (docId: number, content: string) => {
-    try {
-      await navigator.clipboard.writeText(content)
-
-      setCopiedDocId(docId)
-
-      setTimeout(() => {
-        setCopiedDocId(null)
-      }, 2000)
-    } catch (error) {
-      console.error('Failed to copy content:', error)
-    }
-  }
 
   const {
     data: documentsData,
@@ -58,9 +45,7 @@ export default function Documents() {
     queryKey: ['documents', currentPage],
     queryFn: () => documentsApi.list({ skip: (currentPage - 1) * limit, limit }),
   })
-  const documents = (
-    Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
-  ) as Document[]
+  const documents = (documentsData ?? []) as Document[]
   const filteredDocuments = documents.filter((doc: Document) => {
     const matchesSearch =
       doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -82,9 +67,7 @@ export default function Documents() {
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
-  const systems = (
-    Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
-  ) as AISystem[]
+  const systems = (systemsData ?? []) as AISystem[]
   const isLoading = documentsLoading || systemsLoading
   const hasError = documentsError || systemsError
   const errorMessage =
@@ -129,19 +112,12 @@ export default function Documents() {
     if (!editingDoc) return
 
     try {
-      const response = await fetch(`/api/v1/documents/${editingDoc.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content })
-      })
-
-      if (response.ok) {
-        queryClient.invalidateQueries({ queryKey: ['documents'] })
-      }
+      setSaveError(null)
+      await documentsApi.update(editingDoc.id, { content })
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
     } catch (error) {
-      console.error('Save failed:', error)
+      const message = error instanceof Error ? error.message : 'Failed to save document'
+      setSaveError(message)
     }
   }
 
@@ -333,6 +309,13 @@ export default function Documents() {
                       iconOnly
                     />
                   )}
+                  <Link
+                    to={`/documents/${doc.id}/diff`}
+                    className="p-2 text-gray-400 hover:text-purple-600 rounded-lg hover:bg-purple-50"
+                    title="Compare Versions"
+                  >
+                    <GitCompare className="w-5 h-5" />
+                  </Link>
                   <button
                     onClick={() => setEditingDoc(doc)}
                     className="p-2 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700"
@@ -370,7 +353,6 @@ export default function Documents() {
                   >
                     <Download className="w-5 h-5" />
                   </button>
-
                   <button
                     onClick={() => setDocumentToDelete(doc)}
                     className="p-2 text-gray-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20"
@@ -512,6 +494,12 @@ export default function Documents() {
       )}
 
       {/* Editor Modal */}
+      {saveError && (
+        <div className="fixed top-4 right-4 z-50 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-lg">
+          {saveError}
+        </div>
+      )}
+
       {editingDoc && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl w-full max-w-6xl h-[90vh] border border-gray-200 dark:border-gray-700 shadow-2xl">
@@ -519,7 +507,10 @@ export default function Documents() {
               documentId={editingDoc.id}
               initialContent={editingDoc.content || ''}
               onSave={handleSaveDocument}
-              onClose={() => setEditingDoc(null)}
+              onClose={() => {
+                setEditingDoc(null)
+                setSaveError(null)
+              }}
             />
           </div>
         </div>
@@ -527,3 +518,4 @@ export default function Documents() {
     </div>
   )
 }
+

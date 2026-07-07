@@ -3,6 +3,9 @@ from typing import Optional
 from datetime import datetime
 from app.models.document import DocumentType, DocumentStatus
 
+class DocumentShareResponse(BaseModel):
+    share_url: str
+    expires_in_days: int
 
 class DocumentCreate(BaseModel):
     title: str
@@ -49,3 +52,37 @@ class DocumentGenerateRequest(BaseModel):
     document_type: DocumentType
     ai_system_id: int
     include_recommendations: bool = True
+
+
+class DocumentVersionResponse(BaseModel):
+    id: int
+    document_id: int
+    version_number: str
+    created_at: datetime
+    regeneration_reason: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class DiffHunkLine(BaseModel):
+    type: str  # "context" | "added" | "removed"
+    content: str
+
+
+class DiffHunk(BaseModel):
+    old_start: int
+    old_count: int
+    new_start: int
+    new_count: int
+    lines: list[DiffHunkLine]
+
+
+class DocumentVersionWithContent(DocumentVersionResponse):
+    content: str
+
+
+class DocumentDiffResponse(BaseModel):
+    v1: DocumentVersionWithContent
+    v2: DocumentVersionWithContent
+    hunks: list[DiffHunk]

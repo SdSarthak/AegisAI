@@ -8,6 +8,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.database import Base, get_db
 from app.core.security import get_current_user
@@ -23,6 +24,7 @@ def engine():
     eng = create_engine(
         "sqlite:///:memory:",
         connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
     )
 
     Base.metadata.create_all(bind=eng)

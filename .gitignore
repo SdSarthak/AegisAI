@@ -41,6 +41,8 @@ ENV/
 guard/models/
 faiss_index/
 backend/data/regulatory_docs/
+backend/faiss_data/
+backend/mlruns/
 
 # Node / frontend
 node_modules/
@@ -100,6 +102,9 @@ ehthumbs.db
 *.bak
 *.orig
 *.rej
+backend/tmp/*
+backend/metrics.md
+backend/mlruns/*
 
 # Local dev tooling
 .claude/
@@ -114,3 +119,6 @@ lifecycle.txt
 error.txt
 pdf_export.txt
 rag_ingest.txt
+
+# Models
+backend/app/modules/guard/models/*backend/rag_documents/

@@ -1,27 +1,20 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Shield, Bot, FileCheck, FileText, ChevronRight } from 'lucide-react'
+import {
+  Shield,
+  Bot,
+  FileCheck,
+  FileText,
+  ChevronRight,
+  Loader2,
+} from 'lucide-react'
 
-/**
- * Onboarding wizard — guides new users through first-run setup.
- *
- * TODO (good first issue — static layout):
- *   - This component renders a 3-step wizard with a progress bar.
- *   - Implement the static layout: step indicators at the top, step content
- *     in the middle, Back/Next buttons at the bottom.
- *   - No API calls needed yet — just the UI shell with hardcoded step content.
- *   - Acceptance criteria: clicking Next advances the step counter,
- *     clicking Back goes back, and clicking Finish on step 3 navigates to "/".
- *
- * TODO (help wanted — API wiring):
- *   - Step 1: call aiSystemsApi.create() with form data.
- *   - Step 2: call classificationApi.classify() with the new system ID.
- *   - Step 3: call documentsApi.generate() to create the first document.
- *   - On completion, set a flag via PATCH /users/me so the wizard is not
- *     shown again (add `onboarding_completed: boolean` to the user model).
- *   - Acceptance criteria: completing all 3 steps creates a system,
- *     runs classification, and generates a document, then redirects to "/".
- */
+import {
+  aiSystemsApi,
+  authApi,
+  classificationApi,
+  documentsApi,
+} from '../services/api'
 
 const STEPS = [
   {
@@ -43,25 +36,147 @@ const STEPS = [
 
 export default function Onboarding() {
   const navigate = useNavigate()
-  const [currentStep, setCurrentStep] = useState(0)
 
-  // TODO (help wanted): replace with real form state per step
+  const [currentStep, setCurrentStep] = useState(0)
+  const [systemId, setSystemId] = useState<number | null>(null)
+  const [riskLevel, setRiskLevel] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const [systemForm, setSystemForm] = useState({
+    name: '',
+    description: '',
+    use_case: '',
+    sector: '',
+  })
+
+  const [classificationForm, setClassificationForm] = useState({
+    intended_purpose: '',
+    target_users: '',
+    uses_personal_data: false,
+    affects_decision_making: false,
+  })
+
+  const [documentType, setDocumentType] = useState('technical_documentation')
+
   const isLastStep = currentStep === STEPS.length - 1
+  const StepIcon = STEPS[currentStep].icon
+
+  const handleCreateSystem = async () => {
+    if (!systemForm.name.trim()) {
+      setError('Please enter an AI system name.')
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const createdSystem = await aiSystemsApi.create({
+        name: systemForm.name,
+        description: systemForm.description,
+        use_case: systemForm.use_case,
+        sector: systemForm.sector,
+      })
+
+      setSystemId(createdSystem.id)
+      setCurrentStep(1)
+    } catch {
+      setError('Failed to create AI system. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleClassifySystem = async () => {
+    if (!systemId) {
+      setError('AI system was not created. Please go back and try again.')
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const classification = await classificationApi.classifyAndSave(systemId, {
+        intended_purpose: classificationForm.intended_purpose,
+        target_users: classificationForm.target_users,
+        uses_personal_data: classificationForm.uses_personal_data,
+        affects_decision_making: classificationForm.affects_decision_making,
+      })
+
+      const classificationResult = classification as {
+  risk_level?: unknown
+  riskLevel?: unknown
+  classification?: unknown
+}
+
+const detectedRiskLevel =
+  typeof classificationResult.risk_level === 'string'
+    ? classificationResult.risk_level
+    : typeof classificationResult.riskLevel === 'string'
+      ? classificationResult.riskLevel
+      : typeof classificationResult.classification === 'string'
+        ? classificationResult.classification
+        : 'classified'
+
+setRiskLevel(detectedRiskLevel)
+
+      setCurrentStep(2)
+    } catch {
+      setError('Failed to classify AI system. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleGenerateDocument = async () => {
+    if (!systemId) {
+      setError('AI system was not created. Please go back and try again.')
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      await documentsApi.generate({
+        ai_system_id: systemId,
+        document_type: documentType,
+      })
+
+      await authApi.updateMe({
+        onboarding_completed: true,
+      })
+
+      navigate('/')
+    } catch {
+      setError('Failed to complete onboarding. Please try again.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleNext = () => {
-    if (isLastStep) {
-      // TODO (help wanted): mark onboarding complete via API before navigating
-      navigate('/')
-    } else {
-      setCurrentStep((s) => s + 1)
+    if (currentStep === 0) {
+      void handleCreateSystem()
+      return
+    }
+
+    if (currentStep === 1) {
+      void handleClassifySystem()
+      return
+    }
+
+    if (currentStep === 2) {
+      void handleGenerateDocument()
     }
   }
 
   const handleBack = () => {
-    setCurrentStep((s) => Math.max(0, s - 1))
+    setError(null)
+    setCurrentStep((step) => Math.max(0, step - 1))
   }
-
-  const StepIcon = STEPS[currentStep].icon
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-8">
@@ -72,22 +187,22 @@ export default function Onboarding() {
           <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Welcome to AegisAI</h1>
         </div>
 
-        {/* Step indicators */}
         <div className="flex items-center gap-2 mb-8">
-          {STEPS.map((step, idx) => (
+          {STEPS.map((step, index) => (
             <div key={step.label} className="flex items-center gap-2 flex-1">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  idx < currentStep
+                  index < currentStep
                     ? 'bg-primary-600 text-white'
                     : idx === currentStep
                     ? 'border-2 border-primary-600 dark:border-primary-400 text-primary-600 dark:text-primary-400'
                     : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-505'
                 }`}
               >
-                {idx + 1}
+                {index + 1}
               </div>
-              {idx < STEPS.length - 1 && (
+
+              {index < STEPS.length - 1 && (
                 <div
                   className={`h-0.5 flex-1 ${idx < currentStep ? 'bg-primary-600' : 'bg-gray-200 dark:bg-gray-700'}`}
                 />
@@ -96,7 +211,6 @@ export default function Onboarding() {
           ))}
         </div>
 
-        {/* Step content */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <StepIcon className="w-6 h-6 text-primary-600 dark:text-primary-400" />
@@ -112,7 +226,6 @@ export default function Onboarding() {
           </div>
         </div>
 
-        {/* Navigation */}
         <div className="flex justify-between">
           <button
             type="button"
@@ -122,16 +235,20 @@ export default function Onboarding() {
           >
             Back
           </button>
+
           <button
             type="button"
             onClick={handleNext}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+            disabled={isLoading}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
+            {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}
             {isLastStep ? 'Finish' : 'Next'}
-            {!isLastStep && <ChevronRight className="w-4 h-4" />}
+            {!isLastStep && !isLoading && <ChevronRight className="w-4 h-4" />}
           </button>
         </div>
       </div>
     </div>
   )
 }
+

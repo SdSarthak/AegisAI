@@ -1,9 +1,13 @@
+import sys
+import types
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import patch
-import importlib
+from tests.conftest import _CSRFClientWrapper
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.main import app
 from app.core.database import Base, get_db
@@ -12,84 +16,152 @@ from app.models.user import User, SubscriptionTier
 
 
 class DummyDoc:
-    def __init__(self, source):
-        self.metadata = {"source": source}
+    """Lightweight document mock for RAG tests."""
+    def __init__(self, page_content):
+        self.page_content = page_content
+        self.metadata = {"source": page_content}
 
 
-def _get_test_db():
-    engine = create_engine("sqlite:///:memory:")
+def _get_test_db_session():
+    """Creates a fresh in-memory database and returns a sessionmaker."""
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
-
-    def _override_get_db():
-        db = TestingSessionLocal()
-        try:
-            yield db
-        finally:
-            db.close()
-
-    return _override_get_db
+    return TestingSessionLocal
 
 
 @pytest.fixture
 def client():
-    app.dependency_overrides[get_db] = _get_test_db()
+    # 1. Setup fresh in-memory DB
+    SessionLocal = _get_test_db_session()
+    db = SessionLocal()
 
-    # override auth to return a user; default non-admin
+    # 2. Seed a test user so foreign keys in RagQuery work
+    user = User(
+        id=1,
+        email="tester@example.com",
+        hashed_password="fakehash",
+        subscription_tier=SubscriptionTier.FREE,
+        is_active=True
+    )
+    db.add(user)
+    
+    # Add an admin user as well
+    admin = User(
+        id=2,
+        email="admin@example.com",
+        hashed_password="fakehash",
+        subscription_tier=SubscriptionTier.SCALE,
+        is_active=True
+    )
+    db.add(admin)
+    db.commit()
+
+    # 3. Define dependency overrides
+    def _override_get_db():
+        try:
+            yield db
+        finally:
+            pass # Keep it open for the duration of the test
+
     def _fake_user():
-        u = User()
-        u.id = 1
-        u.email = "tester@example.com"
-        u.subscription_tier = SubscriptionTier.FREE
-        return u
+        return user
 
+    app.dependency_overrides[get_db] = _override_get_db
     app.dependency_overrides[get_current_user] = _fake_user
 
     with TestClient(app) as c:
-        yield c
+        yield _CSRFClientWrapper(c)
+    
+    # 4. Cleanup
+    db.close()
+    app.dependency_overrides.clear()
 
 
-def test_query_feedback_and_low_quality_flow(client):
-    # Mock the QA chain to return controlled result and sources
-    fake_result = {"result": "Test answer", "source_documents": [DummyDoc("doc1.pdf#chunk1"), DummyDoc("doc2.pdf#chunk2")]}
+@pytest.fixture
+def mock_rag_modules():
+    """Mocks RAG modules to avoid heavy dependencies and external API calls."""
+    retrieval_chain_mod = types.ModuleType("app.modules.rag.retrieval_chain")
+    groundedness_mod = types.ModuleType("app.modules.rag.groundedness")
+    ml_flow_mod = types.ModuleType("app.modules.rag.ml_flow")
 
-    # Provide a lightweight fake retrieval_chain module (avoid heavy langchain imports)
-    import types, sys
+    # We'll override the qa_chain result in individual tests if needed
+    fake_result = {
+        "result": "Test answer", 
+        "source_documents": [DummyDoc("doc1.pdf#chunk1"), DummyDoc("doc2.pdf#chunk2")]
+    }
+    
+    retrieval_chain_mod.get_qa_chain = lambda user_id=None: lambda payload: fake_result
+    groundedness_mod.compute_groundedness = lambda answer, chunks: 0.85
+    ml_flow_mod.log_query = lambda **kwargs: None
 
-    mod = types.ModuleType("app.modules.rag.retrieval_chain")
+    with patch.dict(
+        sys.modules,
+        {
+            "app.modules.rag.retrieval_chain": retrieval_chain_mod,
+            "app.modules.rag.groundedness": groundedness_mod,
+            "app.modules.rag.ml_flow": ml_flow_mod,
+        },
+    ):
+        yield retrieval_chain_mod, groundedness_mod
 
-    def _fake_get_qa_chain():
-        return lambda payload: fake_result
 
-    mod.get_qa_chain = _fake_get_qa_chain
-    sys.modules["app.modules.rag.retrieval_chain"] = mod
-
-    # Call query endpoint
+def test_query_feedback_and_low_quality_flow(client, mock_rag_modules):
+    """Tests the query, feedback, and admin low-quality chunk extraction pipeline."""
+    # 1. Execute the standard query flow
     resp = client.post("/api/v1/rag/query", json={"question": "What is X?"})
     assert resp.status_code == 200
     data = resp.json()
-    assert "answer" in data and data["answer"] == "Test answer"
+    assert data["answer"] == "Test answer"
     assert "answer_id" in data
     answer_id = data["answer_id"]
 
-    # Submit a thumbs-down for that answer
+    # 2. Submit a thumbs-down feedback entry for that answer
     resp2 = client.post("/api/v1/rag/feedback", json={"answer_id": answer_id, "vote": "down"})
     assert resp2.status_code == 200
 
-    # Now query low-quality-chunks as admin: override current_user to be admin
+    # 3. Route authentication override to test admin extraction privileges
     def _admin_user():
-        u = User()
-        u.id = 2
-        u.email = "admin@example.com"
-        u.subscription_tier = SubscriptionTier.SCALE
+        u = User(id=2, subscription_tier=SubscriptionTier.SCALE)
+        return u
+
+    app.dependency_overrides[get_current_user] = _admin_user
+
+    # 4. Verify chunk tracking extraction logic works seamlessly
+    resp3 = client.get("/api/v1/rag/low-quality-chunks?threshold=0.0")
+    assert resp3.status_code == 200
+    out = resp3.json()
+    assert "low_quality_chunks" in out
+    
+    chunks = {c["chunk"] for c in out["low_quality_chunks"]}
+    assert "doc1.pdf#chunk1" in chunks or "doc2.pdf#chunk2" in chunks
+
+
+def test_feedback_rejects_invalid_vote_value(client, mock_rag_modules):
+    """Ensure that feedback only accepts valid vote values ('up', 'down')."""
+    # 1. Get an answer ID
+    resp = client.post("/api/v1/rag/query", json={"question": "What is X?"})
+    assert resp.status_code == 200
+    answer_id = resp.json()["answer_id"]
+
+    # 2. Submit invalid vote
+    resp2 = client.post(
+        "/api/v1/rag/feedback",
+        json={"answer_id": answer_id, "vote": "maybe"},
+    )
+    assert resp2.status_code == 422
+
+    # 3. Verify admin extraction remains empty
+    def _admin_user():
+        u = User(id=2, subscription_tier=SubscriptionTier.SCALE)
         return u
 
     app.dependency_overrides[get_current_user] = _admin_user
 
     resp3 = client.get("/api/v1/rag/low-quality-chunks?threshold=0.0")
     assert resp3.status_code == 200
-    out = resp3.json()
-    assert "low_quality_chunks" in out
-    # Should contain our two chunks (since total feedback for the answer was 1 down)
-    chunks = {c["chunk"] for c in out["low_quality_chunks"]}
-    assert "doc1.pdf#chunk1" in chunks or "doc2.pdf#chunk2" in chunks
+    assert resp3.json()["low_quality_chunks"] == []

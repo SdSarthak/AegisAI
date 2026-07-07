@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import axios from 'axios'
 import { authApi } from '../services/api'
-import { Shield, AlertCircle, CheckCircle, XCircle } from 'lucide-react'
+import { Shield, AlertCircle, CheckCircle, XCircle, Eye, EyeOff } from 'lucide-react'
 
 interface ValidationError {
   field: string
@@ -15,11 +15,20 @@ interface PydanticValidationError {
 }
 
 interface ErrorResponseData {
-  detail?: string | PydanticValidationError[]
+  detail?: string | PydanticValidationError[] | { field: string; message: string }
 }
 
 function isErrorResponseData(value: unknown): value is ErrorResponseData {
   return typeof value === 'object' && value !== null && 'detail' in value
+}
+
+const USER_FRIENDLY_ERROR_MAP: Record<string, string> = {
+  'value is not a valid email address': 'Please enter a valid email address',
+  'field required': 'This field is required',
+}
+
+function toUserFriendlyMessage(msg: string): string {
+  return USER_FRIENDLY_ERROR_MAP[msg] || msg
 }
 
 function parsePydanticErrors(errorData: unknown): ValidationError[] {
@@ -28,12 +37,8 @@ function parsePydanticErrors(errorData: unknown): ValidationError[] {
   if (Array.isArray(errorData.detail)) {
     return errorData.detail.map((error) => ({
       field: String(error.loc?.[error.loc.length - 1] ?? 'unknown'),
-      message: error.msg || 'Invalid input',
+      message: toUserFriendlyMessage(error.msg || 'Invalid input'),
     }))
-  }
-
-  if (typeof errorData.detail === 'string') {
-    return [{ field: 'general', message: errorData.detail }]
   }
 
   return []
@@ -48,14 +53,8 @@ function checkPasswordStrength(password: string) {
   }
 }
 
-function isPasswordValid(password: string): boolean {
-  const strength = checkPasswordStrength(password)
-  return (
-    strength.hasMinLength &&
-    strength.hasUppercase &&
-    strength.hasDigit &&
-    strength.hasSpecialChar
-  )
+function isPasswordStrong(strength: ReturnType<typeof checkPasswordStrength>) {
+  return Object.values(strength).every(Boolean)
 }
 
 export default function Register() {
@@ -68,44 +67,55 @@ export default function Register() {
   })
   const [errors, setErrors] = useState<ValidationError[]>([])
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const [showPasswordRequirements, setShowPasswordRequirements] = useState(false)
 
   const passwordStrength = checkPasswordStrength(formData.password)
-  const isPasswordFieldValid = isPasswordValid(formData.password)
+  const passwordIsStrong = isPasswordStrong(passwordStrength)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrors([])
-    setLoading(true)
 
-    // Frontend validation
-    if (!isPasswordValid(formData.password)) {
-      setErrors([
-        {
-          field: 'password',
-          message:
-            'Password must contain: at least 8 characters, at least one uppercase letter, at least one digit, at least one special character (!@#$%^&*)',
-        },
-      ])
-      setLoading(false)
+    const trimmedEmail = formData.email.trim()
+    const trimmedFullName = formData.full_name.trim()
+    const trimmedCompanyName = formData.company_name.trim()
+
+    const validationErrors: ValidationError[] = []
+    if (!trimmedEmail) validationErrors.push({ field: 'email', message: 'Email is required.' })
+    if (!formData.password) validationErrors.push({ field: 'password', message: 'Password is required.' })
+    if (formData.password && !passwordIsStrong) validationErrors.push({ field: 'password', message: 'Password does not meet strength requirements.' })
+    if (!trimmedFullName) validationErrors.push({ field: 'full_name', message: 'Full name is required.' })
+    if (!trimmedCompanyName) validationErrors.push({ field: 'company_name', message: 'Company name is required.' })
+
+    if (validationErrors.length > 0) {
+      setErrors(validationErrors)
       return
     }
 
+    setLoading(true)
+
     try {
-      await authApi.register(formData)
+      await authApi.register({
+        email: trimmedEmail,
+        password: formData.password,
+        full_name: trimmedFullName,
+        company_name: trimmedCompanyName,
+      })
       navigate('/login')
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        // Try to parse Pydantic validation errors (422)
         const parsedErrors = parsePydanticErrors(err.response?.data)
+        const detail = err.response?.data?.detail
 
         if (parsedErrors.length > 0) {
           setErrors(parsedErrors)
-        } else if (err.response?.data?.detail) {
-          // Handle custom error messages (400, etc.)
-          setErrors([
-            { field: 'general', message: err.response.data.detail },
-          ])
+        } else if (detail) {
+          if (typeof detail === 'object' && detail.field && detail.message) {
+            setErrors([{ field: detail.field, message: detail.message }])
+          } else {
+            setErrors([{ field: 'general', message: String(detail) }])
+          }
         } else if (err.code === 'ERR_NETWORK') {
           setErrors([
             {
@@ -114,21 +124,18 @@ export default function Register() {
                 'Network error. Please check your connection and try again.',
             },
           ])
-        } else {
+        } else if (err.code === 'ECONNABORTED') {
           setErrors([
             {
               field: 'general',
-              message: 'Registration failed. Please try again.',
+              message: 'Request timed out. Please try again.',
             },
           ])
+        } else {
+          setErrors([{ field: 'general', message: 'Registration failed. Please try again.' }])
         }
       } else {
-        setErrors([
-          {
-            field: 'general',
-            message: 'An unexpected error occurred. Please try again.',
-          },
-        ])
+        setErrors([{ field: 'general', message: 'An unexpected error occurred. Please try again.' }])
       }
     } finally {
       setLoading(false)
@@ -157,7 +164,7 @@ export default function Register() {
             <div className="p-3 flex items-start gap-3 text-sm bg-red-50 rounded-lg border border-red-200">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="text-red-700">
-                {errors.find((e) => e.field === 'general')?.message}
+                {errors.find((e: ValidationError) => e.field === 'general')?.message}
               </div>
             </div>
           )}
@@ -174,14 +181,14 @@ export default function Register() {
               onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 outline-none"
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e) => e.field === 'email')
+                errors.some((e: ValidationError) => e.field === 'email')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e) => e.field === 'email') && (
+            {errors.some((e: ValidationError) => e.field === 'email') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e) => e.field === 'email')?.message}
+                {errors.find((e: ValidationError) => e.field === 'email')?.message}
               </p>
             )}
           </div>
@@ -206,10 +213,9 @@ export default function Register() {
               }`}
             />
 
-            {/* Password strength requirements feedback */}
             {(showPasswordRequirements || formData.password) && (
-              <div className="mt-3 space-y-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <p className="text-xs font-semibold text-gray-700">
+              <div className="mt-3 space-y-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
+                <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                   Password requirements:
                 </p>
                 <div className="space-y-1">
@@ -233,9 +239,9 @@ export default function Register() {
               </div>
             )}
 
-            {errors.some((e) => e.field === 'password') && (
+            {errors.some((e: ValidationError) => e.field === 'password') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e) => e.field === 'password')?.message}
+                {errors.find((e: ValidationError) => e.field === 'password')?.message}
               </p>
             )}
           </div>
@@ -252,14 +258,14 @@ export default function Register() {
               onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
               className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 outline-none"
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e) => e.field === 'full_name')
+                errors.some((e: ValidationError) => e.field === 'full_name')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e) => e.field === 'full_name') && (
+            {errors.some((e: ValidationError) => e.field === 'full_name') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e) => e.field === 'full_name')?.message}
+                {errors.find((e: ValidationError) => e.field === 'full_name')?.message}
               </p>
             )}
           </div>
@@ -276,21 +282,21 @@ export default function Register() {
               onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
               className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 outline-none"
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                errors.some((e) => e.field === 'company_name')
+                errors.some((e: ValidationError) => e.field === 'company_name')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
               }`}
             />
-            {errors.some((e) => e.field === 'company_name') && (
+            {errors.some((e: ValidationError) => e.field === 'company_name') && (
               <p className="mt-1 text-sm text-red-600">
-                {errors.find((e) => e.field === 'company_name')?.message}
+                {errors.find((e: ValidationError) => e.field === 'company_name')?.message}
               </p>
             )}
           </div>
 
           <button
             type="submit"
-            disabled={loading || !isPasswordFieldValid}
+            disabled={loading || (formData.password.length > 0 && !passwordIsStrong)}
             className="w-full py-2 px-4 border border-transparent rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Creating account...' : 'Create account'}
@@ -308,9 +314,28 @@ export default function Register() {
   )
 }
 
-/**
- * Component to display individual password requirement with checkmark or X.
- */
+function getPasswordStrengthLevel(strength: ReturnType<typeof checkPasswordStrength>) {
+  const metCount = Object.values(strength).filter(Boolean).length
+  if (metCount <= 2) return { level: 'Weak', color: 'bg-red-500', width: '33%' }
+  if (metCount === 3) return { level: 'Medium', color: 'bg-yellow-500', width: '66%' }
+  return { level: 'Strong', color: 'bg-green-500', width: '100%' }
+}
+
+function PasswordStrengthBar({ strength }: { strength: ReturnType<typeof checkPasswordStrength> }) {
+  const { level, color, width } = getPasswordStrengthLevel(strength)
+  return (
+    <div className="mt-2">
+      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div
+          className={`h-full ${color} transition-all duration-300`}
+          style={{ width }}
+        />
+      </div>
+      <p className="text-xs mt-1 text-gray-600">{level} password</p>
+    </div>
+  )
+}
+
 function PasswordRequirement({ met, text }: { met: boolean; text: string }) {
   return (
     <div className="flex items-center gap-2 text-xs">

@@ -2,9 +2,31 @@
 
 The AegisAI MCP (Model Context Protocol) server enables AI-assisted coding tools and language models to call AegisAI endpoints as native tools. This allows seamless integration of AegisAI's compliance, guard, and regulatory intelligence features into your AI workflows.
 
+## Table of Contents
+
+- What is MCP?
+- Getting Started
+- Available Tools
+- Configuring MCP Clients
+- Error Handling
+- Development
+- Architecture
+- Troubleshooting
+- Contributing
+- License
+
 ## What is MCP?
 
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io) is a standardized protocol that lets AI assistants (like Claude in VS Code, or other AI coding tools) call external services as structured tools. MCP provides a clean abstraction over HTTP APIs, enabling AI tools to safely and reliably interact with backend services.
+
+## Quick Start
+
+1. Install dependencies
+2. Configure environment variables
+3. Start the MCP server
+4. Connect your MCP client
+5. Use AegisAI tools directly from your AI assistant
+
 
 ## Getting Started
 
@@ -287,7 +309,25 @@ The MCP server:
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for guidelines on contributing to the MCP server.
 
+## Common Use Cases
+
+- Scan prompts for injection attacks
+- Classify AI systems under the EU AI Act
+- Query regulatory requirements
+- Integrate compliance checks into AI coding workflows
+
+## FAQ
+
+### Do I need the full AegisAI platform running?
+Yes, the MCP server communicates with the AegisAI backend.
+
+### Which AI assistants support MCP?
+Any MCP-compatible client such as Claude Desktop, Claude for VS Code, and other MCP-enabled tools.
+
+### Can I use a remote backend?
+Yes. Configure AEGISAI_BASE_URL accordingly.
+
 ## License
 
-Copyright (C) 2024 Sarthak Doshi  
+Copyright (C) 2024–2026 Sarthak Doshi  
 SPDX-License-Identifier: AGPL-3.0-only
