@@ -44,13 +44,16 @@ import hashlib
 import json
 import logging
 import time
-from typing import Any, AsyncIterator, Iterator, Protocol
+from typing import Any, AsyncIterator, Iterator, Optional, Protocol
 
 import anyio
+from fastapi import Request
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.models.audit_log import RAGAuditLog
 from app.models.rag_feedback import RAGFeedback
+from app.modules.rag.retrieval_chain import _get_chunk_guard, _get_embeddings_fn
 
 logger = logging.getLogger("aegisai.rag.stream")
 
@@ -82,6 +85,55 @@ ANSWER:"""
 def sse(event: str, data: dict[str, Any]) -> str:
     """Format a single Server-Sent Event frame."""
     return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+# ---------------------------------------------------------------------------
+# Audit helpers
+# ---------------------------------------------------------------------------
+
+
+def _hash_question(question: str) -> str:
+    return hashlib.sha256(question.encode("utf-8")).hexdigest()
+
+
+def _client_ip(request: Request) -> str | None:
+    return request.client.host if request.client else None
+
+
+def _log_rag_audit(
+    db: Session,
+    *,
+    user_id: int | None,
+    question: str,
+    event_type: str,
+    decision: str,
+    request: Request,
+    reasoning: str | None = None,
+    changes_summary: str | None = None,
+    chunks_total: int | None = None,
+    chunks_dropped: int | None = None,
+    grounding_score: float | None = None,
+) -> None:
+    """Persist a RAG audit record using only a question hash."""
+    try:
+        db.add(
+            RAGAuditLog(
+                user_id=user_id,
+                event_type=event_type,
+                question_hash=_hash_question(question),
+                decision=decision,
+                reasoning=reasoning,
+                changes_summary=changes_summary,
+                chunks_total=chunks_total,
+                chunks_dropped=chunks_dropped,
+                grounding_score=grounding_score,
+                ip_address=_client_ip(request),
+            )
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to write RAG audit log")
 
 
 # ---------------------------------------------------------------------------
@@ -161,13 +213,21 @@ async def _aiter_sync(sync_iter: Iterator[str]) -> AsyncIterator[str]:
 async def stream_rag_answer(
     *,
     question: str,
+    original_question: str,
+    vector_store: Any,
     retriever: _Retriever,
     llm: _LLM,
     db: Session,
     model_name: str | None = None,
+    user_id: Optional[int] = None,
+    http_request: Optional[Request] = None,
 ) -> AsyncIterator[str]:
     """
     Yield SSE frames for ``question``: meta → token+ → done (or error).
+
+    Applies chunk injection scanning, audit logging, and grounding
+    verification — matching the security posture of the non-streaming
+    ``/rag/query`` endpoint.
 
     Persists a ``RAGFeedback`` row before streaming so the frontend gets a
     stable ``answer_id`` in the very first frame. Updates that row with the
@@ -178,6 +238,9 @@ async def stream_rag_answer(
     feedback: RAGFeedback | None = None
     sync_token_iter: Iterator[str] | None = None
     finish_reason = "stop"
+    chunks_total = 0
+    chunks_dropped = 0
+    grounding_score = 0.0
 
     try:
         # --- 1. Retrieve --------------------------------------------------
@@ -188,9 +251,67 @@ async def stream_rag_answer(
             yield sse("error", {"code": "retrieval_failed", "message": str(exc)})
             return
 
-        context, citations = _build_context_and_citations(docs)
+        chunks_total = len(docs)
 
-        # --- 2. Persist placeholder so we have an answer_id ----------------
+        # --- 2. Chunk injection scanning -----------------------------------
+        safe_docs: list[_Document] = []
+        for doc in docs:
+            scan = _get_chunk_guard().scan_chunk(str(doc.page_content))
+            severity = str(scan.get("severity", "low")).lower()
+            if severity == "high":
+                chunks_dropped += 1
+                continue
+            if severity == "medium":
+                logger.warning(
+                    "Medium-severity prompt injection pattern found in streaming RAG chunk: %s",
+                    scan.get("matched_patterns", []),
+                )
+            safe_docs.append(doc)
+
+        logger.info(
+            "RAG streaming chunk safety scan: total=%s dropped=%s",
+            chunks_total,
+            chunks_dropped,
+        )
+
+        if chunks_total > 0 and not safe_docs:
+            yield sse(
+                "error",
+                {
+                    "code": "all_chunks_filtered",
+                    "message": "No retrieved context passed the chunk safety scan.",
+                },
+            )
+            finish_reason = "error"
+            return
+
+        context, citations = _build_context_and_citations(safe_docs)
+
+        # --- 3. Audit log: query start -------------------------------------
+        if http_request is not None:
+            _log_rag_audit(
+                db,
+                user_id=user_id,
+                question=original_question,
+                event_type="RAG_STREAM_QUERY",
+                decision="ALLOW",
+                request=http_request,
+                chunks_total=chunks_total,
+            )
+
+        if chunks_dropped and http_request is not None:
+            _log_rag_audit(
+                db,
+                user_id=user_id,
+                question=original_question,
+                event_type="RAG_CHUNK_DROPPED",
+                decision="ALLOW",
+                request=http_request,
+                chunks_total=chunks_total,
+                chunks_dropped=chunks_dropped,
+            )
+
+        # --- 4. Persist placeholder so we have an answer_id ----------------
         feedback = RAGFeedback(
             question_hash=hashlib.sha256(question.encode("utf-8")).hexdigest(),
             source_chunks=[c["source"] for c in citations if c["source"]],
@@ -199,7 +320,7 @@ async def stream_rag_answer(
         db.commit()
         db.refresh(feedback)
 
-        # --- 3. Emit meta -------------------------------------------------
+        # --- 5. Emit meta -------------------------------------------------
         yield sse(
             "meta",
             {
@@ -209,7 +330,7 @@ async def stream_rag_answer(
             },
         )
 
-        # --- 4. Stream LLM tokens ----------------------------------------
+        # --- 6. Stream LLM tokens ----------------------------------------
         prompt = PROMPT_TEMPLATE.format(
             context=context or "(no relevant context found)",
             question=question,
@@ -227,11 +348,47 @@ async def stream_rag_answer(
             finish_reason = "error"
             return
 
-        # --- 5. Emit done -------------------------------------------------
+        # --- 7. Grounding verification -------------------------------------
+        if answer_buf:
+            full_answer = "".join(answer_buf)
+            chunk_texts = [doc.page_content for doc in safe_docs]
+            try:
+                from app.modules.rag.grounding import GroundingChecker
+
+                embedding_fn = _get_embeddings_fn(vector_store)
+                grounding = GroundingChecker(embeddings_fn=embedding_fn).check(
+                    answer=full_answer,
+                    chunks=chunk_texts,
+                )
+                grounding_score = grounding.score
+                confidence = grounding.confidence
+
+                if confidence == "LOW" and http_request is not None:
+                    _log_rag_audit(
+                        db,
+                        user_id=user_id,
+                        question=original_question,
+                        event_type="RAG_LOW_GROUNDING",
+                        decision="ALLOW",
+                        request=http_request,
+                        chunks_total=chunks_total,
+                        chunks_dropped=chunks_dropped,
+                        grounding_score=grounding_score,
+                    )
+            except Exception:
+                logger.exception("rag.stream.grounding_failed")
+
+        # --- 8. Emit done -------------------------------------------------
         duration_ms = round((time.perf_counter() - started) * 1000, 2)
         yield sse(
             "done",
-            {"finish_reason": finish_reason, "duration_ms": duration_ms},
+            {
+                "finish_reason": finish_reason,
+                "duration_ms": duration_ms,
+                "grounding_score": grounding_score,
+                "chunks_total": chunks_total,
+                "chunks_dropped": chunks_dropped,
+            },
         )
 
     except GeneratorExit:
