@@ -13,6 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 import asyncio
 import hashlib
+import json
 import logging
 import mimetypes
 import os
@@ -793,10 +794,18 @@ async def query_knowledge_base_stream(
     request: Request,
     payload: RAGQueryRequest,
     current_user: User = Depends(get_current_user),
+    guarded_question: GuardedRAGQuestion = Depends(guard_rag_question),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
     """Stream a regulatory answer as Server-Sent Events."""
     del request
+
+    if guarded_question.guard_decision in ("ERROR", "BLOCK"):
+        reason = guarded_question.reasoning or "Query blocked by guard"
+        async def error_stream():
+            yield f"event: error\ndata: {json.dumps({'error': 'query_blocked', 'reason': reason})}\n\n"
+        return StreamingResponse(error_stream(), media_type="text/event-stream")
+
     try:
         vector_store = load_vector_store(user_id=current_user.id)
     except FileNotFoundError as exc:
@@ -809,7 +818,7 @@ async def query_knowledge_base_stream(
     llm_client = LLMClient()
 
     generator = stream_rag_answer(
-        question=payload.question,
+        question=guarded_question.question,
         retriever=retriever,
         llm=llm_client,
         db=db,
