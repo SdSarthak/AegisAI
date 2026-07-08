@@ -9,17 +9,26 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Dict, Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
+from app.core.context import get_request_id
 from app.core.database import engine, Base
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
+from app.middleware.csrf import CSRFMiddleware
+from app.core.telemetry import setup_telemetry
 from app.api.v1 import api_router, badge
 from app.plugins.regulation_loader import init_registry
+from app.tasks.scheduler import scheduler, snapshot_compliance_scores, send_reassessment_reminders
 import app.models  # ensure all ORM models are imported so tables are created
 
 # -------------------------------------------------------------------
@@ -54,10 +63,31 @@ async def lifespan(app: FastAPI):
     app.state.registry = init_registry(builtin_dir, custom_dir)
     logger.info("Regulation registry initialized.")
 
+    # Initialize background scheduler for periodic jobs
+    scheduler.add_job(
+        snapshot_compliance_scores,
+        "cron",
+        hour=2,
+        minute=0,
+        id="compliance_snapshot",
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        send_reassessment_reminders,
+        "cron",
+        hour=8,
+        minute=0,
+        id="reassessment_reminder",
+        replace_existing=True,
+    )
+    scheduler.start()
+    logger.info("Compliance scheduler started")
+
     yield  # Control is passed to FastAPI and the application runs
 
     logger.info("Shutting down AegisAI backend...")
-    # Place any teardown logic here (e.g., closing thread pools, background tasks)
+    scheduler.shutdown()
+    logger.info("Compliance scheduler shut down")
 
 # -------------------------------------------------------------------
 # FastAPI Application Initialization
@@ -96,7 +126,55 @@ app.add_middleware(
 
 # Added last => outermost: every request (incl. CORS preflight and error
 # responses) is assigned a request id and access-logged in JSON.
+app.add_middleware(CSRFMiddleware)
+
+# Added last => outermost: every request (incl. CORS preflight and error
+# responses) is assigned a request id and access-logged in JSON.
 app.add_middleware(RequestContextMiddleware)
+app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
+
+# -------------------------------------------------------------------
+# Error Handlers — include request_id in every error response body
+# -------------------------------------------------------------------
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    headers = getattr(exc, "headers", None)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "detail": exc.detail,
+            "request_id": get_request_id(),
+        },
+        headers=headers,
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": jsonable_encoder(exc.errors()),
+            "request_id": get_request_id(),
+        },
+    )
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    logger.exception("Unhandled exception", extra={"error": str(exc)})
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error",
+            "request_id": get_request_id(),
+        },
+    )
+
+# -------------------------------------------------------------------
+# Observability (OTel + Prometheus instrumentation)
+# -------------------------------------------------------------------
+setup_telemetry(app)
+logger.info("Telemetry instrumentation initialised.")
 
 # -------------------------------------------------------------------
 # Routing
@@ -139,4 +217,26 @@ def health_check() -> Dict[str, Any]:
         "database": db_status,
         "version": app.version,
         "service": "AegisAI Backend"
+    }
+
+
+@app.get("/ready", tags=["Health"])
+def readiness_check() -> Dict[str, Any]:
+    """
+    Readiness probe — confirms the application can serve traffic.
+    """
+    db_ready = False
+    try:
+        with engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+        db_ready = True
+    except SQLAlchemyError:
+        logger.exception("Readiness check — database not reachable")
+
+    ready = db_ready
+    return {
+        "ready": ready,
+        "database": db_ready,
+        "version": app.version,
+        "service": "AegisAI Backend",
     }

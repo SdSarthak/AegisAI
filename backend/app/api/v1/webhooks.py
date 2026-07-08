@@ -1,11 +1,20 @@
 """
-Webhooks API — configure outbound event delivery URLs.
+Webhooks API - configure outbound event delivery URLs.
+
 Copyright (C) 2024 Sarthak Doshi (github.com/SdSarthak)
 SPDX-License-Identifier: AGPL-3.0-only
 """
 
-from typing import List
+import hashlib
+import hmac
+import json
+import logging
+import time
+from typing import Any, List
+from urllib.parse import urlparse
+import ipaddress
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -16,6 +25,145 @@ from app.models.webhook import WebhookConfig
 from app.schemas.webhook import WebhookCreate, WebhookResponse
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+class WebhookDeliveryError(Exception):
+    """Raised when a webhook payload fails to reach its configured endpoint."""
+
+    def __init__(
+        self,
+        url: str,
+        event: str,
+        reason: str,
+    ) -> None:
+        super().__init__(f"Webhook delivery failed for event={event} url={url}: {reason}")
+        self.url = url
+        self.event = event
+        self.reason = reason
+
+
+def _validate_webhook_url(url: str) -> None:
+    """Validate webhook URL to prevent SSRF attacks at delivery time."""
+    parsed = urlparse(url)
+
+    # Only allow http/https schemes
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("Only http and https URLs are allowed")
+
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Invalid URL hostname")
+
+    # Check if hostname is an IP address
+    try:
+        ip = ipaddress.ip_address(hostname)
+        # Block private, link-local, loopback, and other special-use IPs
+        if ip.is_private:
+            raise ValueError("Private IP addresses are not allowed")
+        if ip.is_link_local:
+            raise ValueError("Link-local IP addresses are not allowed")
+        if ip.is_loopback:
+            raise ValueError("Loopback IP addresses are not allowed")
+        if ip.is_reserved:
+            raise ValueError("Reserved IP addresses are not allowed")
+        if ip.is_multicast:
+            raise ValueError("Multicast IP addresses are not allowed")
+        # Block cloud metadata endpoints (169.254.169.254)
+        if str(ip) == "169.254.169.254":
+            raise ValueError("Cloud metadata endpoints are not allowed")
+    except ValueError as e:
+        # Re-raise our own validation errors
+        if "not allowed" in str(e):
+            raise
+        # If it's not an IP address, it's a hostname - continue validation
+
+    # Block common internal hostnames
+    internal_hostnames = [
+        "localhost",
+        "metadata.google.internal",
+        "169.254.169.254",
+    ]
+    if hostname.lower() in internal_hostnames:
+        raise ValueError(f"Hostname '{hostname}' is not allowed")
+
+    # Block any hostname that resolves to internal networks
+    if hostname.endswith(".internal") or hostname.endswith(".local"):
+        raise ValueError("Internal domain names are not allowed")
+
+
+def _build_signature(secret: str, payload_body: bytes) -> str:
+    """Generate an HMAC-SHA256 signature for a webhook payload."""
+    return hmac.new(
+        secret.encode("utf-8"),
+        payload_body,
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _post_webhook(
+    url: str,
+    event: str,
+    payload: dict[str, Any],
+    secret: str | None,
+) -> None:
+    """Post a webhook payload to a configured endpoint with retry logic."""
+    max_retries = 3
+    payload_body = json.dumps(payload, separators=(",", ":")).encode("utf-8")
+    headers = {"X-AegisAI-Event": event}
+
+    if secret:
+        headers["X-AegisAI-Signature"] = _build_signature(secret, payload_body)
+
+    _validate_webhook_url(url)
+
+    for attempt in range(max_retries):
+        try:
+            with httpx.Client(timeout=5.0) as client:
+                response = client.post(url, content=payload_body, headers=headers)
+                response.raise_for_status()
+            return
+        except Exception as exc:
+            if attempt < max_retries - 1:
+                wait = 2 ** attempt
+                logger.warning(
+                    "Webhook attempt %d/%d failed for %s, retrying in %ds: %s",
+                    attempt + 1, max_retries, url, wait, exc,
+                )
+                time.sleep(wait)
+            else:
+                logger.exception(
+                    "Webhook delivery failed after %d attempts for event=%s url=%s",
+                    max_retries, event, url,
+                )
+
+
+def deliver_webhook(
+    db: Session,
+    user_id: int,
+    event: str,
+    payload: dict[str, Any],
+) -> None:
+    """Deliver event to active user webhooks subscribed to the event."""
+    webhooks = (
+        db.query(WebhookConfig)
+        .filter(
+            WebhookConfig.user_id == user_id,
+            WebhookConfig.is_active.is_(True),
+        )
+        .all()
+    )
+
+    for webhook in webhooks:
+        if event not in (webhook.events or []):
+            continue
+
+        _post_webhook(
+            url=webhook.url,
+            event=event,
+            payload=payload,
+            secret=webhook.secret,
+        )
 
 
 @router.post("", response_model=WebhookResponse, status_code=status.HTTP_201_CREATED)
@@ -23,24 +171,10 @@ def create_webhook(
     body: WebhookCreate,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
-    """Register a new webhook endpoint for the current user.
-
-    Args:
-        body: Payload containing the webhook URL and event configuration.
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
-
-    Returns:
-        WebhookResponse: The newly created webhook configuration with HTTP 201.
-    """
+) -> WebhookConfig:
+    """Register a new webhook endpoint for the current user."""
     webhook_data = body.model_dump()
-    webhook_data["url"] = str(body.url)
-
-    db_webhook = WebhookConfig(
-        **webhook_data,
-        user_id=current_user.id,
-    )
+    db_webhook = WebhookConfig(**webhook_data, user_id=current_user.id)
 
     db.add(db_webhook)
     db.commit()
@@ -53,21 +187,14 @@ def create_webhook(
 def list_webhooks(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
-    """List all webhook configurations for the current user.
-
-    Args:
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
-
-    Returns:
-        List[WebhookResponse]: All webhook configs belonging to the current user.
-    """
-    return (
-        db.query(WebhookConfig)
-        .filter(WebhookConfig.user_id == current_user.id)
-        .all()
+) -> list[WebhookConfig]:
+    """List all webhook configurations for the current user."""
+    # Fetch webhooks strictly scoped to the authenticated user
+    webhooks = (
+        db.query(WebhookConfig).filter(WebhookConfig.user_id == current_user.id).all()
     )
+
+    return webhooks
 
 
 @router.delete("/{webhook_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -75,33 +202,20 @@ def delete_webhook(
     webhook_id: int,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
-):
-    """Delete a webhook configuration belonging to the current user.
-
-    Args:
-        webhook_id: The unique identifier of the webhook to delete.
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
-
-    Returns:
-        None: HTTP 204 No Content on success.
-
-    Raises:
-        HTTPException: 404 if webhook not found or not owned by user.
-    """
+) -> None:
+    """Delete a webhook configuration owned by the current user."""
+    # Query checking BOTH the webhook ID and the user ID
     db_webhook = (
         db.query(WebhookConfig)
         .filter(
-            WebhookConfig.id == webhook_id,
-            WebhookConfig.user_id == current_user.id,
+            WebhookConfig.id == webhook_id, WebhookConfig.user_id == current_user.id
         )
         .first()
     )
 
-    if db_webhook is None:
+    if not db_webhook:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Webhook not found",
+            status_code=status.HTTP_404_NOT_FOUND, detail="Webhook not found"
         )
 
     db.delete(db_webhook)

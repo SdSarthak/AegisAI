@@ -37,6 +37,20 @@ class AISystemResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class AISystemSummarySchema(BaseModel):
+    """Lighter schema for list views."""
+
+    id: int
+    name: str
+    use_case: Optional[str]
+    sector: Optional[str]
+    risk_level: Optional[RiskLevel]
+    compliance_status: ComplianceStatus
+    compliance_score: Optional[float] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
 
 # Risk Classification
 class RiskClassificationRequest(BaseModel):
@@ -47,6 +61,8 @@ class RiskClassificationRequest(BaseModel):
     # AI used by public authorities to evaluate/classify people based on social behaviour
     realtime_biometric_public: bool = False
     # Real-time remote biometric identification in publicly accessible spaces
+    biometric_categorisation: bool = False
+    # Categorises people using biometric data to infer sensitive attributes
     subliminal_manipulation: bool = False
     # Techniques that manipulate behaviour subliminally causing harm
     exploits_vulnerable_groups: bool = False
@@ -80,12 +96,20 @@ class RiskClassificationRequest(BaseModel):
     biometric_categorization: bool = False
 
 
+class NISTMapping(BaseModel):
+    primary_functions: List[str]
+    subcategories: List[str]
+    rationale: str
+    nist_risk_tier: str
+
+
 class RiskClassificationResponse(BaseModel):
     risk_level: RiskLevel
     confidence: float  # 0-1
     reasons: List[str]
     requirements: List[str]
     next_steps: List[str]
+    nist_mapping: Optional["NISTMapping"] = None
 
 
 class RiskAssessmentResponse(BaseModel):

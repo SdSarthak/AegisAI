@@ -6,22 +6,31 @@ SPDX-License-Identifier: AGPL-3.0-only
 TODO for contributors (help wanted):
   - Implement GET /analytics/compliance-timeline?system_id={id}&days=30
     Return the last N daily ComplianceSnapshot rows for one AI system.
-  - Implement GET /analytics/summary — return overall stats:
-    total systems, average compliance score, count by risk level,
-    count by compliance status.
   - Acceptance criteria: after the daily snapshot scheduler runs (see
     backend/app/tasks/scheduler.py), the timeline endpoint returns at
     least one data point per system.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
+from app.models.compliance_snapshot import ComplianceSnapshot
+from app.models.document import Document
 from sqlalchemy import func
-from app.models.ai_system import AISystem, RiskLevel
+from datetime import datetime, timedelta, timezone
+from typing import Optional
+
+from fastapi import Query
+
+from app.models.guard_scan_log import GuardScanLog
+from app.schemas.audit_log import GuardAuditLogResponse
+from app.schemas.pagination import PaginatedResponse
 
 router = APIRouter()
 
@@ -33,25 +42,29 @@ def get_compliance_timeline(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return daily compliance snapshots for a given AI system.
+    """Return daily compliance snapshots for a single AI system."""
+    system = db.query(AISystem).filter(
+        AISystem.id == system_id,
+        AISystem.owner_id == current_user.id
+    ).first()
 
-    Args:
-        system_id: The unique identifier of the AI system to query.
-        days: Number of past days to include in the timeline (default: 30).
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
+    if not system:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="AI system not found"
+        )
 
-    Returns:
-        ComplianceTimelineResponse: A list of daily compliance snapshot
-            data points for the specified AI system.
+    since = datetime.now(timezone.utc) - timedelta(days=days)
 
-    Raises:
-        HTTPException: 501 if the endpoint is not yet implemented.
-        HTTPException: 403 if the system does not belong to current_user.
-    """
-    # TODO: implement — replace with real DB query
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED, detail="Not implemented yet"
+    snapshots = db.query(ComplianceSnapshot).filter(
+        ComplianceSnapshot.ai_system_id == system_id,
+        ComplianceSnapshot.snapshotted_at >= since
+    ).order_by(ComplianceSnapshot.snapshotted_at.asc()).all()
+
+    return ComplianceTimelineResponse(
+        ai_system_id=system.id,
+        ai_system_name=system.name,
+        snapshots=snapshots
     )
 
 
@@ -60,44 +73,136 @@ def get_analytics_summary(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return aggregate compliance statistics for the current user's systems.
-
-    Args:
-        current_user: The authenticated user extracted from the JWT token.
-        db: Database session dependency.
-
-    Returns:
-        dict: Aggregated stats including total systems, average compliance
-            score, count by risk level, and count by compliance status.
-
-    Raises:
-        HTTPException: 501 if the endpoint is not yet implemented.
-    """
-    # Return aggregate counts by risk level for the current user's AI systems.
-    # Keep this implementation minimal: counts for minimal/limited/high/unacceptable.
-    counts = (
-      db.query(AISystem.risk_level, func.count(AISystem.id))
-      .filter(AISystem.owner_id == current_user.id)
-      .group_by(AISystem.risk_level)
-      .all()
+    """Return aggregate compliance statistics for the current user."""
+    # FIX: use SQL GROUP BY instead of loading all rows into memory
+    risk_rows = (
+        db.query(AISystem.risk_level, func.count(AISystem.id))
+        .filter(AISystem.owner_id == current_user.id)
+        .group_by(AISystem.risk_level)
+        .all()
     )
 
-    # Map results into a predictable shape for the frontend.
-    result = {
-      "counts": {
-        "minimal": 0,
-        "limited": 0,
-        "high": 0,
-        "unacceptable": 0,
-      }
+    compliance_rows = (
+        db.query(AISystem.compliance_status, func.count(AISystem.id))
+        .filter(AISystem.owner_id == current_user.id)
+        .group_by(AISystem.compliance_status)
+        .all()
+    )
+
+    score_row = (
+        db.query(func.avg(AISystem.compliance_score))
+        .filter(
+            AISystem.owner_id == current_user.id,
+            AISystem.compliance_score.isnot(None),
+        )
+        .scalar()
+    )
+
+    total_systems = (
+        db.query(func.count(AISystem.id))
+        .filter(AISystem.owner_id == current_user.id)
+        .scalar()
+        or 0
+    )
+
+    # Systems with zero associated documents ("Documents Missing" widget stat).
+    documents_missing = (
+        db.query(func.count(AISystem.id))
+        .outerjoin(Document, Document.ai_system_id == AISystem.id)
+        .filter(AISystem.owner_id == current_user.id)
+        .group_by(AISystem.id)
+        .having(func.count(Document.id) == 0)
+        .count()
+    )
+
+    counts = {risk.value: 0 for risk in RiskLevel}
+    for risk_level, count in risk_rows:
+        if risk_level:
+            key = risk_level.value if hasattr(risk_level, "value") else str(risk_level)
+            if key in counts:
+                counts[key] = int(count)
+
+    compliance_statuses = {s.value: 0 for s in ComplianceStatus}
+    for compliance_status, count in compliance_rows:
+        if compliance_status:
+            key = (
+                compliance_status.value
+                if hasattr(compliance_status, "value")
+                else str(compliance_status)
+            )
+            if key in compliance_statuses:
+                compliance_statuses[key] = int(count)
+
+    average_compliance_score = round(float(score_row), 2) if score_row else 0.0
+
+    return {
+        "total_systems": int(total_systems),
+        "average_compliance_score": average_compliance_score,
+        "counts": counts,
+        "compliance_statuses": compliance_statuses,
+        # Flat summary consumed by the dashboard's Compliance Progress
+        # Summary Widget (issue #1341).
+        "widget_summary": {
+            "total": int(total_systems),
+            "compliant": compliance_statuses.get("compliant", 0),
+            "pending_review": compliance_statuses.get("under_review", 0),
+            "high_risk": counts.get("high", 0),
+            "documents_missing": int(documents_missing),
+        },
     }
 
-    for risk, cnt in counts:
-      if risk is None:
-        continue
-      # risk is an enum member (RiskLevel) or its value; normalize by string.
-      key = risk.value if hasattr(risk, "value") else str(risk)
-      if key in result["counts"]:
-        result["counts"][key] = int(cnt)
 
-    return result
+@router.get("/system-risk")
+def get_system_risk(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return per-system risk scores for the current user."""
+    systems = (
+        db.query(AISystem.id, AISystem.name, AISystem.compliance_score, AISystem.risk_level)
+        .filter(AISystem.owner_id == current_user.id)
+        .all()
+    )
+    return [
+        {
+            "id": system.id,
+            "name": system.name,
+            "risk_score": system.compliance_score if system.compliance_score is not None else 0,
+            "risk_level": system.risk_level.value if system.risk_level else "unknown",
+        }
+        for system in systems
+    ]
+
+
+@router.get("/audit-logs", response_model=PaginatedResponse[GuardAuditLogResponse])
+def get_audit_logs(
+    skip: int = Query(0, ge=0, description="Items to skip"),
+    limit: int = Query(20, ge=1, le=100, description="Items per page"),
+    user_id: Optional[int] = Query(None, description="Filter by user ID"),
+    decision: Optional[str] = Query(None, pattern="^(allow|sanitize|block)$", description="Filter by decision"),
+    days: Optional[int] = Query(None, ge=1, description="Only include logs from the last N days"),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return guard scan audit logs with pagination and optional filters."""
+    is_admin = getattr(current_user, "role", None) == "admin"
+    if user_id is not None and user_id != current_user.id and not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to query audit logs for another user.",
+        )
+
+    target_user_id = user_id if user_id is not None else current_user.id
+    filters = [GuardScanLog.user_id == target_user_id]
+
+    if decision:
+        filters.append(GuardScanLog.decision == decision)
+    if days:
+        since = datetime.now(timezone.utc) - timedelta(days=days)
+        filters.append(GuardScanLog.scanned_at >= since)
+
+    base_query = db.query(GuardScanLog).filter(*filters)
+    total = base_query.count()
+    logs = base_query.order_by(GuardScanLog.scanned_at.desc()).offset(skip).limit(limit).all()
+
+    return PaginatedResponse(items=logs, total=total, skip=skip, limit=limit)

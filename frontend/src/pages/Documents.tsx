@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { FileText, Download, Trash2, Plus, Edit, GitCompare } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
 
@@ -30,46 +31,49 @@ export default function Documents() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
-  const [copiedDocId, setCopiedDocId] = useState<number | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const limit = 10
 
-  const handleCopy = async (docId: number, content: string) => {
-    try {
-      await navigator.clipboard.writeText(content)
-
-      setCopiedDocId(docId)
-
-      setTimeout(() => {
-        setCopiedDocId(null)
-      }, 2000)
-    } catch (error) {
-      console.error('Failed to copy content:', error)
-    }
-  }
-
-  const { data: documentsData, isLoading } = useQuery({
-    queryKey: ['documents'],
-    queryFn: documentsApi.list,
+  const {
+    data: documentsData,
+    isLoading: documentsLoading,
+    isError: documentsError,
+    error: documentsErrorDetail,
+    refetch: refetchDocuments,
+  } = useQuery({
+    queryKey: ['documents', currentPage],
+    queryFn: () => documentsApi.list({ skip: (currentPage - 1) * limit, limit }),
   })
-  const documents = Array.isArray(documentsData) ? documentsData : (documentsData?.items ?? [])
+  const documents = (documentsData ?? []) as Document[]
   const filteredDocuments = documents.filter((doc: Document) => {
-  const matchesSearch =
-    doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (doc.content || '').toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesSearch =
+      doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (doc.content || '').toLowerCase().includes(searchQuery.toLowerCase())
 
-  const matchesType =
-    filterType === 'all' || doc.document_type === filterType
+    const matchesType = filterType === 'all' || doc.document_type === filterType
+    const matchesStatus = filterStatus === 'all' || doc.status === filterStatus
 
-  const matchesStatus =
-    filterStatus === 'all' || doc.status === filterStatus
+    return matchesSearch && matchesType && matchesStatus
+  })
 
-  return matchesSearch && matchesType && matchesStatus
-})
-
-  const { data: systemsData } = useQuery({
+  const {
+    data: systemsData,
+    isLoading: systemsLoading,
+    isError: systemsError,
+    error: systemsErrorDetail,
+    refetch: refetchSystems,
+  } = useQuery({
     queryKey: ['ai-systems'],
     queryFn: () => aiSystemsApi.list(),
   })
-  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
+  const systems = (systemsData ?? []) as AISystem[]
+  const isLoading = documentsLoading || systemsLoading
+  const hasError = documentsError || systemsError
+  const errorMessage =
+    (documentsErrorDetail instanceof Error && documentsErrorDetail.message) ||
+    (systemsErrorDetail instanceof Error && systemsErrorDetail.message) ||
+    'Unable to load documents.'
   
   const generateMutation = useMutation({
     mutationFn: documentsApi.generate,
@@ -108,19 +112,12 @@ export default function Documents() {
     if (!editingDoc) return
 
     try {
-      const response = await fetch(`/api/v1/documents/${editingDoc.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ content })
-      })
-
-      if (response.ok) {
-        queryClient.invalidateQueries({ queryKey: ['documents'] })
-      }
+      setSaveError(null)
+      await documentsApi.update(editingDoc.id, { content })
+      queryClient.invalidateQueries({ queryKey: ['documents'] })
     } catch (error) {
-      console.error('Save failed:', error)
+      const message = error instanceof Error ? error.message : 'Failed to save document'
+      setSaveError(message)
     }
   }
 
@@ -193,8 +190,7 @@ export default function Documents() {
         </div>
       </div>
 
-
-      {systems.length === 0 && (
+      {!hasError && systems.length === 0 && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-yellow-800 text-sm">
           You need to add an AI system first before generating documents.
         </div>
@@ -237,6 +233,21 @@ export default function Documents() {
             </div>
           ))}
         </div>
+      ) : hasError ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <FileText className="w-16 h-16 mx-auto mb-4 text-red-200" />
+          <h3 className="text-lg font-medium text-gray-900">Unable to load documents</h3>
+          <p className="text-gray-500 mt-1">{errorMessage}</p>
+          <button
+            onClick={() => {
+              refetchDocuments()
+              refetchSystems()
+            }}
+            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            Retry
+          </button>
+        </div>
       ) : documents.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
@@ -268,7 +279,20 @@ export default function Documents() {
                     <FileText className="w-6 h-6 text-primary-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">{doc.title}</h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-semibold text-gray-900">{doc.title}</h3>
+                      <span className="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-2 py-0.5">
+                        Compliance ID: #{doc.id}
+                        <CopyButton
+                          text={String(doc.id)}
+                          label="Copy ID"
+                          copiedLabel="Copied!"
+                          successMessage="Compliance ID copied!"
+                          iconOnly
+                          className="!p-0.5 !border-0 !rounded"
+                        />
+                      </span>
+                    </div>
                     <div className="flex items-center gap-3 mt-2">
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
                         {doc.document_type.replace(/_/g, ' ')}
@@ -296,24 +320,19 @@ export default function Documents() {
                       iconOnly
                     />
                   )}
+                  <Link
+                    to={`/documents/${doc.id}/diff`}
+                    className="p-2 text-gray-400 hover:text-purple-600 rounded-lg hover:bg-purple-50"
+                    title="Compare Versions"
+                  >
+                    <GitCompare className="w-5 h-5" />
+                  </Link>
                   <button
                     onClick={() => setEditingDoc(doc)}
                     className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
                     title="Edit"
                   >
                     <Edit className="w-5 h-5" />
-                  </button>
-
-                  <button
-                    onClick={() => handleCopy(doc.id, doc.content || '')}
-                    className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
-                    title={copiedDocId === doc.id ? 'Copied!' : 'Copy Markdown'}
-                  >
-                    {copiedDocId === doc.id ? (
-                      <Check className="w-5 h-5" />
-                    ) : (
-                      <Copy className="w-5 h-5" />
-                    )}
                   </button>
 
                   <button
@@ -332,7 +351,6 @@ export default function Documents() {
                   >
                     <Download className="w-5 h-5" />
                   </button>
-
                   <button
                     onClick={() => setDocumentToDelete(doc)}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
@@ -354,6 +372,29 @@ export default function Documents() {
           ))}
         </div>
       ))}
+
+      {/* Pagination Controls */}
+      <div className="flex items-center justify-between pt-4">
+        <button
+          onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+          disabled={currentPage === 1}
+          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+        >
+          Previous
+        </button>
+
+        <span className="text-sm font-medium text-gray-700">
+          Page {currentPage}
+        </span>
+
+        <button
+          onClick={() => setCurrentPage((prev) => prev + 1)}
+          disabled={documents.length < limit}
+          className="px-4 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+        >
+          Next
+        </button>
+      </div>
 
 
       {/* Delete Confirmation Modal */}
@@ -450,14 +491,23 @@ export default function Documents() {
       )}
 
       {/* Editor Modal */}
+      {saveError && (
+        <div className="fixed top-4 right-4 z-50 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg shadow-lg">
+          {saveError}
+        </div>
+      )}
+
       {editingDoc && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-40 p-4">
           <div className="bg-white rounded-xl w-full max-w-6xl h-[90vh]">
             <DocumentEditor
               documentId={editingDoc.id}
               initialContent={editingDoc.content || ''}
               onSave={handleSaveDocument}
-              onClose={() => setEditingDoc(null)}
+              onClose={() => {
+                setEditingDoc(null)
+                setSaveError(null)
+              }}
             />
           </div>
         </div>
@@ -465,3 +515,4 @@ export default function Documents() {
     </div>
   )
 }
+

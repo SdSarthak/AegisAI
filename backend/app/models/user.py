@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Enum, JSON
 from sqlalchemy.orm import relationship
 from datetime import datetime
 import enum
@@ -17,18 +17,26 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(255), unique=True, index=True, nullable=False)
-    hashed_password = Column(String(255), nullable=False)
-    full_name = Column(String(255))
-    company_name = Column(String(255))
+    hashed_password = Column(String(255), nullable=True)
+    oauth_provider = Column(String(50), nullable=True)
+    oauth_id = Column(String(255), nullable=True)
+    avatar_url = Column(String(500), nullable=True)
+    full_name = Column(String(100))
+    company_name = Column(String(100))
 
     # Subscription
     subscription_tier = Column(Enum(SubscriptionTier), default=SubscriptionTier.FREE)
     stripe_customer_id = Column(String(255), nullable=True)
     stripe_subscription_id = Column(String(255), nullable=True)
 
+    # Token versioning - incremented on password change to invalidate existing tokens
+    token_version = Column(Integer, default=0)
+
     # Status
     is_active = Column(Boolean, default=True)
     is_verified = Column(Boolean, default=False)
+    onboarding_completed = Column(Boolean, default=False)
+    dashboard_layout = Column(JSON, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)

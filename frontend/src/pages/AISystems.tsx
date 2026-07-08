@@ -1,7 +1,8 @@
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import React, { useState } from 'react'
+import {
+ useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi } from '../services/api'
-import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X } from 'lucide-react'
+import { Bot, Plus, Trash2, Edit, Search, Filter, ArrowUpDown, X, Download } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
 interface AISystem {
@@ -15,6 +16,14 @@ interface AISystem {
   compliance_score: number
   updated_at: string
 }
+
+const RISK_CHIPS: { value: string; label: string }[] = [
+  { value: '', label: 'All' },
+  { value: 'minimal', label: 'Minimal Risk' },
+  { value: 'limited', label: 'Limited Risk' },
+  { value: 'high', label: 'High Risk' },
+  { value: 'unacceptable', label: 'Unacceptable Risk' },
+]
 
 export default function AISystems() {
   const queryClient = useQueryClient()
@@ -32,21 +41,53 @@ export default function AISystems() {
   const [order, setOrder] = useState('desc')
   const [systemToDelete, setSystemToDelete] = useState<AISystem | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
+  const [exporting, setExporting] = useState(false)
+
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      // Guarantee the loading state is visible for at least 1 second
+      const minDelay = new Promise((r) => setTimeout(r, 1000))
+      const fetchExport = async () => {
+        return aiSystemsApi.exportCsv()
+      }
+      const [blob] = await Promise.all([fetchExport(), minDelay])
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'ai_systems.csv'
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error('Export failed:', error)
+    } finally {
+      setExporting(false)
+    }
+  }
+
 
   const limit = 10
 
-// Fix: Track filters in the cache key array, but keep the API function strictly to known parameters
-  const { data: systemsData, isLoading } = useQuery({
-    queryKey: ['ai-systems', sortBy, order, currentPage, riskFilter, complianceFilter],
+  const {
+    data: systemsData,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useQuery({
+    queryKey: ['ai-systems', sortBy, order, currentPage, riskFilter, complianceFilter, searchTerm],
     queryFn: () =>
       aiSystemsApi.list({
         sort_by: sortBy,
         order,
         page: currentPage,
         limit,
+        search: searchTerm || undefined,
+        risk_level: riskFilter || undefined,
+        compliance_status: complianceFilter || undefined,
       }),
   })
-  const systems = Array.isArray(systemsData) ? systemsData : (systemsData?.items ?? [])
+  const systems = (systemsData ?? []) as AISystem[]
 
   const createMutation = useMutation({
     mutationFn: aiSystemsApi.create,
@@ -65,16 +106,7 @@ export default function AISystems() {
     },
   })
 
-  const filteredSystems = systems.filter((system: AISystem) => {
-    const matchesSearch =
-      system.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (system.description?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
-
-    const matchesRisk = !riskFilter || system.risk_level === riskFilter
-    const matchesCompliance = !complianceFilter || system.compliance_status === complianceFilter
-
-    return matchesSearch && matchesRisk && matchesCompliance
-  })
+  const filteredSystems = systems
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -136,20 +168,55 @@ export default function AISystems() {
     <div className="space-y-8">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">AI Systems</h1>
-          <p className="text-gray-600">Manage your AI systems for compliance tracking</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Systems</h1>
+          <p className="text-gray-600 dark:text-gray-400">Manage your AI systems for compliance tracking</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-        >
-          <Plus className="w-5 h-5" />
-          Add AI System
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Download className="w-5 h-5" />
+            {exporting ? 'Exporting...' : 'Export CSV'}
+          </button>
+          <button
+            onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            <Plus className="w-5 h-5" />
+            Add AI System
+          </button>
+        </div>
+      </div>
+
+      {/* Quick Filter Chips (Risk Level) */}
+      <div className="flex flex-wrap gap-2">
+        {RISK_CHIPS.map((chip) => {
+          const isActive = riskFilter === chip.value
+          return (
+            <button
+              key={chip.value || 'all'}
+              type="button"
+              onClick={() => {
+                setRiskFilter(chip.value)
+                setCurrentPage(1)
+              }}
+              aria-pressed={isActive}
+              className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                isActive
+                  ? 'bg-primary-600 text-white border-primary-600'
+                  : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:border-primary-300 hover:text-primary-700'
+              }`}
+            >
+              {chip.label}
+            </button>
+          )
+        })}
       </div>
 
       {/* Search and Filters */}
-      <div className="flex flex-col md:flex-row gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+      <div className="flex flex-col md:flex-row gap-4 bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
@@ -262,26 +329,51 @@ export default function AISystems() {
             </div>
           ))}
         </div>
+      ) : isError ? (
+        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
+          <Bot className="w-16 h-16 mx-auto mb-4 text-red-300" />
+          <h3 className="text-lg font-medium text-gray-900">Unable to load AI systems</h3>
+          <p className="text-gray-500 mt-1">
+            {error instanceof Error ? error.message : 'Please try again.'}
+          </p>
+          <button
+            onClick={() => refetch()}
+            className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+          >
+            Retry
+          </button>
+        </div>
       ) : filteredSystems.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
           <Bot className="w-16 h-16 mx-auto mb-4 text-gray-300" />
           <h3 className="text-lg font-medium text-gray-900">
-            {searchTerm || riskFilter || complianceFilter 
-              ? 'No matching AI systems' 
+            {searchTerm || riskFilter || complianceFilter
+              ? 'No matching AI systems'
               : 'No AI systems yet'}
           </h3>
           <p className="text-gray-500 mt-1">
-            {searchTerm || riskFilter || complianceFilter 
+            {searchTerm || riskFilter || complianceFilter
               ? 'Try adjusting your filters or search term'
               : 'Add your first AI system to start tracking compliance'}
           </p>
           {!searchTerm && !riskFilter && !complianceFilter && (
-            <button
-              onClick={() => setShowModal(true)}
-              className="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
-            >
-              Add AI System
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Download className="w-5 h-5" />
+                {exporting ? 'Exporting...' : 'Export CSV'}
+              </button>
+              <button
+                onClick={() => setShowModal(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700"
+              >
+                <Plus className="w-5 h-5" />
+                Add AI System
+              </button>
+            </div>
           )}
         </div>
       ) : (
@@ -291,13 +383,13 @@ export default function AISystems() {
               key={system.id}
               className="bg-white rounded-xl border border-gray-200 p-6"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-4">
-                  <div className="p-3 bg-primary-50 rounded-lg">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex items-start gap-4 min-w-0 flex-1">
+                  <div className="p-3 bg-primary-50 rounded-lg shrink-0">
                     <Bot className="w-6 h-6 text-primary-600" />
                   </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{system.name}</h3>
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-gray-900 break-words">{system.name}</h3>
                     {system.description && (
                       <p className="text-gray-600 text-sm mt-1">{system.description}</p>
                     )}
@@ -308,7 +400,7 @@ export default function AISystems() {
                           addSuffix: true,
                         })}
                       </p>
-                    )}    
+                    )}
                     <div className="flex items-center gap-3 mt-2">
                       {system.sector && (
                         <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
@@ -342,7 +434,7 @@ export default function AISystems() {
                   </button>
                 </div>
               </div>
-              
+
               {/* Compliance Progress */}
               <div className="mt-4 pt-4 border-t border-gray-100">
                 <div className="flex items-center justify-between text-sm">
@@ -351,13 +443,12 @@ export default function AISystems() {
                 </div>
                 <div className="mt-2 h-2 bg-gray-100 rounded-full overflow-hidden">
                   <div
-                    className={`h-full rounded-full ${
-                      system.compliance_score >= 80
+                    className={`h-full rounded-full ${system.compliance_score >= 80
                         ? 'bg-green-500'
                         : system.compliance_score >= 50
-                        ? 'bg-yellow-500'
-                        : 'bg-red-500'
-                    }`}
+                          ? 'bg-yellow-500'
+                          : 'bg-red-500'
+                      }`}
                     style={{ width: `${system.compliance_score}%` }}
                   />
                 </div>
@@ -506,4 +597,3 @@ export default function AISystems() {
     </div>
   )
 }
-

@@ -8,5 +8,12 @@ class PaginatedResponse(BaseModel, Generic[T]):
     """Generic paginated response wrapper for list endpoints."""
     items: List[T]
     total: int
-    page: int
+    skip: int
     limit: int
+
+class CursorPaginatedResponse(BaseModel, Generic[T]):
+    """Cursor-based pagination response wrapper for scalable list endpoints."""
+
+    items: List[T]
+    limit: int
+    next_cursor: str | None = None
