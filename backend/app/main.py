@@ -20,7 +20,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
 from app.core.context import get_request_id
-from app.core.database import engine, Base
+from app.core.database import engine
 from app.core.logging import configure_logging
 from app.core.middleware import RequestContextMiddleware
 from app.middleware.csrf import CSRFMiddleware
@@ -49,8 +49,11 @@ async def lifespan(app: FastAPI):
     logger.info("Starting AegisAI backend...")
 
     try:
-        # Initialize database tables during application startup
-        Base.metadata.create_all(bind=engine)
+        # Run Alembic migrations on startup instead of create_all
+        from alembic.config import Config
+        from alembic import command
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
         logger.info("Database tables initialized.")
     except Exception:
         logger.exception("Failed to initialize database tables")

@@ -5,6 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+- Replace `Base.metadata.create_all()` with `alembic upgrade head` on startup for proper migration workflow
+
+### Added
+- Database migration workflow documentation added to `CONTRIBUTING.md`
+
 ### Added
 - **Compliance Scheduler** — Implemented background APScheduler jobs (`snapshot_compliance_scores`, `send_reassessment_reminders`) for daily compliance snapshots and risk-assessment expiry notifications.
 - **Pre-commit hooks** — Added `.pre-commit-config.yaml` with repository hygiene hooks (trailing-whitespace, end-of-file-fixer, check-merge-conflict, check-yaml, check-json) and a local ESLint hook wrapping the existing frontend lint command.
