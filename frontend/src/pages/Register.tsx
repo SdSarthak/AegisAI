@@ -143,11 +143,11 @@ export default function Register() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
+      <div className="max-w-md w-full space-y-8 p-8 bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-transparent dark:border-gray-700">
         <div className="text-center">
           <div className="flex justify-center">
-            <Shield className="w-12 h-12 text-primary-600" />
+            <Shield className="w-12 h-12 text-primary-600 dark:text-primary-400" />
           </div>
           <h2 className="mt-4 text-3xl font-bold text-gray-900 dark:text-white">
             Create Account
@@ -156,7 +156,11 @@ export default function Register() {
         </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
-          {errors.some((e: ValidationError) => e.field === 'general') && (
+          {error && (
+            <div className="p-3 text-sm text-red-650 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900/50 rounded-lg">
+              {error}
+          {/* General error message */}
+          {errors.some((e) => e.field === 'general') && (
             <div className="p-3 flex items-start gap-3 text-sm bg-red-50 rounded-lg border border-red-200">
               <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
               <div className="text-red-700">
@@ -174,7 +178,8 @@ export default function Register() {
               type="email"
               required
               value={formData.email}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, email: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 outline-none"
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
                 errors.some((e: ValidationError) => e.field === 'email')
                   ? 'border-red-300 bg-red-50'
@@ -189,35 +194,24 @@ export default function Register() {
           </div>
 
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Password
             </label>
-            <div className="relative mt-1">
-              <input
-                id="password"
-                type={showPassword ? 'text' : 'password'}
-                required
-                value={formData.password}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, password: e.target.value })}
-                onFocus={() => setShowPasswordRequirements(true)}
-                onBlur={() => setShowPasswordRequirements(false)}
-                className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
-                  errors.some((e: ValidationError) => e.field === 'password')
-                    ? 'border-red-300 bg-red-50'
-                    : 'border-gray-300'
-                }`}
-              />
-              <button
-                type="button"
-                onMouseDown={(e: React.MouseEvent) => e.preventDefault()}
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 focus:outline-none"
-              >
-                {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-              </button>
-            </div>
-
-            {formData.password && <PasswordStrengthBar strength={passwordStrength} />}
+            <input
+              id="password"
+              type="password"
+              required
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 outline-none"
+              onFocus={() => setShowPasswordRequirements(true)}
+              onBlur={() => setShowPasswordRequirements(false)}
+              className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
+                formData.password && !isPasswordFieldValid
+                  ? 'border-red-300 bg-red-50'
+                  : 'border-gray-300'
+              }`}
+            />
 
             {(showPasswordRequirements || formData.password) && (
               <div className="mt-3 space-y-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
@@ -253,7 +247,7 @@ export default function Register() {
           </div>
 
           <div>
-            <label htmlFor="full_name" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="full_name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Full Name
             </label>
             <input
@@ -261,7 +255,8 @@ export default function Register() {
               type="text"
               required
               value={formData.full_name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, full_name: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, full_name: e.target.value })}
+              className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 outline-none"
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
                 errors.some((e: ValidationError) => e.field === 'full_name')
                   ? 'border-red-300 bg-red-50'
@@ -276,7 +271,7 @@ export default function Register() {
           </div>
 
           <div>
-            <label htmlFor="company_name" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="company_name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               Company Name
             </label>
             <input
@@ -284,7 +279,8 @@ export default function Register() {
               type="text"
               required
               value={formData.company_name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({ ...formData, company_name: e.target.value })}
+              onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+              className="mt-1 block w-full px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 outline-none"
               className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
                 errors.some((e: ValidationError) => e.field === 'company_name')
                   ? 'border-red-300 bg-red-50'
@@ -309,7 +305,7 @@ export default function Register() {
 
         <p className="text-center text-sm text-gray-600 dark:text-gray-400">
           Already have an account?{' '}
-          <Link to="/login" className="text-primary-600 hover:text-primary-500">
+          <Link to="/login" className="text-primary-600 dark:text-primary-400 hover:text-primary-500 dark:hover:text-primary-300">
             Sign in
           </Link>
         </p>

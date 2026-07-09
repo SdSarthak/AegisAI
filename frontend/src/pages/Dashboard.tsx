@@ -158,22 +158,22 @@ export default function Dashboard() {
             to="/ai-systems"
             className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
           >
-            <Bot className="w-5 h-5 text-primary-600" />
-            <span className="font-medium">Add AI System</span>
+            <Bot className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+            <span className="font-medium text-gray-900 dark:text-white">Add AI System</span>
           </Link>
           <Link
             to="/classification"
             className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
           >
-            <AlertTriangle className="w-5 h-5 text-primary-600" />
-            <span className="font-medium">Risk Classification</span>
+            <AlertTriangle className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+            <span className="font-medium text-gray-900 dark:text-white">Risk Classification</span>
           </Link>
           <Link
             to="/documents"
             className="flex items-center gap-3 p-4 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary-300 dark:hover:border-primary-500 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors"
           >
-            <FileText className="w-5 h-5 text-primary-600" />
-            <span className="font-medium">Generate Documents</span>
+            <FileText className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+            <span className="font-medium text-gray-900 dark:text-white">Generate Documents</span>
           </Link>
         </div>
       </div>

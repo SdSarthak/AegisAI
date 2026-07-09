@@ -26,49 +26,46 @@ import {
 
 import { analyticsApi } from "../services/api";
 
-type RiskData = {
-  name: string;
-  value: number;
-};
+const barChartData = [
+  { name: 'System A', risk: 45 },
+  { name: 'System B', risk: 80 },
+  { name: 'System C', risk: 30 },
+  { name: 'System D', risk: 65 },
+  { name: 'System E', risk: 20 },
+]
 
-type SummaryStat = {
-  label: string;
-  value: string;
-  icon: React.ComponentType<{ className?: string }>;
-  color: string;
-  bg: string;
-};
-
-type LineChartPoint = {
-  name: string;
-  score: number;
-};
-
-type BarChartPoint = {
-  name: string;
-  risk: number;
-};
-
-const chartThemes = {
-  light: {
-    grid: "rgb(229 231 235)",
-    axis: "rgb(75 85 99)",
-    tooltipBackground: "rgb(255 255 255)",
-    tooltipBorder: "rgb(229 231 235)",
-    tooltipText: "rgb(17 24 39)",
-    legendText: "rgb(55 65 81)",
-    line: "rgb(37 99 235)",
-    bar: "rgb(225 29 72)",
+const summaryStats = [
+  {
+    label: 'Total Systems',
+    value: '12',
+    icon: Activity,
+    color: 'text-blue-600 dark:text-blue-400',
+    bg: 'bg-blue-50 dark:bg-blue-950/40',
+    bg: 'bg-blue-50 dark:bg-blue-500/10',
   },
-  dark: {
-    grid: "rgb(55 65 81)",
-    axis: "rgb(209 213 219)",
-    tooltipBackground: "rgb(31 41 55)",
-    tooltipBorder: "rgb(75 85 99)",
-    tooltipText: "rgb(243 244 246)",
-    legendText: "rgb(229 231 235)",
-    line: "rgb(96 165 250)",
-    bar: "rgb(251 113 133)",
+  {
+    label: 'Avg Score',
+    value: '84%',
+    icon: TrendingUp,
+    color: 'text-green-600 dark:text-green-400',
+    bg: 'bg-green-50 dark:bg-green-950/40',
+    bg: 'bg-green-50 dark:bg-green-500/10',
+  },
+  {
+    label: 'Compliant',
+    value: '10',
+    icon: ShieldCheck,
+    color: 'text-emerald-600 dark:text-emerald-400',
+    bg: 'bg-emerald-50 dark:bg-emerald-950/40',
+    bg: 'bg-emerald-50 dark:bg-emerald-500/10',
+  },
+  {
+    label: 'High Risk',
+    value: '2',
+    icon: AlertTriangle,
+    color: 'text-red-600 dark:text-red-400',
+    bg: 'bg-red-50 dark:bg-red-950/40',
+    bg: 'bg-red-50 dark:bg-red-500/10',
   },
 };
 
@@ -311,65 +308,66 @@ export default function Analytics() {
           </div>
 
           <div className="h-72 w-full">
-            {loadingTimeline ? (
-              <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
-                Loading timeline...
-              </div>
-            ) : errorTimeline ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
-                <p className="mb-2">{errorTimeline}</p>
-                <button
-                  onClick={() => selectedSystemId && fetchComplianceTimeline(selectedSystemId)}
-                  className="text-sm text-primary-600 hover:underline"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : lineChartData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
-                No compliance data available.
-              </div>
-            ) : (
-              <ResponsiveContainer
-                key={`${chartRemountKey}-timeline`}
-                width="100%"
-                height="100%"
-              >
-                <LineChart data={lineChartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartTheme.grid} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fill: chartTheme.axis, fontSize: 12 }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    tick={{ fill: chartTheme.axis, fontSize: 12 }}
-                    tickLine={false}
-                    axisLine={false}
-                    domain={[0, 100]}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: chartTheme.tooltipBackground,
-                      borderColor: chartTheme.tooltipBorder,
-                      color: chartTheme.tooltipText,
-                    }}
-                    itemStyle={{ color: chartTheme.tooltipText }}
-                    labelStyle={{ color: chartTheme.tooltipText }}
-                  />
-                  <Legend wrapperStyle={{ color: chartTheme.legendText }} />
-                  <Line
-                    type="monotone"
-                    dataKey="score"
-                    name="Compliance Score"
-                    stroke={chartTheme.line}
-                    strokeWidth={3}
-                    activeDot={{ r: 6 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            )}
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <LineChart data={lineChartData}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke={document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'}
+                  stroke={chartTheme.grid}
+                />
+
+                <XAxis
+                  dataKey="name"
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <YAxis
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor:
+                      chartTheme.tooltipBg,
+                    border: `1px solid ${chartTheme.tooltipBorder}`,
+                    borderRadius: '8px',
+                    color: chartTheme.text,
+                  }}
+                  labelStyle={{
+                    color: chartTheme.text,
+                  }}
+                />
+
+                <Legend
+                  wrapperStyle={{
+                    color: chartTheme.text,
+                  }}
+                />
+
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  name="Avg Score"
+                  stroke="#0ea5e9"
+                  strokeWidth={3}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
@@ -382,64 +380,65 @@ export default function Analytics() {
           </div>
 
           <div className="h-72 w-full">
-            {loadingSystems ? (
-              <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
-                Loading system risk data...
-              </div>
-            ) : errorSystems ? (
-              <div className="h-full flex flex-col items-center justify-center text-gray-500 dark:text-gray-400">
-                <p className="mb-2">{errorSystems}</p>
-                <button
-                  onClick={fetchSystemRisk}
-                  className="text-sm text-primary-600 hover:underline"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : barChartData.length === 0 ? (
-              <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
-                No systems registered yet.
-              </div>
-            ) : (
-              <ResponsiveContainer
-                key={`${chartRemountKey}-systems`}
-                width="100%"
-                height="100%"
-              >
-                <BarChart data={barChartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartTheme.grid} />
-                  <XAxis
-                    dataKey="name"
-                    tick={{ fill: chartTheme.axis, fontSize: 12 }}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <YAxis
-                    tick={{ fill: chartTheme.axis, fontSize: 12 }}
-                    tickLine={false}
-                    axisLine={false}
-                    domain={[0, 100]}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: chartTheme.tooltipBackground,
-                      borderColor: chartTheme.tooltipBorder,
-                      color: chartTheme.tooltipText,
-                    }}
-                    itemStyle={{ color: chartTheme.tooltipText }}
-                    labelStyle={{ color: chartTheme.tooltipText }}
-                  />
-                  <Legend wrapperStyle={{ color: chartTheme.legendText }} />
-                  <Bar
-                    dataKey="risk"
-                    name="Compliance Score"
-                    fill={chartTheme.bar}
-                    radius={[4, 4, 0, 0]}
-                    maxBarSize={40}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
+            <ResponsiveContainer
+              width="100%"
+              height="100%"
+            >
+              <BarChart data={barChartData}>
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke={document.documentElement.classList.contains('dark') ? '#374151' : '#e5e7eb'}
+                  stroke={chartTheme.grid}
+                />
+
+                <XAxis
+                  dataKey="name"
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <YAxis
+                  tick={{
+                    fill: chartTheme.text,
+                    fontSize: 12,
+                  }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor:
+                      chartTheme.tooltipBg,
+                    border: `1px solid ${chartTheme.tooltipBorder}`,
+                    borderRadius: '8px',
+                    color: chartTheme.text,
+                  }}
+                  labelStyle={{
+                    color: chartTheme.text,
+                  }}
+                />
+
+                <Legend
+                  wrapperStyle={{
+                    color: chartTheme.text,
+                  }}
+                />
+
+                <Bar
+                  dataKey="risk"
+                  name="Risk Score"
+                  fill="#f43f5e"
+                  radius={[4, 4, 0, 0]}
+                  maxBarSize={40}
+                />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </div>

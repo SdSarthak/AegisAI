@@ -183,7 +183,7 @@ setRiskLevel(detectedRiskLevel)
       <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 w-full max-w-lg">
         {/* Header */}
         <div className="flex items-center gap-3 mb-8">
-          <Shield className="w-8 h-8 text-primary-600" />
+          <Shield className="w-8 h-8 text-primary-600 dark:text-primary-400" />
           <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Welcome to AegisAI</h1>
         </div>
 
@@ -194,9 +194,9 @@ setRiskLevel(detectedRiskLevel)
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                   index < currentStep
                     ? 'bg-primary-600 text-white'
-                    : index === currentStep
-                      ? 'border-2 border-primary-600 text-primary-600'
-                      : 'bg-gray-100 text-gray-400'
+                    : idx === currentStep
+                    ? 'border-2 border-primary-600 dark:border-primary-400 text-primary-600 dark:text-primary-400'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-505'
                 }`}
               >
                 {index + 1}
@@ -204,9 +204,7 @@ setRiskLevel(detectedRiskLevel)
 
               {index < STEPS.length - 1 && (
                 <div
-                  className={`h-0.5 flex-1 ${
-                    index < currentStep ? 'bg-primary-600' : 'bg-gray-200'
-                  }`}
+                  className={`h-0.5 flex-1 ${idx < currentStep ? 'bg-primary-600' : 'bg-gray-200 dark:bg-gray-700'}`}
                 />
               )}
             </div>
@@ -215,211 +213,25 @@ setRiskLevel(detectedRiskLevel)
 
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
-            <StepIcon className="w-6 h-6 text-primary-600" />
+            <StepIcon className="w-6 h-6 text-primary-600 dark:text-primary-400" />
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
               {STEPS[currentStep].label}
             </h2>
           </div>
           <p className="text-gray-600 dark:text-gray-400 text-sm">{STEPS[currentStep].description}</p>
 
-          {error && (
-            <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
-            </div>
-          )}
-
-          {currentStep === 0 && (
-            <div className="mt-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  AI System Name
-                </label>
-                <input
-                  type="text"
-                  value={systemForm.name}
-                  onChange={(event) =>
-                    setSystemForm((form) => ({
-                      ...form,
-                      name: event.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Example: Resume Screening AI"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Description
-                </label>
-                <textarea
-                  value={systemForm.description}
-                  onChange={(event) =>
-                    setSystemForm((form) => ({
-                      ...form,
-                      description: event.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Briefly describe your AI system"
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Use Case
-                </label>
-                <input
-                  type="text"
-                  value={systemForm.use_case}
-                  onChange={(event) =>
-                    setSystemForm((form) => ({
-                      ...form,
-                      use_case: event.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Example: Hiring, healthcare, education"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Sector
-                </label>
-                <input
-                  type="text"
-                  value={systemForm.sector}
-                  onChange={(event) =>
-                    setSystemForm((form) => ({
-                      ...form,
-                      sector: event.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Example: HR Tech"
-                />
-              </div>
-            </div>
-          )}
-
-          {currentStep === 1 && (
-            <div className="mt-6 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Intended Purpose
-                </label>
-                <textarea
-                  value={classificationForm.intended_purpose}
-                  onChange={(event) =>
-                    setClassificationForm((form) => ({
-                      ...form,
-                      intended_purpose: event.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="What is this AI system used for?"
-                  rows={3}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Target Users
-                </label>
-                <input
-                  type="text"
-                  value={classificationForm.target_users}
-                  onChange={(event) =>
-                    setClassificationForm((form) => ({
-                      ...form,
-                      target_users: event.target.value,
-                    }))
-                  }
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  placeholder="Example: HR teams, compliance officers"
-                />
-              </div>
-
-              <label className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={classificationForm.uses_personal_data}
-                  onChange={(event) =>
-                    setClassificationForm((form) => ({
-                      ...form,
-                      uses_personal_data: event.target.checked,
-                    }))
-                  }
-                />
-                Uses personal data
-              </label>
-
-              <label className="flex items-center gap-3 rounded-lg border border-gray-200 p-3 text-sm">
-                <input
-                  type="checkbox"
-                  checked={classificationForm.affects_decision_making}
-                  onChange={(event) =>
-                    setClassificationForm((form) => ({
-                      ...form,
-                      affects_decision_making: event.target.checked,
-                    }))
-                  }
-                />
-                Affects decision-making about people
-              </label>
-
-              {riskLevel && (
-                <div className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-700">
-                  Risk classification: <span className="font-semibold">{riskLevel}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {currentStep === 2 && (
-            <div className="mt-6 space-y-4">
-              {riskLevel && (
-                <div className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-700">
-                  Your AI system was classified as:{' '}
-                  <span className="font-semibold">{riskLevel}</span>
-                </div>
-              )}
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Document Type
-                </label>
-                <select
-                  value={documentType}
-                  onChange={(event) => setDocumentType(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                >
-                  <option value="technical_documentation">
-                    Technical Documentation
-                  </option>
-                  <option value="risk_assessment">Risk Assessment</option>
-                  <option value="conformity_declaration">
-                    Conformity Declaration
-                  </option>
-                </select>
-              </div>
-
-              <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
-                Click Finish to generate your first compliance document and complete
-                onboarding.
-              </p>
-            </div>
-          )}
+          {/* TODO (good first issue): add step-specific form fields here */}
+          <div className="mt-6 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-dashed border-gray-300 dark:border-gray-700 text-center text-sm text-gray-400 dark:text-gray-500">
+            Step {currentStep + 1} form fields — implement me
+          </div>
         </div>
 
         <div className="flex justify-between">
           <button
             type="button"
             onClick={handleBack}
-            disabled={currentStep === 0 || isLoading}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+            disabled={currentStep === 0}
+            className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Back
           </button>

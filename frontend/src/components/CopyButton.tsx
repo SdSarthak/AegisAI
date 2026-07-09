@@ -62,8 +62,8 @@ export default function CopyButton({
   }
 
   const baseClass = iconOnly
-    ? 'inline-flex items-center justify-center p-2 rounded-lg border border-gray-200 text-gray-500 hover:text-primary-600 hover:border-primary-200 hover:bg-primary-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-    : 'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-semibold text-gray-600 hover:text-primary-700 hover:border-primary-200 hover:bg-primary-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+    ? 'inline-flex items-center justify-center p-2 rounded-lg border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 hover:border-primary-200 dark:hover:border-primary-850 hover:bg-primary-50 dark:hover:bg-primary-950/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+    : 'inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 text-xs font-semibold text-gray-600 dark:text-gray-300 hover:text-primary-700 dark:hover:text-primary-400 hover:border-primary-200 dark:hover:border-primary-850 hover:bg-primary-50 dark:hover:bg-primary-950/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
 
   const buttonTitle = copied ? copiedLabel : label
 
