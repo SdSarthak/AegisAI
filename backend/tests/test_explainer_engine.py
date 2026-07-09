@@ -3,14 +3,92 @@ Unit tests for backend/app/modules/explainer/engine.py —
 risk classification explainer helpers.
 """
 
-import pytest
+from types import SimpleNamespace
+from unittest.mock import patch
 
+from app.models.ai_system import RiskLevel
+from app.schemas.explain import ExplainRequest
 from app.modules.explainer.engine import (
     _extract_keywords,
     _match_factors,
     _normalize,
+    _build_questionnaire,
+    _compute_confidence,
+    explain_risk,
 )
 
+class TestBuildQuestionnaire:
+    def test_selected_flags_are_true(self):
+        req = _build_questionnaire(
+            [
+                "uses_biometric_data",
+                "law_enforcement",
+            ]
+        )
+
+        assert req.uses_biometric_data is True
+        assert req.law_enforcement is True
+        assert req.credit_worthiness is False
+        assert req.interacts_with_humans is False
+
+class TestComputeConfidence:
+    def test_no_matches(self):
+        assert _compute_confidence([], RiskLevel.MINIMAL) == 0.75
+
+    def test_single_keyword(self):
+        matched = [("credit_worthiness", ["credit"])]
+        assert _compute_confidence(matched, RiskLevel.HIGH) == 0.70
+
+    def test_two_keywords(self):
+        matched = [("credit_worthiness", ["credit", "loan"])]
+        assert _compute_confidence(matched, RiskLevel.HIGH) == 0.78
+
+    def test_three_keywords(self):
+        matched = [("credit_worthiness", ["credit", "loan", "mortgage"])]
+        assert _compute_confidence(matched, RiskLevel.HIGH) == 0.85
+
+    def test_many_keywords_and_multiple_factors(self):
+        matched = [
+            ("credit_worthiness", ["a", "b"]),
+            ("law_enforcement", ["c", "d"]),
+            ("uses_biometric_data", ["e"]),
+        ]
+
+        assert _compute_confidence(matched, RiskLevel.HIGH) == 0.97
+
+class TestExplainRisk:
+    @patch("app.api.v1.classification.classify_risk")
+    @patch("app.api.v1.classification.QUESTIONNAIRE_RISK_FACTORS", create=True)
+    def test_explain_risk_returns_expected_response(
+        self,
+        mock_questionnaire,
+        mock_classify,
+    ):
+        mock_classify.return_value = SimpleNamespace(
+            risk_level=RiskLevel.HIGH,
+            reasons=["reason"],
+            requirements=["requirement"],
+        )
+
+        mock_questionnaire[:] = [
+            SimpleNamespace(
+                id="uses_biometric_data",
+                question="Uses biometric data?",
+                article="Annex III point 1",
+            )
+        ]
+
+        request = ExplainRequest(
+            description="Uses facial recognition biometric identification"
+        )
+
+        response = explain_risk(request)
+
+        assert response.risk_level == RiskLevel.HIGH
+        assert response.confidence > 0
+        assert len(response.triggered_keywords) > 0
+        assert len(response.relevant_articles) > 0
+        assert len(response.recommendations) > 0
 
 class TestNormalize:
     """Tests for _normalize — lowercase and strip."""
