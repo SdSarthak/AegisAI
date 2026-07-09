@@ -313,6 +313,7 @@ def scan_prompt(
                 message="A prompt was blocked because it matched high-risk guard rules.",
                 resource_type="guard_scan",
                 resource_id=log.id,
+                commit=False,
             )
             try:
                 deliver_webhook(
