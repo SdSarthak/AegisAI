@@ -421,7 +421,7 @@ async def google_callback(request: Request, db: Session = Depends(get_db)):
     )
 
     return RedirectResponse(
-        url=f"{settings.FRONTEND_URL}/oauth/callback?token={access_token}"
+        url=f"{settings.FRONTEND_URL}/oauth/callback#token={access_token}"
     )
 
 
@@ -469,5 +469,5 @@ async def github_callback(request: Request, db: Session = Depends(get_db)):
     )
 
     return RedirectResponse(
-        url=f"{settings.FRONTEND_URL}/oauth/callback?token={access_token}"
+        url=f"{settings.FRONTEND_URL}/oauth/callback#token={access_token}"
     )
