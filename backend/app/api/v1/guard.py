@@ -119,8 +119,9 @@ class UserGuardConfig(TypedDict):
     suspicious_threshold: float
 
 
-# Temporary in-memory config store
+# Temporary in-memory config store with thread safety
 user_guard_configs: dict[int, UserGuardConfig] = {}
+_guard_config_lock = Lock()
 
 
 def _infer_detection_type(regex_flag: bool, intent: str) -> str:
@@ -900,7 +901,8 @@ def get_guard_config(current_user: User = Depends(get_current_user)):
         "suspicious_threshold": 0.5,
     }
 
-    return user_guard_configs.get(current_user.id, default_config)
+    with _guard_config_lock:
+        return user_guard_configs.get(current_user.id, default_config)
 
 
 @router.patch("/config", tags=["LLM Guard"])
@@ -927,16 +929,17 @@ def update_guard_config(
             detail="suspicious_threshold must be between 0 and 1",
         )
 
-    user_guard_configs[current_user.id] = {
-        "sanitization_level": config.sanitization_level,
-        "malicious_threshold": config.malicious_threshold,
-        "suspicious_threshold": config.suspicious_threshold,
-    }
+    with _guard_config_lock:
+        user_guard_configs[current_user.id] = {
+            "sanitization_level": config.sanitization_level,
+            "malicious_threshold": config.malicious_threshold,
+            "suspicious_threshold": config.suspicious_threshold,
+        }
 
-    return {
-        "message": "Guard configuration updated successfully",
-        "config": user_guard_configs[current_user.id],
-    }
+        return {
+            "message": "Guard configuration updated successfully",
+            "config": user_guard_configs[current_user.id],
+        }
 
 
 @router.post("/scan/batch", response_model=BulkScanResponse)
