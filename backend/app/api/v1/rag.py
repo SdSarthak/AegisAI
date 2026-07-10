@@ -331,7 +331,6 @@ def ingest_documents(
     db: Session = Depends(get_db),
 ) -> RAGIngestResponse:
     """Upload regulatory PDFs, persist metadata, and rebuild the FAISS index."""
-    user_id = current_user.id
     for upload_file in files:
         # Determine size synchronously using the underlying file object stream
         upload_file.file.seek(0, 2)
@@ -349,35 +348,30 @@ def ingest_documents(
             detail=f"Too many files. Maximum allowed is {settings.RAG_MAX_FILES_PER_REQUEST}.",
         )
 
-    pdf_files = [
-        upload
-        for upload in files
-        if upload.filename
-        and upload.filename.lower().endswith(".pdf")
-        and mimetypes.guess_type(upload.filename)[0]
-        in ("application/pdf", "binary/octet-stream", None)
-    ]
+    pdf_files = []
+    for upload in files:
+        if (
+            upload.filename 
+            and upload.filename.lower().endswith(".pdf") 
+            and mimetypes.guess_type(upload.filename)[0] in ["application/pdf", "binary/octet-stream", None]
+        ):
+            upload.file.seek(0, 2)
+            file_size = upload.file.tell()
+            upload.file.seek(0)
+
+            if file_size > settings.RAG_MAX_FILE_SIZE_BYTES:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Upload failed: '{upload.filename}' exceeds the maximum allowed size limit."
+                )
+            
+            pdf_files.append(upload)
     if not pdf_files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No valid PDF files supplied. Please upload files with a .pdf extension.",
         )
 
-    total_size = 0
-    for upload in pdf_files:
-        upload.file.seek(0, 2)
-        file_size = upload.file.tell()
-        upload.file.seek(0)
-
-        if file_size > settings.RAG_MAX_FILE_SIZE_BYTES:
-            raise HTTPException(
-                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                detail=(
-                    f"File {upload.filename} exceeds the maximum size of "
-                    f"{settings.RAG_MAX_FILE_SIZE_BYTES // (1024 * 1024)}MB."
-                ),
-            )
-        total_size += file_size
 
     if total_size > settings.RAG_TOTAL_BUDGET_BYTES:
         raise HTTPException(
