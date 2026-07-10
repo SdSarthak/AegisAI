@@ -331,30 +331,22 @@ def ingest_documents(
     db: Session = Depends(get_db),
 ) -> RAGIngestResponse:
     """Upload regulatory PDFs, persist metadata, and rebuild the FAISS index."""
-    for upload_file in files:
-        # Determine size synchronously using the underlying file object stream
-        upload_file.file.seek(0, 2)
-        file_size = upload_file.file.tell()
-        upload_file.file.seek(0)
-
-        if file_size > settings.RAG_MAX_FILE_SIZE_BYTES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Upload failed: '{upload_file.filename}' exceeds the maximum allowed size limit."
-            )
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=f"Too many files. Maximum allowed is {settings.RAG_MAX_FILES_PER_REQUEST}.",
+            detail=f"Too many files. Maximum allowed is {settings.RAG_MAX_FILES_PER_REQUEST}."
         )
 
+    total_size = 0
     pdf_files = []
+    
     for upload in files:
         if (
             upload.filename 
             and upload.filename.lower().endswith(".pdf") 
             and mimetypes.guess_type(upload.filename)[0] in ["application/pdf", "binary/octet-stream", None]
         ):
+            # Synchronous size check using the underlying file stream
             upload.file.seek(0, 2)
             file_size = upload.file.tell()
             upload.file.seek(0)
@@ -365,6 +357,7 @@ def ingest_documents(
                     detail=f"Upload failed: '{upload.filename}' exceeds the maximum allowed size limit."
                 )
             
+            total_size += file_size
             pdf_files.append(upload)
     if not pdf_files:
         raise HTTPException(
