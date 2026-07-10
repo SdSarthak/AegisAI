@@ -793,6 +793,7 @@ async def query_knowledge_base_stream(
     request: Request,
     payload: RAGQueryRequest,
     current_user: User = Depends(get_current_user),
+    guarded_question: GuardedRAGQuestion = Depends(guard_rag_question),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
     """Stream a regulatory answer as Server-Sent Events."""
@@ -809,7 +810,7 @@ async def query_knowledge_base_stream(
     llm_client = LLMClient()
 
     generator = stream_rag_answer(
-        question=payload.question,
+        question=guarded_question.question,
         retriever=retriever,
         llm=llm_client,
         db=db,
