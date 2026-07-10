@@ -16,6 +16,14 @@ spec:
     spec:
       # 1. Production Native Python InitContainer to pre-cache exact model assets
       initContainers:
+      - name: run-migrations
+        image: aegisai-backend:latest
+        command: ["alembic", "upgrade", "head"]
+        envFrom:
+        - configMapRef:
+            name: aegisai-config
+        - secretRef:
+            name: aegisai-secrets
       - name: model-download
         image: python:3.11-slim
         command:
@@ -31,7 +39,7 @@ spec:
           target_dir = "/app/models"
 
           print(f"Starting native cache generation for {MODEL} into {target_dir}...")
-          
+
           # Prefetch fully valid weights and tokenizer structures natively
           AutoTokenizer.from_pretrained(MODEL, cache_dir=target_dir)
           AutoModel.from_pretrained(MODEL, cache_dir=target_dir)
@@ -64,7 +72,7 @@ spec:
             path: /health
             port: 8000
           failureThreshold: 30
-          periodSeconds: 10    
+          periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health

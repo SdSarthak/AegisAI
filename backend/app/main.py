@@ -48,16 +48,9 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Starting AegisAI backend...")
 
-    try:
-        # Run Alembic migrations on startup instead of create_all
-        from alembic.config import Config
-        from alembic import command
-        alembic_cfg = Config("alembic.ini")
-        command.upgrade(alembic_cfg, "head")
-        logger.info("Database tables initialized.")
-    except Exception:
-        logger.exception("Failed to initialize database tables")
-        raise
+    # Database migrations are handled by the Alembic initContainer
+    # defined in infra/deployment.yaml before pod startup.
+    logger.info("Database migrations managed by Alembic initContainer.")
 
     # Initialize regulation ruleset registry (stored on app.state for route access)
     builtin_dir = Path(__file__).resolve().parent.parent / "regulations"
