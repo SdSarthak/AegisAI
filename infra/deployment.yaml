@@ -17,8 +17,19 @@ spec:
       # 1. Production Native Python InitContainer to pre-cache exact model assets
       initContainers:
       - name: run-migrations
-        image: aegisai-backend:latest
+        image: aegisai-backend:0.1.0
         command: ["alembic", "upgrade", "head"]
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "200m"
+            memory: "512Mi"
         envFrom:
         - configMapRef:
             name: aegisai-config
