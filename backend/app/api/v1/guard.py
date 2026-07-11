@@ -348,27 +348,14 @@ def scan_prompt(
                     },
                     background_tasks,
                 )
-            except Exception:
-                logger.exception(
-                    "Failed to trigger guard_block webhook delivery"
+            except Exception as general_sys_err:
+                db.rollback()
+                logger.exception("Failed to trigger guard block webhook delivery")
+                logger.critical(f"Unhandled backend glitch caught inside Guard router: {str(general_sys_err)}", exc_info=True)
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail="An internal error occurred while processing the Guard scan."
                 )
-
-        return response
-
-    except (GuardConnectionError, GuardExecutionError) as guard_err:
-        logger.error(f"Guard SDK Operational Failure: {str(guard_err)}", exc_info=True)
-        # Fail-safe closed behavior: block execution on critical safety downtime
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Security scan unavailable. Connection dropped. Reason: {str(guard_err)}"
-        )
-
-    except Exception as general_sys_err:
-        logger.critical(f"Unhandled backend glitch caught inside Guard router: {str(general_sys_err)}", exc_info=True)
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An internal error occurred while processing the Guard scan."
-        )
     
 
 # ---------------------------------------------------------------------------
