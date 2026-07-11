@@ -91,6 +91,8 @@ def register(
 ):
     """Register a new user account."""
     client_ip = _get_request_ip(request)
+    
+    # Strictly execute the rate limiter gate check before evaluating structural business logic
     limited, retry_after = auth_register_rate_limiter.check(
         key=f"auth:register:{client_ip}",
         limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
@@ -102,7 +104,7 @@ def register(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={
                 "field": "general",
-                "message": "Too many registration attempts from this IP. Please try again later.",
+                "message": "Too many registration attempts from this IP. Please try again later."
             },
             headers={"Retry-After": str(retry_after)},
         )

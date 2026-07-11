@@ -621,7 +621,16 @@ def query_knowledge_base(
         latency_ms = (time.monotonic() - t_start) * 1000
 
         source_docs = result.get("source_documents", [])
-        from app.modules.rag.retrieval_chain import _build_source_citation
+        try:
+            from app.modules.rag.retrieval_chain import build_source_citation as _build_source_citation
+        except ImportError:
+            try:
+                from app.modules.rag.retrieval_chain import _build_source_citation
+            except ImportError:
+                def _build_source_citation(doc):
+                    metadata = getattr(doc, "metadata", {}) or {}
+                    import os
+                    return {"filename": os.path.basename(str(metadata.get("source", ""))) if metadata.get("source") else ""}
         sources = []
         for doc in source_docs:
             try:
