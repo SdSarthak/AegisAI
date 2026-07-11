@@ -14,9 +14,12 @@ spec:
       labels:
         app: aegisai-backend
     spec:
-      # -----------------------------------------------------------------
-      # 1. FIXED KUBELINTER RULE: Pod Anti-Affinity added for multi-replica
-      # -----------------------------------------------------------------
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
@@ -29,13 +32,17 @@ spec:
       
       initContainers:
       - name: model-download
-        # -----------------------------------------------------------------
-        # 2. FIXED KUBELINTER RULE: Pinned image tag instead of latest
-        # -----------------------------------------------------------------
         image: python:3.11.9-slim
-        # -----------------------------------------------------------------
-        # 3. FIXED KUBELINTER RULE: Added CPU/Memory limits & requests
-        # -----------------------------------------------------------------
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
         resources:
           requests:
             cpu: "200m"
@@ -57,7 +64,6 @@ spec:
 
           print(f"Starting native cache generation for {MODEL} into {target_dir}...")
           
-          # Prefetch fully valid weights and tokenizer structures natively
           AutoTokenizer.from_pretrained(MODEL, cache_dir=target_dir)
           AutoModel.from_pretrained(MODEL, cache_dir=target_dir)
 
@@ -66,13 +72,25 @@ spec:
         volumeMounts:
         - name: model-storage
           mountPath: /app/models
+        # Explicit writable volumes to prevent runtime crash under readOnlyRootFilesystem
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: cache-volume
+          mountPath: /.cache
 
       containers:
       - name: aegisai-backend
-        # -----------------------------------------------------------------
-        # 4. FIXED KUBELINTER RULE: Fixed main container latest tag block
-        # -----------------------------------------------------------------
         image: aegisai-backend:v1.2.3
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
         ports:
         - containerPort: 8000
         envFrom:
@@ -115,6 +133,8 @@ spec:
           mountPath: /app/faiss_index
         - name: model-storage
           mountPath: /app/models
+        - name: tmp-volume
+          mountPath: /tmp
 
       volumes:
       - name: faiss-storage
@@ -123,6 +143,11 @@ spec:
       - name: model-storage
         persistentVolumeClaim:
           claimName: model-pvc
+      # Temporary in-memory mounts for runtime pip installations and token caching
+      - name: tmp-volume
+        emptyDir: {}
+      - name: cache-volume
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
