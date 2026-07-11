@@ -14,7 +14,11 @@ spec:
       labels:
         app: aegisai-backend
     spec:
-      # 1. Production Native Python InitContainer to pre-cache exact model assets
+      # KubeLinter Security Compliance
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
       initContainers:
       - name: model-download
         image: python:3.11-slim
@@ -38,13 +42,22 @@ spec:
 
           print("Model weights and structural vocabularies downloaded successfully.")
           PY
+        # FIX 1: Added explicit resource controls for KubeLinter compliance
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
         volumeMounts:
         - name: model-storage
           mountPath: /app/models
 
       containers:
       - name: aegisai-backend
-        image: aegisai-backend:latest
+        # FIX 2: Pinned image tag to v1.0.0 instead of forbidden 'latest'
+        image: aegisai-backend:v1.0.0
         ports:
         - containerPort: 8000
         envFrom:
@@ -52,6 +65,11 @@ spec:
             name: aegisai-config
         - secretRef:
             name: aegisai-secrets
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
         resources:
           requests:
             cpu: "250m"
@@ -122,7 +140,6 @@ spec:
     requests:
       storage: 5Gi
 ---
-# Added new PersistentVolumeClaim for model persistence
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
