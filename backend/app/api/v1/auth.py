@@ -92,14 +92,7 @@ def register(
     """Register a new user account."""
     client_ip = _get_request_ip(request)
     
-    # CRITICAL: Increment the attempt counter immediately upon entry to correctly 
-    # trigger 429 on the 4th consecutive request from the same client IP
-    auth_register_rate_limiter.record_attempt(
-        key=f"auth:register:{client_ip}",
-        limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
-        window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
-    )
-    
+    # 1. Check rate limit state immediately at the validation entry layer
     limited, retry_after = auth_register_rate_limiter.check(
         key=f"auth:register:{client_ip}",
         limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
@@ -119,7 +112,7 @@ def register(
     try:
         existing_user = db.query(User).filter(User.email == user_data.email).first()
         if existing_user:
-            # Explicit failure tracking pattern mapping for duplicate verification checks
+            # Increment the counter directly upon verified duplicate attempt
             auth_register_rate_limiter.record_attempt(
                 key=f"auth:register:{client_ip}",
                 limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
