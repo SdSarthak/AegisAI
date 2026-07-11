@@ -42,6 +42,10 @@ from app.modules.rag.streaming import stream_rag_answer
 from app.modules.rag.vector_store import create_vector_store, load_vector_store
 from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
 
+try:
+    from app.modules.rag.retrieval_chain import build_source_citation as _build_source_citation
+except ImportError:
+    from app.modules.rag.retrieval_chain import _build_source_citation
 router = APIRouter()
 logger = logging.getLogger(__name__)
 _RAG_GUARD: Any | None = None
