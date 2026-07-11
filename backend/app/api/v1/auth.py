@@ -85,14 +85,14 @@ def clear_auth_rate_limits() -> None:
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
 def register(
-    user_data: UserCreate,
+    user_data: UserRegister,
     request: Request,
     db: Session = Depends(get_db),
 ):
     """Register a new user account."""
     client_ip = _get_request_ip(request)
     
-    # 1. Check rate limit state immediately at the validation entry layer
+    # 1. RATE LIMIT GATEWAY - ALWAYS CHECK FIRST
     limited, retry_after = auth_register_rate_limiter.check(
         key=f"auth:register:{client_ip}",
         limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
@@ -110,9 +110,9 @@ def register(
         )
 
     try:
+        # 2. DUPLICATE EMAIL CHECK - MUST BE INSIDE TRY BEFORE CREATING USER
         existing_user = db.query(User).filter(User.email == user_data.email).first()
         if existing_user:
-            # Increment the counter directly upon verified duplicate attempt
             auth_register_rate_limiter.record_attempt(
                 key=f"auth:register:{client_ip}",
                 limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
@@ -138,11 +138,10 @@ def register(
         return user
 
     except HTTPException as http_exc:
-        # Prevent controlled verification codes from running into broad exceptions
+        # Keep controlled exceptions from running into broad exceptions
         raise http_exc
     except Exception:
         db.rollback()
-        
         auth_register_rate_limiter.record_attempt(
             key=f"auth:register:{client_ip}",
             limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
