@@ -7,6 +7,7 @@ from typing import Dict
 
 class Decision(Enum):
     """Possible decisions for prompt handling."""
+
     ALLOW = "allow"
     SANITIZE = "sanitize"
     BLOCK = "block"
@@ -15,6 +16,7 @@ class Decision(Enum):
 @dataclass
 class DecisionResult:
     """Result of decision engine analysis."""
+
     decision: Decision
     confidence: float  # 0.0 to 1.0
     reasoning: str
@@ -33,7 +35,7 @@ class DecisionEngine:
     ):
         """
         Initialize decision engine with configurable thresholds.
-        
+
         Args:
             regex_weight: Weight of regex patterns in decision
             intent_weight: Weight of intent classifier in decision
@@ -54,22 +56,28 @@ class DecisionEngine:
     ) -> DecisionResult:
         """
         Make a decision based on regex filter and intent classifier outputs.
-        
+
         Args:
             regex_flag: Whether regex patterns were matched
             regex_score: Severity score from regex (0.0-1.0)
             intent: Classified intent ("benign", "suspicious", "malicious")
             intent_score: Confidence score from classifier (0.0-1.0)
-            
+
         Returns:
             DecisionResult with decision, confidence, and reasoning
         """
         assert 0.0 <= regex_score <= 1.0, f"regex_score out of range: {regex_score}"
         assert 0.0 <= intent_score <= 1.0, f"intent_score out of range: {intent_score}"
-        assert intent in ("benign", "suspicious", "malicious"), f"unknown intent: {intent}"
+        assert intent in (
+            "benign",
+            "suspicious",
+            "malicious",
+        ), f"unknown intent: {intent}"
 
         # Combine signals
-        combined_score = (self.regex_weight * regex_score) + (self.intent_weight * intent_score)
+        combined_score = (self.regex_weight * regex_score) + (
+            self.intent_weight * intent_score
+        )
 
         # High-severity cases: Block if regex + malicious intent
         if regex_flag and regex_score >= 0.8 and intent == "malicious":

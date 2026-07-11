@@ -206,7 +206,9 @@ class LLMGuard:
 
         elif decision_result.decision == Decision.SANITIZE:
             logger.info("Prompt marked for SANITIZATION")
-            sanitized_prompt, sanitization_summary = self.sanitizer.sanitize(user_prompt)
+            sanitized_prompt, sanitization_summary = self.sanitizer.sanitize(
+                user_prompt
+            )
             result["sanitized_text"] = sanitized_prompt
             result["metadata"]["sanitization"] = {
                 "original_length": len(user_prompt),

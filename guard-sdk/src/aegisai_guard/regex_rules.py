@@ -8,6 +8,7 @@ from dataclasses import dataclass
 @dataclass
 class RegexResult:
     """Result of regex pattern matching."""
+
     flag: bool
     matched_patterns: List[str]
     score: float  # 0.0 to 1.0
@@ -19,9 +20,13 @@ class RegexFilter:
     # High-severity patterns: instruction override attempts
     INSTRUCTION_OVERRIDE_PATTERNS = [
         r"\bignore\s+(all|previous|prior|above)\s+instructions\b",
+        r"\bignore\s+all\s+previous\s+instructions\b",
+        r"\bignore\s+(all\s+)?rules\b",
         r"\bforget\s+(all|previous|prior|above)\s+(.*?)\b",
+        r"\bforget\s+everything\s+(you\s+were\s+)?told\s+before\b",
         r"\bdisregard\s+(all|previous|prior)\s+instructions\b",
         r"\boverride\s+system\s+prompt\b",
+        r"\boverride\s+(your|all|previous|prior|above)\s+instructions\b",
         r"\bbypass\s+(all\s+)?restrictions\b",
         r"\bdisable\s+(safety|content|filter)",
     ]
@@ -48,6 +53,7 @@ class RegexFilter:
     POLICY_BYPASS_PATTERNS = [
         r"\bjailbreak\b",
         r"\bdeveloper\s+mode\b",
+        r"\bdan\s+mode\b",
         r"\bgod\s+mode\b",
         r"\bunrestricted\s+mode\b",
         r"\bremove\s+all\s+restrictions\b",
@@ -78,22 +84,34 @@ class RegexFilter:
     def _compile_patterns(self) -> Dict[str, List[re.Pattern]]:
         """Compile all regex patterns with appropriate flags."""
         patterns = {
-            "high_override": [re.compile(p, re.IGNORECASE) for p in self.INSTRUCTION_OVERRIDE_PATTERNS],
-            "high_role": [re.compile(p, re.IGNORECASE) for p in self.ROLE_HIJACKING_PATTERNS],
-            "medium_disclosure": [re.compile(p, re.IGNORECASE) for p in self.PROMPT_DISCLOSURE_PATTERNS],
-            "medium_bypass": [re.compile(p, re.IGNORECASE) for p in self.POLICY_BYPASS_PATTERNS],
-            "medium_code": [re.compile(p, re.IGNORECASE) for p in self.DANGEROUS_CODE_PATTERNS],
-            "low_keywords": [re.compile(p, re.IGNORECASE) for p in self.SUSPICIOUS_KEYWORDS],
+            "high_override": [
+                re.compile(p, re.IGNORECASE) for p in self.INSTRUCTION_OVERRIDE_PATTERNS
+            ],
+            "high_role": [
+                re.compile(p, re.IGNORECASE) for p in self.ROLE_HIJACKING_PATTERNS
+            ],
+            "medium_disclosure": [
+                re.compile(p, re.IGNORECASE) for p in self.PROMPT_DISCLOSURE_PATTERNS
+            ],
+            "medium_bypass": [
+                re.compile(p, re.IGNORECASE) for p in self.POLICY_BYPASS_PATTERNS
+            ],
+            "medium_code": [
+                re.compile(p, re.IGNORECASE) for p in self.DANGEROUS_CODE_PATTERNS
+            ],
+            "low_keywords": [
+                re.compile(p, re.IGNORECASE) for p in self.SUSPICIOUS_KEYWORDS
+            ],
         }
         return patterns
 
     def check(self, prompt: str) -> RegexResult:
         """
         Check prompt against regex patterns.
-        
+
         Args:
             prompt: User input prompt to check
-            
+
         Returns:
             RegexResult with flag, matched patterns, and risk score
         """
@@ -148,5 +166,5 @@ class RegexFilter:
         return RegexResult(
             flag=len(matched_patterns) > 0,
             matched_patterns=matched_patterns,
-            score=risk_score
+            score=risk_score,
         )

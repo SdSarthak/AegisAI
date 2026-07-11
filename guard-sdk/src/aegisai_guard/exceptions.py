@@ -18,7 +18,9 @@ class AegisGuardException(Exception):
                       API responses or logs without leaking internal details.
     """
 
-    def __init__(self, message: str, user_message: str = "An internal guard error occurred.") -> None:
+    def __init__(
+        self, message: str, user_message: str = "An internal guard error occurred."
+    ) -> None:
         super().__init__(message)
         self.user_message = user_message
 
