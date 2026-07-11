@@ -41,7 +41,6 @@ from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.streaming import stream_rag_answer
 from app.modules.rag.vector_store import create_vector_store, load_vector_store
 from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
-from app.modules.rag.retrieval_chain import _build_source_citation
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -623,6 +622,28 @@ def query_knowledge_base(
 
         source_docs = result.get("source_documents", [])
         from app.modules.rag.retrieval_chain import _build_source_citation
+        sources = []
+        for doc in source_docs:
+            try:
+                metadata = getattr(doc, "metadata", {}) or {}
+                import os
+                
+                raw_source = str(metadata.get("source", ""))
+                filename = os.path.basename(raw_source) if raw_source else ""
+                
+                citation = {
+                    "filename": filename,
+                    "title": metadata.get("title") or filename or "Unknown source",
+                    "source": metadata.get("source"),
+                    "page": metadata.get("page"),
+                    "chunk_id": metadata.get("chunk_id"),
+                    "article": str(metadata.get("article", "")) if metadata.get("article") else None,
+                    "paragraph": metadata.get("paragraph")
+                }
+                sources.append(citation)
+            except Exception:
+                # Loop safety guardrail to avoid entire request breaking with 503
+                continue
         sources = result.get("cached_sources") or [
             _build_source_citation(doc) for doc in source_docs
         ]
