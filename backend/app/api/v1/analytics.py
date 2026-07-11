@@ -21,8 +21,9 @@ from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
 from app.models.compliance_snapshot import ComplianceSnapshot
+from app.models.document import Document
 from sqlalchemy import func
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import Query
@@ -53,7 +54,7 @@ def get_compliance_timeline(
             detail="AI system not found"
         )
 
-    since = datetime.utcnow() - timedelta(days=days)
+    since = datetime.now(timezone.utc) - timedelta(days=days)
 
     snapshots = db.query(ComplianceSnapshot).filter(
         ComplianceSnapshot.ai_system_id == system_id,
@@ -104,6 +105,16 @@ def get_analytics_summary(
         or 0
     )
 
+    # Systems with zero associated documents ("Documents Missing" widget stat).
+    documents_missing = (
+        db.query(func.count(AISystem.id))
+        .outerjoin(Document, Document.ai_system_id == AISystem.id)
+        .filter(AISystem.owner_id == current_user.id)
+        .group_by(AISystem.id)
+        .having(func.count(Document.id) == 0)
+        .count()
+    )
+
     counts = {risk.value: 0 for risk in RiskLevel}
     for risk_level, count in risk_rows:
         if risk_level:
@@ -129,6 +140,15 @@ def get_analytics_summary(
         "average_compliance_score": average_compliance_score,
         "counts": counts,
         "compliance_statuses": compliance_statuses,
+        # Flat summary consumed by the dashboard's Compliance Progress
+        # Summary Widget (issue #1341).
+        "widget_summary": {
+            "total": int(total_systems),
+            "compliant": compliance_statuses.get("compliant", 0),
+            "pending_review": compliance_statuses.get("under_review", 0),
+            "high_risk": counts.get("high", 0),
+            "documents_missing": int(documents_missing),
+        },
     }
 
 
@@ -178,7 +198,7 @@ def get_audit_logs(
     if decision:
         filters.append(GuardScanLog.decision == decision)
     if days:
-        since = datetime.utcnow() - timedelta(days=days)
+        since = datetime.now(timezone.utc) - timedelta(days=days)
         filters.append(GuardScanLog.scanned_at >= since)
 
     base_query = db.query(GuardScanLog).filter(*filters)

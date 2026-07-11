@@ -1,9 +1,11 @@
 from pydantic_settings import BaseSettings
 from typing import List
+from pydantic import field_validator
 
 
 class Settings(BaseSettings):
     DOCUMENT_SHARE_EXPIRE_DAYS: int = 7
+    DOCUMENT_SHARE_SECRET_KEY: str = ""
     # App
     APP_NAME: str = "AegisAI"
     DEBUG: bool = False
@@ -21,6 +23,12 @@ class Settings(BaseSettings):
     STRIPE_SECRET_KEY: str = ""
     STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    # OAuth
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GITHUB_CLIENT_ID: str = ""
+    GITHUB_CLIENT_SECRET: str = ""
+    FRONTEND_URL: str = "http://localhost:5173"
     STRIPE_PRICE_STARTER: str = ""
     STRIPE_PRICE_GROWTH: str = ""
     STRIPE_PRICE_SCALE: str = ""
@@ -41,7 +49,7 @@ class Settings(BaseSettings):
     GUARD_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
     # Rate Limiting & Outage Policies
-    RATE_LIMIT_FAIL_CLOSED: bool = False
+    RATE_LIMIT_FAIL_CLOSED: bool = True
     BADGE_RATE_LIMIT_REQUESTS: int = 5
     BADGE_RATE_LIMIT_WINDOW_SECONDS: int = 60
 
@@ -79,6 +87,41 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = True
         extra = "ignore"
+
+    @field_validator("REDIS_URL")
+    @classmethod
+    def validate_redis_url(cls, v, info):
+        if not info.data.get("DEBUG") and not v:
+            raise ValueError(
+                "REDIS_URL is required in production mode. Set REDIS_URL in your .env file."
+            )
+        return v
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key(cls, v, info):
+        known_weak_secrets = {
+            "changeme",
+            "secret",
+            "your-secret-key",
+            "your-secret-key-here",
+            "change-me",
+            "change_me",
+            "insecure",
+            "password",
+            "test",
+        }
+        if v.strip().lower() in known_weak_secrets:
+            raise ValueError(
+                "SECRET_KEY is set to a well-known insecure default value. "
+                "Generate a strong secret with: openssl rand -hex 32"
+            )
+        if not info.data.get("DEBUG") and len(v) < 32:
+            raise ValueError(
+                "SECRET_KEY must be at least 32 characters in production mode. "
+                "Generate one with: openssl rand -hex 32"
+            )
+        return v
 
 
 settings = Settings()

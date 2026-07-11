@@ -15,7 +15,6 @@ import GuardConsole from './pages/GuardConsole'
 import NotFound from './pages/NotFound'
 import { Toaster } from 'react-hot-toast'
 import RagChat from './pages/RagChat'
-import Guard from './pages/Guard'
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isRevalidating } = useAuthStore()

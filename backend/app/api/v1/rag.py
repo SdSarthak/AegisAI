@@ -181,6 +181,7 @@ def _log_rag_audit(
     except Exception:
         db.rollback()
         logger.exception("Failed to write RAG audit log")
+        raise
 
 
 def _decision_reasoning(result: dict[str, Any]) -> str | None:
@@ -392,6 +393,14 @@ def ingest_documents(
             dest = os.path.join(storage_dir, filename)
             with open(dest, "wb") as buf:
                 shutil.copyfileobj(upload.file, buf)
+            file_size_bytes = os.path.getsize(dest)
+            if file_size_bytes == 0:
+                if os.path.exists(dest):
+                    os.remove(dest)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File {upload.filename} is empty (0 bytes).",
+                )
             saved_paths.append(dest)
             pending_documents.append(
                 RAGDocument(
@@ -399,12 +408,18 @@ def ingest_documents(
                     original_filename=os.path.basename(upload.filename),
                     storage_path=dest,
                     content_type=upload.content_type,
-                    file_size_bytes=os.path.getsize(dest),
+                    file_size_bytes=file_size_bytes,
                     uploaded_by_id=_current_user_id(current_user),
                 )
             )
 
-        chunks = _valid_text_chunks(saved_paths)
+        try:
+            chunks = _valid_text_chunks(saved_paths)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
 
         if not chunks:
             raise HTTPException(
@@ -460,7 +475,12 @@ def list_rag_documents(
     db: Session = Depends(get_db),
 ):
     """List documents currently included in the RAG knowledge base."""
-    documents = db.query(RAGDocument).order_by(RAGDocument.created_at.desc()).all()
+    documents = (
+        db.query(RAGDocument)
+        .filter(RAGDocument.uploaded_by_id == current_user.id)
+        .order_by(RAGDocument.created_at.desc())
+        .all()
+    )
     return RAGDocumentListResponse(items=documents, total=len(documents))
 
 
@@ -475,6 +495,12 @@ def delete_rag_document(
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="RAG document not found")
 
+    if document.uploaded_by_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to delete this document.",
+        )
+
     storage_path = document.storage_path
     db.delete(document)
     db.flush()
@@ -484,11 +510,11 @@ def delete_rag_document(
         index_size_bytes = _rebuild_index_from_documents(
             remaining_documents, user_id=current_user.id
         )
-    except Exception as exc:
+    except Exception:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"Failed to rebuild FAISS index: {exc}",
+            detail="Failed to rebuild the RAG index. Please try again.",
         )
 
     db.commit()
@@ -596,8 +622,9 @@ def query_knowledge_base(
         latency_ms = (time.monotonic() - t_start) * 1000
 
         source_docs = result.get("source_documents", [])
+        from app.modules.rag.retrieval_chain import _build_source_citation
         sources = result.get("cached_sources") or [
-            dict(getattr(doc, "metadata", {}) or {}) for doc in source_docs
+            _build_source_citation(doc) for doc in source_docs
         ]
         source_labels = [str(source.get("source", "")) for source in sources]
         answer = str(result.get("result", ""))
@@ -712,14 +739,16 @@ def query_knowledge_base(
     except HTTPException:
         raise
     except FileNotFoundError as exc:
+        logger.error("RAG file not found: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
+            detail="The AI analysis service is temporarily unavailable. Please try again later.",
         )
     except Exception as exc:
+        logger.error("RAG query error: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"RAG module error: {str(exc)}",
+            detail="The AI analysis service is temporarily unavailable. Please try again later.",
         )
 
 

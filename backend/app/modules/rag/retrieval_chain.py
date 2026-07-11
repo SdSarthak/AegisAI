@@ -277,3 +277,38 @@ from typing import Any
 def _build_source_citation(document: Any) -> dict[str, Any]:
     metadata = getattr(document, "metadata", {}) or {}
     return dict(metadata)
+
+def _build_source_citation(doc: Any) -> dict[str, Any]:
+    """Extract structured citation data from a LangChain document chunk.
+
+    Returns a dict with filename, article, and paragraph keys
+    as required by RAGQueryResponse sources field.
+    """
+    import os
+    import re
+
+    metadata = dict(getattr(doc, "metadata", {}) or {})
+
+    raw_source = str(metadata.get("source", ""))
+    filename = os.path.basename(raw_source) if raw_source else ""
+
+    article = metadata.get("article") or metadata.get("article_number") or None
+    paragraph = metadata.get("paragraph") or metadata.get("paragraph_number") or None
+
+    if not article:
+        content_preview = str(getattr(doc, "page_content", ""))[:300]
+        article_match = re.search(r"(Article\s+\d+[a-z]?)", content_preview, re.IGNORECASE)
+        if article_match:
+            article = article_match.group(1)
+
+    citation: dict[str, Any] = {"filename": filename}
+    if article:
+        citation["article"] = str(article)
+    if paragraph is not None:
+        try:
+            citation["paragraph"] = int(paragraph)
+        except (ValueError, TypeError):
+            citation["paragraph"] = paragraph
+
+    return citation
+  
