@@ -41,7 +41,6 @@ from app.schemas.user import (
     DashboardLayoutUpdate,
     DashboardLayoutResponse,
 )
-from app.schemas.user import UserRegister
 
 # Pre-computed bcrypt hash used when the looked-up user is None so that the
 # login endpoint always performs a constant-time hash comparison, closing
@@ -86,7 +85,7 @@ def clear_auth_rate_limits() -> None:
     "/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED
 )
 def register(
-    user_data: UserRegister,
+    user_data: UserCreate,
     request: Request,
     db: Session = Depends(get_db),
 ):
