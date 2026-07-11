@@ -110,18 +110,15 @@ def register(
     try:
         existing_user = db.query(User).filter(User.email == user_data.email).first()
         if existing_user:
-            # [FIXED PATH 1] Email already exists -> Failed attempt record kijiye
-            _record_attempt(
-                _auth_registration_attempts_by_ip,
-                client_ip,
-                _AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+            # Record failed attempt via distributed rate limiter before throwing 400
+            auth_register_rate_limiter.record_attempt(
+                key=f"auth:register:{client_ip}",
+                limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
+                window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
             )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "field": "general",
-                    "message": "This email is already registered. Please use a different email or try logging in."
-                }
+                detail="Email already registered"
             )
 
         user = User(
@@ -133,26 +130,19 @@ def register(
         db.add(user)
         db.commit()
         db.refresh(user)
-        return user  # Successful execution path: yahan attempt record NAHI hoga!
+        return user
 
-    except HTTPException:
-        # Record the failed registration attempt so repeated abuse is rate-limited
-        auth_register_rate_limiter.record_attempt(
-            key=f"auth:register:{client_ip}",
-            limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
-            window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
-        )
-        raise
+    except HTTPException as http_exc:
+        # CRITICAL: Prevent 400 errors from leaking into the broad Exception block
+        raise http_exc
     except Exception:
         db.rollback()
-
-        # Record failed registration attempt so repeated abuse is rate-limited
+        
         auth_register_rate_limiter.record_attempt(
             key=f"auth:register:{client_ip}",
             limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
             window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
         )
-
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
@@ -160,7 +150,6 @@ def register(
                 "message": "An error occurred during registration. Please try again."
             },
         )
-
 
 @router.post("/login", response_model=Token)
 def login(
