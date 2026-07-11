@@ -19,6 +19,14 @@ body {
     animation: animate-in 0.5s ease-out forwards;
   }
 
+  /* Issue #1342: long titles inside flex rows (AI system names, etc.)
+     need min-width: 0 on the flex child plus explicit wrapping, otherwise
+     flexbox's default min-width: auto blocks wrapping and the text
+     overflows the card on small screens. */
+  .text-wrap-safe {
+    @apply min-w-0 break-words;
+  }
+
   @keyframes animate-in {
     from {
       opacity: 0;

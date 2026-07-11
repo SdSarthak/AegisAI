@@ -25,6 +25,7 @@ export interface UseRagStreamResult {
   answerId: string | null
   error: string | null
   finishInfo: RagStreamDone | null
+  responseTime: number | null
   ask: (question: string) => Promise<void>
   stop: () => void
   reset: () => void
@@ -37,6 +38,8 @@ export function useRagStream(): UseRagStreamResult {
   const [answerId, setAnswerId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [finishInfo, setFinishInfo] = useState<RagStreamDone | null>(null)
+  const [responseTime, setResponseTime] = useState<number | null>(null)
+  const startTimeRef = useRef<number | null>(null)
 
   // Hold a ref to the in-flight AbortController so `stop` can cancel without
   // re-binding on every render.
@@ -51,6 +54,7 @@ export function useRagStream(): UseRagStreamResult {
     setAnswerId(null)
     setError(null)
     setFinishInfo(null)
+    setResponseTime(null)
   }, [])
 
   const stop = useCallback(() => {
@@ -73,6 +77,8 @@ export function useRagStream(): UseRagStreamResult {
     setAnswerId(null)
     setError(null)
     setFinishInfo(null)
+    setResponseTime(null)
+    startTimeRef.current = performance.now()
 
     try {
       await ragApi.streamQuery(
@@ -88,6 +94,9 @@ export function useRagStream(): UseRagStreamResult {
           onDone: (done) => {
             setFinishInfo(done)
             setStatus('done')
+            if (startTimeRef.current !== null) {
+              setResponseTime((performance.now() - startTimeRef.current) / 1000)
+            }
           },
           onError: (err) => {
             setError(err.message)
@@ -112,5 +121,5 @@ export function useRagStream(): UseRagStreamResult {
     }
   }, [])
 
-  return { status, tokens, citations, answerId, error, finishInfo, ask, stop, reset }
+  return { status, tokens, citations, answerId, error, finishInfo, responseTime, ask, stop, reset }
 }

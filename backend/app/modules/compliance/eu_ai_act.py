@@ -67,8 +67,19 @@ def evaluate_compliance(
 
     for article, description, action in rules:
         # Check individual requirement status from questionnaire responses
-        req_key = article.lower().replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_")
-        req_status = questionnaire_responses.get(req_key, "missing")
+        req_key = article.lower().replace(" ", "_").replace("(", "_").replace(")", "").replace("/", "_")
+        # Trim whitespace from questionnaire_responses keys and values to prevent "missing" status
+        # on keys/values that users accidentally include leading/trailing spaces in.
+        # Try the transformed key, then fall back to any key that matches after stripping.
+        raw_status = questionnaire_responses.get(req_key, "missing")
+        if raw_status == "missing":
+            for k, v in questionnaire_responses.items():
+                if k.strip() == req_key:
+                    raw_status = v
+                    break
+        if isinstance(raw_status, str):
+            raw_status = raw_status.strip()
+        req_status = _COMPLIANCE_STATUS_MAP.get(raw_status, raw_status)
 
         if req_status not in ("missing", "partial", "done"):
             req_status = "missing"
