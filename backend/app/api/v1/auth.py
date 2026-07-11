@@ -41,6 +41,7 @@ from app.schemas.user import (
     DashboardLayoutUpdate,
     DashboardLayoutResponse,
 )
+from app.schemas.auth import UserRegister
 
 # Pre-computed bcrypt hash used when the looked-up user is None so that the
 # login endpoint always performs a constant-time hash comparison, closing
