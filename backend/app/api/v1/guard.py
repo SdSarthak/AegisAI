@@ -371,7 +371,7 @@ def scan_prompt(
             confidence=result["metadata"]["decision_reasoning"]["confidence"],
             reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
             sanitized_prompt=result.get("sanitized_prompt"),
-            matched_patterns=result["metadata"]["regex_analysis"].get("matched_patterns", []),
+            matched_patterns=result["metadata"]["regex_analysis"].get("matched_patterns", [])
         )
 
     except Exception:
