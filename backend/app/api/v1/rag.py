@@ -640,10 +640,11 @@ def query_knowledge_base(
                 raw_source = str(metadata.get("source", ""))
                 filename = os.path.basename(raw_source) if raw_source else ""
                 
+                # BOTH KEYS INCLUDED FOR BACKWARD COMPATIBILITY WITH PYTEST CONTRACTS
                 citation = {
+                    "source": raw_source or filename or "Unknown source",
                     "filename": filename,
                     "title": metadata.get("title") or filename or "Unknown source",
-                    "source": metadata.get("source"),
                     "page": metadata.get("page"),
                     "chunk_id": metadata.get("chunk_id"),
                     "article": str(metadata.get("article", "")) if metadata.get("article") else None,

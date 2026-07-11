@@ -92,7 +92,14 @@ def register(
     """Register a new user account."""
     client_ip = _get_request_ip(request)
     
-    # Strictly execute the rate limiter gate check before evaluating structural business logic
+    # CRITICAL: Increment the attempt counter immediately upon entry to correctly 
+    # trigger 429 on the 4th consecutive request from the same client IP
+    auth_register_rate_limiter.record_attempt(
+        key=f"auth:register:{client_ip}",
+        limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
+        window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+    )
+    
     limited, retry_after = auth_register_rate_limiter.check(
         key=f"auth:register:{client_ip}",
         limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
