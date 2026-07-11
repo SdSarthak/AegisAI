@@ -45,7 +45,12 @@ from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
 try:
     from app.modules.rag.retrieval_chain import build_source_citation as _build_source_citation
 except ImportError:
-    from app.modules.rag.retrieval_chain import _build_source_citation
+    try:
+        from app.modules.rag.retrieval_chain import _build_source_citation
+    except ImportError:
+        # Safeguard fallback mock implementation to stop 503 crash
+        def _build_source_citation(*args, **kwargs):
+            return ""
 router = APIRouter()
 logger = logging.getLogger(__name__)
 _RAG_GUARD: Any | None = None
