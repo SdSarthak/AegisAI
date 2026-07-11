@@ -268,7 +268,12 @@ def _run_chain_with_documents(
     logger.warning(
         "Falling back to unfiltered QA chain execution; combine chain unavailable"
     )
-    result = qa_chain(original_payload)
+    result = qa_chain(original_payload) 
     if not isinstance(result, dict):
         return {"result": str(result), "source_documents": documents}
     return result
+from typing import Any
+
+def _build_source_citation(document: Any) -> dict[str, Any]:
+    metadata = getattr(document, "metadata", {}) or {}
+    return dict(metadata)

@@ -41,16 +41,8 @@ from app.modules.rag.document_loader import load_documents_from_paths
 from app.modules.rag.streaming import stream_rag_answer
 from app.modules.rag.vector_store import create_vector_store, load_vector_store
 from app.schemas.rag import RAGQueryRequest, RAGQueryResponse
+from app.modules.rag.retrieval_chain import _build_source_citation
 
-try:
-    from app.modules.rag.retrieval_chain import build_source_citation as _build_source_citation
-except ImportError:
-    try:
-        from app.modules.rag.retrieval_chain import _build_source_citation
-    except ImportError:
-        # Safeguard fallback mock implementation to stop 503 crash
-        def _build_source_citation(*args, **kwargs):
-            return ""
 router = APIRouter()
 logger = logging.getLogger(__name__)
 _RAG_GUARD: Any | None = None
