@@ -146,24 +146,19 @@ def register(
     except Exception:
         db.rollback()
 
-        # [FIXED PATH 2] Database crash/General Exception -> Failed attempt record kijiye
-        _record_attempt(
-            _auth_registration_attempts_by_ip,
-            client_ip,
-            _AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
-        # Record the failed registration attempt so repeated abuse is rate-limited
+        # Record failed registration attempt so repeated abuse is rate-limited
         auth_register_rate_limiter.record_attempt(
             key=f"auth:register:{client_ip}",
             limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
             window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
-
         )
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={
                 "field": "general",
                 "message": "An error occurred during registration. Please try again."
-            }
+            },
         )
 
 
