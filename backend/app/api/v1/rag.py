@@ -359,7 +359,7 @@ def ingest_documents(
             if file_size > settings.RAG_MAX_FILE_SIZE_BYTES:
                 raise HTTPException(
                     status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    detail=f"Upload failed: '{upload.filename}' exceeds the maximum allowed size limit."
+                    detail=f"Upload failed: '{upload.filename}' exceeds the maximum size limit."  # <--- Changed "maximum allowed size" to "maximum size"
                 )
             
             total_size += file_size
