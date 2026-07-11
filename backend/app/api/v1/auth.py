@@ -110,7 +110,7 @@ def register(
     try:
         existing_user = db.query(User).filter(User.email == user_data.email).first()
         if existing_user:
-            # Record failed attempt via distributed rate limiter before throwing 400
+            # Explicit failure tracking pattern mapping for duplicate verification checks
             auth_register_rate_limiter.record_attempt(
                 key=f"auth:register:{client_ip}",
                 limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
@@ -136,7 +136,7 @@ def register(
         return user
 
     except HTTPException as http_exc:
-        # CRITICAL: Prevent 400 errors from leaking into the broad Exception block
+        # Prevent controlled verification codes from running into broad exceptions
         raise http_exc
     except Exception:
         db.rollback()

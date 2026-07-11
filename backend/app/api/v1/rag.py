@@ -642,7 +642,6 @@ def query_knowledge_base(
                 }
                 sources.append(citation)
             except Exception:
-                # Loop safety guardrail to avoid entire request breaking with 503
                 continue
         sources = result.get("cached_sources") or [
             _build_source_citation(doc) for doc in source_docs
