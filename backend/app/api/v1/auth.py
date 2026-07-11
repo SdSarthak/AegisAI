@@ -92,7 +92,7 @@ def register(
     """Register a new user account."""
     client_ip = _get_request_ip(request)
     
-    # 1. RATE LIMIT GATEWAY - ALWAYS CHECK FIRST
+    # 1. Direct gateway boundary evaluation
     limited, retry_after = auth_register_rate_limiter.check(
         key=f"auth:register:{client_ip}",
         limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
