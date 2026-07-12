@@ -141,31 +141,30 @@ class LLMGuard:
         # Step 2: Intent Classification (ML Layer)
         logger.debug("Step 2: Classifying intent...")
         if self._fallback_active:
-            # fallback_mode + classifier unavailable → serve ALLOW immediately
-            result["decision"] = "allow"
             result["metadata"]["intent_analysis"] = {
                 "intent": "benign",
-                "confidence": 0.0,
-                "class_scores": {},
+                "confidence": 1.0,
+                "class_scores": {"benign": 1.0},
                 "fallback": True,
             }
-            result["metadata"]["decision_reasoning"] = {
-                "reasoning": "Fallback mode: classifier unavailable, serving ALLOW.",
-                "confidence": 0.0,
-                "rule_matched": None,
-            }
-            result["metadata"]["action"] = "allowed"
             logger.warning(
-                "Guard serving ALLOW in fallback mode (classifier unavailable)."
+                "Classifier unavailable; evaluating prompt using active regex filters."
             )
-            return result
-
-        try:
-            intent_result = self.classifier.classify(user_prompt)
-        except Exception as exc:  # noqa: BLE001
-            raise AegisGuardClassifierError(
-                f"Intent classification failed: {exc}",
-            ) from exc
+            
+            # Create a mock intent result object to pass into the decision engine
+            class MockIntentResult:
+                intent = "benign"
+                confidence = 1.0
+                class_scores = {"benign": 1.0}
+                
+            intent_result = MockIntentResult()
+        else:
+            try:
+                intent_result = self.classifier.classify(user_prompt)
+            except Exception as exc:  # noqa: BLE001
+                raise AegisGuardClassifierError(
+                    f"Intent classification failed: {exc}",
+                ) from exc
 
         result["metadata"]["intent_analysis"] = {
             "intent": intent_result.intent,
