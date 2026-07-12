@@ -790,13 +790,64 @@ def invalidate_rag_cache_question(
     },
 )
 async def query_knowledge_base_stream(
-    request: Request,
+    http_request: Request,
     payload: RAGQueryRequest,
     current_user: User = Depends(get_current_user),
+    guarded_question: GuardedRAGQuestion = Depends(guard_rag_question),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
     """Stream a regulatory answer as Server-Sent Events."""
-    del request
+    if guarded_question.guard_decision == "ERROR":
+        _log_rag_audit(
+            db,
+            user_id=getattr(current_user, "id", None),
+            question=guarded_question.original_question,
+            event_type="RAG_GUARD_ERROR",
+            decision="ERROR",
+            request=http_request,
+            reasoning=guarded_question.reasoning,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "error": "guard_unavailable",
+                "safe_message": "The query safety scanner is unavailable.",
+            },
+        )
+
+    if guarded_question.guard_decision == "BLOCK":
+        _log_rag_audit(
+            db,
+            user_id=getattr(current_user, "id", None),
+            question=guarded_question.original_question,
+            event_type="RAG_QUERY_BLOCKED",
+            decision="BLOCK",
+            request=http_request,
+            reasoning=guarded_question.reasoning,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "query_blocked",
+                "reason": guarded_question.reasoning,
+                "safe_message": (
+                    "Your query contains patterns that cannot be processed."
+                ),
+            },
+        )
+
+    if guarded_question.guard_decision == "SANITIZE":
+        _log_rag_audit(
+            db,
+            user_id=getattr(current_user, "id", None),
+            question=guarded_question.original_question,
+            event_type="RAG_QUERY_SANITIZED",
+            decision="SANITIZE",
+            request=http_request,
+            reasoning=guarded_question.reasoning,
+            changes_summary=guarded_question.changes_summary,
+        )
+
     try:
         vector_store = load_vector_store(user_id=current_user.id)
     except FileNotFoundError as exc:
@@ -809,11 +860,15 @@ async def query_knowledge_base_stream(
     llm_client = LLMClient()
 
     generator = stream_rag_answer(
-        question=payload.question,
+        question=guarded_question.question,
+        original_question=guarded_question.original_question,
+        vector_store=vector_store,
         retriever=retriever,
         llm=llm_client,
         db=db,
         model_name=settings.LLM_MODEL,
+        user_id=getattr(current_user, "id", None),
+        http_request=http_request,
     )
 
     return StreamingResponse(
