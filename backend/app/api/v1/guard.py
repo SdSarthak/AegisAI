@@ -307,79 +307,72 @@ def scan_prompt(
         SanitizationLevel.MEDIUM,
     )
 
-        try:
-        try:
-            guard = LLMGuard(sanitization_level=san_level)
-            result = guard.guard(request.prompt)
-        except ConnectionError as conn_err:
-            raise GuardConnectionError(
-                f"Failed to connect to LLMGuard server: {str(conn_err)}"
-            )
-        except Exception as exec_err:
-            raise GuardExecutionError(
-                f"LLMGuard inference execution failed: {str(exec_err)}"
-            )
-
-        client_ip = http_request.client.host if http_request.client else None
-
-        log = _build_guard_scan_log(
-            current_user.id,
-            request.prompt,
-            result,
-            ip_address=client_ip,
+    try:
+        guard = LLMGuard(sanitization_level=san_level)
+        result = guard.guard(request.prompt)
+    except ConnectionError as conn_err:
+        raise GuardConnectionError(
+            f"Failed to connect to LLMGuard server: {str(conn_err)}"
         )
-        db.add(log)
-        db.flush()
-
-        if log.decision == "block":
-            create_notification(
-                db=db,
-                user_id=current_user.id,
-                notification_type=NotificationType.GUARD_BLOCK.value,
-                title="Prompt blocked by LLM Guard",
-                message="A prompt was blocked because it matched high-risk guard rules.",
-                resource_type="guard_scan",
-                resource_id=log.id,
-                commit=False,
-            )
-            try:
-                deliver_webhook(
-                    db,
-                    current_user.id,
-                    "guard_block",
-                    {
-                        "decision": "block",
-                        "confidence": result["metadata"]["decision_reasoning"]["confidence"],
-                        "matched_patterns": result["metadata"]["regex_analysis"].get("matched_patterns", []),
-                        "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
-                    },
-                )
-            except Exception as general_sys_err:
-                db.rollback()
-                logger.exception("Failed to trigger guard block webhook delivery")
-                logger.critical(
-                    f"Unhandled backend glitch caught inside Guard router: {str(general_sys_err)}",
-                    exc_info=True,
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="An internal error occurred while processing the Guard scan.",
-                )
-
-        db.commit()
-
-        return ScanResponse(
-            decision=result["decision"],
-            confidence=result["metadata"]["decision_reasoning"]["confidence"],
-            reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
-            sanitized_prompt=result.get("sanitized_prompt"),
-            matched_patterns=result["metadata"]["regex_analysis"].get("matched_patterns", []),
+    except Exception as exec_err:
+        raise GuardExecutionError(
+            f"LLMGuard inference execution failed: {str(exec_err)}"
         )
 
-    except Exception:
-        db.rollback()
-        logger.exception("Guard scan failed")
-        raise
+    client_ip = http_request.client.host if http_request.client else None
+    log = _build_guard_scan_log(
+        current_user.id,
+        request.prompt,
+        result,
+        ip_address=client_ip,
+    )
+    db.add(log)
+    db.flush()
+
+    if log.decision == "block":
+        create_notification(
+            db=db,
+            user_id=current_user.id,
+            notification_type=NotificationType.GUARD_BLOCK.value,
+            title="Prompt blocked by LLM Guard",
+            message="A prompt was blocked because it matched high-risk guard rules.",
+            resource_type="guard_scan",
+            resource_id=log.id,
+            commit=False,
+        )
+        try:
+            deliver_webhook(
+                db,
+                current_user.id,
+                "guard_block",
+                {
+                    "decision": "block",
+                    "confidence": result["metadata"]["decision_reasoning"]["confidence"],
+                    "matched_patterns": result["metadata"]["regex_analysis"].get("matched_patterns", []),
+                    "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
+                },
+            )
+        except Exception as general_sys_err:
+            db.rollback()
+            logger.exception("Failed to trigger guard block webhook delivery")
+            logger.critical(
+                f"Unhandled backend glitch caught inside Guard router: {str(general_sys_err)}",
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An internal error occurred while processing the Guard scan.",
+            )
+
+    db.commit()
+
+    return ScanResponse(
+        decision=result["decision"],
+        confidence=result["metadata"]["decision_reasoning"]["confidence"],
+        reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
+        sanitized_prompt=result.get("sanitized_prompt"),
+        matched_patterns=result["metadata"]["regex_analysis"].get("matched_patterns", []),
+    )
     
 
 # ---------------------------------------------------------------------------
