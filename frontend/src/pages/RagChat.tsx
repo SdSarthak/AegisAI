@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toast } from 'react-hot-toast'
 import {
   AlertCircle,
   Bot,
@@ -46,10 +47,21 @@ export default function RagChat() {
       setSubmittedQuestion('')
       return
     }
+   
     setValidationError(null)
     setSubmittedQuestion(trimmed)
     setQuestion('')
     ask(trimmed)
+  }
+  const handleCopy = async () => {
+    if (!hasAnswer) return
+
+    try {
+      await navigator.clipboard.writeText(tokens)
+      toast.success('Copied to clipboard!')
+    } catch (error) {
+      toast.error('Copy failed')
+    }
   }
 
   const handleExport = () => {
@@ -218,14 +230,24 @@ export default function RagChat() {
                                 Sources
                               </h3>
                               {!isStreaming && (
-                                <button
-                                  type="button"
-                                  onClick={handleExport}
-                                  className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700"
-                                >
-                                  <FileText className="w-3.5 h-3.5" />
-                                  Export
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={handleExport}
+                                    className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                    Export
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={handleCopy}
+                                    className="inline-flex items-center gap-1.5 text-xs"
+                                  >
+                                    Copy
+                                  </button>
+                                </>
                               )}
                             </div>
                             <div className="space-y-3">

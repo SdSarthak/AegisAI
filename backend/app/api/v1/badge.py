@@ -16,7 +16,7 @@ TODO for contributors (help wanted):
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status, Request
-from fastapi.responses import Response, JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
@@ -73,4 +73,3 @@ def get_compliance_badge(
 
     svg = generate_badge_svg(system.name, system.risk_level, system.compliance_status)
     return Response(content=svg, media_type="image/svg+xml", headers=headers)
-

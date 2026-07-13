@@ -17,6 +17,7 @@ from .grounding import GroundingChecker
 logger = logging.getLogger(__name__)
 ChatOpenAI = None
 _CHUNK_GUARD: Any | None = None
+_RAG_CACHE: Any | None = None
 
 SAFE_CONTEXT_FALLBACK = (
     "Retrieved context could not be verified as safe. "
@@ -136,6 +137,29 @@ def load_vector_store(user_id: int | None = None) -> Any:
     return loader(user_id=user_id)
 
 
+def get_rag_cache() -> Any:
+    """Return the process-wide cache with a lazily loaded embedding model."""
+    global _RAG_CACHE
+    if _RAG_CACHE is None:
+        from .cache import SemanticCache
+
+        def embed_question(question: str) -> list[float]:
+            from .vector_store import get_embeddings
+
+            embeddings = get_embeddings()
+            if hasattr(embeddings, "embed_query"):
+                return embeddings.embed_query(question)
+            return embeddings.embed_documents([question])[0]
+
+        _RAG_CACHE = SemanticCache(
+            settings.REDIS_URL,
+            embed_question,
+            ttl_seconds=settings.RAG_CACHE_TTL_SECONDS,
+            similarity_threshold=settings.RAG_CACHE_SIMILARITY_THRESHOLD,
+        )
+    return _RAG_CACHE
+
+
 def get_qa_chain(user_id: int | None = None):
     """
     Build and return a RetrievalQA chain backed by the persisted FAISS index.
@@ -248,3 +272,38 @@ def _run_chain_with_documents(
     if not isinstance(result, dict):
         return {"result": str(result), "source_documents": documents}
     return result
+
+
+def _build_source_citation(doc: Any) -> dict[str, Any]:
+    """Extract structured citation data from a LangChain document chunk.
+
+    Returns a dict with filename, article, and paragraph keys
+    as required by RAGQueryResponse sources field.
+    """
+    import os
+    import re
+
+    metadata = dict(getattr(doc, "metadata", {}) or {})
+
+    raw_source = str(metadata.get("source", ""))
+    filename = os.path.basename(raw_source) if raw_source else ""
+
+    article = metadata.get("article") or metadata.get("article_number") or None
+    paragraph = metadata.get("paragraph") or metadata.get("paragraph_number") or None
+
+    if not article:
+        content_preview = str(getattr(doc, "page_content", ""))[:300]
+        article_match = re.search(r"(Article\s+\d+[a-z]?)", content_preview, re.IGNORECASE)
+        if article_match:
+            article = article_match.group(1)
+
+    citation: dict[str, Any] = {"filename": filename}
+    if article:
+        citation["article"] = str(article)
+    if paragraph is not None:
+        try:
+            citation["paragraph"] = int(paragraph)
+        except (ValueError, TypeError):
+            citation["paragraph"] = paragraph
+
+    return citation
