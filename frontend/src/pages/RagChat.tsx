@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react'
 import {
   AlertCircle,
@@ -13,6 +14,11 @@ import {
 import { useRagStream } from '../hooks/useRagStream'
 import CopyButton from '../components/CopyButton'
 
+function getResponseTimeColor(time: number): string {
+  if (time < 1) return 'text-green-600 bg-green-50'
+  if (time < 3) return 'text-yellow-600 bg-yellow-50'
+  return 'text-red-600 bg-red-50'
+}
 
 export default function RagChat() {
   const [question, setQuestion] = useState('')
@@ -26,7 +32,11 @@ export default function RagChat() {
     error: streamError,
     ask,
     stop,
+    finishInfo,
   } = useRagStream()
+
+  // Response time is optional and may not be present in finishInfo depending on backend payload.
+  const responseTime = (finishInfo as any)?.response_time_seconds ?? null
 
   const isStreaming = status === 'streaming'
   const isAwaitingFirstToken = isStreaming && tokens.length === 0
@@ -192,6 +202,18 @@ export default function RagChat() {
                             disabled={isStreaming || !tokens.trim()}
                           />
                         </div>
+
+                        {!isStreaming && responseTime !== null && (
+                          <div className="flex justify-end">
+                            <span
+                              className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${getResponseTimeColor(
+                                responseTime,
+                              )}`}
+                            >
+                              ⚡ {responseTime.toFixed(2)}s
+                            </span>
+                          </div>
+                        )}
 
                         <p className="text-gray-700 leading-7 whitespace-pre-wrap">
                           {tokens}
