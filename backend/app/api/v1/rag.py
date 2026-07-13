@@ -17,10 +17,11 @@ import logging
 import mimetypes
 import os
 import shutil
-import tempfile
 import time
+import uuid
 from dataclasses import dataclass
-from typing import Any, List, Literal
+from datetime import datetime
+from typing import Any, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import StreamingResponse
@@ -31,6 +32,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.models.audit_log import RAGAuditLog
+from app.models.rag_document import RAGDocument
 from app.models.rag_feedback import RAGFeedback
 from app.models.rag_query import RagQuery
 from app.models.user import SubscriptionTier, User
@@ -65,6 +67,33 @@ class RAGIngestResponse(BaseModel):
     index_size_bytes: int
 
 
+class RAGDocumentResponse(BaseModel):
+    id: int
+    filename: str
+    original_filename: str
+    content_type: Optional[str] = None
+    file_size_bytes: int
+    chunks_count: int
+    uploaded_by_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class RAGDocumentListResponse(BaseModel):
+    items: list[RAGDocumentResponse]
+    total: int
+
+
+class RAGDocumentDeleteResponse(BaseModel):
+    deleted_document_id: int
+    documents_remaining: int
+    index_rebuilt: bool
+    index_size_bytes: int
+
+
 class RAGFeedbackRequest(BaseModel):
     """Feedback payload for a previously returned RAG answer."""
 
@@ -87,6 +116,24 @@ def get_qa_chain(user_id: int | None = None) -> Any:
     from app.modules.rag.retrieval_chain import get_qa_chain as chain_factory
 
     return chain_factory(user_id=user_id)
+
+
+def get_rag_cache() -> Any | None:
+    """Return the optional RAG cache without making Redis a hard dependency."""
+    from app.modules.rag import retrieval_chain
+
+    factory = getattr(retrieval_chain, "get_rag_cache", None)
+    return factory() if factory is not None else None
+
+
+def _require_rag_admin(current_user: User) -> None:
+    """Restrict cache mutation to explicit admins or Scale operators."""
+    is_admin = getattr(current_user, "role", None) == "admin"
+    is_scale = (
+        getattr(current_user, "subscription_tier", None) == SubscriptionTier.SCALE
+    )
+    if not (is_admin or is_scale):
+        raise HTTPException(status_code=403, detail="Admin access required")
 
 
 def _hash_question(question: str) -> str:
@@ -133,6 +180,7 @@ def _log_rag_audit(
     except Exception:
         db.rollback()
         logger.exception("Failed to write RAG audit log")
+        raise
 
 
 def _decision_reasoning(result: dict[str, Any]) -> str | None:
@@ -201,6 +249,77 @@ async def guard_rag_question(
     )
 
 
+def _ensure_storage_dir() -> str:
+    os.makedirs(settings.RAG_DOCUMENT_STORAGE_PATH, exist_ok=True)
+    return settings.RAG_DOCUMENT_STORAGE_PATH
+
+
+def _stored_filename(original_filename: str) -> str:
+    safe_name = os.path.basename(original_filename).replace(os.sep, "_")
+    return f"{uuid.uuid4().hex}_{safe_name}"
+
+
+def _index_size_bytes(user_id: int | None = None) -> int:
+    index_path = (
+        os.path.join(settings.FAISS_INDEX_BASE_PATH, f"user_{user_id}")
+        if user_id is not None
+        else settings.FAISS_INDEX_PATH
+    )
+    index_size_bytes = 0
+    for fname in ("index.faiss", "index.pkl"):
+        fpath = os.path.join(index_path, fname)
+        if os.path.exists(fpath):
+            index_size_bytes += os.path.getsize(fpath)
+    return index_size_bytes
+
+
+def _valid_text_chunks(file_paths: list[str]):
+    raw_chunks = load_documents_from_paths(file_paths)
+    return [
+        chunk for chunk in raw_chunks
+        if getattr(chunk, "page_content", None) and chunk.page_content.strip()
+    ]
+
+
+def _rebuild_index_from_documents(
+    documents: list[RAGDocument], user_id: int | None = None
+) -> int:
+    index_path = (
+        os.path.join(settings.FAISS_INDEX_BASE_PATH, f"user_{user_id}")
+        if user_id is not None
+        else settings.FAISS_INDEX_PATH
+    )
+    file_paths = [doc.storage_path for doc in documents if os.path.exists(doc.storage_path)]
+    if not file_paths:
+        shutil.rmtree(index_path, ignore_errors=True)
+        cache = get_rag_cache()
+        if cache is not None:
+            cache.invalidate_all()
+        return 0
+
+    chunks = _valid_text_chunks(file_paths)
+    if not chunks:
+        shutil.rmtree(index_path, ignore_errors=True)
+        cache = get_rag_cache()
+        if cache is not None:
+            cache.invalidate_all()
+        return 0
+
+    if user_id is None:
+        create_vector_store(chunks)
+    else:
+        create_vector_store(chunks, user_id=user_id)
+    cache = get_rag_cache()
+    if cache is not None:
+        cache.invalidate_all()
+    return _index_size_bytes(user_id=user_id)
+
+
+def _current_user_id(current_user: User) -> Optional[int]:
+    user_id = getattr(current_user, "id", None)
+    return user_id if isinstance(user_id, int) else None
+
+
 @router.post(
     "/ingest",
     response_model=RAGIngestResponse,
@@ -210,9 +329,9 @@ async def guard_rag_question(
 def ingest_documents(
     files: List[UploadFile] = File(..., description="One or more PDF files to ingest"),
     current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ) -> RAGIngestResponse:
-    """Upload regulatory PDFs, chunk them, and rebuild the persisted FAISS index."""
-    user_id = current_user.id
+    """Upload regulatory PDFs, persist metadata, and rebuild the FAISS index."""
     if len(files) > settings.RAG_MAX_FILES_PER_REQUEST:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
@@ -258,22 +377,43 @@ def ingest_documents(
             ),
         )
 
-    tmp_dir = tempfile.mkdtemp(prefix="aegis_ingest_")
+    storage_dir = _ensure_storage_dir()
     saved_paths: list[str] = []
+    pending_documents: list[RAGDocument] = []
 
     try:
         for upload in pdf_files:
-            dest = os.path.join(tmp_dir, os.path.basename(upload.filename))
+            filename = _stored_filename(upload.filename)
+            dest = os.path.join(storage_dir, filename)
             with open(dest, "wb") as buf:
                 shutil.copyfileobj(upload.file, buf)
+            file_size_bytes = os.path.getsize(dest)
+            if file_size_bytes == 0:
+                if os.path.exists(dest):
+                    os.remove(dest)
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"File {upload.filename} is empty (0 bytes).",
+                )
             saved_paths.append(dest)
+            pending_documents.append(
+                RAGDocument(
+                    filename=filename,
+                    original_filename=os.path.basename(upload.filename),
+                    storage_path=dest,
+                    content_type=upload.content_type,
+                    file_size_bytes=file_size_bytes,
+                    uploaded_by_id=_current_user_id(current_user),
+                )
+            )
 
-        raw_chunks = load_documents_from_paths(saved_paths)
-        chunks = [
-            chunk
-            for chunk in raw_chunks
-            if chunk.page_content and chunk.page_content.strip()
-        ]
+        try:
+            chunks = _valid_text_chunks(saved_paths)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(exc),
+            ) from exc
 
         if not chunks:
             raise HTTPException(
@@ -284,21 +424,30 @@ def ingest_documents(
                 ),
             )
 
+        chunks_by_source: dict[str, int] = {path: 0 for path in saved_paths}
+        for chunk in chunks:
+            source = str(getattr(chunk, "metadata", {}).get("source", ""))
+            if source in chunks_by_source:
+                chunks_by_source[source] += 1
+
+        for document in pending_documents:
+            document.chunks_count = chunks_by_source.get(document.storage_path, 0)
+            db.add(document)
+        db.flush()
+
         try:
-            create_vector_store(chunks, user_id=user_id)
+            all_documents = db.query(RAGDocument).order_by(RAGDocument.id.asc()).all()
+            index_size_bytes = _rebuild_index_from_documents(
+                all_documents, user_id=current_user.id
+            )
         except Exception as exc:
+            db.rollback()
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail=f"Failed to build FAISS index: {exc}",
             )
 
-        from app.modules.rag.vector_store import _get_index_path
-        index_path = _get_index_path(user_id)
-        index_size_bytes = 0
-        for fname in ("index.faiss", "index.pkl"):
-            fpath = os.path.join(index_path, fname)
-            if os.path.exists(fpath):
-                index_size_bytes += os.path.getsize(fpath)
+        db.commit()
 
         return RAGIngestResponse(
             files_processed=len(saved_paths),
@@ -307,7 +456,74 @@ def ingest_documents(
         )
 
     finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        if db.is_active:
+            for path in saved_paths:
+                exists_in_db = db.query(RAGDocument).filter(RAGDocument.storage_path == path).first()
+                if not exists_in_db and os.path.exists(path):
+                    os.remove(path)
+
+
+@router.get("/documents", response_model=RAGDocumentListResponse)
+def list_rag_documents(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """List documents currently included in the RAG knowledge base."""
+    documents = (
+        db.query(RAGDocument)
+        .filter(RAGDocument.uploaded_by_id == current_user.id)
+        .order_by(RAGDocument.created_at.desc())
+        .all()
+    )
+    return RAGDocumentListResponse(items=documents, total=len(documents))
+
+
+@router.delete("/documents/{document_id}", response_model=RAGDocumentDeleteResponse)
+def delete_rag_document(
+    document_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Remove a RAG source document and rebuild the FAISS index."""
+    document = db.query(RAGDocument).filter(RAGDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="RAG document not found")
+
+    if document.uploaded_by_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You do not have permission to delete this document.",
+        )
+
+    storage_path = document.storage_path
+    db.delete(document)
+    db.flush()
+
+    remaining_documents = db.query(RAGDocument).order_by(RAGDocument.id.asc()).all()
+    try:
+        index_size_bytes = _rebuild_index_from_documents(
+            remaining_documents, user_id=current_user.id
+        )
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Failed to rebuild the RAG index. Please try again.",
+        )
+
+    db.commit()
+    if os.path.exists(storage_path):
+        try:
+            os.remove(storage_path)
+        except OSError:
+            pass
+
+    return RAGDocumentDeleteResponse(
+        deleted_document_id=document_id,
+        documents_remaining=len(remaining_documents),
+        index_rebuilt=bool(remaining_documents),
+        index_size_bytes=index_size_bytes,
+    )
 
 
 @router.post("/query", response_model=RAGQueryResponse)
@@ -372,13 +588,38 @@ def query_knowledge_base(
 
         from app.core.database import Base
 
-        qa_chain = get_qa_chain(user_id=current_user.id)
         t_start = time.monotonic()
-        result = qa_chain({"query": guarded_question.question})
+        cache = get_rag_cache()
+        cache_namespace = f"user:{current_user.id}"
+        cached_answer = (
+            cache.get(guarded_question.question, namespace=cache_namespace)
+            if cache is not None
+            else None
+        )
+        cache_hit = cached_answer is not None
+        cache_type = cached_answer.cache_type if cached_answer is not None else None
+        cache_age_seconds = cached_answer.age_seconds if cached_answer is not None else None
+
+        if cached_answer is not None:
+            result = {
+                "result": cached_answer.answer,
+                "cached_sources": cached_answer.sources,
+                "grounding_score": cached_answer.grounding_score,
+                "grounding_confidence": cached_answer.grounding_confidence,
+                "chunks_total": cached_answer.chunks_total,
+                "chunks_dropped": cached_answer.chunks_dropped,
+                "warning": cached_answer.warning,
+            }
+        else:
+            qa_chain = get_qa_chain(user_id=current_user.id)
+            result = qa_chain({"query": guarded_question.question})
         latency_ms = (time.monotonic() - t_start) * 1000
 
         source_docs = result.get("source_documents", [])
-        sources = [dict(getattr(doc, "metadata", {}) or {}) for doc in source_docs]
+        from app.modules.rag.retrieval_chain import _build_source_citation
+        sources = result.get("cached_sources") or [
+            _build_source_citation(doc) for doc in source_docs
+        ]
         source_labels = [str(source.get("source", "")) for source in sources]
         answer = str(result.get("result", ""))
         chunks_total = int(result.get("chunks_total", len(source_docs)))
@@ -386,6 +627,23 @@ def query_knowledge_base(
         grounding_score = float(result.get("grounding_score", 0.0))
         grounding_confidence = str(result.get("grounding_confidence", "LOW")).upper()
         warning = result.get("warning")
+
+        if not cache_hit and cache is not None and not result.get("llm_skipped", False):
+            from app.modules.rag.cache import CachedAnswer
+
+            cache.set(
+                guarded_question.question,
+                CachedAnswer(
+                    answer=answer,
+                    sources=sources,
+                    grounding_score=grounding_score,
+                    grounding_confidence=grounding_confidence,
+                    chunks_total=chunks_total,
+                    chunks_dropped=chunks_dropped,
+                    warning=warning,
+                ),
+                namespace=cache_namespace,
+            )
 
         if chunks_dropped:
             _log_rag_audit(
@@ -419,16 +677,18 @@ def query_knowledge_base(
             pass
 
         feedback = RAGFeedback(
-            question=guarded_question.question,
-            answer=answer,
+            question_hash=hashlib.sha256(guarded_question.question.encode("utf-8")).hexdigest(),
+            answer_hash=hashlib.sha256(answer.encode("utf-8")).hexdigest(),
             source_chunks=source_labels,
         )
         db.add(feedback)
         db.add(
             RagQuery(
                 user_id=current_user.id,
-                question=guarded_question.question,
-                answer_summary=answer[:200],
+                question_hash=hashlib.sha256(guarded_question.question.encode("utf-8")).hexdigest(),
+                question_length=len(guarded_question.question),
+                answer_hash=hashlib.sha256(answer.encode("utf-8")).hexdigest(),
+                answer_length=len(answer),
                 source_count=len(sources),
             )
         )
@@ -443,11 +703,13 @@ def query_knowledge_base(
                 answer=answer,
                 sources=source_labels,
                 latency_ms=latency_ms,
+                cache_hit=cache_hit,
+                cache_type=cache_type,
             )
         except Exception:
             pass
 
-        return RAGQueryResponse(
+        response = RAGQueryResponse(
             answer=answer,
             sources=sources,
             answer_id=feedback.id,
@@ -462,19 +724,55 @@ def query_knowledge_base(
             low_confidence=grounding_confidence == "LOW",
             confidence_tier=grounding_confidence.lower(),
             flagged_reason=warning,
+            cache_hit=cache_hit,
+            cache_type=cache_type,
+            cache_age_seconds=cache_age_seconds,
         )
+
+        return response
     except HTTPException:
         raise
     except FileNotFoundError as exc:
+        logger.error("RAG file not found: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
+            detail="The AI analysis service is temporarily unavailable. Please try again later.",
         )
     except Exception as exc:
+        logger.error("RAG query error: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=f"RAG module error: {str(exc)}",
+            detail="The AI analysis service is temporarily unavailable. Please try again later.",
         )
+
+
+@router.delete("/cache", tags=["RAG Intelligence"])
+def invalidate_rag_cache(
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Invalidate every exact and semantic RAG cache entry."""
+    _require_rag_admin(current_user)
+    cache = get_rag_cache()
+    return {"status": "ok", "entries_deleted": cache.invalidate_all() if cache else 0}
+
+
+@router.delete("/cache/{question_hash}", tags=["RAG Intelligence"])
+def invalidate_rag_cache_question(
+    question_hash: str,
+    current_user: User = Depends(get_current_user),
+) -> dict[str, Any]:
+    """Invalidate one question by its SHA-256 digest."""
+    _require_rag_admin(current_user)
+    if len(question_hash) != 64 or any(
+        char not in "0123456789abcdef" for char in question_hash.lower()
+    ):
+        raise HTTPException(status_code=400, detail="Invalid SHA-256 question hash")
+    cache = get_rag_cache()
+    return {
+        "status": "ok",
+        "question_hash": question_hash.lower(),
+        "entries_deleted": cache.invalidate(question_hash.lower()) if cache else 0,
+    }
 
 
 @router.post(
@@ -638,8 +936,10 @@ def get_rag_history(
         "results": [
             {
                 "id": query.id,
-                "question": query.question,
-                "answer_summary": query.answer_summary,
+                "question_hash": query.question_hash,
+                "question_length": query.question_length,
+                "answer_hash": query.answer_hash,
+                "answer_length": query.answer_length,
                 "source_count": query.source_count,
                 "created_at": query.created_at,
             }

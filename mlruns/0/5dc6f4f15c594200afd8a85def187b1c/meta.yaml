@@ -1,0 +1,15 @@
+artifact_uri: file:///C:/Users/HP/Desktop/folders/intership/AegisAI-aishwarya/mlruns/0/5dc6f4f15c594200afd8a85def187b1c/artifacts
+end_time: 1783177742072
+entry_point_name: ''
+experiment_id: '0'
+lifecycle_stage: active
+run_id: 5dc6f4f15c594200afd8a85def187b1c
+run_name: rag_query
+run_uuid: 5dc6f4f15c594200afd8a85def187b1c
+source_name: ''
+source_type: 4
+source_version: ''
+start_time: 1783177741858
+status: 3
+tags: []
+user_id: HP

@@ -176,17 +176,37 @@ return {current, ttl}
 
             return False, 0
 
-    def check_and_consume(
+    def check(
         self,
         key: str,
         limit: int,
         window_seconds: int,
-        cost: int = 1,
         fail_closed: Optional[bool] = None,
     ) -> tuple[bool, int]:
-        """Return whether a request should be limited and the retry-after value."""
+        """Check whether a key is currently over the rate limit without consuming a slot."""
+        return self._check_internal(key, limit, window_seconds, cost=0, fail_closed=fail_closed)
+
+    def record_attempt(
+        self,
+        key: str,
+        limit: int,
+        window_seconds: int,
+        fail_closed: Optional[bool] = None,
+    ) -> tuple[bool, int]:
+        """Record one failed attempt, consuming one slot from the rate limit."""
+        return self._check_internal(key, limit, window_seconds, cost=1, fail_closed=fail_closed)
+
+    def _check_internal(
+        self,
+        key: str,
+        limit: int,
+        window_seconds: int,
+        cost: int,
+        fail_closed: Optional[bool] = None,
+    ) -> tuple[bool, int]:
+
         if fail_closed is None:
-            fail_closed = getattr(settings, "RATE_LIMIT_FAIL_CLOSED", False)
+            fail_closed = getattr(settings, "RATE_LIMIT_FAIL_CLOSED", True)
 
         now = datetime.now(timezone.utc)
         use_redis = False
@@ -266,6 +286,19 @@ return {current, ttl}
                 return True, window_seconds
 
         return self._check_local(key, limit, window_seconds, cost)
+    def check_and_consume(
+        self,
+        key: str,
+        limit: int,
+        window_seconds: int,
+        cost: int = 1,
+        fail_closed: Optional[bool] = None,
+    ) -> tuple[bool, int]:
+        """Return whether a request should be limited and the retry-after value."""
+        return self._check_internal(key, limit, window_seconds, cost=cost, fail_closed=fail_closed)
+
+
+
 
 
 guard_scan_rate_limiter = DistributedRateLimiter()
