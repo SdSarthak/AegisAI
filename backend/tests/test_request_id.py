@@ -128,7 +128,7 @@ def app_with_middleware():
 
     @app.get("/ping")
     def ping():
-        return {"ok": True}
+        return {"ok": True, "request_id": get_request_id()}
 
     @app.get("/get-request-id")
     def get_req_id():

@@ -133,8 +133,9 @@ class UserGuardConfig(TypedDict):
     suspicious_threshold: float
 
 
-# Temporary in-memory config store
+# Temporary in-memory config store with thread safety
 user_guard_configs: dict[int, UserGuardConfig] = {}
+_guard_config_lock = Lock()
 
 
 def _infer_detection_type(regex_flag: bool, intent: str) -> str:
@@ -172,7 +173,7 @@ def _build_guard_scan_log(user_id: int, prompt: str, result: dict, ip_address: s
         ml_confidence=intent_analysis.get("confidence", 0.0),
         combined_score=decision_reasoning.get("confidence", 0.0),
         prompt_length=len(prompt),
-        scanned_at=datetime.utcnow(),
+        scanned_at=datetime.now(timezone.utc),
         ip_address=ip_address,
     )
 
@@ -365,6 +366,57 @@ def scan_prompt(
             )
 
     db.commit()
+
+        client_ip = http_request.client.host if http_request.client else None
+
+        log = _build_guard_scan_log(current_user.id, request.prompt, result, ip_address=client_ip)
+        db.add(log)
+        db.flush()
+
+        if log.decision == "block":
+            create_notification(
+                db=db,
+                user_id=current_user.id,
+                notification_type=NotificationType.GUARD_BLOCK.value,
+                title="Prompt blocked by LLM Guard",
+                message="A prompt was blocked because it matched high-risk guard rules.",
+                resource_type="guard_scan",
+                resource_id=log.id,
+                commit=False,
+            )
+            try:
+                deliver_webhook(
+                    db,
+                    current_user.id,
+                    "guard_block",
+                    {
+                        "decision": "block",
+                        "confidence": result["metadata"]["decision_reasoning"]["confidence"],
+                        "matched_patterns": result["metadata"]["regex_analysis"].get("matched_patterns", []),
+                        "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
+                    },
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to trigger guard_block webhook delivery"
+                )
+
+        db.commit()
+
+        return ScanResponse(
+            decision=result["decision"],
+            confidence=result["metadata"]["decision_reasoning"]["confidence"],
+            reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
+            sanitized_prompt=result.get("sanitized_prompt"),
+            matched_patterns=result["metadata"]["regex_analysis"].get(
+                "matched_patterns",
+                [],
+            ),
+        )
+
+    except Exception:
+        db.rollback()
+        logger.exception("Guard scan failed")
 
     return ScanResponse(
         decision=result["decision"],
@@ -791,7 +843,7 @@ def get_guard_stats(
             detail="You do not have permission to query stats for another user.",
         )
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     if window == "24h":
         start_date = now - timedelta(hours=24)
     elif window == "7d":
@@ -922,7 +974,8 @@ def get_guard_config(current_user: User = Depends(get_current_user)):
         "suspicious_threshold": 0.5,
     }
 
-    return user_guard_configs.get(current_user.id, default_config)
+    with _guard_config_lock:
+        return user_guard_configs.get(current_user.id, default_config)
 
 
 @router.patch("/config", tags=["LLM Guard"])
@@ -949,16 +1002,17 @@ def update_guard_config(
             detail="suspicious_threshold must be between 0 and 1",
         )
 
-    user_guard_configs[current_user.id] = {
-        "sanitization_level": config.sanitization_level,
-        "malicious_threshold": config.malicious_threshold,
-        "suspicious_threshold": config.suspicious_threshold,
-    }
+    with _guard_config_lock:
+        user_guard_configs[current_user.id] = {
+            "sanitization_level": config.sanitization_level,
+            "malicious_threshold": config.malicious_threshold,
+            "suspicious_threshold": config.suspicious_threshold,
+        }
 
-    return {
-        "message": "Guard configuration updated successfully",
-        "config": user_guard_configs[current_user.id],
-    }
+        return {
+            "message": "Guard configuration updated successfully",
+            "config": user_guard_configs[current_user.id],
+        }
 
 
 @router.post("/scan/batch", response_model=BulkScanResponse)
@@ -1034,9 +1088,9 @@ def bulk_scan_prompts(
                     message="A prompt was blocked because it matched high-risk guard rules.",
                     resource_type="guard_scan",
                     resource_id=log.id,
+                    commit=False,
                 )
-                background_tasks.add_task(
-                    deliver_webhook,
+                deliver_webhook(
                     db,
                     current_user.id,
                     "guard_block",
@@ -1046,7 +1100,6 @@ def bulk_scan_prompts(
                         "matched_patterns": result["metadata"]["regex_analysis"].get("matched_patterns", []),
                         "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest(),
                     },
-                    background_tasks,
                 )
 
             results.append(

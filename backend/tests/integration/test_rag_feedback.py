@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.conftest import _CSRFClientWrapper
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -74,7 +75,7 @@ def client():
     app.dependency_overrides[get_current_user] = _fake_user
 
     with TestClient(app) as c:
-        yield c
+        yield _CSRFClientWrapper(c)
     
     # 4. Cleanup
     db.close()
