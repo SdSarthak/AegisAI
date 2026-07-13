@@ -307,7 +307,7 @@ def scan_prompt(
         SanitizationLevel.MEDIUM,
     )
 
-    try:
+        try:
         try:
             guard = LLMGuard(sanitization_level=san_level)
             result = guard.guard(request.prompt)
@@ -321,9 +321,13 @@ def scan_prompt(
             )
 
         client_ip = http_request.client.host if http_request.client else None
-        
-        # FIXED: Kept only ONE single log creation block
-        log = _build_guard_scan_log(current_user.id, request.prompt, result, ip_address=client_ip)
+
+        log = _build_guard_scan_log(
+            current_user.id,
+            request.prompt,
+            result,
+            ip_address=client_ip,
+        )
         db.add(log)
         db.flush()
 
@@ -362,17 +366,20 @@ def scan_prompt(
                     detail="An internal error occurred while processing the Guard scan.",
                 )
 
-        # FIXED: Kept only ONE single commit block
         db.commit()
 
-        # FIXED: Removed the repeated duplicate 'matched_patterns' keyword argument
         return ScanResponse(
             decision=result["decision"],
             confidence=result["metadata"]["decision_reasoning"]["confidence"],
             reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
             sanitized_prompt=result.get("sanitized_prompt"),
-            matched_patterns=result["metadata"]["regex_analysis"].get("matched_patterns", [])
+            matched_patterns=result["metadata"]["regex_analysis"].get("matched_patterns", []),
         )
+
+    except Exception:
+        db.rollback()
+        logger.exception("Guard scan failed")
+        raise
     
 
 # ---------------------------------------------------------------------------
