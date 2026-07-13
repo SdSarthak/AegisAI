@@ -11,6 +11,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
+from app.modules.rag.cache import clear_cache
 import pytest_asyncio
 from sqlalchemy.orm import Session
 
@@ -80,6 +81,13 @@ def reset_rag_guard_singleton():
     yield
     rag_api._RAG_GUARD = None
 
+
+
+@pytest.fixture(autouse=True)
+def clear_rag_cache_between_tests():
+    clear_cache()
+    yield
+    clear_cache()
 
 def guard_result(decision: str, sanitized_prompt: str | None = None) -> dict[str, Any]:
     """Build a representative guard result."""

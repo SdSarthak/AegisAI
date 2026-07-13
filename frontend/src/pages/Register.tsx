@@ -34,7 +34,6 @@ function toUserFriendlyMessage(msg: string): string {
 function parsePydanticErrors(errorData: unknown): ValidationError[] {
   if (!isErrorResponseData(errorData)) return []
 
-  // 422 Pydantic validation errors arrive as an array
   if (Array.isArray(errorData.detail)) {
     return errorData.detail.map((error) => ({
       field: String(error.loc?.[error.loc.length - 1] ?? 'unknown'),
@@ -54,6 +53,10 @@ function checkPasswordStrength(password: string) {
   }
 }
 
+function isPasswordStrong(strength: ReturnType<typeof checkPasswordStrength>) {
+  return Object.values(strength).every(Boolean)
+}
+
 export default function Register() {
   const navigate = useNavigate()
   const [formData, setFormData] = useState({
@@ -68,6 +71,7 @@ export default function Register() {
   const [showPasswordRequirements, setShowPasswordRequirements] = useState(false)
 
   const passwordStrength = checkPasswordStrength(formData.password)
+  const passwordIsStrong = isPasswordStrong(passwordStrength)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -77,10 +81,10 @@ export default function Register() {
     const trimmedFullName = formData.full_name.trim()
     const trimmedCompanyName = formData.company_name.trim()
 
-    // UX-only empty field checks — backend validates format/strength rules
     const validationErrors: ValidationError[] = []
     if (!trimmedEmail) validationErrors.push({ field: 'email', message: 'Email is required.' })
     if (!formData.password) validationErrors.push({ field: 'password', message: 'Password is required.' })
+    if (formData.password && !passwordIsStrong) validationErrors.push({ field: 'password', message: 'Password does not meet strength requirements.' })
     if (!trimmedFullName) validationErrors.push({ field: 'full_name', message: 'Full name is required.' })
     if (!trimmedCompanyName) validationErrors.push({ field: 'company_name', message: 'Company name is required.' })
 
@@ -105,7 +109,6 @@ export default function Register() {
         const detail = err.response?.data?.detail
 
         if (parsedErrors.length > 0) {
-          // 422: Pydantic field-level validation errors
           setErrors(parsedErrors)
         } else if (detail) {
           if (typeof detail === 'object' && detail.field && detail.message) {
@@ -214,7 +217,8 @@ export default function Register() {
               </button>
             </div>
 
-            {/* Password strength requirements feedback */}
+            {formData.password && <PasswordStrengthBar strength={passwordStrength} />}
+
             {(showPasswordRequirements || formData.password) && (
               <div className="mt-3 space-y-2 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg border border-gray-200 dark:border-gray-600">
                 <p className="text-xs font-semibold text-gray-700 dark:text-gray-300">
@@ -296,7 +300,7 @@ export default function Register() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || (formData.password.length > 0 && !passwordIsStrong)}
             className="w-full py-2 px-4 border border-transparent rounded-lg shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loading ? 'Creating account...' : 'Create account'}
@@ -310,6 +314,28 @@ export default function Register() {
           </Link>
         </p>
       </div>
+    </div>
+  )
+}
+
+function getPasswordStrengthLevel(strength: ReturnType<typeof checkPasswordStrength>) {
+  const metCount = Object.values(strength).filter(Boolean).length
+  if (metCount <= 2) return { level: 'Weak', color: 'bg-red-500', width: '33%' }
+  if (metCount === 3) return { level: 'Medium', color: 'bg-yellow-500', width: '66%' }
+  return { level: 'Strong', color: 'bg-green-500', width: '100%' }
+}
+
+function PasswordStrengthBar({ strength }: { strength: ReturnType<typeof checkPasswordStrength> }) {
+  const { level, color, width } = getPasswordStrengthLevel(strength)
+  return (
+    <div className="mt-2">
+      <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div
+          className={`h-full ${color} transition-all duration-300`}
+          style={{ width }}
+        />
+      </div>
+      <p className="text-xs mt-1 text-gray-600">{level} password</p>
     </div>
   )
 }

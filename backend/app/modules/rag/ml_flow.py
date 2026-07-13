@@ -29,6 +29,8 @@ def log_query(
     answer: str,
     sources: list,
     latency_ms: float = 0.0,
+    cache_hit: bool = False,
+    cache_type: str | None = None,
 ) -> None:
     """
     Log a single RAG query as an MLflow run.
@@ -38,6 +40,8 @@ def log_query(
         answer:      The generated answer text.
         sources:     List of source document identifiers used to ground the answer.
         latency_ms:  End-to-end response latency in milliseconds.
+        cache_hit:   Whether the answer was served from either cache level.
+        cache_type:  ``exact`` or ``semantic`` for a cache hit.
     """
     tracking_uri = settings.MLFLOW_TRACKING_URI or ""
     if tracking_uri:
@@ -52,6 +56,13 @@ def log_query(
             mlflow.log_metric("answer_length", len(answer))
             mlflow.log_metric("source_count", len(sources))
             mlflow.log_metric("response_latency_ms", latency_ms)
+            mlflow.log_metric("cache_hit", 1.0 if cache_hit else 0.0)
+            mlflow.log_metric(
+                "cache_exact_hit", 1.0 if cache_type == "exact" else 0.0
+            )
+            mlflow.log_metric(
+                "cache_semantic_hit", 1.0 if cache_type == "semantic" else 0.0
+            )
 
             # Artifact
             mlflow.log_text(answer, "answer.txt")

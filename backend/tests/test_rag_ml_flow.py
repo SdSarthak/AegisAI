@@ -34,4 +34,5 @@ def test_log_query_records_rag_metrics():
     mock_log_metric.assert_any_call("answer_length", 33)
     mock_log_metric.assert_any_call("source_count", 2)
     mock_log_metric.assert_any_call("response_latency_ms", 125.5)
+    mock_log_metric.assert_any_call("cache_hit", 0.0)
     mock_log_text.assert_called_once_with("Maintain technical documentation.", "answer.txt")
