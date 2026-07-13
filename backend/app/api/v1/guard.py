@@ -373,14 +373,6 @@ def scan_prompt(
             sanitized_prompt=result.get("sanitized_prompt"),
             matched_patterns=result["metadata"]["regex_analysis"].get("matched_patterns", [])
         )
-
-    except Exception:
-        db.rollback()
-        logger.exception("Guard scan failed")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An internal error occurred while processing the Guard scan.",
-        )
     
 
 # ---------------------------------------------------------------------------
