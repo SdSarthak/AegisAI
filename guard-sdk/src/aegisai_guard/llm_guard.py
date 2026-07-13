@@ -1,8 +1,8 @@
 """
 Standalone LLM Guard orchestrator combining all defense layers.
 
-This is the SDK version — it performs guard analysis only (regex → classify
-→ decide → sanitize) and does **not** call an LLM.  The ``response`` field
+This is the SDK version — it performs guard analysis only (regex -> classify
+-> decide -> sanitize) and does **not** call an LLM.  The ``response`` field
 in the returned dict will be ``None`` for allowed/sanitized prompts or a
 safe fallback string for blocked prompts.
 """
@@ -11,6 +11,10 @@ import logging
 from datetime import datetime
 from typing import Dict, Optional
 
+from .exceptions import (
+    AegisGuardClassifierError,
+    AegisGuardInitError,
+)
 from .regex_rules import RegexFilter
 from .intent_classifier import IntentClassifier
 from .decision_engine import DecisionEngine, Decision
@@ -31,19 +35,30 @@ class LLMGuard:
         self,
         classifier_model_path: Optional[str] = None,
         sanitization_level: SanitizationLevel = SanitizationLevel.MEDIUM,
+        fallback_mode: bool = False,
     ):
         """
         Initialize the guard with all defense layers.
-        
+
         The classifier automatically loads the fine-tuned model trained by the notebook
         if available, otherwise falls back to deterministic heuristics.
-        
+
         Args:
             classifier_model_path: Path to fine-tuned classifier model.
                                    If None, auto-detects on disk.
-            sanitization_level: How aggressively to sanitize prompts
+            sanitization_level: How aggressively to sanitize prompts.
+            fallback_mode: If True, the guard initialises even when the ML classifier
+                          cannot be loaded and serves ALLOW-only responses in that case,
+                          instead of raising AegisGuardInitError. Defaults to False
+                          (fail-fast on classifier init failure).
+
+        Raises:
+            AegisGuardInitError: When the classifier or any required component
+                                 cannot be initialised and fallback_mode is False.
         """
         logger.info("Initializing LLM Guard...")
+        self.fallback_mode = fallback_mode
+        self._fallback_active = False
 
         # Layer 1: Fast regex filter
         self.regex_filter = RegexFilter()
@@ -53,9 +68,19 @@ class LLMGuard:
         try:
             self.classifier = IntentClassifier(model_path=classifier_model_path)
             logger.info("[OK] Intent classifier initialized")
-        except Exception as e:
-            logger.error(f"Failed to initialize classifier: {e}")
-            raise
+        except Exception as exc:  # noqa: BLE001
+            if self.fallback_mode:
+                logger.warning(
+                    "Classifier init failed; falling back to allow-all mode: %s",
+                    exc,
+                )
+                self.classifier = None
+                self._fallback_active = True
+            else:
+                raise AegisGuardInitError(
+                    f"Failed to initialise intent classifier: {exc}",
+                    component="IntentClassifier",
+                ) from exc
 
         # Layer 3: Decision engine
         self.decision_engine = DecisionEngine()
@@ -63,15 +88,15 @@ class LLMGuard:
 
         # Layer 4: Sanitizer
         self.sanitizer = PromptSanitizer(level=sanitization_level)
-        logger.info(f"[OK] Sanitizer initialized (level: {sanitization_level.value})")
+        logger.info("[OK] Sanitizer initialized (level: %s)", sanitization_level.value)
 
     def guard(self, user_prompt: str) -> Dict:
         """
         Run the complete guard pipeline on a user prompt.
-        
+
         Args:
             user_prompt: Raw user input
-            
+
         Returns:
             Dictionary with keys:
               - ``decision``: ``"allow"`` | ``"sanitize"`` | ``"block"``
@@ -79,9 +104,13 @@ class LLMGuard:
               - ``sanitized_text``: sanitized version (only when decision is ``sanitize``)
               - ``risk_score``: combined risk score (0.0–1.0)
               - ``metadata``: detailed analysis from each layer
+
+        Raises:
+            AegisGuardClassifierError: When the classifier fails mid-pipeline
+                                       and fallback_mode is disabled.
         """
         timestamp = datetime.now().isoformat()
-        logger.info(f"Processing prompt at {timestamp}")
+        logger.info("Processing prompt at %s", timestamp)
 
         result: Dict = {
             "timestamp": timestamp,
@@ -107,17 +136,47 @@ class LLMGuard:
             "risk_score": regex_result.score,
         }
         result["risk_score"] = regex_result.score
-        logger.info(f"Regex flag: {regex_result.flag}, Score: {regex_result.score}")
+        logger.info("Regex flag: %s, Score: %s", regex_result.flag, regex_result.score)
 
         # Step 2: Intent Classification (ML Layer)
         logger.debug("Step 2: Classifying intent...")
-        intent_result = self.classifier.classify(user_prompt)
+        if self._fallback_active:
+            # fallback_mode + classifier unavailable → serve ALLOW immediately
+            result["decision"] = "allow"
+            result["metadata"]["intent_analysis"] = {
+                "intent": "benign",
+                "confidence": 0.0,
+                "class_scores": {},
+                "fallback": True,
+            }
+            result["metadata"]["decision_reasoning"] = {
+                "reasoning": "Fallback mode: classifier unavailable, serving ALLOW.",
+                "confidence": 0.0,
+                "rule_matched": None,
+            }
+            result["metadata"]["action"] = "allowed"
+            logger.warning(
+                "Guard serving ALLOW in fallback mode (classifier unavailable)."
+            )
+            return result
+
+        try:
+            intent_result = self.classifier.classify(user_prompt)
+        except Exception as exc:  # noqa: BLE001
+            raise AegisGuardClassifierError(
+                f"Intent classification failed: {exc}",
+            ) from exc
+
         result["metadata"]["intent_analysis"] = {
             "intent": intent_result.intent,
             "confidence": intent_result.confidence,
             "class_scores": intent_result.class_scores,
         }
-        logger.info(f"Intent: {intent_result.intent}, Confidence: {intent_result.confidence}")
+        logger.info(
+            "Intent: %s, Confidence: %s",
+            intent_result.intent,
+            intent_result.confidence,
+        )
 
         # Step 3: Decision Engine
         logger.debug("Step 3: Making decision...")
@@ -133,7 +192,11 @@ class LLMGuard:
             "confidence": decision_result.confidence,
             "rule_matched": decision_result.rule_matched,
         }
-        logger.info(f"Decision: {decision_result.decision.value} (confidence: {decision_result.confidence})")
+        logger.info(
+            "Decision: %s (confidence: %s)",
+            decision_result.decision.value,
+            decision_result.confidence,
+        )
 
         # Step 4: Handle Decision
         if decision_result.decision == Decision.BLOCK:
@@ -151,7 +214,7 @@ class LLMGuard:
                 "changes": sanitization_summary,
             }
             result["metadata"]["action"] = "sanitized"
-            logger.info(f"Sanitization: {sanitization_summary}")
+            logger.info("Sanitization: %s", sanitization_summary)
 
         else:  # ALLOW
             logger.info("Prompt ALLOWED")

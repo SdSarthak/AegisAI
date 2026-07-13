@@ -8,6 +8,7 @@ without an OpenAI key, a running DB, or a real FAISS index.
 
 from __future__ import annotations
 from app.core.config import settings
+import hashlib
 import json
 from dataclasses import dataclass, field
 from typing import Iterator
@@ -204,8 +205,8 @@ class TestStreamRagAnswer:
         answer_id = events[0]["data"]["answer_id"]
         row = db_session.query(RAGFeedback).filter(RAGFeedback.id == answer_id).first()
         assert row is not None
-        assert row.question == "hi"
-        assert row.answer == "Hello world."
+        assert row.question_hash == hashlib.sha256("hi".encode("utf-8")).hexdigest()
+        assert row.answer_hash == hashlib.sha256("Hello world.".encode("utf-8")).hexdigest()
         assert row.source_chunks == ["doc.pdf"]
 
     @pytest.mark.asyncio

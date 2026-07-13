@@ -1,10 +1,12 @@
-import React from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { aiSystemsApi, documentsApi } from '../services/api'
 import { Bot, FileText, AlertTriangle, CheckCircle, Clock } from 'lucide-react'
 import BackendStatus from '../components/BackendStatus'
-
+import ComplianceSummaryWidget from '../components/ComplianceSummaryWidget'
+import RecentlyViewedSystems from '../components/RecentlyViewedSystems'
+import { formatLastUpdated } from '../utils/date'
 export default function Dashboard() {
   const {
     data: systemsData,
@@ -41,6 +43,14 @@ export default function Dashboard() {
     (documentsErrorDetail instanceof Error && documentsErrorDetail.message) ||
     'Unable to load dashboard data.'
 
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+
+  useEffect(() => {
+    if (!isLoading && !hasError && (systemsData !== undefined || documentsData !== undefined)) {
+      setLastUpdated(new Date())
+    }
+  }, [isLoading, hasError, systemsData, documentsData])
+
   const stats = [
     {
       name: 'AI Systems',
@@ -74,6 +84,11 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dashboard</h1>
           <p className="text-gray-600 dark:text-gray-400">Overview of your EU AI Act compliance status</p>
+          {lastUpdated && (
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Last Updated: {formatLastUpdated(lastUpdated)}
+            </p>
+          )}
         </div>
         <BackendStatus />
       </div>
@@ -133,6 +148,8 @@ export default function Dashboard() {
         </div>
       )}
 
+      <ComplianceSummaryWidget />
+
       {/* Quick Actions */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
@@ -161,6 +178,8 @@ export default function Dashboard() {
         </div>
       </div>
 
+      <RecentlyViewedSystems />
+
       {/* Recent AI Systems */}
       <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Your AI Systems</h2>
@@ -180,11 +199,11 @@ export default function Dashboard() {
             {systems.slice(0, 5).map((system) => (
               <div
                 key={system.id}
-                className="flex items-center justify-between p-4 rounded-lg border border-gray-200 dark:border-gray-700"
+                className="flex items-center justify-between gap-4 p-4 rounded-lg border border-gray-200 dark:border-gray-700"
               >
-                <div>
-                  <p className="font-medium text-gray-900 dark:text-white">{system.name}</p>
-                  <div className="flex items-center gap-2 mt-1">
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-gray-900 dark:text-white break-words">{system.name}</p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     {system.risk_level && (
                       <span
                         className={`text-xs px-2 py-0.5 rounded-full ${
@@ -206,7 +225,7 @@ export default function Dashboard() {
                 </div>
                 <Link
                   to={`/classification/${system.id}`}
-                  className="text-sm text-primary-600 hover:text-primary-500"
+                  className="text-sm text-primary-600 hover:text-primary-500 shrink-0"
                 >
                   View →
                 </Link>
@@ -218,3 +237,4 @@ export default function Dashboard() {
     </div>
   )
 }
+

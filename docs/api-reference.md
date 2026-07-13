@@ -427,6 +427,50 @@ Check if the Guard module is loaded and available.
 
 ## RAG Intelligence
 
+### GET /rag/documents
+
+List source documents currently stored in the RAG knowledge base.
+
+**Response `200`:**
+```json
+{
+  "items": [
+    {
+      "id": 12,
+      "filename": "c93b..._eu_ai_act.pdf",
+      "original_filename": "eu_ai_act.pdf",
+      "content_type": "application/pdf",
+      "file_size_bytes": 2483921,
+      "chunks_count": 184,
+      "uploaded_by_id": 4,
+      "created_at": "2026-06-08T12:00:00",
+      "updated_at": "2026-06-08T12:00:00"
+    }
+  ],
+  "total": 1
+}
+```
+
+---
+
+### DELETE /rag/documents/{id}
+
+Remove a source document from the RAG knowledge base and rebuild the FAISS index from the remaining stored documents.
+
+**Response `200`:**
+```json
+{
+  "deleted_document_id": 12,
+  "documents_remaining": 3,
+  "index_rebuilt": true,
+  "index_size_bytes": 3912048
+}
+```
+
+**Errors:** `404` if the document does not exist, `503` if the FAISS index rebuild fails.
+
+---
+
 ### POST /rag/query
 
 Ask a regulatory question and receive a grounded answer.

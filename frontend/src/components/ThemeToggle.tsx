@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { Sun, Moon } from 'lucide-react'
 
 export default function ThemeToggle() {
@@ -61,3 +61,4 @@ export default function ThemeToggle() {
     </button>
   )
 }
+
