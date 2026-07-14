@@ -26,6 +26,8 @@ except ImportError:  # pragma: no cover - exercised only when optional provider 
 
 logger = logging.getLogger(__name__)
 _rag_index_lock = threading.Lock()
+_vector_store_cache: dict[int | None, Any] = {}
+_vector_store_cache_lock = threading.Lock()
 
 
 def _get_faiss_class() -> Any:
@@ -146,12 +148,20 @@ def create_vector_store(documents: list[Any], user_id: int | None = None) -> Any
 
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    with _vector_store_cache_lock:
+        _vector_store_cache[user_id] = vector_store
+
     return vector_store
 
 
 def load_vector_store(user_id: int | None = None) -> Any:
     """
-    Load an existing FAISS index from disk.
+    Load a FAISS index, reusing the in-process cached instance when available.
+
+    Reingestion (``create_vector_store``) refreshes the cache for the same
+    ``user_id``, so callers always see the latest index without paying the
+    disk read and deserialization cost on every query.
 
     Args:
         user_id: Optional user ID for tenant-isolated index loading.
@@ -159,6 +169,11 @@ def load_vector_store(user_id: int | None = None) -> Any:
     Raises:
         FileNotFoundError: if the index has not been created yet.
     """
+    with _vector_store_cache_lock:
+        cached = _vector_store_cache.get(user_id)
+    if cached is not None:
+        return cached
+
     index_path = _get_index_path(user_id)
     if not os.path.exists(index_path):
         raise FileNotFoundError(
@@ -176,9 +191,14 @@ def load_vector_store(user_id: int | None = None) -> Any:
 
     embeddings = get_embeddings()
     faiss_cls = _get_faiss_class()
-    return faiss_cls.load_local(
+    vector_store = faiss_cls.load_local(
         index_path, embeddings, allow_dangerous_deserialization=True
     )
+
+    with _vector_store_cache_lock:
+        _vector_store_cache[user_id] = vector_store
+
+    return vector_store
 
 
 def check_index_exists(user_id: int | None = None) -> bool:
