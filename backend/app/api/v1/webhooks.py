@@ -9,6 +9,7 @@ import hashlib
 import hmac
 import json
 import logging
+import socket
 import time
 from typing import Any, List
 from urllib.parse import urlparse
@@ -27,6 +28,44 @@ from app.schemas.webhook import WebhookCreate, WebhookResponse
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# IP ranges that are never allowed for webhook delivery
+BLOCKED_IP_NETWORKS = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("fc00::/7"),
+    ipaddress.ip_network("fe80::/10"),
+]
+
+CLOUD_METADATA_IPS = [
+    ipaddress.ip_address("169.254.169.254"),
+    ipaddress.ip_address("100.100.100.200"),
+    ipaddress.ip_address("192.0.0.192"),
+]
+
+INTERNAL_HOSTNAME_SUFFIXES = [
+    ".internal",
+    ".local",
+    ".lan",
+    ".intranet",
+    ".private",
+    ".corp",
+]
+
+INTERNAL_HOSTNAME_EXACT = [
+    "localhost",
+    "metadata.google.internal",
+    "metadata.aws.internal",
+    "metadata.azure.internal",
+    "100.100.100.200",
+    "192.0.0.192",
+]
+
+DNS_REBINDING_TTL_THRESHOLD = 300
+
 
 class WebhookDeliveryError(Exception):
     """Raised when a webhook payload fails to reach its configured endpoint."""
@@ -43,6 +82,18 @@ class WebhookDeliveryError(Exception):
         self.reason = reason
 
 
+def _is_ip_blocked(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """Check if an IP address falls into any blocked range."""
+    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+        return True
+    for network in BLOCKED_IP_NETWORKS:
+        if ip in network:
+            return True
+    if ip in CLOUD_METADATA_IPS:
+        return True
+    return False
+
+
 def _validate_webhook_url(url: str) -> None:
     """Validate webhook URL to prevent SSRF attacks at delivery time."""
     parsed = urlparse(url)
@@ -55,41 +106,36 @@ def _validate_webhook_url(url: str) -> None:
     if not hostname:
         raise ValueError("Invalid URL hostname")
 
-    # Check if hostname is an IP address
+    # Check if hostname is an IP address directly
     try:
         ip = ipaddress.ip_address(hostname)
-        # Block private, link-local, loopback, and other special-use IPs
-        if ip.is_private:
-            raise ValueError("Private IP addresses are not allowed")
-        if ip.is_link_local:
-            raise ValueError("Link-local IP addresses are not allowed")
-        if ip.is_loopback:
-            raise ValueError("Loopback IP addresses are not allowed")
-        if ip.is_reserved:
-            raise ValueError("Reserved IP addresses are not allowed")
-        if ip.is_multicast:
-            raise ValueError("Multicast IP addresses are not allowed")
-        # Block cloud metadata endpoints (169.254.169.254)
-        if str(ip) == "169.254.169.254":
-            raise ValueError("Cloud metadata endpoints are not allowed")
+        if _is_ip_blocked(ip):
+            raise ValueError(f"IP address {hostname} is not allowed")
+        return
     except ValueError as e:
-        # Re-raise our own validation errors
         if "not allowed" in str(e):
             raise
-        # If it's not an IP address, it's a hostname - continue validation
 
-    # Block common internal hostnames
-    internal_hostnames = [
-        "localhost",
-        "metadata.google.internal",
-        "169.254.169.254",
-    ]
-    if hostname.lower() in internal_hostnames:
+    # Block exact-match internal hostnames
+    if hostname.lower() in INTERNAL_HOSTNAME_EXACT:
         raise ValueError(f"Hostname '{hostname}' is not allowed")
 
-    # Block any hostname that resolves to internal networks
-    if hostname.endswith(".internal") or hostname.endswith(".local"):
-        raise ValueError("Internal domain names are not allowed")
+    # Block internal hostname suffix patterns
+    for suffix in INTERNAL_HOSTNAME_SUFFIXES:
+        if hostname.lower().endswith(suffix):
+            raise ValueError(f"Hostname '{hostname}' has a blocked suffix '{suffix}'")
+
+    # Resolve ALL IPs for the hostname and validate each
+    try:
+        results = socket.getaddrinfo(hostname, None)
+        resolved_ips = set()
+        for result in results:
+            ip = ipaddress.ip_address(result[4][0])
+            resolved_ips.add(ip)
+            if _is_ip_blocked(ip):
+                raise ValueError(f"Hostname '{hostname}' resolves to blocked IP {ip}")
+    except socket.gaierror as e:
+        raise ValueError(f"Could not resolve hostname '{hostname}': {e}")
 
 
 def _build_signature(secret: str, payload_body: bytes) -> str:
