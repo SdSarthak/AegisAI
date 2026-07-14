@@ -1,8 +1,6 @@
 import axios, { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import { useAuthStore } from '../stores/authStore'
-
-const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim()
-const API_BASE_URL = configuredApiBaseUrl ? configuredApiBaseUrl.replace(/\/$/, '') : '/api/v1'
+import { API_BASE_URL, buildApiUrl } from '../utils/apiUrl'
 
 // Queue for synchronizing concurrent 401 responses.  When a 401 arrives the
 // first request triggers logout + navigation; all other in-flight 401s
@@ -13,11 +11,6 @@ const pending401s: Array<{
   reject: (reason: unknown) => void
   error: unknown
 }> = []
-
-function buildApiUrl(path: string): string {
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`
-  return `${API_BASE_URL}${normalizedPath}`
-}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
