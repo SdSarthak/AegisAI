@@ -3,7 +3,7 @@
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 import logging
-from threading import Lock
+from threading import Event, Lock
 from typing import Optional
 
 from app.core.config import settings
@@ -14,6 +14,9 @@ try:
     import redis
 except ImportError:  # pragma: no cover - exercised only when the dependency is missing
     redis = None
+
+_REDIS_CONNECT_TIMEOUT = 2
+_REDIS_OPERATION_TIMEOUT = 2
 
 
 class DistributedRateLimiter:
@@ -44,11 +47,14 @@ return {current, ttl}
         self._local_cleanup_calls = 0
         self._redis_client: Optional[object] = None
         self._redis_script: Optional[object] = None
+        self._redis_init_lock = Lock()
 
         # Circuit breaker settings and state
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.cb_state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
+        self.cb_event = Event()
+        self.cb_event.set()  # CLOSED = set
         self.consecutive_failures = 0
         self.last_state_change: datetime = datetime.now(timezone.utc)
 
@@ -62,6 +68,15 @@ return {current, ttl}
             "failures_closed": 0,
             "failures_open": 0,
         }
+
+        # Pre-warm Redis client if URL is configured
+        if settings.REDIS_URL and redis is not None:
+            self._redis_client = redis.Redis.from_url(
+                settings.REDIS_URL,
+                decode_responses=True,
+                socket_connect_timeout=_REDIS_CONNECT_TIMEOUT,
+                socket_timeout=_REDIS_OPERATION_TIMEOUT,
+            )
 
     def clear_local_attempts(self) -> None:
         """Clear the in-memory fallback state used when Redis is unavailable."""
@@ -99,12 +114,17 @@ return {current, ttl}
         if not settings.REDIS_URL or redis is None:
             return None
 
-        if self._redis_client is None:
-            self._redis_client = redis.Redis.from_url(  # type: ignore[union-attr]
-                settings.REDIS_URL,
-                decode_responses=True,
-            )
+        if self._redis_client is not None:
+            return self._redis_client
 
+        with self._redis_init_lock:
+            if self._redis_client is None:
+                self._redis_client = redis.Redis.from_url(  # type: ignore[union-attr]
+                    settings.REDIS_URL,
+                    decode_responses=True,
+                    socket_connect_timeout=_REDIS_CONNECT_TIMEOUT,
+                    socket_timeout=_REDIS_OPERATION_TIMEOUT,
+                )
         return self._redis_client
 
     def _check_redis(
@@ -116,7 +136,9 @@ return {current, ttl}
         cost: int,
     ) -> tuple[bool, int]:
         if self._redis_script is None:
-            self._redis_script = client.register_script(self._RATE_LIMIT_SCRIPT)  # type: ignore[attr-defined]
+            with self._redis_init_lock:
+                if self._redis_script is None:
+                    self._redis_script = client.register_script(self._RATE_LIMIT_SCRIPT)  # type: ignore[attr-defined]
 
         current, ttl = self._redis_script(  # type: ignore[operator]
             keys=[key],
@@ -210,34 +232,31 @@ return {current, ttl}
 
         now = datetime.now(timezone.utc)
         use_redis = False
-        client = None
 
-        with self._local_lock:
-            self.metrics["total_requests"] += 1
-
-            # Evaluate/Update Circuit Breaker State
-            if self.cb_state == "OPEN":
-                elapsed = (now - self.last_state_change).total_seconds()
-                if elapsed >= self.recovery_timeout:
-                    self.cb_state = "HALF_OPEN"
-                    self.last_state_change = now
-                    logger.warning("Circuit breaker transitioning from OPEN to HALF_OPEN for rate limiter.")
-                    use_redis = True
-                else:
-                    self.metrics["blocked_by_circuit_breaker"] += 1
-            else:
+        # Evaluate/Update Circuit Breaker State (outside local lock to prevent contention)
+        if self.cb_state == "OPEN":
+            elapsed = (now - self.last_state_change).total_seconds()
+            if elapsed >= self.recovery_timeout:
+                self.cb_state = "HALF_OPEN"
+                self.last_state_change = now
+                logger.warning("Circuit breaker transitioning from OPEN to HALF_OPEN for rate limiter.")
                 use_redis = True
+            else:
+                with self._local_lock:
+                    self.metrics["blocked_by_circuit_breaker"] += 1
+        else:
+            use_redis = True
 
-            if use_redis:
-                client = self._get_redis_client()
-                if client is None:
-                    # Redis is not configured or available (local dev fallback)
-                    use_redis = False
+        # Get Redis client outside the local lock to avoid blocking all threads
+        client = self._get_redis_client() if use_redis else None
+        if client is None:
+            use_redis = False
 
         # Redis operation block (executed outside local lock to prevent contention)
         if use_redis and client is not None:
             try:
                 with self._local_lock:
+                    self.metrics["total_requests"] += 1
                     self.metrics["redis_calls"] += 1
 
                 limited, retry_after = self._check_redis(client, key, limit, window_seconds, cost)
@@ -245,6 +264,7 @@ return {current, ttl}
                 with self._local_lock:
                     if self.cb_state == "HALF_OPEN":
                         self.cb_state = "CLOSED"
+                        self.cb_event.set()
                         self.consecutive_failures = 0
                         self.last_state_change = datetime.now(timezone.utc)
                         logger.info("Circuit breaker reset to CLOSED after successful Redis call.")
@@ -258,10 +278,12 @@ return {current, ttl}
 
                 with self._local_lock:
                     self.metrics["redis_failures"] += 1
+                    self.metrics["total_requests"] += 1
                     self.consecutive_failures += 1
 
                     if self.cb_state != "OPEN" and self.consecutive_failures >= self.failure_threshold:
                         self.cb_state = "OPEN"
+                        self.cb_event.clear()
                         self.last_state_change = datetime.now(timezone.utc)
                         logger.error(
                             "Circuit breaker tripped to OPEN state due to %d consecutive Redis failures.",
@@ -276,6 +298,7 @@ return {current, ttl}
 
         # Fallback to Local Tracking
         with self._local_lock:
+            self.metrics["total_requests"] += 1
             self.metrics["local_fallbacks"] += 1
 
             # If Redis was configured and active, but we skipped it because the circuit breaker is OPEN,
