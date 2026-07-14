@@ -12,15 +12,20 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
 
     # Database
-    DATABASE_URL: str
-
-    # JWT
-    SECRET_KEY: str
+    DATABASE_URL: str 
+    SECRET_KEY: str 
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # Stripe (optional — leave blank to disable billing)
     STRIPE_SECRET_KEY: str = ""
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASS: str = ""
+    SMTP_FROM: str = "noreply@aegisai.app"
+    SMTP_TLS: bool = True
+    APP_URL: str = "http://localhost:3000"
     STRIPE_PUBLISHABLE_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
     # OAuth
