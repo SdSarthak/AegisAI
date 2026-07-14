@@ -16,7 +16,7 @@ os.environ["SECRET_KEY"] = "testsecret"
 os.environ["REDIS_URL"] = ""
 os.environ["DEBUG"] = "True"
 
-from app.core.database import Base
+from app.core.database import Base, StaticPool
 from app.core.security import decode_token, get_current_user
 from app.models.user import SubscriptionTier
 from app.models.user import User

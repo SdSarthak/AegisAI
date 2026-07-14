@@ -452,7 +452,6 @@ export const ragApi = {
 
     try {
       for (;;) {
-        
         const { value, done } = await reader.read()
         if (done) break
         buffer += value
