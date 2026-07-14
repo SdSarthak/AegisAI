@@ -13,6 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 import asyncio
 import hashlib
+import json
 import logging
 import mimetypes
 import os
@@ -798,6 +799,13 @@ async def query_knowledge_base_stream(
 ) -> StreamingResponse:
     """Stream a regulatory answer as Server-Sent Events."""
     del request
+
+    if guarded_question.guard_decision in ("ERROR", "BLOCK"):
+        reason = guarded_question.reasoning or "Query blocked by guard"
+        async def error_stream():
+            yield f"event: error\ndata: {json.dumps({'error': 'query_blocked', 'reason': reason})}\n\n"
+        return StreamingResponse(error_stream(), media_type="text/event-stream")
+
     try:
         vector_store = load_vector_store(user_id=current_user.id)
     except FileNotFoundError as exc:
