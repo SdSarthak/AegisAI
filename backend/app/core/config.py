@@ -83,6 +83,15 @@ class Settings(BaseSettings):
     OTEL_METRICS_EXPORTER: str = "prometheus"
     OTEL_TRACES_EXPORTER: str = "none"
 
+    # SMTP Email Notifications
+    SMTP_ENABLED: bool = False
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 465
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = "AegisAI"
+
     class Config:
         env_file = ".env"
         case_sensitive = True
