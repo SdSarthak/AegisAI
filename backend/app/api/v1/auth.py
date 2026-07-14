@@ -91,6 +91,8 @@ def register(
 ):
     """Register a new user account."""
     client_ip = _get_request_ip(request)
+    
+    # 1. Direct gateway boundary evaluation
     limited, retry_after = auth_register_rate_limiter.check(
         key=f"auth:register:{client_ip}",
         limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
@@ -102,19 +104,25 @@ def register(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={
                 "field": "general",
-                "message": "Too many registration attempts from this IP. Please try again later.",
+                "message": "Too many registration attempts from this IP. Please try again later."
             },
             headers={"Retry-After": str(retry_after)},
         )
 
     try:
+        # 2. DUPLICATE EMAIL CHECK - MUST BE INSIDE TRY BEFORE CREATING USER
         existing_user = db.query(User).filter(User.email == user_data.email).first()
         if existing_user:
+            auth_register_rate_limiter.record_attempt(
+                key=f"auth:register:{client_ip}",
+                limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
+                window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
                     "field": "general",
-                    "message": "This email is already registered. Please use a different email or try logging in."
+                    "message": "Email already registered"
                 }
             )
 
@@ -128,17 +136,12 @@ def register(
         db.commit()
         db.refresh(user)
         return user
-    except HTTPException:
-        # Record the failed registration attempt so repeated abuse is rate-limited
-        auth_register_rate_limiter.record_attempt(
-            key=f"auth:register:{client_ip}",
-            limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
-            window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
-        )
-        raise
+
+    except HTTPException as http_exc:
+        # Keep controlled exceptions from running into broad exceptions
+        raise http_exc
     except Exception:
         db.rollback()
-        # Record the failed registration attempt so repeated abuse is rate-limited
         auth_register_rate_limiter.record_attempt(
             key=f"auth:register:{client_ip}",
             limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
@@ -149,9 +152,8 @@ def register(
             detail={
                 "field": "general",
                 "message": "An error occurred during registration. Please try again."
-            }
+            },
         )
-
 
 @router.post("/login", response_model=Token)
 def login(
