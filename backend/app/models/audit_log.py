@@ -117,3 +117,47 @@ def after_ai_system_update(mapper, connection, target):
                 changed_at=datetime.utcnow(),
             )
         )
+        
+"""
+
+backend/app/models/audit_log.py
+
+Replace / expand the existing placeholder with the full model.
+
+"""
+import enum
+import uuid
+from datetime import datetime
+from sqlalchemy import Column, DateTime, Enum, Float, JSON, String, Text
+from sqlalchemy.dialects.postgresql import UUID
+from app.core.database import Base  # same Base used by all other models
+
+class ScanStatus(str, enum.Enum):
+
+    allowed   = "allowed"
+
+    blocked   = "blocked"
+
+    sanitized = "sanitized"
+class AuditLog(Base):
+
+    __tablename__ = "audit_logs"
+
+    id               = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    user_id          = Column(String, nullable=True)          # None for unauthenticated
+
+    ip_address       = Column(String, nullable=True)
+
+    timestamp        = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    raw_prompt       = Column(Text, nullable=False)
+
+    scan_status      = Column(Enum(ScanStatus), nullable=False, index=True)
+
+    risk_score       = Column(Float, nullable=True)           # 0.0 – 1.0
+
+    triggered_rules  = Column(JSON, nullable=True)            # ["prompt_injection", ...]
+
+    detection_method = Column(String, nullable=True)          # "regex" | "deberta" | "rate_limit"
+    

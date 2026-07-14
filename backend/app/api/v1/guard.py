@@ -16,6 +16,8 @@ import base64
 from collections import Counter, defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from threading import Lock
+from typing import Optional, TypedDict
+from app.models.audit_log import AuditLog, ScanStatus
 from typing import Optional, TypedDict, Literal
 
 from app.api.v1.webhooks import deliver_webhook
@@ -300,6 +302,23 @@ def scan_prompt(
 
         client_ip = http_request.client.host if http_request.client else None
 
+        audit_log = AuditLog(
+            user_id=str(current_user.id),
+            raw_prompt=request.prompt,
+            scan_status=ScanStatus.blocked
+            if result["decision"] == "block"
+            else ScanStatus.sanitized
+            if result["decision"] == "sanitize"
+            else ScanStatus.allowed,
+            risk_score=response.confidence,
+            triggered_rules=response.matched_patterns,
+            detection_method="guard",
+        )
+
+        db.add(audit_log)
+        db.commit()
+
+        if result["decision"] == "block":
         log = _build_guard_scan_log(current_user.id, request.prompt, result, ip_address=client_ip)
         db.add(log)
         db.flush()
@@ -363,9 +382,9 @@ def scan_prompt(
 class _ExplainRateLimitConfig:
     """Explanations are 50–100x more expensive than a scan — limit them"""
 
-    LIMIT = 10
-    WINDOW_SECONDS = 60
-    TIMEOUT_SECONDS = 15.0
+ LIMIT = 10
+ WINDOW_SECONDS = 60
+ TIMEOUT_SECONDS = 15.0
 
 
 @router.post(
