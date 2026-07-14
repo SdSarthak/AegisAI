@@ -51,7 +51,9 @@ export default function RagChat() {
     setValidationError(null)
     setSubmittedQuestion(trimmed)
     setQuestion('')
+
     ask(trimmed)
+
   }
   const handleCopy = async () => {
     if (!hasAnswer) return
