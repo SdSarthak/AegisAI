@@ -1,0 +1,53 @@
+name: AegisAI Compliance Check (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      api-url:
+        description: 'Base URL of the AegisAI API.'
+        type: string
+        required: false
+        default: 'https://api.aegisai.dev/api/v1'
+      config-path:
+        description: 'Path to aegisai.yml in the calling repo.'
+        type: string
+        required: false
+        default: 'aegisai.yml'
+      fail-on:
+        description: 'Comma-separated risk levels that require a valid compliance document.'
+        type: string
+        required: false
+        default: 'high,unacceptable'
+    secrets:
+      AEGISAI_TOKEN:
+        description: 'AegisAI API bearer token.'
+        required: true
+    outputs:
+      report:
+        description: 'Path to the generated JSON compliance report.'
+        value: ${{ jobs.check.outputs.report }}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      report: ${{ steps.compliance.outputs.report }}
+    steps:
+      - name: Checkout calling repo
+        uses: actions/checkout@v4
+
+      - name: Run AegisAI compliance check
+        id: compliance
+        uses: SdSarthak/AegisAI@main
+        with:
+          aegisai-token: ${{ secrets.AEGISAI_TOKEN }}
+          api-url: ${{ inputs.api-url }}
+          config-path: ${{ inputs.config-path }}
+          fail-on: ${{ inputs.fail-on }}
+
+      - name: Upload compliance report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aegisai-compliance-report
+          path: ${{ steps.compliance.outputs.report }}
