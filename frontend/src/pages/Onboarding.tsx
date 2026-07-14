@@ -191,6 +191,7 @@ setRiskLevel(detectedRiskLevel)
           {STEPS.map((step, index) => (
             <div key={step.label} className="flex items-center gap-2 flex-1">
               <div
+                aria-current={index === currentStep ? 'step' : undefined}
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                   index < currentStep
                     ? 'bg-primary-600 text-white'
@@ -213,7 +214,8 @@ setRiskLevel(detectedRiskLevel)
           ))}
         </div>
 
-        <div className="mb-8">
+        {/* Step content */}
+       <div className="mb-8" aria-live="polite" aria-atomic="true">
           <div className="flex items-center gap-3 mb-2">
             <StepIcon className="w-6 h-6 text-primary-600" />
             <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -423,11 +425,11 @@ setRiskLevel(detectedRiskLevel)
           >
             Back
           </button>
-
           <button
             type="button"
             onClick={handleNext}
             disabled={isLoading}
+            aria-label={isLastStep ? 'Finish setup' : `Next: ${STEPS[currentStep + 1]?.label}`}
             className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isLoading && <Loader2 className="w-4 h-4 animate-spin" />}

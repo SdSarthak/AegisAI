@@ -36,9 +36,11 @@ export default function Layout() {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-black dark:text-white">
-      
+
       {/* Sidebar */}
-      <div
+      <nav
+        role="navigation"
+        aria-label="Main navigation"
         className={`fixed inset-y-0 left-0 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 transition-[width] duration-200 z-40 ${
           isCollapsed ? 'w-20' : 'w-64'
         }`}
@@ -47,7 +49,6 @@ export default function Layout() {
         <div className="flex items-center justify-between gap-2 px-4 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <Shield className="w-8 h-8 text-primary-600" />
-
             <span
               className={`text-lg font-semibold text-gray-900 dark:text-white ${
                 isCollapsed ? 'sr-only' : ''
@@ -62,6 +63,9 @@ export default function Layout() {
             onClick={() => setIsCollapsed((prev) => !prev)}
             className="p-2 text-gray-500 dark:text-gray-300 hover:text-gray-700 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
             aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-expanded={!isCollapsed}
+            aria-controls="sidebar-nav"
+            title={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
             {isCollapsed ? (
               <ChevronRight className="w-5 h-5" />
@@ -72,29 +76,30 @@ export default function Layout() {
         </div>
 
         {/* Navigation */}
-        <nav className="flex flex-col gap-1 p-4">
+        <ul id="sidebar-nav" role="list" className="flex flex-col gap-1 p-4">
           {navigation.map((item) => {
             const isActive = location.pathname === item.href
-
             return (
-              <Link
-                key={item.name}
-                to={item.href}
-                title={item.name}
-                className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-primary-50 text-primary-700 dark:bg-primary-900 dark:text-white'
-                    : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                } ${isCollapsed ? 'justify-center' : ''}`}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className={isCollapsed ? 'sr-only' : ''}>
-                  {item.name}
-                </span>
-              </Link>
+              <li key={item.name}>
+                <Link
+                  to={item.href}
+                  aria-current={isActive ? 'page' : undefined}
+                  title={item.name}
+                  className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors ${
+                    isActive
+                      ? 'bg-primary-50 text-primary-700 dark:bg-primary-900 dark:text-white'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                  } ${isCollapsed ? 'justify-center' : ''}`}
+                >
+                  <item.icon className="w-5 h-5" />
+                  <span className={isCollapsed ? 'sr-only' : ''}>
+                    {item.name}
+                  </span>
+                </Link>
+              </li>
             )
           })}
-        </nav>
+        </ul>
 
         {/* User section */}
         <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-gray-200 dark:border-gray-700">
@@ -113,15 +118,17 @@ export default function Layout() {
             </div>
 
             <button
+              type="button"
               onClick={logout}
               className="p-2 text-gray-400 dark:text-gray-300 hover:text-gray-600 dark:hover:text-white rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
               aria-label="Log out"
+              title="Log out"
             >
               <LogOut className="w-5 h-5" />
             </button>
           </div>
         </div>
-      </div>
+      </nav>
 
       {/* Main content */}
       <div
@@ -132,8 +139,6 @@ export default function Layout() {
         {/* Header */}
         <header className="sticky top-0 z-30 flex items-center justify-end gap-3 px-8 py-3 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-b border-gray-200/60 dark:border-gray-700">
           <NotificationBell />
-
-          {/* ✅ FINAL THEME BUTTON (clean placement) */}
           <ThemeToggle />
         </header>
 
