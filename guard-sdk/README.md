@@ -40,3 +40,7 @@ The SDK executes a high-performance four-layer defensive pipeline:
 ## License
 
 AegisAI is licensed under the AGPL-3.0 License.
+
+## Contributing
+
+Contributions are welcome! Please open an issue or pull request on the main [AegisAI repository](https://github.com/SdSarthak/AegisAI). Make sure to follow the project's [contributing guidelines](https://github.com/SdSarthak/AegisAI/blob/main/CONTRIBUTING.md) before submitting.
