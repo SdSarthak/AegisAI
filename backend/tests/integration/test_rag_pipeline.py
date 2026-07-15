@@ -162,8 +162,10 @@ def rag_env(monkeypatch):
     try:
         # ── Point settings at the temp dir ────────────────────────────────
         monkeypatch.setattr("app.core.config.settings.FAISS_INDEX_PATH", index_dir)
+        monkeypatch.setattr("app.core.config.settings.FAISS_INDEX_BASE_PATH", index_dir)
         # Also patch the attribute on the already-imported module objects
         monkeypatch.setattr("app.modules.rag.vector_store.settings.FAISS_INDEX_PATH", index_dir)
+        monkeypatch.setattr("app.modules.rag.vector_store.settings.FAISS_INDEX_BASE_PATH", index_dir)
 
         # ── Fake embeddings (avoids OpenAI API call) ──────────────────────
         fake_embeddings = MagicMock()
@@ -184,14 +186,14 @@ def rag_env(monkeypatch):
         # ── Fake QA chain (avoids LLM call) ──────────────────────────────
         monkeypatch.setattr(
             "app.modules.rag.retrieval_chain.get_qa_chain",
-            lambda: _FakeQAChain(),
+            lambda user_id=None: _FakeQAChain(),
         )
         # Also patch the import inside rag.py's query handler
         monkeypatch.setattr(
             "app.api.v1.rag.get_qa_chain" if hasattr(
                 sys.modules.get("app.api.v1.rag", object()), "get_qa_chain"
             ) else "app.modules.rag.retrieval_chain.get_qa_chain",
-            lambda: _FakeQAChain(),
+            lambda user_id=None: _FakeQAChain(),
         )
 
         yield {
@@ -220,11 +222,18 @@ class TestRagPipelineIntegration:
         POST /rag/ingest with a valid PDF must:
         - return HTTP 200
         - report files_processed == 1 and chunks_created > 0
-        - write index.faiss and index.pkl to the configured index directory
+        - write index.faiss and index.pkl to the configured index directory (user-scoped)
         """
         auth = _register_user(db_session)
         pdf_bytes = rag_env["pdf_bytes"]
         index_dir = rag_env["index_dir"]
+
+        # Decode the user id from the JWT to determine the user-scoped index path
+        from app.core.security import decode_token
+        token = auth["Authorization"].removeprefix("Bearer ")
+        payload = decode_token(token)
+        user_id = int(payload["sub"])
+        user_index_dir = os.path.join(index_dir, f"user_{user_id}")
 
         response = client.post(
             "/api/v1/rag/ingest",
@@ -239,11 +248,11 @@ class TestRagPipelineIntegration:
         assert data["files_processed"] == 1
         assert data["chunks_created"] > 0, "Expected at least one text chunk from the PDF"
 
-        # FAISS index files must exist on disk
-        assert os.path.exists(os.path.join(index_dir, "index.faiss")), (
+        # FAISS index files must exist on disk (under user-scoped path)
+        assert os.path.exists(os.path.join(user_index_dir, "index.faiss")), (
             "index.faiss not found — FAISS index was not persisted"
         )
-        assert os.path.exists(os.path.join(index_dir, "index.pkl")), (
+        assert os.path.exists(os.path.join(user_index_dir, "index.pkl")), (
             "index.pkl not found — FAISS index was not persisted"
         )
 

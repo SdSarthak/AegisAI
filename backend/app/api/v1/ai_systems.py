@@ -12,12 +12,15 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.core.config import settings
 from app.models.user import User
-from app.models.ai_system import AISystem, ComplianceStatus
+from app.models.ai_system import AISystem, ComplianceStatus, RiskAssessment
 from app.models.audit_log import AISystemAuditLog
+from app.models.compliance_snapshot import ComplianceSnapshot
+from app.models.document import Document
 from app.schemas.ai_system import (
     AISystemCreate,
     AISystemUpdate,
     AISystemResponse,
+    AISystemSummarySchema,
     BulkImportResponse,
     ComplianceStatusUpdateSchema,
 )
@@ -171,7 +174,7 @@ _SORTABLE_FIELDS = {
 }
 
 
-@router.get("/", response_model=PaginatedResponse[AISystemResponse])
+@router.get("/", response_model=PaginatedResponse[AISystemSummarySchema])
 def list_ai_systems(
     sort_by: Optional[str] = Query("created_at", description="Sort field: name, risk_level, compliance_score, created_at"),
     order: Optional[str] = Query("desc", description="Sort direction: asc, desc"),
@@ -446,16 +449,25 @@ def clone_ai_system(
             detail="AI system not found"
         )
 
+    base_name = f"{original.name} (copy)"
+    candidate = base_name
+    counter = 2
+    while db.query(AISystem).filter(
+        AISystem.owner_id == current_user.id,
+        AISystem.name == candidate,
+    ).first():
+        candidate = f"{original.name} (copy {counter})"
+        counter += 1
+
     cloned = AISystem(
         owner_id=current_user.id,
-        name=f"{original.name} (copy)",
+        name=candidate,
         description=original.description,
         version=original.version,
         use_case=original.use_case,
         sector=original.sector,
         compliance_status=ComplianceStatus.NOT_STARTED,
     )
-
     db.add(cloned)
     db.commit()
     db.refresh(cloned)
@@ -508,6 +520,16 @@ def delete_ai_system(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="AI system not found"
         )
+
+    db.query(RiskAssessment).filter(
+        RiskAssessment.ai_system_id == system_id,
+    ).delete(synchronize_session=False)
+    db.query(ComplianceSnapshot).filter(
+        ComplianceSnapshot.ai_system_id == system_id,
+    ).delete(synchronize_session=False)
+    db.query(Document).filter(
+        Document.ai_system_id == system_id,
+    ).update({Document.ai_system_id: None}, synchronize_session=False)
 
     db.delete(system)
     db.commit()

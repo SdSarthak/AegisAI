@@ -65,9 +65,7 @@ def test_batch_scan_rejects_empty_batch_payload(client, auth_headers):
     )
 
     assert response.status_code == 400
-    assert response.json() == {
-        "detail": "At least one prompt is required per batch request."
-    }
+    assert response.json()["detail"] == "At least one prompt is required per batch request."
 
 
 def test_batch_scan_rejects_payload_exceeding_validate_prompts_limit(
@@ -83,9 +81,7 @@ def test_batch_scan_rejects_payload_exceeding_validate_prompts_limit(
     )
 
     assert response.status_code == 400
-    assert response.json() == {
-        "detail": "Maximum 50 prompts allowed per batch request."
-    }
+    assert response.json()["detail"] == "Maximum 50 prompts allowed per batch request."
 
 
 @pytest.mark.parametrize(

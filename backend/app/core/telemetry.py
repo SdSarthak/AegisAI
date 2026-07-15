@@ -10,6 +10,7 @@ Exposes:
 
 from __future__ import annotations
 
+import asyncio
 import time
 from functools import wraps
 from typing import Any, Callable, TypeVar
@@ -90,7 +91,21 @@ def instrument_guard(fn: _F) -> _F:
     """Time guard inference and record decision counters."""
 
     @wraps(fn)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
+    async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+        start = time.perf_counter()
+        result = await fn(*args, **kwargs)
+        duration = time.perf_counter() - start
+        decision = (
+            result.get("decision", "unknown")
+            if isinstance(result, dict)
+            else "unknown"
+        )
+        GUARD_INFERENCE_LATENCY.labels(decision=decision).observe(duration)
+        GUARD_SCAN_TOTAL.labels(decision=decision).inc()
+        return result
+
+    @wraps(fn)
+    def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
         start = time.perf_counter()
         result = fn(*args, **kwargs)
         duration = time.perf_counter() - start
@@ -103,14 +118,25 @@ def instrument_guard(fn: _F) -> _F:
         GUARD_SCAN_TOTAL.labels(decision=decision).inc()
         return result
 
-    return wrapper  # type: ignore[return-value]
+    if asyncio.iscoroutinefunction(fn):
+        return async_wrapper  # type: ignore[return-value]
+    return sync_wrapper
 
 
 def instrument_rag(fn: _F) -> _F:
     """Time RAG retrieval calls."""
 
     @wraps(fn)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
+    async def async_wrapper(*args: Any, **kwargs: Any) -> Any:
+        start = time.perf_counter()
+        result = await fn(*args, **kwargs)
+        duration = time.perf_counter() - start
+        RAG_RETRIEVAL_LATENCY.observe(duration)
+        RAG_QUERY_TOTAL.labels(status="success").inc()
+        return result
+
+    @wraps(fn)
+    def sync_wrapper(*args: Any, **kwargs: Any) -> Any:
         start = time.perf_counter()
         result = fn(*args, **kwargs)
         duration = time.perf_counter() - start
@@ -118,7 +144,9 @@ def instrument_rag(fn: _F) -> _F:
         RAG_QUERY_TOTAL.labels(status="success").inc()
         return result
 
-    return wrapper  # type: ignore[return-value]
+    if asyncio.iscoroutinefunction(fn):
+        return async_wrapper  # type: ignore[return-value]
+    return sync_wrapper
 
 
 # ---------------------------------------------------------------------------
