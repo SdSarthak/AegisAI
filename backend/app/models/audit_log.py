@@ -56,8 +56,10 @@ class AISystemAuditLog(Base):
     __tablename__ = "ai_system_audit_logs"
 
     id = Column(Integer, primary_key=True, index=True)
-    ai_system_id = Column(Integer, ForeignKey("ai_systems.id"), nullable=False)
-    changed_by_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    ai_system_id = Column(Integer, ForeignKey("ai_systems.id", ondelete="CASCADE"), nullable=False)
+    # SET NULL rather than CASCADE: this is a compliance audit trail and must
+    # survive deletion of the user who made the change.
+    changed_by_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
 
     # JSON dicts of {field: value} before and after the change
     old_values = Column(JSON, default=dict)
@@ -76,7 +78,9 @@ class RAGAuditLog(Base):
     __tablename__ = "rag_audit_logs"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
+    # SET NULL rather than CASCADE: this is a compliance audit trail and must
+    # survive deletion of the user it was recorded for.
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     event_type = Column(String(64), nullable=False, index=True)
     question_hash = Column(String(64), nullable=False, index=True)
     decision = Column(String(16), nullable=False)

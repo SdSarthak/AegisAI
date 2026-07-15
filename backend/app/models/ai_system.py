@@ -27,7 +27,7 @@ class AISystem(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
     # Basic info
     name = Column(String(255), nullable=False)
@@ -61,7 +61,7 @@ class RiskAssessment(Base):
     __tablename__ = "risk_assessments"
 
     id = Column(Integer, primary_key=True, index=True)
-    ai_system_id = Column(Integer, ForeignKey("ai_systems.id"), nullable=False)
+    ai_system_id = Column(Integer, ForeignKey("ai_systems.id", ondelete="CASCADE"), nullable=False)
 
     # Assessment details
     assessment_type = Column(String(100))  # "initial", "periodic", "incident"

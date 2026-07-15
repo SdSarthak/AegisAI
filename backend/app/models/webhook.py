@@ -20,7 +20,7 @@ class WebhookConfig(Base):
     __tablename__ = "webhook_configs"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
     url = Column(String(1000), nullable=False)
     secret = Column(String(255), nullable=True)  # HMAC signing secret

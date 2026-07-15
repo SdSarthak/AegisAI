@@ -43,7 +43,7 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
-    ai_systems = relationship("AISystem", back_populates="owner")
-    documents = relationship("Document", back_populates="owner")
-    webhook_configs = relationship("WebhookConfig", back_populates="user")
-    notifications    = relationship("Notification",    back_populates="user")
+    ai_systems = relationship("AISystem", back_populates="owner", cascade="all, delete-orphan")
+    documents = relationship("Document", back_populates="owner", cascade="all, delete-orphan")
+    webhook_configs = relationship("WebhookConfig", back_populates="user", cascade="all, delete-orphan")
+    notifications = relationship("Notification", back_populates="user", cascade="all, delete-orphan")

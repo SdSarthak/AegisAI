@@ -27,8 +27,8 @@ class Document(Base):
     __tablename__ = "documents"
 
     id = Column(Integer, primary_key=True, index=True)
-    owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    ai_system_id = Column(Integer, ForeignKey("ai_systems.id"), nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    ai_system_id = Column(Integer, ForeignKey("ai_systems.id", ondelete="CASCADE"), nullable=True)
 
     # Document info
     title = Column(String(255), nullable=False)
@@ -58,7 +58,7 @@ class DocumentVersion(Base):
 
     document_id = Column(
         Integer,
-        ForeignKey("documents.id"),
+        ForeignKey("documents.id", ondelete="CASCADE"),
         nullable=False
     )
 
