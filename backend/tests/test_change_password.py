@@ -91,6 +91,16 @@ class TestChangePassword:
         assert resp.status_code == 422
         assert "at least 8 characters" in str(resp.json())
 
+    def test_long_new_password_returns_422(self, client):
+        c, user = client
+        long_password = ("é" * 36) + "A1!"
+        resp = c.post(
+            "/api/v1/auth/change-password",
+            json={"current_password": "OldPass1!", "new_password": long_password},
+        )
+        assert resp.status_code == 422
+        assert "72 bytes" in str(resp.json())
+
     def test_missing_uppercase_returns_422(self, client):
         c, user = client
         resp = c.post(

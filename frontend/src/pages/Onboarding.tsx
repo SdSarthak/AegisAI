@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   Shield,
@@ -179,11 +179,12 @@ setRiskLevel(detectedRiskLevel)
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
-      <div className="bg-white rounded-2xl border border-gray-200 p-8 w-full max-w-lg">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center p-8">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-8 w-full max-w-lg">
+        {/* Header */}
         <div className="flex items-center gap-3 mb-8">
           <Shield className="w-8 h-8 text-primary-600" />
-          <h1 className="text-xl font-semibold text-gray-900">Welcome to AegisAI</h1>
+          <h1 className="text-xl font-semibold text-gray-900 dark:text-white">Welcome to AegisAI</h1>
         </div>
 
         <div className="flex items-center gap-2 mb-8">
@@ -215,12 +216,11 @@ setRiskLevel(detectedRiskLevel)
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-2">
             <StepIcon className="w-6 h-6 text-primary-600" />
-            <h2 className="text-lg font-semibold text-gray-900">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
               {STEPS[currentStep].label}
             </h2>
           </div>
-
-          <p className="text-gray-600 text-sm">{STEPS[currentStep].description}</p>
+          <p className="text-gray-600 dark:text-gray-400 text-sm">{STEPS[currentStep].description}</p>
 
           {error && (
             <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -439,3 +439,4 @@ setRiskLevel(detectedRiskLevel)
     </div>
   )
 }
+

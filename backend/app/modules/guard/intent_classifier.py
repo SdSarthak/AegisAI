@@ -12,9 +12,9 @@ from torch.utils.data import DataLoader, Dataset
 from transformers import (
     AutoTokenizer,
     AutoModelForSequenceClassification,
-    AdamW,
     get_linear_schedule_with_warmup,
 )
+from torch.optim import AdamW
 from sklearn.metrics import classification_report, confusion_matrix, f1_score
 
 from . import guard_config as config
@@ -313,6 +313,11 @@ class IntentClassifier:
         Returns:
             Dictionary with training metrics
         """
+        if AdamW is None or get_linear_schedule_with_warmup is None:
+            raise RuntimeError(
+                "Training requires transformers. Install project training dependencies."
+            )
+
         if self.uses_heuristic_fallback:
             self._load_pretrained()
             self.model.to(self.device)

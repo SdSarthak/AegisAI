@@ -15,6 +15,29 @@
 </div>
 
 ---
+
+## 📚 Table of Contents
+
+- [Live Demo](#live-demo)
+- [What is AegisAI?](#what-is-aegisai)
+- [Tech Stack](#tech-stack)
+- [Quick Start](#quick-start)
+  - [Option 1 — Docker](#option-1--docker-recommended)
+  - [Option 2 — Manual](#option-2--manual)
+  - [Option 3 — Ollama](#option-3--ollama-free-no-api-key)
+- [Environment Variables](#environment-variables)
+- [Common Setup Profiles](#common-setup-profiles)
+- [Viewing RAG MLflow Runs Locally](#viewing-rag-mlflow-runs-locally)
+- [Colab Notebooks](#-colab-notebooks)
+- [Project Structure](#project-structure)
+- [What's New](#whats-new)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
+- [Troubleshooting](#npm-install-fails)
+
+---
+
 ## Live Demo
 
 https://aegis-ai-sigma-seven.vercel.app
@@ -83,6 +106,7 @@ source venv/bin/activate
 # venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 cp .env.example .env   # fill in values
+alembic upgrade head   # run database migrations
 uvicorn app.main:app --reload
 
 # Frontend (new terminal)
@@ -90,6 +114,8 @@ cd frontend
 npm install
 npm run dev
 ```
+
+For hosted frontend deployments, set `VITE_API_BASE_URL` to the backend API origin, for example `http://localhost:8000/api/v1` locally or your deployed backend URL in production.
 
 ### Option 3 — Ollama (free, no API key)
 

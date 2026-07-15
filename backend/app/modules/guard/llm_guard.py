@@ -1,4 +1,9 @@
-"""Main application: LLM Guard orchestrator combining all defense layers."""
+"""Main application: LLM Guard orchestrator combining all defense layers.
+
+Changed: Added regex-only chunk scanning for retrieved RAG context.
+Why: RAG chunks can contain injected instructions even when the user query is safe.
+Addresses: Indirect prompt injection and poisoned document chunks before LLM context assembly.
+"""
 
 import json
 import logging
@@ -90,7 +95,6 @@ class LLMGuard:
 
         result = {
             "timestamp": timestamp,
-            "user_prompt": user_prompt,
             "normalized_prompt": normalized_prompt,
             "decision": None,
             "response": None,
@@ -192,6 +196,33 @@ class LLMGuard:
                 result["response"] = "LLM client not available"
 
         return result
+
+    def scan_chunk(self, chunk_text: str) -> Dict:
+        """Scan retrieved RAG chunk text using only the fast regex layer.
+
+        Args:
+            chunk_text: Text content retrieved from the vector store.
+
+        Returns:
+            Dictionary with safety status, severity, and matched regex patterns.
+        """
+        normalized_text = normalize_prompt(chunk_text)
+        regex_result = self.regex_filter.check(normalized_text)
+
+        if regex_result.score >= 0.8:
+            severity = "high"
+        elif regex_result.score >= 0.5:
+            severity = "medium"
+        elif regex_result.score > 0.0:
+            severity = "low"
+        else:
+            severity = "low"
+
+        return {
+            "safe": severity != "high",
+            "severity": severity,
+            "matched_patterns": regex_result.matched_patterns,
+        }
 
     def evaluate_on_test_set(self, test_prompts: list, true_labels: list) -> Dict:
         """

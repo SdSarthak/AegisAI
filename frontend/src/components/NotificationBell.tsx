@@ -1,18 +1,16 @@
-import React, { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Clock, X } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { notificationsApi } from '../services/api'
 
-// TODO: Wire to GET /api/v1/notifications via useQuery (Issue #113)
-
 interface NotificationPreview {
   id: number
+  notification_type: string
   title: string
   message: string
   is_read: boolean
   created_at: string               // ISO‑8601 date string
-  type: 'alert' | 'update' | 'ai' | 'news'
 }
 
 
@@ -31,12 +29,19 @@ function timeAgo(isoDate: string): string {
 }
 
 /** Accent colour for the notification type stripe. */
-function typeColor(type: NotificationPreview['type']): string {
-  switch (type) {
-    case 'alert':  return 'bg-red-500'
-    case 'update': return 'bg-green-500'
-    case 'ai':     return 'bg-purple-500'
-    case 'news':   return 'bg-primary-500'
+function typeColor(notificationType: string): string {
+  switch (notificationType) {
+    case 'guard_block':
+    case 'compliance_drift':
+      return 'bg-red-500'
+    case 'document_generated':
+      return 'bg-green-500'
+    case 'system_classified':
+      return 'bg-purple-500'
+    case 'reassessment_due':
+      return 'bg-amber-500'
+    default:
+      return 'bg-primary-500'
   }
 }
 
@@ -49,11 +54,19 @@ export default function NotificationBell() {
 
   // Live data via useQuery
   const queryClient = useQueryClient()
-  const { data: notifications = [] } = useQuery({
+  const { data: notificationsResponse } = useQuery({
     queryKey: ['notifications', 'unread'],
-    queryFn: () => notificationsApi.list(true),
+    queryFn: async () => {
+      const result = await notificationsApi.list(true)
+      return Array.isArray(result) ? result : (result?.items ?? [])
+     },
     refetchInterval: 60_000,
   })
+
+  // Normalize response — API may return a plain array or { items, total }
+  const notifications: NotificationPreview[] = Array.isArray(notificationsResponse)
+    ? notificationsResponse
+    : notificationsResponse?.items ?? []
 
   const unreadCount = notifications.filter((n: NotificationPreview) => !n.is_read).length
 
@@ -123,7 +136,7 @@ export default function NotificationBell() {
 
       {/* Dropdown panel */}
       <div
-        className={`absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl border border-gray-200 shadow-xl z-50 transition-all duration-200 ease-out origin-top-right ${
+        className={`absolute right-0 mt-2 w-80 sm:w-96 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xl z-50 transition-all duration-200 ease-out origin-top-right ${
           isOpen
             ? 'opacity-100 translate-y-0 pointer-events-auto'
             : 'opacity-0 -translate-y-2 pointer-events-none'
@@ -132,9 +145,9 @@ export default function NotificationBell() {
         aria-label="Notifications panel"
       >
 
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 dark:border-gray-700">
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold text-gray-900">
+            <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
               Notifications
             </h3>
             {unreadCount > 0 && (
@@ -174,7 +187,7 @@ export default function NotificationBell() {
 
                 <div
                   className={`w-1 self-stretch rounded-full flex-shrink-0 ${typeColor(
-                    notification.type,
+                    notification.notification_type,
                   )}`}
                 />
 
@@ -209,7 +222,7 @@ export default function NotificationBell() {
         </div>
 
 
-        <div className="border-t border-gray-100">
+        <div className="border-t border-gray-100 dark:border-gray-700">
           <Link
             to="/notifications"
             onClick={() => setIsOpen(false)}

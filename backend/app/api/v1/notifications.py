@@ -25,6 +25,7 @@ def create_notification(
     message: str,
     resource_type: str | None = None,
     resource_id: int | None = None,
+    commit: bool = True,
 ) -> Notification:
     notification = Notification(
         user_id=user_id,
@@ -35,8 +36,9 @@ def create_notification(
         resource_id=resource_id,
     )
     db.add(notification)
-    db.commit()
-    db.refresh(notification)
+    if commit:
+        db.commit()
+        db.refresh(notification)
     return notification
 
 
@@ -48,7 +50,7 @@ def list_notifications(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """List the current user's notifications with optional unread filtering."""
+    """Return paginated notifications for the current user, optionally filtered to unread only."""
     query = db.query(Notification).filter(Notification.user_id == current_user.id)
 
     if unread_only:
@@ -71,13 +73,34 @@ def list_notifications(
     )
 
 
+@router.get("/unread-count")
+def get_unread_count(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Return the number of unread notifications for the current user."""
+
+    unread_count = (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == current_user.id,
+            Notification.is_read.is_(False),
+        )
+        .count()
+    )
+
+    return {
+        "unread_count": unread_count
+    }
+
+
 @router.post("/read", status_code=status.HTTP_204_NO_CONTENT)
 def mark_notifications_read(
     body: NotificationMarkRead,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Mark the specified notifications as read."""
+    """Mark the specified notifications as read for the current user."""
     db.query(Notification).filter(
         Notification.user_id == current_user.id,
         Notification.id.in_(body.ids),
@@ -87,6 +110,51 @@ def mark_notifications_read(
     )
 
     db.commit()
+    return None
+
+
+@router.post("/read-all", status_code=status.HTTP_204_NO_CONTENT)
+def mark_all_notifications_read(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Mark all unread notifications as read for the current user."""
+
+    (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == current_user.id,
+            Notification.is_read.is_(False),
+        )
+        .update(
+            {Notification.is_read: True},
+            synchronize_session=False,
+        )
+    )
+
+    db.commit()
+
+    return None
+
+
+@router.delete("/read", status_code=status.HTTP_204_NO_CONTENT)
+def delete_read_notifications(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Delete all read notifications belonging to the current user."""
+
+    (
+        db.query(Notification)
+        .filter(
+            Notification.user_id == current_user.id,
+            Notification.is_read.is_(True),
+        )
+        .delete(synchronize_session=False)
+    )
+
+    db.commit()
+
     return None
 
 

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from datetime import datetime
 from app.models.user import SubscriptionTier
 
@@ -69,3 +69,12 @@ class ChangePasswordRequest(BaseModel):
     @classmethod
     def validate_new_password(cls, v: str) -> str:
         return validate_password_strength(v)
+    
+class DashboardLayoutUpdate(BaseModel):
+    layout: list[dict[str, Any]]
+    hidden: list[str] = []
+
+
+class DashboardLayoutResponse(BaseModel):
+    layout: list[dict[str, Any]]
+    hidden: list[str] = []

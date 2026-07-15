@@ -1,0 +1,15 @@
+name: AegisAI Compliance Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  compliance:
+    uses: SdSarthak/AegisAI/.github/workflows/reusable-compliance-check.yml@main
+    with:
+      config-path: aegisai.yml
+      fail-on: high,unacceptable
+    secrets:
+      AEGISAI_TOKEN: ${{ secrets.AEGISAI_TOKEN }}

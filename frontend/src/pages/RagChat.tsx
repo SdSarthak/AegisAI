@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { toast } from 'react-hot-toast'
 import {
   AlertCircle,
   Bot,
@@ -12,6 +13,12 @@ import {
 
 import { useRagStream } from '../hooks/useRagStream'
 
+function getResponseTimeColor(time: number): string {
+  if (time < 1) return 'text-green-600 bg-green-50'
+  if (time < 3) return 'text-yellow-600 bg-yellow-50'
+  return 'text-red-600 bg-red-50'
+}
+
 export default function RagChat() {
   const [question, setQuestion] = useState('')
   const [submittedQuestion, setSubmittedQuestion] = useState('')
@@ -22,13 +29,12 @@ export default function RagChat() {
     tokens,
     citations,
     error: streamError,
+    responseTime,
     ask,
     stop,
   } = useRagStream()
 
   const isStreaming = status === 'streaming'
-  // We're "loading" only until the first token arrives. After that we show
-  // the partial answer with a typing caret.
   const isAwaitingFirstToken = isStreaming && tokens.length === 0
   const hasAnswer = tokens.length > 0
   const displayError = validationError ?? streamError
@@ -41,10 +47,21 @@ export default function RagChat() {
       setSubmittedQuestion('')
       return
     }
+   
     setValidationError(null)
     setSubmittedQuestion(trimmed)
     setQuestion('')
     ask(trimmed)
+  }
+  const handleCopy = async () => {
+    if (!hasAnswer) return
+
+    try {
+      await navigator.clipboard.writeText(tokens)
+      toast.success('Copied to clipboard!')
+    } catch (error) {
+      toast.error('Copy failed')
+    }
   }
 
   const handleExport = () => {
@@ -74,7 +91,6 @@ export default function RagChat() {
 
   return (
     <div className="h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)] flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
-      {/* Header */}
       <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-white">
         <div className="flex items-center gap-3">
           <div className="p-2 sm:p-3 bg-primary-50 rounded-xl">
@@ -89,10 +105,8 @@ export default function RagChat() {
         </div>
       </div>
 
-      {/* Body */}
       <div className="flex-1 overflow-y-auto bg-gray-50">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
-          {/* Empty state */}
           {!submittedQuestion && !hasAnswer && !isStreaming && !displayError && (
             <div className="min-h-[320px] sm:min-h-[420px] flex flex-col items-center justify-center text-center">
               <div className="p-3 sm:p-4 bg-primary-50 rounded-2xl mb-5">
@@ -124,10 +138,8 @@ export default function RagChat() {
             </div>
           )}
 
-          {/* Conversation */}
           {(submittedQuestion || hasAnswer || isStreaming || displayError) && (
             <div className="space-y-5 sm:space-y-6">
-              {/* User bubble */}
               {submittedQuestion && (
                 <div className="flex justify-end">
                   <div className="w-full sm:w-auto sm:max-w-2xl bg-primary-600 text-white rounded-2xl sm:rounded-br-md px-4 sm:px-5 py-3 sm:py-4 shadow-sm">
@@ -139,7 +151,6 @@ export default function RagChat() {
                 </div>
               )}
 
-              {/* Loading skeleton (before first token) */}
               {isAwaitingFirstToken && (
                 <div className="flex justify-start">
                   <div className="w-full max-w-3xl bg-white border border-gray-200 rounded-2xl sm:rounded-bl-md px-4 sm:px-5 py-4 shadow-sm">
@@ -161,7 +172,6 @@ export default function RagChat() {
                 </div>
               )}
 
-              {/* Error state (no answer yet) */}
               {!isAwaitingFirstToken && displayError && !hasAnswer && (
                 <div className="flex justify-start">
                   <div className="w-full max-w-3xl bg-red-50 border border-red-200 rounded-2xl sm:rounded-bl-md px-4 sm:px-5 py-4 text-red-800">
@@ -176,7 +186,6 @@ export default function RagChat() {
                 </div>
               )}
 
-              {/* Answer bubble */}
               {hasAnswer && (
                 <div className="flex justify-start">
                   <div className="w-full max-w-3xl bg-white border border-gray-200 rounded-2xl sm:rounded-bl-md px-4 sm:px-5 py-4 shadow-sm">
@@ -185,6 +194,18 @@ export default function RagChat() {
                         <Bot className="w-5 h-5 text-primary-600" />
                       </div>
                       <div className="space-y-5 min-w-0 flex-1">
+                        {!isStreaming && responseTime !== null && (
+                          <div className="flex justify-end">
+                            <span
+                              className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${getResponseTimeColor(
+                                responseTime,
+                              )}`}
+                            >
+                              ⚡ {responseTime.toFixed(2)}s
+                            </span>
+                          </div>
+                        )}
+
                         <p className="text-gray-700 leading-7 whitespace-pre-wrap">
                           {tokens}
                           {isStreaming && (
@@ -209,14 +230,24 @@ export default function RagChat() {
                                 Sources
                               </h3>
                               {!isStreaming && (
-                                <button
-                                  type="button"
-                                  onClick={handleExport}
-                                  className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700"
-                                >
-                                  <FileText className="w-3.5 h-3.5" />
-                                  Export
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={handleExport}
+                                    className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                    Export
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={handleCopy}
+                                    className="inline-flex items-center gap-1.5 text-xs"
+                                  >
+                                    Copy
+                                  </button>
+                                </>
                               )}
                             </div>
                             <div className="space-y-3">
@@ -246,7 +277,6 @@ export default function RagChat() {
         </div>
       </div>
 
-      {/* Input form */}
       <div className="border-t border-gray-200 bg-white px-4 sm:px-6 py-3 sm:py-4">
         <form onSubmit={handleAsk} className="max-w-4xl mx-auto">
           <div className="flex items-end gap-2 sm:gap-3 bg-gray-50 border border-gray-300 rounded-2xl px-3 sm:px-4 py-3 focus-within:ring-2 focus-within:ring-primary-500 focus-within:border-primary-500">
@@ -286,7 +316,7 @@ export default function RagChat() {
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 mt-2">
             <p className="text-xs text-gray-500">
               {isStreaming
-                ? 'Streaming answer — click stop to cancel.'
+                ? 'Streaming answer - click stop to cancel.'
                 : 'Answers stream token-by-token as they are generated.'}
             </p>
             <p className="text-xs text-gray-400">

@@ -4,6 +4,7 @@ from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
+from tests.conftest import _CSRFClientWrapper
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -74,7 +75,7 @@ def client():
     app.dependency_overrides[get_current_user] = _fake_user
 
     with TestClient(app) as c:
-        yield c
+        yield _CSRFClientWrapper(c)
     
     # 4. Cleanup
     db.close()
@@ -94,7 +95,7 @@ def mock_rag_modules():
         "source_documents": [DummyDoc("doc1.pdf#chunk1"), DummyDoc("doc2.pdf#chunk2")]
     }
     
-    retrieval_chain_mod.get_qa_chain = lambda: lambda payload: fake_result
+    retrieval_chain_mod.get_qa_chain = lambda user_id=None: lambda payload: fake_result
     groundedness_mod.compute_groundedness = lambda answer, chunks: 0.85
     ml_flow_mod.log_query = lambda **kwargs: None
 

@@ -1,9 +1,11 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiSystemsApi, documentsApi } from '../services/api'
-import { FileText, Download, Trash2, Plus, Edit, Copy, Check } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { FileText, Download, Trash2, Plus, Edit, GitCompare, SearchX } from 'lucide-react'
 import DocumentEditor from '../components/DocumentEditor'
 import CopyButton from '../components/CopyButton'
+import EmptyState from '../components/EmptyState'
 
 interface Document {
   id: number
@@ -30,24 +32,9 @@ export default function Documents() {
   const [filterStatus, setFilterStatus] = useState('all')
   const [editingDoc, setEditingDoc] = useState<Document | null>(null)
   const [documentToDelete, setDocumentToDelete] = useState<Document | null>(null)
-  const [copiedDocId, setCopiedDocId] = useState<number | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const limit = 10
-
-  const handleCopy = async (docId: number, content: string) => {
-    try {
-      await navigator.clipboard.writeText(content)
-
-      setCopiedDocId(docId)
-
-      setTimeout(() => {
-        setCopiedDocId(null)
-      }, 2000)
-    } catch (error) {
-      console.error('Failed to copy content:', error)
-    }
-  }
 
   const {
     data: documentsData,
@@ -263,23 +250,28 @@ export default function Documents() {
           </button>
         </div>
       ) : documents.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <FileText className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-          <h3 className="text-lg font-medium text-gray-900">No documents yet</h3>
-          <p className="text-gray-500 mt-1">
-            Generate your first compliance document
-          </p>
-        </div>
+        <EmptyState
+          icon={FileText}
+          title="No documents yet"
+          message="Generate your first compliance document"
+          action={
+            <button
+              onClick={() => setShowModal(true)}
+              disabled={systems.length === 0}
+              className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+            >
+              <Plus className="w-5 h-5" />
+              Generate Document
+            </button>
+          }
+        />
       ) : (
         filteredDocuments.length === 0 ? (
-        <div className="text-center py-12 bg-white rounded-xl border border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">
-            No matching documents
-          </h3>
-          <p className="text-gray-500 mt-1">
-            Try adjusting your search or filters
-          </p>
-        </div>
+        <EmptyState
+          icon={SearchX}
+          title="No matching documents"
+          message="Try adjusting your search or filters"
+        />
       ) : (
         <div className="grid gap-4">
           {filteredDocuments.map((doc: Document) => (
@@ -293,7 +285,20 @@ export default function Documents() {
                     <FileText className="w-6 h-6 text-primary-600" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-gray-900">{doc.title}</h3>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-semibold text-gray-900">{doc.title}</h3>
+                      <span className="inline-flex items-center gap-1 text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-2 py-0.5">
+                        Compliance ID: #{doc.id}
+                        <CopyButton
+                          text={String(doc.id)}
+                          label="Copy ID"
+                          copiedLabel="Copied!"
+                          successMessage="Compliance ID copied!"
+                          iconOnly
+                          className="!p-0.5 !border-0 !rounded"
+                        />
+                      </span>
+                    </div>
                     <div className="flex items-center gap-3 mt-2">
                       <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
                         {doc.document_type.replace(/_/g, ' ')}
@@ -321,24 +326,19 @@ export default function Documents() {
                       iconOnly
                     />
                   )}
+                  <Link
+                    to={`/documents/${doc.id}/diff`}
+                    className="p-2 text-gray-400 hover:text-purple-600 rounded-lg hover:bg-purple-50"
+                    title="Compare Versions"
+                  >
+                    <GitCompare className="w-5 h-5" />
+                  </Link>
                   <button
                     onClick={() => setEditingDoc(doc)}
                     className="p-2 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50"
                     title="Edit"
                   >
                     <Edit className="w-5 h-5" />
-                  </button>
-
-                  <button
-                    onClick={() => handleCopy(doc.id, doc.content || '')}
-                    className="p-2 text-gray-400 hover:text-green-600 rounded-lg hover:bg-green-50"
-                    title={copiedDocId === doc.id ? 'Copied!' : 'Copy Markdown'}
-                  >
-                    {copiedDocId === doc.id ? (
-                      <Check className="w-5 h-5" />
-                    ) : (
-                      <Copy className="w-5 h-5" />
-                    )}
                   </button>
 
                   <button
@@ -357,7 +357,6 @@ export default function Documents() {
                   >
                     <Download className="w-5 h-5" />
                   </button>
-
                   <button
                     onClick={() => setDocumentToDelete(doc)}
                     className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
@@ -522,3 +521,4 @@ export default function Documents() {
     </div>
   )
 }
+

@@ -30,8 +30,8 @@ def _get_credentials_exception() -> HTTPException:
 
 def validate_password_strength(password: str) -> str:
     errors = []
-    if len(password) > 128:
-        raise ValueError("Password must not exceed 128 characters")
+    if len(password.encode("utf-8")) > 72:
+        raise ValueError("Password must be 72 bytes or fewer due to bcrypt limitations")
     if len(password) < 8:
         errors.append("at least 8 characters")
     if not re.search(r'[A-Z]', password):
@@ -61,7 +61,7 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None, token_version: int = 0) -> str:
     """Create a JWT access token with an expiration payload."""
     to_encode = data.copy()
     
@@ -74,8 +74,9 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
         
     to_encode.update({
         "exp": expire,
-        "iat": now,
-        "nbf": now,
+        "iat": int(now.timestamp()),
+        "nbf": int(now.timestamp()),
+        "token_version": token_version,
     })
     encoded_jwt = jwt.encode(
         to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM
@@ -148,6 +149,15 @@ async def get_current_user(
         # Standardized to 401 generic failure instead of a distinct "User not found" 401
         # to prevent user enumeration attacks via valid-but-orphaned tokens.
         raise _get_credentials_exception()
+
+    # Reject tokens with a stale token_version (e.g. after password change)
+    token_version = payload.get("token_version", 0)
+    if token_version < user.token_version:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail={"field": "general", "message": "Token has been invalidated. Please log in again."},
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     # Bind to the request context so every downstream log line (and the
     # access log emitted by RequestContextMiddleware) carries user_id.
