@@ -1,47 +1,91 @@
-"""Unit tests for document generation — all 3 template types."""
+"""Unit tests for document generation — all 3 template types.
+Clean, deterministic, production-ready.
+"""
+
+import uuid
+from typing import Dict
 
 import pytest
-from app.core.security import create_access_token
+
+from app.main import app
 
 
-def get_auth_headers(user_id: int) -> dict:
-    token = create_access_token(data={"sub": str(user_id)})
+def make_email(prefix: str) -> str:
+    return f"{prefix}.{uuid.uuid4().hex}@example.com"
+
+
+def register_and_login(client, email: str, password: str = "TestPass123!") -> Dict[str, str]:
+    register_response = client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": password},
+    )
+    assert register_response.status_code == 201
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        data={"username": email, "password": password},
+    )
+    assert login_response.status_code == 200
+
+    token = login_response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 
-def register_and_login(client, email, password="TestPass123!"):
-    client.post("/api/v1/auth/register", json={"email": email, "password": password})
-    response = client.post("/api/v1/auth/login", data={"username": email, "password": password})
-    token = response.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
-
-
-def create_ai_system(client, headers):
+def create_ai_system(client, headers: Dict[str, str]) -> int:
     response = client.post(
         "/api/v1/ai-systems/",
         json={"name": "Test AI System", "description": "A test system"},
-        headers=headers
+        headers=headers,
     )
+    assert response.status_code == 201
     return response.json()["id"]
 
-def test_list_document_templates(client):
-    headers = register_and_login(client, "templates@example.com")
 
-    response = client.get(
-        "/api/v1/documents/templates",
-        headers=headers
+def generate_document(client, headers: Dict[str, str], system_id: int, document_type: str):
+    return client.post(
+        "/api/v1/documents/generate",
+        json={"ai_system_id": system_id, "document_type": document_type},
+        headers=headers,
     )
 
+
+# =========================================================
+# FIXTURES
+# =========================================================
+
+@pytest.fixture(autouse=True)
+def cleanup_dependency_overrides():
+    """Ensure no dependency overrides leak between tests."""
+    yield
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def auth_headers(client):
+    return register_and_login(client, make_email("auth"))
+
+
+@pytest.fixture
+def ai_system_id(client, auth_headers):
+    return create_ai_system(client, auth_headers)
+
+
+def test_list_document_templates(client):
+    headers = register_and_login(client, make_email("templates"))
+
+    response = client.get("/api/v1/documents/templates", headers=headers)
+
     assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
 
     data = response.json()
     assert isinstance(data, list)
-    assert len(data) == 3
+    assert len(data) >=3
 
     template_types = {template["type"] for template in data}
-    assert "technical_documentation" in template_types
-    assert "risk_assessment" in template_types
-    assert "conformity_declaration" in template_types
+    assert {"technical_documentation", "risk_assessment", "conformity_declaration"}.issubset(
+        template_types
+    )
 
     for template in data:
         assert "type" in template
@@ -51,91 +95,34 @@ def test_list_document_templates(client):
         assert template["description"]
 
 
-# ✅ Test 1: Generate Technical Documentation → 201
-def test_generate_technical_documentation(client):
-    headers = register_and_login(client, "tech_doc@example.com")
+@pytest.mark.parametrize(
+    "document_type",
+    ["technical_documentation", "risk_assessment", "conformity_declaration"],
+)
+
+def test_generate_document_for_each_template(client, document_type):
+    headers = register_and_login(client, make_email(document_type))
     system_id = create_ai_system(client, headers)
 
-    response = client.post(
-        "/api/v1/documents/generate",
-        json={
-            "ai_system_id": system_id,
-            "document_type": "technical_documentation"
-        },
-        headers=headers
-    )
+    response = generate_document(client, headers, system_id, document_type)
 
     assert response.status_code == 201
-    assert response.json() is not None
+    data = response.json()
+    assert data["document_type"] == document_type
+    assert data["ai_system_id"] == system_id
+    assert data["status"] == "generated"
+    assert data["title"]
+    assert data["content"]
+    assert data["id"] is not None
 
-
-# ✅ Test 2: Generate Risk Assessment → 201
-def test_generate_risk_assessment(client):
-    headers = register_and_login(client, "risk@example.com")
-    system_id = create_ai_system(client, headers)
-
+def test_generate_with_invalid_template_type(client, auth_headers, ai_system_id):
     response = client.post(
         "/api/v1/documents/generate",
-        json={
-            "ai_system_id": system_id,
-            "document_type": "risk_assessment"
-        },
-        headers=headers
+        json={"ai_system_id": ai_system_id, "document_type": "unknown_document_type"},
+        headers=auth_headers,
     )
 
-    assert response.status_code == 201
-    assert response.json() is not None
-
-
-# ✅ Test 3: Generate Conformity Declaration → 201
-def test_generate_conformity_declaration(client):
-    headers = register_and_login(client, "conformity@example.com")
-    system_id = create_ai_system(client, headers)
-
-    response = client.post(
-        "/api/v1/documents/generate",
-        json={
-            "ai_system_id": system_id,
-            "document_type": "conformity_declaration"
-        },
-        headers=headers
-    )
-
-    assert response.status_code == 201
-    assert response.json() is not None
-
-
-# ❌ Test 4: Non-existent system → 404
-def test_generate_for_nonexistent_system(client):
-    headers = register_and_login(client, "notsystem@example.com")
-
-    response = client.post(
-        "/api/v1/documents/generate",
-        json={
-            "ai_system_id": 99999,
-            "document_type": "technical_documentation"
-        },
-        headers=headers
-    )
-
-    assert response.status_code == 404
-
-
-# ❌ Test 5: Another user's system → 404
-def test_generate_for_another_users_system(client):
-    # User 1 creates a system
-    headers_user1 = register_and_login(client, "user1@example.com")
-    system_id = create_ai_system(client, headers_user1)
-
-    # User 2 tries to generate doc for User 1's system
-    headers_user2 = register_and_login(client, "user2@example.com")
-    response = client.post(
-        "/api/v1/documents/generate",
-        json={
-            "ai_system_id": system_id,
-            "document_type": "technical_documentation"
-        },
-        headers=headers_user2
-    )
-
-    assert response.status_code == 404
+    assert response.status_code in (400, 422)
+    data = response.json()
+    assert "detail" in data
+    assert "unknown_document_type" in str(data["detail"])

@@ -201,3 +201,143 @@ def test_blocked_guard_scan_creates_notification(tmp_path):
 
     app.dependency_overrides.clear()
     db.close()
+
+
+def test_get_unread_count_returns_correct_count(tmp_path):
+    client, db, user, _ = _make_client(tmp_path)
+
+    db.add_all(
+        [
+            Notification(
+                user_id=user.id,
+                notification_type=NotificationType.GUARD_BLOCK.value,
+                title="Unread 1",
+                message="",
+                is_read=False,
+            ),
+            Notification(
+                user_id=user.id,
+                notification_type=NotificationType.GUARD_BLOCK.value,
+                title="Unread 2",
+                message="",
+                is_read=False,
+            ),
+            Notification(
+                user_id=user.id,
+                notification_type=NotificationType.GUARD_BLOCK.value,
+                title="Read",
+                message="",
+                is_read=True,
+            ),
+        ]
+    )
+    db.commit()
+
+    response = client.get("/api/v1/notifications/unread-count")
+
+    assert response.status_code == 200
+    assert response.json() == {"unread_count": 2}
+
+    app.dependency_overrides.clear()
+    db.close()
+
+def test_mark_all_notifications_read(tmp_path):
+    client, db, user, other_user = _make_client(tmp_path)
+
+    mine = Notification(
+        user_id=user.id,
+        notification_type=NotificationType.GUARD_BLOCK.value,
+        title="Mine",
+        message="",
+        is_read=False,
+    )
+
+    other = Notification(
+        user_id=other_user.id,
+        notification_type=NotificationType.GUARD_BLOCK.value,
+        title="Other",
+        message="",
+        is_read=False,
+    )
+
+    db.add_all([mine, other])
+    db.commit()
+
+    response = client.post("/api/v1/notifications/read-all")
+
+    assert response.status_code == 204
+
+    db.refresh(mine)
+    db.refresh(other)
+
+    assert mine.is_read is True
+    assert other.is_read is False
+
+    app.dependency_overrides.clear()
+    db.close()
+
+def test_delete_read_notifications(tmp_path):
+    client, db, user, other_user = _make_client(tmp_path)
+
+    read_notification = Notification(
+        user_id=user.id,
+        notification_type=NotificationType.GUARD_BLOCK.value,
+        title="Read",
+        message="",
+        is_read=True,
+    )
+
+    unread_notification = Notification(
+        user_id=user.id,
+        notification_type=NotificationType.GUARD_BLOCK.value,
+        title="Unread",
+        message="",
+        is_read=False,
+    )
+
+    other_user_read = Notification(
+        user_id=other_user.id,
+        notification_type=NotificationType.GUARD_BLOCK.value,
+        title="Other",
+        message="",
+        is_read=True,
+    )
+
+    db.add_all(
+        [
+            read_notification,
+            unread_notification,
+            other_user_read,
+        ]
+    )
+    db.commit()
+    read_id = read_notification.id
+    unread_id = unread_notification.id
+    other_id = other_user_read.id
+    response = client.delete("/api/v1/notifications/read")
+
+    assert response.status_code == 204
+
+    assert (
+        db.query(Notification)
+        .filter(Notification.id == read_id)
+        .first()
+        is None
+    )
+
+    assert (
+        db.query(Notification)
+        .filter(Notification.id == unread_id)
+        .first()
+        is not None
+    )
+
+    assert (
+        db.query(Notification)
+        .filter(Notification.id == other_id)
+        .first()
+        is not None
+    )
+
+    app.dependency_overrides.clear()
+    db.close()

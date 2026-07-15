@@ -14,6 +14,34 @@ spec:
       labels:
         app: aegisai-backend
     spec:
+      # 1. Production Native Python InitContainer to pre-cache exact model assets
+      initContainers:
+      - name: model-download
+        image: python:3.11-slim
+        command:
+        - sh
+        - "-c"
+        - |
+          pip install --no-cache-dir transformers torch sentencepiece
+          python - <<'PY'
+          import os
+          from transformers import AutoModel, AutoTokenizer
+
+          MODEL = "microsoft/deberta-v3-small"
+          target_dir = "/app/models"
+
+          print(f"Starting native cache generation for {MODEL} into {target_dir}...")
+          
+          # Prefetch fully valid weights and tokenizer structures natively
+          AutoTokenizer.from_pretrained(MODEL, cache_dir=target_dir)
+          AutoModel.from_pretrained(MODEL, cache_dir=target_dir)
+
+          print("Model weights and structural vocabularies downloaded successfully.")
+          PY
+        volumeMounts:
+        - name: model-storage
+          mountPath: /app/models
+
       containers:
       - name: aegisai-backend
         image: aegisai-backend:latest
@@ -31,25 +59,42 @@ spec:
           limits:
             cpu: "1000m"
             memory: "2Gi"
+        startupProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          failureThreshold: 30
+          periodSeconds: 10    
         readinessProbe:
           httpGet:
             path: /health
             port: 8000
           initialDelaySeconds: 10
           periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 2
         livenessProbe:
           httpGet:
             path: /health
             port: 8000
           initialDelaySeconds: 30
           periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
         volumeMounts:
         - name: faiss-storage
           mountPath: /app/faiss_index
+        - name: model-storage
+          mountPath: /app/models
+
       volumes:
       - name: faiss-storage
         persistentVolumeClaim:
           claimName: faiss-pvc
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: model-pvc
 ---
 apiVersion: v1
 kind: Service
@@ -70,6 +115,18 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: faiss-pvc
+spec:
+  accessModes:
+  - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+---
+# Added new PersistentVolumeClaim for model persistence
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: model-pvc
 spec:
   accessModes:
   - ReadWriteOnce

@@ -1,0 +1,16 @@
+# aegisai.yml — lives in the root of a consumer repo.
+# Lists the AI systems (already registered in AegisAI) this repo owns.
+
+systems:
+  - id: 42
+    name: CV Screening Tool
+    # optional — defaults to all three doc types when omitted
+    required_documents:
+      - technical_documentation
+      - risk_assessment
+      - conformity_declaration
+
+  - id: 57
+    name: Support Chatbot
+    required_documents:
+      - technical_documentation

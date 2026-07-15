@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
-import { classificationApi } from '../services/api'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { aiSystemsApi, classificationApi } from '../services/api'
+import { recordRecentlyViewed } from '../utils/recentlyViewed'
 import {
   AlertTriangle,
   BarChart2,
@@ -158,6 +159,25 @@ export default function Classification() {
   const { systemId } = useParams()
   const [activeTab, setActiveTab] = useState<Tab>('questionnaire')
   const [result, setResult] = useState<ClassificationResult | null>(null)
+
+  // Fetch the system so we can label the "Recently Viewed" entry with its
+  // name and risk level (issue #1344). Only runs when opening an existing
+  // system, not the standalone classify-without-saving flow.
+  const { data: system } = useQuery({
+    queryKey: ['ai-system', systemId],
+    queryFn: () => aiSystemsApi.get(parseInt(systemId as string)),
+    enabled: Boolean(systemId),
+  })
+
+  useEffect(() => {
+    if (system) {
+      recordRecentlyViewed({
+        id: system.id,
+        name: system.name,
+        risk_level: system.risk_level ?? null,
+      })
+    }
+  }, [system])
   const [formData, setFormData] = useState({
     use_case_category: 'hr_recruitment',
     is_safety_component: false,
@@ -188,6 +208,10 @@ export default function Classification() {
     onSuccess: (data) => {
       setResult(data)
       setActiveTab('results')
+    },
+    onError: () => {
+      setResult(null)
+      setActiveTab('questionnaire')
     },
   })
 
@@ -640,6 +664,14 @@ export default function Classification() {
         >
           {classifyMutation.isPending ? 'Classifying...' : 'Classify Risk Level'}
         </button>
+
+        {classifyMutation.isError && (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {classifyMutation.error instanceof Error
+              ? classifyMutation.error.message
+              : 'Unable to classify this system right now.'}
+          </div>
+        )}
       </form>
     </div>
   )
@@ -781,3 +813,4 @@ export default function Classification() {
     </div>
   )
 }
+
