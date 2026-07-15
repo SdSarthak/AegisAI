@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react'
 import {
   AlertCircle,
@@ -12,13 +11,6 @@ import {
 } from 'lucide-react'
 
 import { useRagStream } from '../hooks/useRagStream'
-import CopyButton from '../components/CopyButton'
-
-function getResponseTimeColor(time: number): string {
-  if (time < 1) return 'text-green-600 bg-green-50'
-  if (time < 3) return 'text-yellow-600 bg-yellow-50'
-  return 'text-red-600 bg-red-50'
-}
 
 export default function RagChat() {
   const [question, setQuestion] = useState('')
@@ -32,11 +24,7 @@ export default function RagChat() {
     error: streamError,
     ask,
     stop,
-    finishInfo,
   } = useRagStream()
-
-  // Response time is optional and may not be present in finishInfo depending on backend payload.
-  const responseTime = (finishInfo as any)?.response_time_seconds ?? null
 
   const isStreaming = status === 'streaming'
   const isAwaitingFirstToken = isStreaming && tokens.length === 0
@@ -186,35 +174,7 @@ export default function RagChat() {
                       <div className="p-2 bg-primary-50 rounded-lg flex-shrink-0">
                         <Bot className="w-5 h-5 text-primary-600" />
                       </div>
-
                       <div className="space-y-5 min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-3">
-                          <h3 className="text-sm font-semibold text-gray-900">
-                            Response
-                          </h3>
-
-                          <CopyButton
-                            text={tokens}
-                            label="Copy"
-                            copiedLabel="Copied!"
-                            successMessage="Response copied!"
-                            iconOnly
-                            disabled={isStreaming || !tokens.trim()}
-                          />
-                        </div>
-
-                        {!isStreaming && responseTime !== null && (
-                          <div className="flex justify-end">
-                            <span
-                              className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${getResponseTimeColor(
-                                responseTime,
-                              )}`}
-                            >
-                              ⚡ {responseTime.toFixed(2)}s
-                            </span>
-                          </div>
-                        )}
-
                         <p className="text-gray-700 leading-7 whitespace-pre-wrap">
                           {tokens}
                           {isStreaming && (
@@ -224,7 +184,6 @@ export default function RagChat() {
                             />
                           )}
                         </p>
-
 
                         {streamError && (
                           <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
