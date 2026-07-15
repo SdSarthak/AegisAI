@@ -40,11 +40,3 @@ The SDK executes a high-performance four-layer defensive pipeline:
 ## License
 
 AegisAI is licensed under the AGPL-3.0 License.
-
-### What to do now:
-1. Copy that code block.
-2. Go back to your open Notepad window for `README.md`.
-3. Clear everything out, paste it in, save (`Ctrl + S`), and close it.
-
-Once that's done, run the `cd ..` and `git` command block we used before in your command prompt to push it up. You've got this!
-
