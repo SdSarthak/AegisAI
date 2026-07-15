@@ -7,7 +7,9 @@ from pydantic import BaseModel
 class AISystemAuditLogResponse(BaseModel):
     id: int
     ai_system_id: int
-    changed_by_id: int
+    # Nullable: SET NULL on delete preserves the audit row after the
+    # acting user is deleted.
+    changed_by_id: Optional[int] = None
     old_values: Dict[str, Any]
     new_values: Dict[str, Any]
     changed_at: datetime
@@ -18,7 +20,9 @@ class AISystemAuditLogResponse(BaseModel):
 
 class GuardAuditLogResponse(BaseModel):
     id: int
-    user_id: int
+    # Nullable: SET NULL on delete preserves the scan log after the
+    # scanning user is deleted.
+    user_id: Optional[int] = None
     prompt_hash: str
     decision: str
     confidence: float
