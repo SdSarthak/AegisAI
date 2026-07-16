@@ -20,17 +20,14 @@ from app.core.security import get_current_user
 from app.models.ai_system import AISystem, ComplianceStatus, RiskLevel
 from app.models.user import User
 from app.schemas.analytics import ComplianceTimelineResponse
-from app.models.compliance_snapshot import ComplianceSnapshot
-from app.models.document import Document
 from sqlalchemy import func
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-
-from fastapi import Query
-
+from app.models.ai_system import AISystem, RiskLevel
 from app.models.guard_scan_log import GuardScanLog
-from app.schemas.audit_log import GuardAuditLogResponse
+from app.schemas.guard_scan_log import GuardScanLogResponse
 from app.schemas.pagination import PaginatedResponse
+from typing import Optional
+from fastapi import Query
+from datetime import datetime
 
 router = APIRouter()
 
@@ -152,57 +149,55 @@ def get_analytics_summary(
     }
 
 
-@router.get("/system-risk")
-def get_system_risk(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """Return per-system risk scores for the current user."""
-    systems = (
-        db.query(AISystem.id, AISystem.name, AISystem.compliance_score, AISystem.risk_level)
-        .filter(AISystem.owner_id == current_user.id)
-        .all()
-    )
-    return [
-        {
-            "id": system.id,
-            "name": system.name,
-            "risk_score": system.compliance_score if system.compliance_score is not None else 0,
-            "risk_level": system.risk_level.value if system.risk_level else "unknown",
-        }
-        for system in systems
-    ]
-
-
-@router.get("/audit-logs", response_model=PaginatedResponse[GuardAuditLogResponse])
+@router.get('/audit-logs')
 def get_audit_logs(
-    skip: int = Query(0, ge=0, description="Items to skip"),
-    limit: int = Query(20, ge=1, le=100, description="Items per page"),
-    user_id: Optional[int] = Query(None, description="Filter by user ID"),
-    decision: Optional[str] = Query(None, pattern="^(allow|sanitize|block)$", description="Filter by decision"),
-    days: Optional[int] = Query(None, ge=1, description="Only include logs from the last N days"),
+    page: int = 1,
+    page_size: int = 20,
+    decision: str = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    """Return guard scan audit logs with pagination and optional filters."""
-    is_admin = getattr(current_user, "role", None) == "admin"
-    if user_id is not None and user_id != current_user.id and not is_admin:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You do not have permission to query audit logs for another user.",
-        )
+    """Return paginated guard scan audit logs for the current user.
 
-    target_user_id = user_id if user_id is not None else current_user.id
-    filters = [GuardScanLog.user_id == target_user_id]
+    Args:
+        page: Page number, 1-indexed (default: 1).
+        page_size: Number of results per page (default: 20).
+        decision: Optional filter by decision (allow/sanitize/block).
+        current_user: The authenticated user extracted from the JWT token.
+        db: Database session dependency.
+
+    Returns:
+        dict: Paginated list of guard scan log entries.
+    """
+    from app.models.guard_scan_log import GuardScanLog
+
+    query = db.query(GuardScanLog).filter(GuardScanLog.user_id == current_user.id)
 
     if decision:
-        filters.append(GuardScanLog.decision == decision)
-    if days:
-        since = datetime.now(timezone.utc) - timedelta(days=days)
-        filters.append(GuardScanLog.scanned_at >= since)
+        query = query.filter(GuardScanLog.decision == decision)
 
-    base_query = db.query(GuardScanLog).filter(*filters)
-    total = base_query.count()
-    logs = base_query.order_by(GuardScanLog.scanned_at.desc()).offset(skip).limit(limit).all()
+    total = query.count()
+    logs = (
+        query.order_by(GuardScanLog.scanned_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
 
-    return PaginatedResponse(items=logs, total=total, skip=skip, limit=limit)
+    return {
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "logs": [
+            {
+                "id": log.id,
+                "decision": log.decision,
+                "confidence": log.confidence,
+                "intent": log.intent,
+                "detection_type": log.detection_type,
+                "prompt_length": log.prompt_length,
+                "scanned_at": log.scanned_at,
+            }
+            for log in logs
+        ],
+    }
