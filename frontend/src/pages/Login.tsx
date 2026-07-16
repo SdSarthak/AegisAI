@@ -10,11 +10,6 @@ interface ValidationError {
   message: string
 }
 
-interface PydanticValidationError {
-  loc?: Array<string | number>
-  msg?: string
-}
-
 export default function Login() {
   const navigate = useNavigate()
   const { setAuth } = useAuthStore()
@@ -23,6 +18,10 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [errors, setErrors] = useState<ValidationError[]>([])
   const [loading, setLoading] = useState(false)
+
+  const setError = (message: string) => {
+    setErrors([{ field: 'general', message }])
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -47,42 +46,25 @@ export default function Login() {
     setLoading(true)
 
     try {
-      const tokenData = await authApi.login(trimmedEmail, password)
+      const tokenData = await authApi.login(email, password)
       setAuth(tokenData.access_token, null)
-      const user = await authApi.getMe(tokenData.access_token)
+      const user = await authApi.getMe()
       setAuth(tokenData.access_token, user)
       navigate('/')
     } catch (err) {
       if (axios.isAxiosError(err)) {
-        const detail = err.response?.data?.detail
-        if (detail) {
-          if (typeof detail === 'object' && detail.field && detail.message) {
-            // Authentication failure (always field: 'general')
-            setErrors([{ field: detail.field, message: detail.message }])
-          } else if (Array.isArray(detail)) {
-            // Pydantic 422 errors — login uses OAuth2PasswordRequestForm so
-            // the server field name is 'username'; map it to 'email' for the UI.
-            const parsed = detail.map((error: PydanticValidationError) => {
-              const rawField = String(error.loc?.[error.loc.length - 1] ?? 'general')
-              const field = rawField === 'username' ? 'email' : rawField
-              return { field, message: error.msg || 'Invalid input' }
-            })
-            setErrors(parsed)
-          } else {
-            setErrors([{ field: 'general', message: String(detail) }])
-          }
-        } else if (err.code === 'ERR_NETWORK') {
-          setErrors([
-            {
-              field: 'general',
-              message: 'Network error. Please check your connection and try again.',
-            },
-          ])
+        const status = err.response?.status
+        if (status === 401 || status === 403) {
+          setError('Invalid email or password.')
+        } else if (status && status >= 500) {
+          setError('Server error, please try again later.')
+        } else if (!err.response) {
+          setError('Unable to connect to server.')
         } else {
-          setErrors([{ field: 'general', message: 'Invalid email or password' }])
+          setError(err.response.data?.detail ?? 'Something went wrong. Please try again.')
         }
       } else {
-        setErrors([{ field: 'general', message: 'An unexpected error occurred. Please try again.' }])
+        setError('Something went wrong. Please try again.')
       }
     } finally {
       setLoading(false)
@@ -122,7 +104,7 @@ export default function Login() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white ${
+              className={`mt-1 block w-full px-3 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500${
                 errors.some((e: ValidationError) => e.field === 'email')
                   ? 'border-red-300 bg-red-50'
                   : 'border-gray-300'
@@ -146,7 +128,7 @@ export default function Login() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 dark:border-gray-600 dark:bg-gray-700 dark:text-white ${
+                className={`block w-full pl-3 pr-10 py-2 border rounded-lg shadow-sm focus:ring-primary-500 focus:border-primary-500 ${
                   errors.some((e: ValidationError) => e.field === 'password')
                     ? 'border-red-300 bg-red-50'
                     : 'border-gray-300'
