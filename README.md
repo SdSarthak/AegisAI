@@ -195,6 +195,202 @@ If you want to train the machine learning models yourself, you can run our offic
 
 ---
 
+## Environment Variables
+
+AegisAI uses environment variables for backend configuration, authentication, database connectivity, and LLM provider integration.
+
+Before starting the backend, copy the example environment file:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Then update the values inside `backend/.env`.
+
+### Backend Environment Variables
+
+| Variable | Description | Required | Example | Module |
+|---|---|---|---|---|
+| `SECRET_KEY` | Secret key used for JWT token signing and authentication security | Yes | `super-secret-key` | Auth / Security |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | JWT access token expiration time in minutes | Optional | `60` | Auth |
+| `DATABASE_URL` | PostgreSQL connection string used by SQLAlchemy | Yes | `postgresql://user:password@localhost:5432/aegisai` | Database |
+| `POSTGRES_USER` | PostgreSQL database username | Docker only | `postgres` | Database |
+| `POSTGRES_PASSWORD` | PostgreSQL database password | Docker only | `postgres` | Database |
+| `POSTGRES_DB` | PostgreSQL database name | Docker only | `aegisai` | Database |
+| `LLM_API_KEY` | API key for the configured LLM provider. Use `ollama` when running locally with Ollama | Yes | `sk-xxxxx` or `ollama` | LLM / RAG |
+| `LLM_BASE_URL` | Base URL for OpenAI-compatible APIs or local Ollama instance | Optional | `http://localhost:11434/v1` | LLM / RAG |
+| `LLM_MODEL` | Model name used for chat completion and RAG responses | Yes | `llama3.2` | LLM / RAG |
+| `EMBEDDING_MODEL` | Embedding model used for vector generation in RAG pipelines | Optional | `text-embedding-3-small` | RAG |
+| `FAISS_INDEX_PATH` | Path where FAISS vector indexes are stored | Optional | `data/faiss_index` | RAG |
+| `GUARD_MODEL_PATH` | Path to the trained DeBERTa guard classifier | Optional | `app/modules/guard/models/classifier` | Guard |
+| `RATE_LIMIT_PER_MINUTE` | Maximum number of Guard scan requests allowed per user per minute | Optional | `30` | Guard |
+| `MLFLOW_TRACKING_URI` | MLflow tracking server URI for experiment logging | Optional | `http://localhost:5000` | MLOps |
+| `PROMETHEUS_ENABLED` | Enables Prometheus metrics endpoint | Optional | `true` | Monitoring |
+| `CORS_ORIGINS` | Allowed frontend origins for API access | Optional | `http://localhost:5173` | API / Frontend |
+
+## Ollama Example Configuration
+
+To run AegisAI locally without a paid API key:
+
+```env
+LLM_API_KEY=ollama
+LLM_BASE_URL=http://localhost:11434/v1
+LLM_MODEL=llama3.2
+```
+
+Then pull a model using:
+
+```bash
+ollama pull llama3.2
+```
+
+## Notes
+
+- The backend will fail to start if required variables are missing.
+- Docker users can configure PostgreSQL credentials directly in `docker-compose.yml` or `.env`.
+- All LLM providers must expose an OpenAI-compatible API format.
+- Environment variables may evolve as new modules are added.
+---
+## Troubleshooting
+This section covers common setup and runtime issues contributors may encounter while installing or developing AegisAI.
+
+### Docker Compose startup failures
+
+**Issue**
+Containers fail to start or exit immediately after running:
+```bash
+docker compose up -d
+```
+**Fix**
+-Ensure Docker Desktop(or Docker Engine)is running.
+-Rebuild containers:
+```bash
+docker compose down
+docker compose up --build
+```
+
+---
+### Backend `.env` configuration issues
+**Issue**
+
+The backend fails because requires environment variables are missing.
+
+**Fix**
+Create the environment file:
+```bash
+cp backend/.env.example backend/.env
+```
+
+Ensure following variables are configured:
+-`DATABASE_URL`
+-`SECRET_KEY`
+-`LLM_API_KEY`
+-`LLM_MODEL`
+
+---
+### Postgresql connection errors
+**Issue**
+Example:
+```
+Connection refused
+```
+**Fix**
+- Verify Postgresql is running.
+- Check that `DATABASE_URL` is correct.
+- Run database migrations:
+```bash
+alembic upgrade head
+```
+If using Docker:
+
+```bash
+docker compose ps
+```
+
+---
+### Port conflicts
+
+By default AegisAI uses:
+
+| Service | Port |
+|---------|------|
+| Frontend | 5173 |
+| Backend | 8000 |
+| PostgreSQL | 5432 |
+
+If a port is already in use, stop the conflicting process or change the configured port.
+
+---
+### Ollama service connectivity problems
+
+Ensure Ollama is running:
+
+```bash
+ollama serve
+```
+
+Download a model if needed:
+
+```bash
+ollama pull llama3.2
+```
+
+Verify your `.env` contains:
+
+```env
+LLM_API_KEY=ollama
+LLM_BASE_URL=http://localhost:11434/v1
+LLM_MODEL=llama3.2
+```
+
+---
+### Dependency installation issues
+
+#### Python
+
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+#### Node.js
+
+```bash
+npm cache clean --force
+npm install
+```
+
+If needed:
+
+```bash
+rm -rf node_modules
+rm package-lock.json
+npm install
+```
+
+---
+
+### Python and Node.js version mismatches
+
+Recommended versions:
+
+- Python **3.11+**
+- Node.js **18+**
+
+Check installed versions:
+
+```bash
+python --version
+node --version
+npm --version
+```
+
+---
+
+
+
+
+
 ## Project Structure
 
 ```
