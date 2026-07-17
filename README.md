@@ -160,6 +160,146 @@ ollama pull llama3.2
 - Docker users can configure PostgreSQL credentials directly in `docker-compose.yml` or `.env`.
 - All LLM providers must expose an OpenAI-compatible API format.
 - Environment variables may evolve as new modules are added.
+---
+## Troubleshooting
+This section covers common setup and runtime issues contributors may encounter while installing or developing AegisAI.
+
+### Docker Compose startup failures
+
+**Issue**
+Containers fail to start or exit immediately after running:
+```bash
+docker compose up -d
+```
+**Fix**
+-Ensure Docker Desktop(or Docker Engine)is running.
+-Rebuild containers:
+```bash
+docker compose down
+docker compose up --build
+```
+
+---
+### Backend `.env` configuration issues
+**Issue**
+
+The backend fails because requires environment variables are missing.
+
+**Fix**
+Create the environment file:
+```bash
+cp backend/.env.example backend/.env
+```
+
+Ensure following variables are configured:
+-`DATABASE_URL`
+-`SECRET_KEY`
+-`LLM_API_KEY`
+-`LLM_MODEL`
+
+---
+### Postgresql connection errors
+**Issue**
+Example:
+```
+Connection refused
+```
+**Fix**
+- Verify Postgresql is running.
+- Check that `DATABASE_URL` is correct.
+- Run database migrations:
+```bash
+alembic upgrade head
+```
+If using Docker:
+
+```bash
+docker compose ps
+```
+
+---
+### Port conflicts
+
+By default AegisAI uses:
+
+| Service | Port |
+|---------|------|
+| Frontend | 5173 |
+| Backend | 8000 |
+| PostgreSQL | 5432 |
+
+If a port is already in use, stop the conflicting process or change the configured port.
+
+---
+### Ollama service connectivity problems
+
+Ensure Ollama is running:
+
+```bash
+ollama serve
+```
+
+Download a model if needed:
+
+```bash
+ollama pull llama3.2
+```
+
+Verify your `.env` contains:
+
+```env
+LLM_API_KEY=ollama
+LLM_BASE_URL=http://localhost:11434/v1
+LLM_MODEL=llama3.2
+```
+
+---
+### Dependency installation issues
+
+#### Python
+
+```bash
+python -m pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+#### Node.js
+
+```bash
+npm cache clean --force
+npm install
+```
+
+If needed:
+
+```bash
+rm -rf node_modules
+rm package-lock.json
+npm install
+```
+
+---
+
+### Python and Node.js version mismatches
+
+Recommended versions:
+
+- Python **3.11+**
+- Node.js **18+**
+
+Check installed versions:
+
+```bash
+python --version
+node --version
+npm --version
+```
+
+---
+
+
+
+
 
 ## Project Structure
 
