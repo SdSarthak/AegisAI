@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { aiSystemsApi, analyticsApi } from "../services/api";
 
 import ComplianceRiskChart from "../components/ComplianceRiskChart";
 
@@ -31,44 +33,12 @@ const lineChartData = [
   { name: "May", score: 82 },
   { name: "Jun", score: 90 },
 ];
-
 const barChartData = [
   { name: "System A", risk: 45 },
   { name: "System B", risk: 80 },
   { name: "System C", risk: 30 },
   { name: "System D", risk: 65 },
   { name: "System E", risk: 20 },
-];
-
-const summaryStats = [
-  {
-    label: "Total Systems",
-    value: "12",
-    icon: Activity,
-    color: "text-blue-600 dark:text-blue-400",
-    bg: "bg-blue-50 dark:bg-blue-500/10",
-  },
-  {
-    label: "Avg Score",
-    value: "84%",
-    icon: TrendingUp,
-    color: "text-green-600 dark:text-green-400",
-    bg: "bg-green-50 dark:bg-green-500/10",
-  },
-  {
-    label: "Compliant",
-    value: "10",
-    icon: ShieldCheck,
-    color: "text-emerald-600 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-500/10",
-  },
-  {
-    label: "High Risk",
-    value: "2",
-    icon: AlertTriangle,
-    color: "text-red-600 dark:text-red-400",
-    bg: "bg-red-50 dark:bg-red-500/10",
-  },
 ];
 
 type RiskData = {
@@ -104,12 +74,37 @@ const getChartTheme = (isDark: boolean) =>
 
 export default function Analytics() {
   const [riskPieData, setRiskPieData] = useState<RiskData[]>([]);
+  const {
+    data: systemsData,
+    isLoading: systemsLoading,
+  } = useQuery({
+    queryKey: ["ai-systems"],
+    queryFn: () => aiSystemsApi.list(),
+  });
+  const [selectedSystem, setSelectedSystem] = useState<number | null>(null);
+  const { 
+    data: timelineData,
+    isLoading: timelineLoading 
+  } = useQuery({
+    queryKey: ["compliance-timeline", selectedSystem],
+    queryFn: () => analyticsApi.timeline(selectedSystem!),
+    enabled: selectedSystem !== null,
+  });
+  const {
+    data: summaryData,
+    isLoading: summaryLoading,
+  } = useQuery({
+    queryKey: ["analytics-summary"],
+    queryFn: () => analyticsApi.summary(),
+  });
   const [loading, setLoading] = useState(true);
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    fetchRiskDistribution();
-  }, []);
+    if (systemsData && systemsData.length > 0 && !selectedSystem) {
+      setSelectedSystem(systemsData[0].id);
+    }
+  }, [systemsData, selectedSystem]);
 
   useEffect(() => {
     const checkTheme = () => {
@@ -129,6 +124,45 @@ export default function Analytics() {
 
   const chartTheme = getChartTheme(isDark);
   const chartRemountKey = isDark ? "dark" : "light";
+
+  const summaryStats = [
+  {
+    label: "Total Systems",
+    value: summaryData?.total_systems ?? 0,
+    icon: ShieldCheck,
+    color: "text-blue-600",
+    bgColor: "bg-blue-100",
+  },
+  {
+    label: "Avg Score",
+    value: `${summaryData?.average_compliance_score ?? 0}%`,
+    icon: TrendingUp,
+    color: "text-green-600",
+    bgColor: "bg-green-100",
+  },
+  {
+    label: "Compliant",
+    value: summaryData?.counts?.compliant ?? 0,
+    icon: ShieldCheck,
+    color: "text-emerald-600",
+    bgColor: "bg-emerald-100",
+  },
+  {
+    label: "High Risk",
+    value: summaryData?.counts?.high_risk ?? 0,
+    icon: AlertTriangle,
+    color: "text-red-600",
+    bgColor: "bg-red-100",
+  },
+];
+
+  const timelineChartData =
+    timelineData?.snapshots?.map((snapshot: any) => ({
+      name: new Date(snapshot.snapshotted_at).toLocaleDateString("en-US", {
+        month: "short",
+      }),
+      score: snapshot.compliance_score ?? 0,
+    })) ?? [];
 
   const fetchRiskDistribution = async () => {
     try {
@@ -179,7 +213,7 @@ export default function Analytics() {
             key={stat.label}
             className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-6 flex items-center gap-4 shadow-sm"
           >
-            <div className={`shrink-0 p-3 rounded-lg ${stat.bg}`}>
+            <div className={`shrink-0 p-3 rounded-lg ${stat.bgColor}`}>
               <stat.icon className={`w-6 h-6 ${stat.color}`} />
             </div>
             <div>
@@ -205,7 +239,7 @@ export default function Analytics() {
               width="100%"
               height="100%"
             >
-              <LineChart data={lineChartData}>
+              <LineChart data={timelineChartData}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartTheme.grid} />
                 <XAxis
                   dataKey="name"
