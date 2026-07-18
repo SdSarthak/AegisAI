@@ -14,7 +14,20 @@ spec:
       labels:
         app: aegisai-backend
     spec:
-      # 1. Production Native Python InitContainer to pre-cache exact model assets
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      # FIX 1: Added Pod Anti-Affinity to satisfy high-availability checks
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: aegisai-backend
+              topologyKey: kubernetes.io/hostname
+
       initContainers:
       - name: model-download
         image: python:3.11-slim
@@ -38,13 +51,30 @@ spec:
 
           print("Model weights and structural vocabularies downloaded successfully.")
           PY
+        # FIX 2: Enforced Read-Only Root Filesystem for init container
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: "250m"
+            memory: "512Mi"
+          limits:
+            cpu: "1000m"
+            memory: "2Gi"
         volumeMounts:
         - name: model-storage
           mountPath: /app/models
+        # FIX 3: Added writable /tmp volume mount
+        - name: tmp-volume
+          mountPath: /tmp
 
       containers:
       - name: aegisai-backend
-        image: aegisai-backend:latest
+        image: aegisai-backend:v1.0.0
         ports:
         - containerPort: 8000
         envFrom:
@@ -52,6 +82,13 @@ spec:
             name: aegisai-config
         - secretRef:
             name: aegisai-secrets
+        # FIX 4: Enforced Read-Only Root Filesystem for backend container
+        securityContext:
+          readOnlyRootFilesystem: true
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
         resources:
           requests:
             cpu: "250m"
@@ -87,6 +124,9 @@ spec:
           mountPath: /app/faiss_index
         - name: model-storage
           mountPath: /app/models
+        # FIX 5: Added writable /tmp volume mount for runtime processing
+        - name: tmp-volume
+          mountPath: /tmp
 
       volumes:
       - name: faiss-storage
@@ -95,6 +135,9 @@ spec:
       - name: model-storage
         persistentVolumeClaim:
           claimName: model-pvc
+      # FIX 6: Declared emptyDir volume for writable temporary filesystem access
+      - name: tmp-volume
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -122,7 +165,6 @@ spec:
     requests:
       storage: 5Gi
 ---
-# Added new PersistentVolumeClaim for model persistence
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:

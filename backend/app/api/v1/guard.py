@@ -44,6 +44,20 @@ from app.schemas.pagination import CursorPaginatedResponse
 
 from app.modules.guard import guard_config
 
+# CUSTOM GUARD LIFECYCLE EXCEPTIONS
+class AegisGuardException(Exception):
+    """Base exception class for all LLM Guard related failures."""
+    pass
+
+class GuardConnectionError(AegisGuardException):
+    """Raised when the SDK cannot establish a connection to the classifier."""
+    pass
+
+class GuardExecutionError(AegisGuardException):
+    """Raised when model inference or processing fails mid-execution."""
+    pass
+
+
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
@@ -281,22 +295,77 @@ def scan_prompt(
             headers={"Retry-After": str(retry_after)},
         )
 
+    from app.modules.guard.llm_guard import LLMGuard
+    from app.modules.guard.sanitizer import SanitizationLevel
+
+    level_map = {
+        "low": SanitizationLevel.LOW,
+        "medium": SanitizationLevel.MEDIUM,
+        "high": SanitizationLevel.HIGH,
+    }
+    san_level = level_map.get(
+        settings.GUARD_SANITIZATION_LEVEL,
+        SanitizationLevel.MEDIUM,
+    )
+
     try:
-        from app.modules.guard.llm_guard import LLMGuard
-        from app.modules.guard.sanitizer import SanitizationLevel
-
-        level_map = {
-            "low": SanitizationLevel.LOW,
-            "medium": SanitizationLevel.MEDIUM,
-            "high": SanitizationLevel.HIGH,
-        }
-        san_level = level_map.get(
-            settings.GUARD_SANITIZATION_LEVEL,
-            SanitizationLevel.MEDIUM,
-        )
-
         guard = LLMGuard(sanitization_level=san_level)
         result = guard.guard(request.prompt)
+    except ConnectionError as conn_err:
+        raise GuardConnectionError(
+            f"Failed to connect to LLMGuard server: {str(conn_err)}"
+        )
+    except Exception as exec_err:
+        raise GuardExecutionError(
+            f"LLMGuard inference execution failed: {str(exec_err)}"
+        )
+
+    client_ip = http_request.client.host if http_request.client else None
+    log = _build_guard_scan_log(
+        current_user.id,
+        request.prompt,
+        result,
+        ip_address=client_ip,
+    )
+    db.add(log)
+    db.flush()
+
+    if log.decision == "block":
+        create_notification(
+            db=db,
+            user_id=current_user.id,
+            notification_type=NotificationType.GUARD_BLOCK.value,
+            title="Prompt blocked by LLM Guard",
+            message="A prompt was blocked because it matched high-risk guard rules.",
+            resource_type="guard_scan",
+            resource_id=log.id,
+            commit=False,
+        )
+        try:
+            deliver_webhook(
+                db,
+                current_user.id,
+                "guard_block",
+                {
+                    "decision": "block",
+                    "confidence": result["metadata"]["decision_reasoning"]["confidence"],
+                    "matched_patterns": result["metadata"]["regex_analysis"].get("matched_patterns", []),
+                    "prompt_hash": hashlib.sha256(request.prompt.encode()).hexdigest(),
+                },
+            )
+        except Exception as general_sys_err:
+            db.rollback()
+            logger.exception("Failed to trigger guard block webhook delivery")
+            logger.critical(
+                f"Unhandled backend glitch caught inside Guard router: {str(general_sys_err)}",
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="An internal error occurred while processing the Guard scan.",
+            )
+
+    db.commit()
 
         client_ip = http_request.client.host if http_request.client else None
 
@@ -349,10 +418,13 @@ def scan_prompt(
         db.rollback()
         logger.exception("Guard scan failed")
 
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="An internal error occurred while processing the Guard scan.",
-        )
+    return ScanResponse(
+        decision=result["decision"],
+        confidence=result["metadata"]["decision_reasoning"]["confidence"],
+        reasoning=result["metadata"]["decision_reasoning"]["reasoning"],
+        sanitized_prompt=result.get("sanitized_prompt"),
+        matched_patterns=result["metadata"]["regex_analysis"].get("matched_patterns", []),
+    )
     
 
 # ---------------------------------------------------------------------------
