@@ -1,330 +1,356 @@
-
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   AlertCircle,
-  Bot,
+  Check,
+  ChevronDown,
   FileText,
   Loader2,
-  Send,
-  Sparkles,
-  Square,
-  User,
+  Pencil,
+  Plus,
+  RefreshCcw,
+  Trash2,
 } from 'lucide-react'
 
-import { useRagStream } from '../hooks/useRagStream'
-import CopyButton from '../components/CopyButton'
+import { documentsApi } from '../services/api'
+import DocumentEditor from '../components/DocumentEditor'
 
-function getResponseTimeColor(time: number): string {
-  if (time < 1) return 'text-green-600 bg-green-50'
-  if (time < 3) return 'text-yellow-600 bg-yellow-50'
-  return 'text-red-600 bg-red-50'
+type DocumentItem = {
+  id: number
+  title: string
+  created_at: string
+  updated_at: string
 }
 
-export default function RagChat() {
-  const [question, setQuestion] = useState('')
-  const [submittedQuestion, setSubmittedQuestion] = useState('')
-  const [validationError, setValidationError] = useState<string | null>(null)
+type DocumentVersion = {
+  id: number
+  document_id: number
+  version_number: string
+  created_at: string
+}
 
-  const {
-    status,
-    tokens,
-    citations,
-    error: streamError,
-    ask,
-    stop,
-    finishInfo,
-  } = useRagStream()
+export default function Documents() {
+  const navigate = useNavigate()
 
-  // Response time is optional and may not be present in finishInfo depending on backend payload.
-  const responseTime = (finishInfo as any)?.response_time_seconds ?? null
+  const [documents, setDocuments] = useState<DocumentItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const isStreaming = status === 'streaming'
-  const isAwaitingFirstToken = isStreaming && tokens.length === 0
-  const hasAnswer = tokens.length > 0
-  const displayError = validationError ?? streamError
+  const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(null)
+  const [selectedDocumentTitle, setSelectedDocumentTitle] = useState<string>('')
+  const [selectedDocumentContent, setSelectedDocumentContent] = useState<string>('')
 
-  const handleAsk = (e: React.FormEvent) => {
-    e.preventDefault()
-    const trimmed = question.trim()
-    if (!trimmed) {
-      setValidationError('Please enter a question before asking.')
-      setSubmittedQuestion('')
-      return
-    }
-    setValidationError(null)
-    setSubmittedQuestion(trimmed)
-    setQuestion('')
-    ask(trimmed)
+  const [versions, setVersions] = useState<DocumentVersion[]>([])
+  const [versionsLoading, setVersionsLoading] = useState(false)
+  const [versionsError, setVersionsError] = useState<string | null>(null)
+
+  const refreshDocuments = async () => {
+    const list = await documentsApi.list()
+    setDocuments(list as DocumentItem[])
   }
 
-  const handleExport = () => {
-    if (!hasAnswer) return
+  useEffect(() => {
+    let mounted = true
+    setLoading(true)
+    setError(null)
 
-    const exportText = [
-      'AI Response',
-      tokens,
-      '',
-      'Source citations',
-      ...citations.map(
-        (citation, index) =>
-          `${index + 1}. ${citation.source}\n${citation.excerpt}`
-      ),
-    ].join('\n')
+    documentsApi
+      .list()
+      .then((data) => {
+        if (!mounted) return
+        setDocuments(data as DocumentItem[])
+      })
+      .catch(() => {
+        if (!mounted) return
+        setError('Failed to load documents')
+      })
+      .finally(() => {
+        if (!mounted) return
+        setLoading(false)
+      })
 
-    const blob = new Blob([exportText], {
-      type: 'text/plain;charset=utf-8',
-    })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = 'rag-answer.txt'
-    link.click()
-    URL.revokeObjectURL(url)
+    return () => {
+      mounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!selectedDocumentId) return
+
+    setVersionsLoading(true)
+    setVersionsError(null)
+
+    documentsApi
+      .getVersions(selectedDocumentId)
+      .then((data) => setVersions(data as DocumentVersion[]))
+      .catch(() => setVersionsError('Failed to load versions'))
+      .finally(() => setVersionsLoading(false))
+  }, [selectedDocumentId])
+
+  useEffect(() => {
+    if (!selectedDocumentId) return
+
+    documentsApi
+      .get(selectedDocumentId)
+      .then((doc: any) => {
+        setSelectedDocumentContent(doc?.content ?? '')
+      })
+      .catch(() => {
+        // keep existing content
+      })
+  }, [selectedDocumentId])
+
+  const handleSelectDocument = (doc: DocumentItem) => {
+    setSelectedDocumentId(doc.id)
+    setSelectedDocumentTitle(doc.title)
+  }
+
+  const handleCreateDocument = async () => {
+    setError(null)
+    try {
+      // Backend expects: { document_type, ai_system_id }
+      await documentsApi.generate({
+        document_type: 'regulatory',
+        ai_system_id: 1,
+      })
+      await refreshDocuments()
+    } catch {
+      setError('Failed to generate document')
+    }
+  }
+
+  const handleRegenerate = async (documentId: number) => {
+    setError(null)
+    try {
+      // The current API does not expose a regenerate-by-id endpoint on the frontend API wrapper.
+      // Use generate to create a new document for the configured backend.
+      await documentsApi.generate({
+        document_type: 'regulatory',
+        ai_system_id: 1,
+      })
+      await refreshDocuments()
+    } catch {
+      setError('Failed to regenerate document')
+    }
+  }
+
+  const handleDelete = async (documentId: number) => {
+    if (!confirm('Delete this document?')) return
+    setError(null)
+    try {
+      await documentsApi.delete(documentId)
+      await refreshDocuments()
+      if (selectedDocumentId === documentId) {
+        setSelectedDocumentId(null)
+        setSelectedDocumentTitle('')
+        setSelectedDocumentContent('')
+        setVersions([])
+      }
+    } catch {
+      setError('Failed to delete document')
+    }
+  }
+
+  const handleBackToList = () => {
+    setSelectedDocumentId(null)
+    setSelectedDocumentTitle('')
+    setSelectedDocumentContent('')
+    setVersions([])
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="flex items-center gap-3 text-gray-600">
+          <Loader2 className="w-5 h-5 animate-spin" />
+          Loading documents...
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="h-[calc(100vh-2rem)] md:h-[calc(100vh-4rem)] flex flex-col bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <div className="px-4 sm:px-6 py-4 border-b border-gray-200 bg-white">
-        <div className="flex items-center gap-3">
-          <div className="p-2 sm:p-3 bg-primary-50 rounded-xl">
-            <Bot className="w-5 h-5 sm:w-6 sm:h-6 text-primary-600" />
-          </div>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">Chatbot</h1>
-            <p className="text-sm sm:text-base text-gray-600">
-              Ask regulatory and compliance questions with source-backed answers
-            </p>
-          </div>
+    <div className="max-w-6xl mx-auto px-4 py-6">
+      <div className="flex items-start justify-between gap-4 mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
+          <p className="text-sm text-gray-500">Generate, edit, delete, and compare compliance documents.</p>
         </div>
+        <button
+          type="button"
+          onClick={handleCreateDocument}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700"
+        >
+          <Plus className="w-4 h-4" />
+          Generate
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-gray-50">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-8 space-y-6 sm:space-y-8">
-          {!submittedQuestion && !hasAnswer && !isStreaming && !displayError && (
-            <div className="min-h-[320px] sm:min-h-[420px] flex flex-col items-center justify-center text-center">
-              <div className="p-3 sm:p-4 bg-primary-50 rounded-2xl mb-5">
-                <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-primary-600" />
-              </div>
-              <h2 className="text-xl sm:text-2xl font-semibold text-gray-900">
-                How can I help with AI compliance?
-              </h2>
-              <p className="text-sm sm:text-base text-gray-500 mt-2 max-w-xl">
-                Ask about EU AI Act risk classification, compliance documentation,
-                human oversight, or source-backed regulatory guidance.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 mt-6 sm:mt-8 w-full">
-                {[
-                  'Does my system qualify as high-risk?',
-                  'Which documents are needed for compliance?',
-                  'What does human oversight require?',
-                ].map((example) => (
-                  <button
-                    key={example}
-                    type="button"
-                    onClick={() => setQuestion(example)}
-                    className="text-left bg-white border border-gray-200 rounded-xl p-4 text-sm text-gray-700 hover:border-primary-200 hover:bg-primary-50 transition-colors"
-                  >
-                    {example}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {(submittedQuestion || hasAnswer || isStreaming || displayError) && (
-            <div className="space-y-5 sm:space-y-6">
-              {submittedQuestion && (
-                <div className="flex justify-end">
-                  <div className="w-full sm:w-auto sm:max-w-2xl bg-primary-600 text-white rounded-2xl sm:rounded-br-md px-4 sm:px-5 py-3 sm:py-4 shadow-sm">
-                    <div className="flex items-start gap-3">
-                      <User className="w-5 h-5 mt-0.5 flex-shrink-0" />
-                      <p className="text-sm leading-6">{submittedQuestion}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {isAwaitingFirstToken && (
-                <div className="flex justify-start">
-                  <div className="w-full max-w-3xl bg-white border border-gray-200 rounded-2xl sm:rounded-bl-md px-4 sm:px-5 py-4 shadow-sm">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="p-2 bg-primary-50 rounded-lg">
-                        <Bot className="w-5 h-5 text-primary-600" />
-                      </div>
-                      <div className="flex items-center gap-2 text-sm font-medium text-gray-900">
-                        <Loader2 className="w-4 h-4 animate-spin text-primary-600" />
-                        Searching knowledge base
-                      </div>
-                    </div>
-                    <div className="space-y-3 animate-pulse">
-                      <div className="h-3 bg-gray-200 rounded-full w-11/12" />
-                      <div className="h-3 bg-gray-200 rounded-full w-full" />
-                      <div className="h-3 bg-gray-200 rounded-full w-9/12" />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {!isAwaitingFirstToken && displayError && !hasAnswer && (
-                <div className="flex justify-start">
-                  <div className="w-full max-w-3xl bg-red-50 border border-red-200 rounded-2xl sm:rounded-bl-md px-4 sm:px-5 py-4 text-red-800">
-                    <div className="flex items-start gap-3">
-                      <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-                      <div>
-                        <h3 className="font-medium">Unable to answer</h3>
-                        <p className="text-sm mt-1">{displayError}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {hasAnswer && (
-                <div className="flex justify-start">
-                  <div className="w-full max-w-3xl bg-white border border-gray-200 rounded-2xl sm:rounded-bl-md px-4 sm:px-5 py-4 shadow-sm">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 bg-primary-50 rounded-lg flex-shrink-0">
-                        <Bot className="w-5 h-5 text-primary-600" />
-                      </div>
-
-                      <div className="space-y-5 min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-3">
-                          <h3 className="text-sm font-semibold text-gray-900">
-                            Response
-                          </h3>
-
-                          <CopyButton
-                            text={tokens}
-                            label="Copy"
-                            copiedLabel="Copied!"
-                            successMessage="Response copied!"
-                            iconOnly
-                            disabled={isStreaming || !tokens.trim()}
-                          />
-                        </div>
-
-                        {!isStreaming && responseTime !== null && (
-                          <div className="flex justify-end">
-                            <span
-                              className={`inline-flex items-center gap-1 text-xs font-medium px-2 py-1 rounded-full ${getResponseTimeColor(
-                                responseTime,
-                              )}`}
-                            >
-                              ⚡ {responseTime.toFixed(2)}s
-                            </span>
-                          </div>
-                        )}
-
-                        <p className="text-gray-700 leading-7 whitespace-pre-wrap">
-                          {tokens}
-                          {isStreaming && (
-                            <span
-                              className="inline-block w-2 h-4 bg-primary-600 ml-0.5 align-text-bottom animate-pulse"
-                              aria-hidden="true"
-                            />
-                          )}
-                        </p>
-
-
-                        {streamError && (
-                          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-                            <span className="font-medium">Stream interrupted: </span>
-                            {streamError}
-                          </div>
-                        )}
-
-                        {citations.length > 0 && (
-                          <div className="mt-6">
-                            <div className="flex items-center justify-between mb-3">
-                              <h3 className="text-sm font-semibold text-gray-900">
-                                Sources
-                              </h3>
-                              {!isStreaming && (
-                                <button
-                                  type="button"
-                                  onClick={handleExport}
-                                  className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700"
-                                >
-                                  <FileText className="w-3.5 h-3.5" />
-                                  Export
-                                </button>
-                              )}
-                            </div>
-                            <div className="space-y-3">
-                              {citations.map((citation, index) => (
-                                <div
-                                  key={index}
-                                  className="border border-gray-200 rounded-lg p-3 bg-gray-50"
-                                >
-                                  <p className="font-medium text-sm text-gray-900">
-                                    {citation.source}
-                                  </p>
-                                  <p className="text-sm text-gray-600 mt-1">
-                                    {citation.excerpt}
-                                  </p>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+      {error && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700 flex items-start gap-2">
+          <AlertCircle className="w-4 h-4 mt-0.5" />
+          <span>{error}</span>
         </div>
-      </div>
+      )}
 
-      <div className="border-t border-gray-200 bg-white px-4 sm:px-6 py-3 sm:py-4">
-        <form onSubmit={handleAsk} className="max-w-4xl mx-auto">
-          <div className="flex items-end gap-2 sm:gap-3 bg-gray-50 border border-gray-300 rounded-2xl px-3 sm:px-4 py-3 focus-within:ring-2 focus-within:ring-primary-500 focus-within:border-primary-500">
-            <label htmlFor="rag-question" className="sr-only">
-              Question
-            </label>
-            <textarea
-              id="rag-question"
-              value={question}
-              onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setQuestion(e.target.value)}
-              placeholder="Ask a compliance question..."
-              rows={1}
-              disabled={isStreaming}
-              className="min-w-0 flex-1 resize-none bg-transparent border-0 p-0 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-0 disabled:text-gray-500"
-            />
-            {isStreaming ? (
-              <button
-                type="button"
-                onClick={stop}
-                className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 bg-gray-800 text-white rounded-xl hover:bg-gray-700 flex-shrink-0"
-                aria-label="Stop answering"
-                title="Stop answering"
-              >
-                <Square className="w-4 h-4 fill-current" />
-              </button>
+      <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-5">
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          <div className="p-4 border-b border-gray-200 font-medium text-gray-900">Your documents</div>
+          <div className="p-2 max-h-[62vh] overflow-y-auto">
+            {documents.length === 0 ? (
+              <div className="p-6 text-center text-gray-500">No documents yet</div>
             ) : (
-              <button
-                type="submit"
-                className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 bg-primary-600 text-white rounded-xl hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
-                aria-label="Ask question"
-                title="Ask question"
-              >
-                <Send className="w-5 h-5" />
-              </button>
+              <div className="space-y-2">
+                {documents.map((doc) => {
+                  const isActive = doc.id === selectedDocumentId
+                  return (
+                    <button
+                      key={doc.id}
+                      type="button"
+                      onClick={() => handleSelectDocument(doc)}
+                      className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
+                        isActive
+                          ? 'bg-primary-50 border-primary-200'
+                          : 'bg-white border-gray-200 hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900 truncate">{doc.title}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Updated {new Date(doc.updated_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                        <FileText className="w-4 h-4 text-gray-400 mt-0.5 flex-shrink-0" />
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
             )}
           </div>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3 mt-2">
-            <p className="text-xs text-gray-500">
-              {isStreaming
-                ? 'Streaming answer - click stop to cancel.'
-                : 'Answers stream token-by-token as they are generated.'}
-            </p>
-            <p className="text-xs text-gray-400">
-              Use this assistant to explore risk, documentation, and governance obligations.
-            </p>
-          </div>
-        </form>
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+          {!selectedDocumentId ? (
+            <div className="p-8 text-gray-500">Select a document to edit.</div>
+          ) : (
+            <div>
+              <div className="p-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="text-lg font-semibold text-gray-900 truncate">{selectedDocumentTitle}</h2>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/documents/${selectedDocumentId}`)}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
+                  >
+                    <ChevronDown className="w-4 h-4" />
+                    Versions
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleRegenerate(selectedDocumentId)}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
+                  >
+                    <RefreshCcw className="w-4 h-4" />
+                    Regenerate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(selectedDocumentId)}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-red-200 text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBackToList}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50"
+                  >
+                    <Check className="w-4 h-4" />
+                    Close
+                  </button>
+                </div>
+              </div>
+
+              {versionsError && (
+                <div className="px-4 py-3 text-sm text-red-700 bg-red-50 border-b border-red-200">{versionsError}</div>
+              )}
+
+              <div className="p-4">
+                {versionsLoading ? (
+                  <div className="flex items-center gap-2 text-sm text-gray-600">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading versions...
+                  </div>
+                ) : (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-sm font-medium text-gray-900">History</p>
+                      <p className="text-xs text-gray-500">{versions.length} version(s)</p>
+                    </div>
+                    <div className="space-y-2">
+                      {versions
+                        .slice()
+                        .reverse()
+                        .map((v) => (
+                          <div
+                            key={v.id}
+                            className="flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium text-gray-900">Version {v.version_number}</p>
+                              <p className="text-xs text-gray-500 mt-1">{new Date(v.created_at).toLocaleString()}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/documents/${v.document_id}/diff`)}
+                              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 text-sm"
+                            >
+                              <FileText className="w-4 h-4 text-gray-400" />
+                              Compare
+                            </button>
+                          </div>
+                        ))}
+                      {versions.length === 0 && (
+                        <div className="text-sm text-gray-500 p-4 border border-gray-200 rounded-lg bg-white">
+                          No versions found.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="mb-4 flex items-center gap-2 text-sm text-gray-600">
+                  <Pencil className="w-4 h-4" />
+                  Editor
+                </div>
+
+                <DocumentEditor
+                  documentId={selectedDocumentId}
+                  initialContent={selectedDocumentContent}
+                  onSave={async () => {
+                    // refresh content + documents list
+                    try {
+                      const doc: any = await documentsApi.get(selectedDocumentId)
+                      setSelectedDocumentContent(doc?.content ?? selectedDocumentContent)
+                      await refreshDocuments()
+                    } catch {
+                      // ignore
+                    }
+                  }}
+                  onClose={handleBackToList}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
 }
+
