@@ -51,7 +51,8 @@ spec:
         - sh
         - "-c"
         - |
-          pip install --no-cache-dir transformers torch sentencepiece
+          pip install --no-cache-dir --target /tmp/lib transformers torch sentencepiece
+          export PYTHONPATH=/tmp/lib:$PYTHONPATH
           python - <<'PY'
           import os
           from transformers import AutoModel, AutoTokenizer
@@ -59,7 +60,6 @@ spec:
           target_dir = "/app/models"
           print(f"Starting native cache generation for {MODEL} into {target_dir}...")
 
-          # Prefetch fully valid weights and tokenizer structures natively
           AutoTokenizer.from_pretrained(MODEL, cache_dir=target_dir)
           AutoModel.from_pretrained(MODEL, cache_dir=target_dir)
           print("Model weights and structural vocabularies downloaded successfully.")
@@ -67,10 +67,7 @@ spec:
         securityContext:
           runAsNonRoot: true
           runAsUser: 1000
-          # NOTE: left false — pip install needs to write to site-packages on root fs.
-          # If you want true here, switch to a prebuilt image with deps baked in
-          # (no runtime pip install) or mount an emptyDir over the site-packages path.
-          readOnlyRootFilesystem: false
+          readOnlyRootFilesystem: true
         resources:
           requests:
             cpu: "500m"
@@ -81,6 +78,8 @@ spec:
         volumeMounts:
         - name: model-storage
           mountPath: /app/models
+        - name: pip-cache
+          mountPath: /tmp
       containers:
       - name: aegisai-backend
         image: aegisai-backend:0.1.0
@@ -138,6 +137,8 @@ spec:
       - name: model-storage
         persistentVolumeClaim:
           claimName: model-pvc
+      - name: pip-cache
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
