@@ -106,6 +106,7 @@ source venv/bin/activate
 # venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 cp .env.example .env   # fill in values
+alembic upgrade head   # run database migrations
 uvicorn app.main:app --reload
 
 # Frontend (new terminal)

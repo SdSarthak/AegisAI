@@ -16,7 +16,7 @@ TODO for contributors (help wanted):
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import Response
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import get_db
@@ -57,12 +57,19 @@ def get_compliance_badge(
         )
 
     if format == "json":
-        return {
-            "system_id": system_id,
-            "name": system.name,
-            "risk_level": system.risk_level,
-            "compliance_status": system.compliance_status,
-        }
+        return JSONResponse(
+            content={
+                "system_id": system_id,
+                "name": system.name,
+                "risk_level": system.risk_level,
+                "compliance_status": system.compliance_status,
+            },
+            headers={"Cache-Control": "public, max-age=60"},
+        )
 
     svg = generate_badge_svg(system.name, system.risk_level, system.compliance_status)
-    return Response(content=svg, media_type="image/svg+xml")
+    return Response(
+        content=svg,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "public, max-age=300"},
+    )

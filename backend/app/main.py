@@ -12,6 +12,7 @@ from typing import Dict, Any
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.sessions import SessionMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from sqlalchemy import text
@@ -126,6 +127,7 @@ app.add_middleware(CSRFMiddleware)
 # Added last => outermost: every request (incl. CORS preflight and error
 # responses) is assigned a request id and access-logged in JSON.
 app.add_middleware(RequestContextMiddleware)
+app.add_middleware(SessionMiddleware, secret_key=settings.SECRET_KEY)
 
 # -------------------------------------------------------------------
 # Error Handlers — include request_id in every error response body

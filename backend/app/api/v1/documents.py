@@ -66,20 +66,23 @@ from reportlab.lib.enums import TA_LEFT, TA_CENTER
 
 router = APIRouter()
 
-def create_share_token(document_id: int):
+def create_share_token(document_id: int, owner_id: int):
     expire = datetime.now(timezone.utc) + timedelta(
         days=settings.DOCUMENT_SHARE_EXPIRE_DAYS
     )
 
     payload = {
         "document_id": document_id,
+        "owner_id": owner_id,
         "type": "document_share",
         "exp": expire
     }
 
+    share_secret = settings.DOCUMENT_SHARE_SECRET_KEY or settings.SECRET_KEY
+
     token = jwt.encode(
         payload,
-        settings.SECRET_KEY,
+        share_secret,
         algorithm=settings.ALGORITHM
     )
 
@@ -422,10 +425,12 @@ def get_shared_document(
 ):
     """Access shared document without authentication."""
 
+    share_secret = settings.DOCUMENT_SHARE_SECRET_KEY or settings.SECRET_KEY
+
     try:
         payload = jwt.decode(
             token,
-            settings.SECRET_KEY,
+            share_secret,
             algorithms=[settings.ALGORITHM]
         )
 
@@ -448,8 +453,9 @@ def get_shared_document(
         )
 
     document_id = payload.get("document_id")
+    token_owner_id = payload.get("owner_id")
 
-    if not document_id:
+    if not document_id or token_owner_id is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invalid token payload"
@@ -466,6 +472,12 @@ def get_shared_document(
         )
 
     if hasattr(document, "is_deleted") and document.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Share link revoked"
+        )
+
+    if document.owner_id != token_owner_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Share link revoked"
@@ -495,7 +507,7 @@ def share_document(
             detail="Document not found"
         )
 
-    token = create_share_token(document.id)
+    token = create_share_token(document.id, current_user.id)
 
     return {
         "share_url": f"/api/v1/documents/share/{token}",
