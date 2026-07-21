@@ -4,6 +4,11 @@ Revision ID: 4d8e9f0a1b2c
 Revises: 7f3b2e91a6d4
 Create Date: 2026-06-19 00:00:00.000000
 """
+revision = "4d8e9f0a1b2c"
+down_revision = "7f3b2e91a6d4"
+branch_labels = None
+depends_on = None
+
 from alembic import op
 import sqlalchemy as sa
 
