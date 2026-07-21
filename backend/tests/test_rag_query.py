@@ -63,6 +63,7 @@ def mock_rag_modules():
         }
 
     retrieval_chain.get_qa_chain = lambda user_id=None: _qa_chain
+    retrieval_chain._build_source_citation = lambda doc: {"source": doc.metadata.get("source", "unknown")}
 
     ml_flow = types.ModuleType("app.modules.rag.ml_flow")
     ml_flow.log_query = lambda question, answer, sources, latency_ms: None
