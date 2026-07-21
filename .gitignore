@@ -122,3 +122,6 @@ rag_ingest.txt
 
 # Models
 backend/app/modules/guard/models/*backend/rag_documents/
+
+mlruns/
+rag_documents/
