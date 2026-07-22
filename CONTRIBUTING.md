@@ -127,6 +127,28 @@ Hooks run automatically on `git commit`. To run them manually against all files:
 pre-commit run --all-files
 ```
 
+### Database Migrations
+
+AegisAI uses [Alembic](https://alembic.sqlalchemy.org/) for database schema migrations.
+
+**Apply all pending migrations:**
+```bash
+docker compose exec backend alembic upgrade head
+```
+
+**Create a new migration after modifying models:**
+```bash
+docker compose exec backend alembic revision --autogenerate -m "describe your change"
+docker compose exec backend alembic upgrade head
+```
+
+**Rollback the last migration:**
+```bash
+docker compose exec backend alembic downgrade -1
+```
+
+> **Note:** Always run `alembic upgrade head` after `docker compose up -d` to ensure your database schema is up to date.
+
 ---
 
 ## Pull Request Process

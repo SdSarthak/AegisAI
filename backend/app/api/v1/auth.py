@@ -110,6 +110,23 @@ def register(
     try:
         existing_user = db.query(User).filter(User.email == user_data.email).first()
         if existing_user:
+            # This attempt is about to fail — record it now and consult the
+            # result of THIS call instead of discarding it, otherwise the
+            # slot only gets counted on the *next* request.
+            limited, retry_after = auth_register_rate_limiter.record_attempt(
+                key=f"auth:register:{client_ip}",
+                limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
+                window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
+            )
+            if limited:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail={
+                        "field": "general",
+                        "message": "Too many registration attempts from this IP. Please try again later.",
+                    },
+                    headers={"Retry-After": str(retry_after)},
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={
@@ -129,21 +146,8 @@ def register(
         db.refresh(user)
         return user
     except HTTPException:
-        # Record the failed registration attempt so repeated abuse is rate-limited
-        auth_register_rate_limiter.record_attempt(
-            key=f"auth:register:{client_ip}",
-            limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
-            window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
-        )
         raise
     except Exception:
-        db.rollback()
-        # Record the failed registration attempt so repeated abuse is rate-limited
-        auth_register_rate_limiter.record_attempt(
-            key=f"auth:register:{client_ip}",
-            limit=_AUTH_REGISTER_RATE_LIMIT_REQUESTS,
-            window_seconds=_AUTH_REGISTER_RATE_LIMIT_WINDOW_SECONDS,
-        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail={

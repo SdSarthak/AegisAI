@@ -112,7 +112,7 @@ def test_login_wrong_password(client):
 def test_invalid_token_returns_401(client):
     # Remove mock auth so real token validation runs
     app.dependency_overrides.pop(get_current_user, None)
-    
+
     response = client.get(
         "/api/v1/auth/me",
         headers={"Authorization": "Bearer invalidtoken"}
@@ -123,7 +123,7 @@ def test_invalid_token_returns_401(client):
 def test_expired_token_returns_401(client):
     # Remove mock auth so real token validation runs
     app.dependency_overrides.pop(get_current_user, None)
-    
+
     expired_token = create_access_token(
         data={"sub": "expired@example.com"},
         expires_delta=timedelta(minutes=-1)
@@ -284,16 +284,22 @@ def test_register_rate_limit_triggers_after_three_attempts(client):
     """
     # Use the same email for all attempts so each fails with 400 (duplicate).
     email = "ratelimit-register@example.com"
+
+    # First attempt succeeds and must NOT consume a rate-limit slot.
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"email": email, "password": VALID_TEST_PASSWORD},
+    )
+    assert response.status_code == 201
+
+    # Three subsequent duplicate-email attempts are the real failures
+    # that consume rate-limit slots (limit = 3).
     for _ in range(3):
         response = client.post(
             "/api/v1/auth/register",
-            json={
-                "email": email,
-                "password": VALID_TEST_PASSWORD,
-            },
+            json={"email": email, "password": VALID_TEST_PASSWORD},
         )
-        # First attempt succeeds; subsequent ones fail with 400.
-        assert response.status_code in (201, 400)
+        assert response.status_code == 400
 
     # Fourth failed attempt should trigger rate limit.
     response = client.post(

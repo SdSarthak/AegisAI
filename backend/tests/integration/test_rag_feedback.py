@@ -49,7 +49,7 @@ def client():
         is_active=True
     )
     db.add(user)
-    
+
     # Add an admin user as well
     admin = User(
         id=2,
@@ -76,7 +76,7 @@ def client():
 
     with TestClient(app) as c:
         yield _CSRFClientWrapper(c)
-    
+
     # 4. Cleanup
     db.close()
     app.dependency_overrides.clear()
@@ -91,11 +91,12 @@ def mock_rag_modules():
 
     # We'll override the qa_chain result in individual tests if needed
     fake_result = {
-        "result": "Test answer", 
+        "result": "Test answer",
         "source_documents": [DummyDoc("doc1.pdf#chunk1"), DummyDoc("doc2.pdf#chunk2")]
     }
-    
+
     retrieval_chain_mod.get_qa_chain = lambda user_id=None: lambda payload: fake_result
+    retrieval_chain_mod._build_source_citation = lambda doc: {"source": doc.metadata.get("source", "unknown")}
     groundedness_mod.compute_groundedness = lambda answer, chunks: 0.85
     ml_flow_mod.log_query = lambda **kwargs: None
 
@@ -136,7 +137,7 @@ def test_query_feedback_and_low_quality_flow(client, mock_rag_modules):
     assert resp3.status_code == 200
     out = resp3.json()
     assert "low_quality_chunks" in out
-    
+
     chunks = {c["chunk"] for c in out["low_quality_chunks"]}
     assert "doc1.pdf#chunk1" in chunks or "doc2.pdf#chunk2" in chunks
 

@@ -14,37 +14,76 @@ spec:
       labels:
         app: aegisai-backend
     spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - aegisai-backend
+            topologyKey: kubernetes.io/hostname
       # 1. Production Native Python InitContainer to pre-cache exact model assets
       initContainers:
+      - name: run-migrations
+        image: aegisai-backend:0.1.0
+        command: ["alembic", "upgrade", "head"]
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+        resources:
+          requests:
+            cpu: "100m"
+            memory: "256Mi"
+          limits:
+            cpu: "200m"
+            memory: "512Mi"
+        envFrom:
+        - configMapRef:
+            name: aegisai-config
+        - secretRef:
+            name: aegisai-secrets
       - name: model-download
         image: python:3.11-slim
         command:
         - sh
         - "-c"
         - |
-          pip install --no-cache-dir transformers torch sentencepiece
+          pip install --no-cache-dir --target /tmp/lib transformers torch sentencepiece
+          export PYTHONPATH=/tmp/lib:$PYTHONPATH
           python - <<'PY'
           import os
           from transformers import AutoModel, AutoTokenizer
-
           MODEL = "microsoft/deberta-v3-small"
           target_dir = "/app/models"
-
           print(f"Starting native cache generation for {MODEL} into {target_dir}...")
-          
-          # Prefetch fully valid weights and tokenizer structures natively
+
           AutoTokenizer.from_pretrained(MODEL, cache_dir=target_dir)
           AutoModel.from_pretrained(MODEL, cache_dir=target_dir)
-
           print("Model weights and structural vocabularies downloaded successfully.")
           PY
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m"
+            memory: "4Gi"
         volumeMounts:
         - name: model-storage
           mountPath: /app/models
-
+        - name: pip-cache
+          mountPath: /tmp
       containers:
       - name: aegisai-backend
-        image: aegisai-backend:latest
+        image: aegisai-backend:0.1.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
         envFrom:
@@ -52,6 +91,10 @@ spec:
             name: aegisai-config
         - secretRef:
             name: aegisai-secrets
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1000
+          readOnlyRootFilesystem: true
         resources:
           requests:
             cpu: "250m"
@@ -64,7 +107,7 @@ spec:
             path: /health
             port: 8000
           failureThreshold: 30
-          periodSeconds: 10    
+          periodSeconds: 10
         readinessProbe:
           httpGet:
             path: /health
@@ -87,7 +130,6 @@ spec:
           mountPath: /app/faiss_index
         - name: model-storage
           mountPath: /app/models
-
       volumes:
       - name: faiss-storage
         persistentVolumeClaim:
@@ -95,6 +137,8 @@ spec:
       - name: model-storage
         persistentVolumeClaim:
           claimName: model-pvc
+      - name: pip-cache
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

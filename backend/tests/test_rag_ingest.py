@@ -26,7 +26,7 @@ def _make_pdf_upload(filename: str = "test.pdf", content: bytes = b"%PDF-1.4 fak
 def _mock_current_user():
     """Return a minimal fake User object accepted by get_current_user."""
     user = MagicMock()
-    user.id = "test-user-id"
+    user.id = 1
     user.email = "test@example.com"
     return user
 
@@ -214,15 +214,15 @@ class TestRagIngest:
         # Override the conftest's default auth to force an actual 401
         from app.core.security import get_current_user
         from fastapi import HTTPException, status
-        
+
         def raise_unauthorized():
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Not authenticated",
             )
-        
+
         app.dependency_overrides[get_current_user] = raise_unauthorized
-        
+
         try:
             response = client.post(
                 "/api/v1/rag/ingest",
@@ -395,7 +395,7 @@ class TestRagDocuments:
         assert not os.path.exists(deleted_path)
         mock_create.assert_called_once_with(
             [remaining_chunk],
-            user_id="test-user-id",
+            user_id=1,
         )
 
     def test_delete_missing_document_returns_404(self, client, mock_rag_user):
