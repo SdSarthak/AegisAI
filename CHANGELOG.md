@@ -5,6 +5,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+- ** off-by-one bug ** in registration rate limiter that let a request crossing the threshold return 400 instead of 429
+
 ### Changed
 - Replace `Base.metadata.create_all()` with `alembic upgrade head` on startup for proper migration workflow
 
