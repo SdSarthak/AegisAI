@@ -1,7 +1,3 @@
-This is the complete, final version of `backend/tests/test_guard_explain.py`. I have integrated the API stub tests, the `max_length` validation, the `TestRealModel` integration tests, and the `lime` method pass-through verification.
-
-This single file now restores 100% of the original test coverage while implementing your requested security fix.
-
 ```python
 """
 Tests for Guard explainability (issue #77).
@@ -15,7 +11,6 @@ import os
 import time
 import pytest
 import json
-from unittest.mock import MagicMock, patch
 
 from app.modules.guard import explainer as explainer_module
 from app.modules.guard.explainer import (
@@ -50,7 +45,7 @@ def _fake_response(
         tokens=[
             TokenAttribution(token=t, attribution=a, char_span=s) for t, a, s in rows
         ],
-        method=method, # type: ignore
+        method=method,  # type: ignore
         model_version="1.0.0",
         latency_ms=42.0,
     )
