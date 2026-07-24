@@ -434,15 +434,8 @@ def rag_feedback(
 ):
     """Record thumbs-up or thumbs-down feedback."""
 
-    try:
-        answer_id = int(payload.answer_id)
-
-    except ValueError:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid answer_id.",
-        )
-
+    answer_id = payload.answer_id
+    
     feedback = (
         db.query(RAGFeedback)
         .filter(
