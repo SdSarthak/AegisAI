@@ -887,7 +887,7 @@ def get_low_quality_chunks(
         raise HTTPException(status_code=403, detail="Admin access required")
 
     counts: dict[str, dict[str, int]] = {}
-    rows = db.query(RAGFeedback).all()
+    rows = db.query(RAGFeedback).limit(10000).all()
     for row in rows:
         total = (row.thumbs_up or 0) + (row.thumbs_down or 0)
         for chunk in row.source_chunks or []:
