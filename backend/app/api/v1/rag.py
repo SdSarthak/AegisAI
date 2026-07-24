@@ -7,6 +7,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 import os
 import shutil
 import tempfile
+import time
 from typing import List, Literal, Optional
 import mimetypes
 
@@ -57,7 +58,8 @@ class RAGQueryResponse(BaseModel):
     sources: list[str] = []
     answer_id: Optional[str] = None
     groundedness_score: float = 0.0
-
+    low_confidence: bool = False
+   
 
 class RAGIngestResponse(BaseModel):
     files_processed: int
@@ -308,6 +310,7 @@ def query_knowledge_base(
             sources=sources,
             answer_id=answer_id,
             groundedness_score=0.0,
+            low_confidence=False,
         )
 
     except FileNotFoundError as exc:
