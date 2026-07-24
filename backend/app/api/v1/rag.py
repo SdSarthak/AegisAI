@@ -880,10 +880,7 @@ def get_low_quality_chunks(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Aggregate feedback by source chunk and return low-quality candidates."""
-    try:
-        if current_user.subscription_tier != SubscriptionTier.SCALE:
-            raise HTTPException(status_code=403, detail="Admin access required")
-    except Exception:
+    if current_user.subscription_tier != SubscriptionTier.SCALE:
         raise HTTPException(status_code=403, detail="Admin access required")
 
     counts: dict[str, dict[str, int]] = {}
