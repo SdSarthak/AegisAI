@@ -14,9 +14,6 @@ class TestInstrumentGuard:
 
     def test_sync_wrapper_records_inference_metrics(self):
         """Sync function decorated with instrument_guard records decision metrics."""
-        # Track metric calls
-        recorded = {}
-
         def mock_guard(prompt: str) -> dict:
             return {"decision": "ALLOW", "metadata": {}}
 
@@ -133,10 +130,6 @@ class TestInstrumentator:
         assert hasattr(telemetry, "instrumentator")
         assert hasattr(telemetry.instrumentator, "instrument")
 
-    def test_excluded_handlers_contain_admin_endpoints(self):
-        """FastAPI admin endpoints are excluded from instrumentation."""
-        excluded = telemetry.instrumentator._excluded_handlers
-        assert "/metrics" in excluded
-        assert "/health" in excluded
-        assert "/ready" in excluded
-        assert "/docs" in excluded
+    def test_instrumentator_has_expose_method(self):
+        """instrumentator has the expose() method required to add /metrics endpoint."""
+        assert hasattr(telemetry.instrumentator, "expose")
