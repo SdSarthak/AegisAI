@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -279,21 +280,32 @@ def get_current_user_stats(
     db: Session = Depends(get_db),
 ):
     """Return summary statistics for the authenticated user."""
-    systems = db.query(AISystem).filter(AISystem.owner_id == current_user.id).all()
+    # Count by risk level using SQL aggregation — never loads individual rows.
+    risk_rows = (
+        db.query(AISystem.risk_level, func.count(AISystem.id))
+        .filter(AISystem.owner_id == current_user.id)
+        .group_by(AISystem.risk_level)
+        .all()
+    )
+    risk_breakdown: dict = {
+        row[0].value: row[1] for row in risk_rows if row[0] is not None
+    }
+    total_systems = sum(risk_breakdown.values())
 
-    risk_breakdown: dict = {}
-    compliant_systems = 0
-    for system in systems:
-        if system.risk_level:
-            key = system.risk_level.value
-            risk_breakdown[key] = risk_breakdown.get(key, 0) + 1
-        if system.compliance_status == ComplianceStatus.COMPLIANT:
-            compliant_systems += 1
+    # Count compliant systems with a separate aggregate query.
+    compliant_systems = (
+        db.query(func.count(AISystem.id))
+        .filter(
+            AISystem.owner_id == current_user.id,
+            AISystem.compliance_status == ComplianceStatus.COMPLIANT,
+        )
+        .scalar()
+    ) or 0
 
     total_documents = db.query(Document).filter(Document.owner_id == current_user.id).count()
 
     return UserStatsResponse(
-        total_systems=len(systems),
+        total_systems=total_systems,
         total_documents=total_documents,
         risk_breakdown=risk_breakdown,
         compliant_systems=compliant_systems,
