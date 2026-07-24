@@ -674,7 +674,7 @@ def query_knowledge_base(
         try:
             Base.metadata.create_all(bind=db.get_bind())
         except Exception:
-            pass
+            logger.warning("Failed to create metadata tables during feedback write")
 
         feedback = RAGFeedback(
             question_hash=hashlib.sha256(guarded_question.question.encode("utf-8")).hexdigest(),
