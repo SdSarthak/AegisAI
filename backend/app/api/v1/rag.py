@@ -707,7 +707,7 @@ def query_knowledge_base(
                 cache_type=cache_type,
             )
         except Exception:
-            pass
+            logger.warning("Failed to log RAG query to MLflow tracking server")
 
         response = RAGQueryResponse(
             answer=answer,
